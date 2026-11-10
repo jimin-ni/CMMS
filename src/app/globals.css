@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+/* 키 컬러 4종 (로고 이미지 기준, HEX는 추정값) */
+@theme {
+  --color-key-blue: #8fb0cf;
+  --color-key-mist: #e6eaec;
+  --color-key-stone: #9ea09e;
+  --color-key-brown: #6b4e37;
+}
+
+body {
+  background: var(--color-key-mist);
+  color: #2b2b2b;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
