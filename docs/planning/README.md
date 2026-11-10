@@ -7,8 +7,9 @@ CMMS(Creator Message Management System, 가제)의 기획 문서 모음입니다
 | [01-overview.md](./01-overview.md) | 서비스 개요, 공모전 요건 대조, 시장과 경쟁 |
 | [02-features.md](./02-features.md) | 기능 범위, MVP, 기능별 상세 |
 | [03-tech-stack.md](./03-tech-stack.md) | Next.js 기반 기술 설계 초안, 실시간 구조 비교 |
-| [04-roadmap-and-team.md](./04-roadmap-and-team.md) | 역할 분담, 일정, 리스크, 결정 사항 |
+| [04-roadmap-and-team.md](./04-roadmap-and-team.md) | 역할 분담, 진행 순서, 리스크, 결정 사항 |
 | [05-github-workflow.md](./05-github-workflow.md) | 브랜치 규칙, GitHub Actions, GitHub Projects 운영 |
+| [06-auth.md](./06-auth.md) | 인증 방식 비교 (Better Auth, Supabase Auth, Clerk) |
 
 ## 표기 규칙
 
