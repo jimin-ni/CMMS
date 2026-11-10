@@ -9,7 +9,7 @@
 |---|---|---|---|
 | 프레임워크 | Next.js (App Router, TypeScript) | [결정] | 프론트엔드와 API를 한 저장소에서 관리 |
 | 스타일 | Tailwind CSS | [가설] | 빠른 UI 작업, 모바일 대응이 쉬움 |
-| 인증 | Better Auth (MIT) 추천, 확정 전 | [가설] | 사용자 정보를 우리 DB에 두고 추가 서비스 없이 운영. 비교는 06 문서 |
+| 인증 | Better Auth (MIT) | [결정] | 사용자 정보를 우리 DB에 두고 추가 서비스 없이 운영. 비교는 06 문서 |
 | ORM | Prisma 또는 Drizzle | [미정] | 타입 안정성, 마이그레이션 관리 |
 | DB | PostgreSQL (Render) | [가설] | 정형 데이터(사용자, 구독)와 비정형 데이터(메시지 본문, 페르소나 문서)를 한 DB에서 처리 |
 | 캐시·요청 제한 | Redis (Render Key Value) | [가설] | 요청 제한, 반응 예측 캐시 |
