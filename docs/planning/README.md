@@ -1,0 +1,26 @@
+# CMMS 기획 문서
+
+CMMS(Creator Message Management System, 가제)의 기획 문서 모음입니다. 공모전 제출 마감은 2026-12-05입니다.
+
+| 문서 | 내용 |
+|---|---|
+| [01-overview.md](./01-overview.md) | 서비스 개요, 공모전 요건 대조, 시장과 경쟁 |
+| [02-features.md](./02-features.md) | 기능 범위, MVP, 기능별 상세 |
+| [03-tech-stack.md](./03-tech-stack.md) | Next.js 기반 기술 설계 초안, 실시간 구조 비교 |
+| [04-roadmap-and-team.md](./04-roadmap-and-team.md) | 역할 분담, 일정, 리스크, 결정 사항 |
+| [05-github-workflow.md](./05-github-workflow.md) | 브랜치 규칙, GitHub Actions, GitHub Projects 운영 |
+
+## 표기 규칙
+
+- **[사실]**: 출처가 확인된 내용
+- **[가설]**: 검증이 필요한 내용
+- **[결정]**: 팀 합의가 끝난 내용
+- **[미정]**: 아직 정하지 않은 내용
+
+## 현재 상태 (2026-11-10)
+
+- [결정] 팀 2명, Next.js 사용
+- [결정] 혼합형 수익 모델로 잠정 결정
+- [결정] 인증된 크리에이터 간 메시지 기능과, 함께 방송할 때 시청자를 포함하는 단톡방은 추가 아이디어로 둠
+- [미정] 대상 크리에이터 (후보 5명 중 미정)
+- [미정] 실시간 통신 방식 (03 문서 참고)
