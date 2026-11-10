@@ -1,2 +1,2 @@
 # CMMS
-Creator Massage Managing System
+Creator Message Managing System
