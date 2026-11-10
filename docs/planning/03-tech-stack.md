@@ -9,7 +9,7 @@
 |---|---|---|---|
 | 프레임워크 | Next.js (App Router, TypeScript) | [결정] | 프론트엔드와 API를 한 저장소에서 관리 |
 | 스타일 | Tailwind CSS | [가설] | 빠른 UI 작업, 모바일 대응이 쉬움 |
-| 인증 | Auth.js (NextAuth) + DB 기반 역할 관리 | [가설] | Next.js와 통합이 쉬움. 역할(팬, 크리에이터, 관리자)은 DB에서 관리 |
+| 인증 | Better Auth (MIT) 추천, 확정 전 | [가설] | 사용자 정보를 우리 DB에 두고 추가 서비스 없이 운영. 비교는 06 문서 |
 | ORM | Prisma 또는 Drizzle | [미정] | 타입 안정성, 마이그레이션 관리 |
 | DB | PostgreSQL (Render) | [가설] | 정형 데이터(사용자, 구독)와 비정형 데이터(메시지 본문, 페르소나 문서)를 한 DB에서 처리 |
 | 캐시·요청 제한 | Redis (Render Key Value) | [가설] | 요청 제한, 반응 예측 캐시 |
@@ -36,9 +36,9 @@ Next.js의 기본 서버는 WebSocket 연결을 직접 다루지 않으므로, �
 
 | 테이블 | 주요 필드 | 비고 |
 |---|---|---|
-| users | id, role, nickname, created_at | 역할: fan, creator, admin |
-| creator_profiles | user_id, verified, persona (JSON), persona_version | 페르소나는 비정형 데이터 |
-| subscriptions | id, fan_id, creator_id, status, started_at, expires_at | 기념일 표시에 started_at 사용 |
+| users | id, email, nickname, role, created_at | 최소 정보만 저장. role: subscriber, creator, admin |
+| creator_profiles | user_id, verified, persona (JSON), persona_version | 크리에이터 인증 여부는 verified 플래그. 페르소나는 비정형 데이터 |
+| subscriptions | id, subscriber_id, creator_id, status, started_at, expires_at | 기념일 표시에 started_at 사용 |
 | rooms | id, type (1:1, creator_pair, broadcast) | 방 구조를 여러 기능이 공유 |
 | room_members | room_id, user_id | |
 | messages | id, room_id, sender_id, body (JSON), created_at, read_at | |
