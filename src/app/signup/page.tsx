@@ -20,7 +20,8 @@ export default function SignupPage() {
       name: String(form.get("name")),
       email: String(form.get("email")),
       password: String(form.get("password")),
-    });
+      role: String(form.get("role")),
+    } as Parameters<typeof authClient.signUp.email>[0]);
 
     setPending(false);
     if (result.error) {
@@ -35,7 +36,23 @@ export default function SignupPage() {
     <main className="mx-auto w-full max-w-md px-6 py-12">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4 rounded-2xl bg-white p-8 shadow-sm">
         <h1 className="text-2xl font-bold text-key-brown">회원가입</h1>
-        <p className="text-xs text-key-stone">가입하면 기본 역할은 구독자(public)입니다.</p>
+        <fieldset className="flex flex-col gap-2 text-sm">
+          <legend className="mb-1">가입 유형</legend>
+          <label className="flex items-start gap-2">
+            <input type="radio" name="role" value="public" defaultChecked className="mt-1" />
+            <span>
+              구독자
+              <span className="block text-xs text-key-stone">크리에이터의 메시지를 받아봅니다.</span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2">
+            <input type="radio" name="role" value="creator" className="mt-1" />
+            <span>
+              크리에이터
+              <span className="block text-xs text-key-stone">팬에게 메시지를 보냅니다.</span>
+            </span>
+          </label>
+        </fieldset>
         <label className="flex flex-col gap-1 text-sm">
           닉네임
           <input name="name" required className="rounded-lg border border-key-stone/50 px-3 py-2" />
