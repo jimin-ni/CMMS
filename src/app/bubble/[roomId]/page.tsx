@@ -70,6 +70,7 @@ async function RoomContent({ params }: { params: Promise<{ roomId: string }> }) 
         initialMessages={messages}
         initialCursor={new Date(nowMs).toISOString()}
         isOpen={isOpen}
+        memberCount={seesAllMessages(room, viewer) ? room.member_count : null}
         canSend={canSendInRoom(room, viewer)}
         maxChars={maxCharsFor(viewer.role)}
         showReactionPreview={viewer.role === "public" && viewer.id !== room.creator_id}
