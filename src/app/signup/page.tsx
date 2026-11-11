@@ -23,18 +23,33 @@ export default function SignupPage() {
     setErrorMessage(null);
 
     const form = new FormData(event.currentTarget);
+    // 역할은 가입 요청에 넣지 않는다. 가입 후 서버에서 따로 설정한다.
     const result = await authClient.signUp.email({
       name: String(form.get("name")),
       email: String(form.get("email")),
       password: String(form.get("password")),
-      role: isCreator ? "creator" : "public",
-    } as Parameters<typeof authClient.signUp.email>[0]);
+    });
 
-    setPending(false);
     if (result.error) {
+      setPending(false);
       setErrorMessage(result.error.message ?? "회원가입에 실패했습니다.");
       return;
     }
+
+    if (isCreator) {
+      const res = await fetch("/api/signup/creator", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ role: "creator" }),
+      });
+      if (!res.ok) {
+        setPending(false);
+        setErrorMessage("크리에이터 설정에 실패했습니다. 로그인 후 다시 시도해 주세요.");
+        return;
+      }
+    }
+
+    setPending(false);
     // 예를 고른 경우 크리에이터 페이지로 이동한다.
     router.push(isCreator ? "/creator" : "/");
     router.refresh();
