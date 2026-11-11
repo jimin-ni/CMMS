@@ -1,20 +1,27 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useState } from "react";
 import { useRouter } from "next/navigation";
-import { startChatAction } from "@/lib/bubble/talk-actions";
+import { startChatAction, type StartChatResult } from "@/lib/bubble/talk-actions";
 import type { CreatorCard } from "@/lib/bubble/talk-repo";
 import { Avatar } from "@/components/avatar";
 
 // 크리에이터 프로필 카드 목록(사진과 닉네임만). 한 명을 고르면 1:1 대화, 여러 명을 고르면 그룹 대화를 연다.
 export function CreatorPicker({ creators, maxPick }: { creators: CreatorCard[]; maxPick: number }) {
   const router = useRouter();
-  const [state, formAction, pending] = useActionState(startChatAction, null);
   const [picked, setPicked] = useState<string[]>([]);
 
-  useEffect(() => {
-    if (state?.ok) router.push(`/bubble/talk/${state.chatId}`);
-  }, [state, router]);
+  // 대화가 열리면 그 자리에서 한 번만 이동한다. effect로 이동하면 목록 화면 상태가 보존되어
+  // 목록으로 돌아올 때마다 같은 대화로 다시 이동해 버린다.
+  async function submitAction(prev: StartChatResult | null, formData: FormData) {
+    const result = await startChatAction(prev, formData);
+    if (result.ok) {
+      setPicked([]);
+      router.push(`/bubble/talk/${result.chatId}`);
+    }
+    return result;
+  }
+  const [state, formAction, pending] = useActionState(submitAction, null);
 
   function toggle(id: string) {
     setPicked((prev) =>
