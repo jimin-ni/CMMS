@@ -1,18 +1,24 @@
 # 인증(Better Auth) 개발 메모
 
-- 브랜치: `jimins-claude/dev-auth`
+- 상태: main에 머지됨 (PR #6, #15). 이슈 #3 닫음 (2026-11-12 갱신)
 - 기획 근거: `docs/planning/06-auth.md` (Better Auth 확정)
+- 버전: `better-auth` 1.7.19 (전체 버전 표는 `docs/planning/03-tech-stack.md` 1-1절)
 
 ## 역할 (role)
 
 | 값 | 표시 이름 | 설명 |
 |---|---|---|
 | `public` | 구독자 | 가입 시 기본 역할 |
-| `creator` | 크리에이터 | 관리자가 부여. 인증 승인 기능은 추후 추가 |
-| `admin` | 관리자 | 사용자 목록 조회 등 관리 API 허용 |
+| `creator` | 크리에이터 | 가입 화면에서 "예"를 고르면 가입 후 서버 API로 전환. 인증 승인 기능은 추후 추가 |
+| `admin` | 관리자 | 사용자 목록 조회 등 관리 API 허용. 가입 화면이나 API로는 설정할 수 없음 |
 
 - 역할 정의: `src/lib/access.ts`
 - 관리자 플러그인 설정: `src/lib/auth.ts`
+
+### 가입 시 역할 설정 주의
+
+- Better Auth admin 플러그인이 `role` 필드를 `input: false`로 잠급니다. 가입 요청이나 `additionalFields`로 `role`을 보내면 `FIELD_NOT_ALLOWED`로 실패합니다 (#13).
+- 그래서 가입 요청에는 역할을 넣지 않고, 가입 직후 `POST /api/signup/creator`를 호출합니다. 이 API는 본인 계정만 `public`에서 `creator`로 바꿉니다.
 
 ## 로컬 실행
 
@@ -34,10 +40,12 @@
 | `/` | 로그인 | 닉네임, 역할, 이메일, 기능 화면 링크 |
 | `/login`, `/signup` | 공통 | 이메일과 비밀번호 로그인, 가입 |
 | `/features` | 로그인 필요 | 주요 기능 3종 임시 카드 (로그아웃 상태면 `/login`으로 이동) |
+| `/creator` | 크리에이터 | 대화방 열기, 성격 저장 (`docs/dev/bubble.md`) |
+| `/bubble`, `/bubble/[roomId]` | 로그인 필요 | 버블 대화방 목록과 대화 화면 |
 
 ## 확인한 동작
 
-- 가입 시 역할은 `public`
+- 가입 시 역할은 `public`. 크리에이터로 가입하면 `/creator`로 이동하고 역할이 `creator`가 됨 (2026-11-11 브라우저 테스트)
 - `public` 계정은 `/api/auth/admin/list-users` 호출 시 403
 - `admin` 계정은 같은 API 호출 시 사용자 목록 반환
 - 로그아웃 상태에서 `/features` 접근 시 `/login`으로 리다이렉트
