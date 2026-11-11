@@ -3,14 +3,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { MessageRow } from "@/lib/bubble/repo";
-import { Composer } from "./composer";
-import { DeleteMessageButton } from "./room-controls";
+import { Composer, type SendAction } from "./composer";
+import { DeleteMessageButton, type DeleteAction } from "./room-controls";
+import { Avatar } from "@/components/avatar";
 
 // 새 메시지를 가져오는 간격. (실시간 방식은 PoC 후 결정, 지금은 폴링)
 const POLL_MS = 5000;
 
+// 버블 대화방과 크리에이터 톡이 함께 쓰는 대화 화면. 읽기 주소와 쓰기 동작만 다르다.
 type Props = {
-  roomId: string;
+  // 실시간 읽기 주소. ?since=<cursor>를 붙여 폴링한다.
+  pollUrl: string;
+  sendAction: SendAction;
+  deleteAction: DeleteAction;
+  // 보내기 폼에 함께 넣을 대상 id (예: roomId, chatId)
+  target: { name: string; value: string };
   viewerId: string;
   initialMessages: MessageRow[];
   initialCursor: string;
@@ -19,13 +26,13 @@ type Props = {
   memberCount: number | null;
   canSend: boolean;
   maxChars: number;
-  // 크리에이터 예상 반응 미리보기. 구독자에게만 켠다.
-  showReactionPreview: boolean;
+  // 크리에이터 예상 반응 미리보기를 쓸 버블 방. 구독자에게만 넘긴다.
+  previewRoomId: string | null;
   closedNotice: string;
 };
 
 export function RoomChat(props: Props) {
-  const { roomId, viewerId, isOpen, memberCount } = props;
+  const { pollUrl, viewerId, isOpen, memberCount } = props;
   const router = useRouter();
   const [messages, setMessages] = useState(props.initialMessages);
   const cursor = useRef(props.initialCursor);
@@ -37,7 +44,7 @@ export function RoomChat(props: Props) {
     inFlight.current = true;
     try {
       const res = await fetch(
-        `/api/bubble/rooms/${roomId}/messages?since=${encodeURIComponent(cursor.current)}`,
+        `${pollUrl}?since=${encodeURIComponent(cursor.current)}`,
         { cache: "no-store" },
       );
       if (!res.ok) return;
@@ -60,7 +67,7 @@ export function RoomChat(props: Props) {
     } finally {
       inFlight.current = false;
     }
-  }, [roomId, router, memberCount]);
+  }, [pollUrl, router, memberCount]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -106,7 +113,11 @@ export function RoomChat(props: Props) {
                     {bubble}
                   </div>
                   {message.can_delete && (
-                    <DeleteMessageButton messageId={message.id} onDeleted={sync} />
+                    <DeleteMessageButton
+                      messageId={message.id}
+                      deleteAction={props.deleteAction}
+                      onDeleted={sync}
+                    />
                   )}
                 </li>
               );
@@ -116,9 +127,7 @@ export function RoomChat(props: Props) {
               <li key={message.id} className={`flex gap-2 ${firstOfRun ? "mt-2" : ""}`}>
                 <div className="w-9 shrink-0">
                   {firstOfRun && (
-                    <span className="flex h-9 w-9 items-center justify-center rounded-[14px] bg-key-mist text-sm font-semibold text-key-brown">
-                      {Array.from(message.sender_name)[0] ?? "?"}
-                    </span>
+                    <Avatar name={message.sender_name} url={message.sender_avatar_url} size={36} />
                   )}
                 </div>
                 <div className="flex flex-col items-start">
@@ -138,9 +147,10 @@ export function RoomChat(props: Props) {
 
       {props.canSend ? (
         <Composer
-          roomId={roomId}
+          sendAction={props.sendAction}
+          target={props.target}
           maxChars={props.maxChars}
-          showReactionPreview={props.showReactionPreview}
+          previewRoomId={props.previewRoomId}
           onSent={sync}
         />
       ) : (

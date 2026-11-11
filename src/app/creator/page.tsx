@@ -7,6 +7,8 @@ import { OpenRoomForm } from "@/components/bubble/room-forms";
 import { CloseRoomButton } from "@/components/bubble/room-controls";
 import { PersonaForm } from "@/components/creator/persona-form";
 import { getPersona, PERSONA_MAX } from "@/lib/creator/profile";
+import { AVATAR_MAX_BYTES, getAvatarUrl } from "@/lib/creator/avatar";
+import { AvatarForm } from "@/components/creator/avatar-form";
 
 export default function CreatorPage() {
   return (
@@ -23,7 +25,11 @@ async function CreatorContent() {
   if (!viewer) redirect("/login");
   if (viewer.role !== "creator") redirect("/");
 
-  const [rooms, persona] = await Promise.all([listRoomsFor(viewer), getPersona(viewer.id)]);
+  const [rooms, persona, avatarUrl] = await Promise.all([
+    listRoomsFor(viewer),
+    getPersona(viewer.id),
+    getAvatarUrl(viewer.id),
+  ]);
   // 크리에이터는 열린 방을 하나만 가질 수 있다.
   const openRoom = rooms.find((room) => room.status === "open");
   const closedRooms = rooms.filter((room) => room.status === "closed");
@@ -59,10 +65,15 @@ async function CreatorContent() {
       </section>
 
       <section className="flex flex-col gap-3 rounded-2xl bg-white p-6">
+        <h2 className="text-lg font-medium text-key-brown">프로필 사진</h2>
+        <AvatarForm name={viewer.name} currentUrl={avatarUrl} maxBytes={AVATAR_MAX_BYTES} />
+      </section>
+
+      <section className="flex flex-col gap-3 rounded-2xl bg-white p-6">
         <h2 className="text-lg font-medium text-key-brown">AI 반응 미리보기 설정</h2>
         <p className="text-sm text-key-stone">
           구독자가 메시지를 보내기 전에 내 예상 반응을 이모지로 미리 보여줘요. AI가 아래 성격을
-          참고합니다.
+          참고합니다. 성격은 다른 사람에게 보이지 않아요.
         </p>
         <PersonaForm initialPersona={persona} maxChars={PERSONA_MAX} />
       </section>

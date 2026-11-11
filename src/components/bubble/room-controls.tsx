@@ -2,13 +2,17 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { closeRoomAction, deleteMessageAction } from "@/lib/bubble/actions";
+import { closeRoomAction, type ActionResult } from "@/lib/bubble/actions";
+
+export type DeleteAction = (messageId: string) => Promise<ActionResult>;
 
 export function DeleteMessageButton({
   messageId,
+  deleteAction,
   onDeleted,
 }: {
   messageId: string;
+  deleteAction: DeleteAction;
   onDeleted: () => void;
 }) {
   const [pending, startTransition] = useTransition();
@@ -21,7 +25,7 @@ export function DeleteMessageButton({
         disabled={pending}
         onClick={() =>
           startTransition(async () => {
-            const result = await deleteMessageAction(messageId);
+            const result = await deleteAction(messageId);
             if (result.ok) onDeleted();
             else setError(result.error);
           })

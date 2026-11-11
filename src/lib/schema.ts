@@ -1,4 +1,9 @@
-import { pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { customType, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+
+// Drizzle에 bytea 기본 타입이 없어서 직접 정의한다. node-postgres는 bytea를 Buffer로 주고받는다.
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType: () => "bytea",
+});
 
 // Drizzle 쿼리용 테이블 정의. 실제 스키마(제약, 인덱스)는 db/migrations의 SQL 파일이 기준이다.
 // 테이블을 바꿀 때는 새 마이그레이션 파일을 추가하고, 여기 정의도 같이 맞춘다.
@@ -8,6 +13,8 @@ export const user = pgTable("user", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   email: text("email").notNull(),
+  // admin 플러그인이 추가한 열. 값은 public, creator, admin (null이면 public으로 본다).
+  role: text("role"),
 });
 
 export const bubbleRooms = pgTable("bubble_rooms", {
@@ -41,5 +48,41 @@ export const bubbleMessages = pgTable("bubble_messages", {
 export const creatorProfiles = pgTable("creator_profiles", {
   userId: text("user_id").primaryKey(),
   persona: text("persona").notNull().default(""),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// 크리에이터 톡 (0004). 크리에이터끼리만 쓰는 1:1 또는 그룹 대화.
+export const creatorChats = pgTable("creator_chats", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  title: text("title"),
+  directKey: text("direct_key").unique(),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const creatorChatMembers = pgTable(
+  "creator_chat_members",
+  {
+    chatId: uuid("chat_id").notNull(),
+    userId: text("user_id").notNull(),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.chatId, t.userId] })],
+);
+
+export const creatorChatMessages = pgTable("creator_chat_messages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  chatId: uuid("chat_id").notNull(),
+  senderId: text("sender_id").notNull(),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+});
+
+// 크리에이터 프로필 사진 (0006). 크리에이터만 등록한다.
+export const creatorAvatars = pgTable("creator_avatars", {
+  userId: text("user_id").primaryKey(),
+  content: bytea("content").notNull(),
+  contentType: text("content_type").notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

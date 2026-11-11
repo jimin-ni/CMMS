@@ -1,18 +1,20 @@
 "use client";
 
-import { useActionState, useEffect, useState, useTransition } from "react";
+import { useActionState, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { joinRoomAction, openRoomAction } from "@/lib/bubble/actions";
+import { joinRoomAction, openRoomAction, type ActionResult } from "@/lib/bubble/actions";
 
 export function OpenRoomForm() {
   const router = useRouter();
-  const [state, formAction, pending] = useActionState(openRoomAction, null);
 
-  useEffect(() => {
-    if (state?.ok && state.roomId) {
-      router.push(`/bubble/${state.roomId}`);
-    }
-  }, [state, router]);
+  // 방이 열리면 그 자리에서 한 번만 이동한다. effect로 이동하면 이전 화면 상태가 보존되어
+  // 이 화면으로 돌아올 때 같은 방으로 다시 이동할 수 있다.
+  async function submitAction(prev: ActionResult | null, formData: FormData) {
+    const result = await openRoomAction(prev, formData);
+    if (result.ok && result.roomId) router.push(`/bubble/${result.roomId}`);
+    return result;
+  }
+  const [state, formAction, pending] = useActionState(submitAction, null);
 
   return (
     <form action={formAction} className="flex flex-col gap-2">

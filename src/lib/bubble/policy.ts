@@ -18,6 +18,11 @@ export const BUBBLE_POLICY = {
 
   // 구독자가 입력을 멈추고 이만큼 지나면 크리에이터 예상 반응을 요청한다.
   previewDebounceMs: 3000,
+
+  // 크리에이터 톡: 대화 하나에 들어갈 수 있는 최대 인원(본인 포함)과 크리에이터 목록에 보일 최대 수.
+  // 글자 수, 삭제 시간, 전송 제한은 위 크리에이터 값과 같은 규칙을 쓴다.
+  talkMaxMembers: 20,
+  talkDirectoryLimit: 50,
 } as const;
 
 export function maxCharsFor(role: "admin" | "creator" | "public"): number {

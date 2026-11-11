@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { canAccessRoom, canJoinRoom, listRoomsFor } from "@/lib/bubble/repo";
 import { getViewer } from "@/lib/session";
 import { JoinRoomButton } from "@/components/bubble/room-forms";
+import { ChatTabs } from "@/components/bubble/chat-tabs";
+import { Avatar } from "@/components/avatar";
 
 export default function BubbleListPage() {
   return (
@@ -31,6 +33,7 @@ async function BubbleListContent() {
           </Link>
         )}
       </header>
+      {viewer.role === "creator" && <ChatTabs active="subscribers" />}
       {rooms.length === 0 && (
         <p className="px-5 pb-6 text-sm text-key-stone">
           {viewer.role === "creator" ? "아직 연 대화방이 없어요." : "열린 대화방이 없어요."}
@@ -40,9 +43,7 @@ async function BubbleListContent() {
         {rooms.map((room) => {
           const row = (
             <>
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] bg-key-blue/40 font-semibold text-key-brown">
-                {Array.from(room.creator_name)[0] ?? "?"}
-              </span>
+              <Avatar name={room.creator_name} url={room.creator_avatar_url} size={44} />
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate font-medium text-gray-900">{room.title}</span>
                 <span className="truncate text-xs text-key-stone">
