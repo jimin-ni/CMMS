@@ -10,6 +10,7 @@ CMMS(Creator Message Management System, 가제)의 기획 문서 모음입니다
 | [04-roadmap-and-team.md](./04-roadmap-and-team.md) | 역할 분담, 진행 순서, 리스크, 결정 사항 |
 | [05-github-workflow.md](./05-github-workflow.md) | 브랜치 규칙, GitHub Actions, GitHub Projects 운영 |
 | [06-auth.md](./06-auth.md) | 인증 방식 비교 (Better Auth, Supabase Auth, Clerk) |
+| [07-database.md](./07-database.md) | 데이터베이스 선택 이유 (관계형, PostgreSQL) |
 
 ## 표기 규칙
 
@@ -21,6 +22,10 @@ CMMS(Creator Message Management System, 가제)의 기획 문서 모음입니다
 ## 현재 상태 (2026-11-10)
 
 - [결정] 팀 2명, Next.js 사용
+- [결정] 인증: Better Auth (MIT)
+- [결정] 데이터베이스: 관계형 DB, PostgreSQL (07 문서)
+- [결정] 사용자 역할 3종: 구독자, 크리에이터, 관리자
+- [결정] 브랜치 운영: 기획 변경은 `jimins-claude/plan-docs`, 개발 작업은 개발용 브랜치를 따로 만든다
 - [결정] 혼합형 수익 모델로 잠정 결정
 - [결정] 인증된 크리에이터 간 메시지 기능과, 함께 방송할 때 시청자를 포함하는 단톡방은 추가 아이디어로 둠
 - [미정] 대상 크리에이터 (후보 5명 중 미정)
