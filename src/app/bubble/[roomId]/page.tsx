@@ -3,10 +3,11 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { BUBBLE_POLICY, maxCharsFor } from "@/lib/bubble/policy";
 import {
-  canAccessThread,
-  canSendInThread,
-  getThread,
+  canAccessRoom,
+  canSendInRoom,
+  getRoom,
   listMessages,
+  seesAllMessages,
 } from "@/lib/bubble/repo";
 import { getViewer } from "@/lib/session";
 import { Composer } from "@/components/bubble/composer";
@@ -16,7 +17,7 @@ import {
   RoomRefresher,
 } from "@/components/bubble/room-controls";
 
-export default function RoomPage({ params }: { params: Promise<{ threadId: string }> }) {
+export default function RoomPage({ params }: { params: Promise<{ roomId: string }> }) {
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-6">
       <Suspense fallback={<p className="text-sm text-key-stone">불러오는 중...</p>}>
@@ -26,20 +27,20 @@ export default function RoomPage({ params }: { params: Promise<{ threadId: strin
   );
 }
 
-async function RoomContent({ params }: { params: Promise<{ threadId: string }> }) {
-  const { threadId } = await params;
+async function RoomContent({ params }: { params: Promise<{ roomId: string }> }) {
+  const { roomId } = await params;
   const viewer = await getViewer();
   if (!viewer) redirect("/login");
 
-  const thread = await getThread(threadId);
-  if (!thread || !canAccessThread(thread, viewer)) redirect("/bubble");
+  // 참여하지 않은 구독자는 목록에서 참여 버튼을 먼저 눌러야 한다.
+  const room = await getRoom(roomId, viewer.id);
+  if (!room || !canAccessRoom(room, viewer)) redirect("/bubble");
 
-  const messages = await listMessages(thread.id, viewer.id, BUBBLE_POLICY.deleteWindowMs);
-  const isOpen = thread.status === "open";
-  const canSend = isOpen && canSendInThread(thread, viewer);
-  const canClose = isOpen && (viewer.role === "admin" || viewer.id === thread.creator_id);
-  const otherName =
-    viewer.id === thread.creator_id ? thread.subscriber_name : thread.creator_name;
+  // 구독자에게는 자신과 크리에이터의 메시지만 내려간다.
+  const messages = await listMessages(room, viewer, BUBBLE_POLICY.deleteWindowMs);
+  const isOpen = room.status === "open";
+  const canSend = canSendInRoom(room, viewer);
+  const canClose = isOpen && (viewer.role === "admin" || viewer.id === room.creator_id);
 
   return (
     <div className="flex h-[calc(100vh-9rem)] min-h-[28rem] flex-col overflow-hidden rounded-2xl bg-talk-bg shadow-sm">
@@ -49,13 +50,20 @@ async function RoomContent({ params }: { params: Promise<{ threadId: string }> }
         <Link href="/bubble" aria-label="버블 목록으로" className="text-xl text-gray-800">
           ‹
         </Link>
-        <h1 className="flex-1 truncate font-semibold text-gray-900">
-          {otherName}
-          {viewer.role === "admin" && (
-            <span className="ml-2 text-xs font-normal text-gray-600">(관리자 보기)</span>
-          )}
-        </h1>
-        {canClose && <CloseRoomButton threadId={thread.id} />}
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate font-semibold text-gray-900">
+            {room.title}
+            {viewer.role === "admin" && (
+              <span className="ml-2 text-xs font-normal text-gray-600">(관리자 보기)</span>
+            )}
+          </h1>
+          <p className="truncate text-xs text-gray-700">
+            {seesAllMessages(room, viewer)
+              ? `참여 ${room.member_count}명 · 모든 구독자의 메시지가 보여요`
+              : `${room.creator_name} · 내 메시지는 크리에이터에게만 보여요`}
+          </p>
+        </div>
+        {canClose && <CloseRoomButton roomId={room.id} />}
       </header>
 
       {/* column-reverse라서 새 메시지가 오면 스크롤이 맨 아래에 머문다. */}
@@ -123,7 +131,7 @@ async function RoomContent({ params }: { params: Promise<{ threadId: string }> }
       </div>
 
       {canSend ? (
-        <Composer threadId={thread.id} maxChars={maxCharsFor(viewer.role)} />
+        <Composer roomId={room.id} maxChars={maxCharsFor(viewer.role)} />
       ) : (
         <p className="bg-white px-4 py-3 text-center text-sm text-gray-500">
           {isOpen ? "이 대화방에서는 메시지를 보낼 수 없어요." : "닫힌 대화방입니다."}

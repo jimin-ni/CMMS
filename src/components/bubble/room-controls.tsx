@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { closeThreadAction, deleteMessageAction } from "@/lib/bubble/actions";
+import { closeRoomAction, deleteMessageAction } from "@/lib/bubble/actions";
 
 // 새 메시지를 주기적으로 가져온다. (실시간 방식은 PoC 후 결정)
 export function RoomRefresher() {
@@ -40,7 +40,7 @@ export function DeleteMessageButton({ messageId }: { messageId: string }) {
   );
 }
 
-export function CloseRoomButton({ threadId }: { threadId: string }) {
+export function CloseRoomButton({ roomId }: { roomId: string }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +52,7 @@ export function CloseRoomButton({ threadId }: { threadId: string }) {
         disabled={pending}
         onClick={() =>
           startTransition(async () => {
-            const result = await closeThreadAction(threadId);
+            const result = await closeRoomAction(roomId);
             if (result.ok) router.refresh();
             else setError(result.error);
           })

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { BUBBLE_POLICY, maxCharsFor, validateBody } from "@/lib/bubble/policy";
-import { canSendInThread, getThread, recentMessagesForPreview } from "@/lib/bubble/repo";
+import { canSendInRoom, getRoom, recentMessagesForPreview } from "@/lib/bubble/repo";
 import { previewReaction } from "@/lib/bubble/ai-preview";
 import { getViewer } from "@/lib/session";
 
@@ -10,16 +10,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
   }
 
-  const { threadId, draft } = (await request.json().catch(() => ({}))) as {
-    threadId?: string;
+  const { roomId, draft } = (await request.json().catch(() => ({}))) as {
+    roomId?: string;
     draft?: string;
   };
-  if (!threadId || typeof draft !== "string") {
+  if (!roomId || typeof draft !== "string") {
     return NextResponse.json({ error: "잘못된 요청이에요." }, { status: 400 });
   }
 
-  const thread = await getThread(threadId);
-  if (!thread || !canSendInThread(thread, viewer)) {
+  const room = await getRoom(roomId, viewer.id);
+  if (!room || !canSendInRoom(room, viewer)) {
     return NextResponse.json({ error: "이 대화방을 볼 수 없어요." }, { status: 403 });
   }
 
@@ -28,9 +28,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: check.error }, { status: 400 });
   }
 
-  const recent = await recentMessagesForPreview(thread.id, BUBBLE_POLICY.previewContextMessages);
+  // 구독자에게는 자신과 크리에이터의 메시지만 문맥으로 쓴다. 다른 구독자 메시지는 넘기지 않는다.
+  const recent = await recentMessagesForPreview(room, viewer, BUBBLE_POLICY.previewContextMessages);
   const context = recent.map((m) => ({
-    role: m.sender_id === thread.creator_id ? ("creator" as const) : ("subscriber" as const),
+    role: m.sender_id === room.creator_id ? ("creator" as const) : ("subscriber" as const),
     body: m.body.slice(0, BUBBLE_POLICY.previewContextCharsPerMessage),
   }));
 

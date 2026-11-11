@@ -9,7 +9,7 @@ type Preview =
   | { status: "unavailable"; reason: string }
   | { error: string };
 
-export function Composer({ threadId, maxChars }: { threadId: string; maxChars: number }) {
+export function Composer({ roomId, maxChars }: { roomId: string; maxChars: number }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [draft, setDraft] = useState("");
@@ -38,13 +38,13 @@ export function Composer({ threadId, maxChars }: { threadId: string; maxChars: n
       const res = await fetch("/api/bubble/preview", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ threadId, draft }),
+        body: JSON.stringify({ roomId, draft }),
       });
       setPreview((await res.json()) as Preview);
       setPreviewLoading(false);
     }, 800);
     return () => clearTimeout(timer);
-  }, [draft, length, threadId]);
+  }, [draft, length, roomId]);
 
   return (
     <div className="flex flex-col gap-2 bg-white p-3">
@@ -65,7 +65,7 @@ export function Composer({ threadId, maxChars }: { threadId: string; maxChars: n
       {previewLoading && <p className="text-xs text-key-stone">예상 반응을 확인하는 중...</p>}
 
       <form ref={formRef} action={formAction} className="flex flex-col gap-1">
-        <input type="hidden" name="threadId" value={threadId} />
+        <input type="hidden" name="roomId" value={roomId} />
         <div className="flex items-end gap-2">
           <textarea
             name="body"

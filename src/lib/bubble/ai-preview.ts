@@ -7,7 +7,7 @@ export type PreviewResult =
   | { status: "ok"; fit: "맞음" | "애매" | "어긋남"; expectedReaction: string; reason: string }
   | { status: "unavailable"; reason: string };
 
-const SYSTEM_PROMPT = `너는 크리에이터와 구독자의 1:1 대화를 돕는 판단 도우미다.
+const SYSTEM_PROMPT = `너는 크리에이터와 구독자의 대화를 돕는 판단 도우미다.
 주어진 최근 대화 문맥을 보고, 구독자의 새 메시지에 대해 크리에이터가 어떻게 반응할지 예측한다.
 또한 그 메시지가 지금까지의 대화 흐름과 자연스럽게 이어지는지(문맥 반영 여부)를 판단한다.
 반드시 아래 JSON 한 개만 출력한다. 다른 설명은 붙이지 않는다.

@@ -10,8 +10,8 @@ export type FeatureCard = {
 // 주요 기능 3종 (임시 화면용)
 export const FEATURES: FeatureCard[] = [
   {
-    title: "버블 1:1 채팅",
-    description: "크리에이터와 구독자의 1:1 메시지, AI 반응 미리보기",
+    title: "버블 채팅",
+    description: "크리에이터 1명과 구독자 여러 명의 대화방, AI 반응 미리보기",
     owner: "주요 기능 1 (본인)",
     status: "개발 중",
     href: "/bubble",
