@@ -1,8 +1,8 @@
 # 시참(시청자 참여) 개발 메모
 
-- 브랜치: `yoon-claude/feature-minigame` (목업 PoC가 올라간 브랜치)
+- 브랜치: `yoon-claude/feature-sicham` (main에서 분기, 목업 PoC가 올라간 브랜치)
 - 소유: 주요 기능 3 (Yoon) · 이 쪽 기준 1차
-- 상태: **기획 단계**. 코드 아님. `/sicham`에 화면 확인용 목업 PoC만 존재
+- 상태: **스키마 단계**. `/sicham` 목업 PoC + `db/migrations/0004_sicham.sql` 초안 (미적용, 번호 미통보)
 - 기획 근거: `docs/planning/02-features.md`
 
 ## 현재 목업 (PoC)
@@ -81,6 +81,9 @@
 | code lifecycle(코드 회전·재노출) | 보류 |
 | 로테이션 추적(이미 플레이한 사람 태그) | 승인하되 **보류** — 대형 방 전용 옵션 |
 | ban 회피(핸들 전부 변경) | 핸드폰 인증 가능성, 현재 focus 아님 |
+| no-show 쿨다운 구현 | 규칙은 결정됨(아래). 테이블·컬럼은 PoC 이후 |
+| 예약 시참 | PoC는 라이브 방송 중 모집만 |
+| presence 재확인 | PoC 이후 |
 
 ## 결정됨
 
@@ -146,16 +149,52 @@
 
 근거: Server Action은 클라이언트당 순차 실행이라 폴링이 전송을 막고 POST 전용. Route Handler는 폴링→SSE 전환과 LLM 스트리밍·외부 연동에 맞음. 위 「실시간 푸시 요구사항」의 폴링→SSE 결정과 일치한다.
 
-**시참(coplay) 테이블 추가 규칙 — 공유 DB:** 새 마이그레이션 번호(`000N`)로 추가하되, 번호가 겹치지 않게 **추가 전에 Jimin에게 통보**(Jimin 요청, #17). Better Auth 테이블은 건드리지 않는다.
+**시참 테이블 추가 규칙 — 공유 DB:** 새 마이그레이션 번호(`000N`)로 추가하되, 번호가 겹치지 않게 **추가 전에 Jimin에게 통보**(Jimin 요청, #17). Better Auth 테이블은 건드리지 않는다.
 
 **폴링 엔드포인트 참고 형태 (Jimin, 버블 선례):** `GET /api/bubble/rooms/[roomId]/messages?since=<커서>` → 커서 이후 생성·삭제분 + 다음 커서 + 방 상태 반환. 같은 주소로 나중에 SSE 전환. 시참 실시간 읽기(순번·슬롯·세션 상태)도 이 커서 기반 모양을 따른다.
 
-**미정:** 실시간 전달 방식(Socket.IO / SSE / 관리형 서비스)은 공통 인프라 측에서 아직 미정. 정해지면 #17 또는 후속 이슈로 재공지(이슈 #9 연계).
+**미정:** 실시간 전달 방식(Socket.IO / SSE / 관리형 서비스)은 공통 인프라 측에서 아직 미정. Jimin이 이슈 #19(실시간 전달 방식 결정과 적용)에서 추적하고, 결정은 04 문서 결정 로그에 남긴다.
+
+---
+
+## 데이터 모델 (`0004_sicham.sql` 초안, 2026-11-11)
+
+이전 HTML 초안(공유 `rooms` 재사용 + `sicham_session` 1:1 확장)은 폐기. main에 공유 `rooms`가 없고, 버블이 `bubble_*` 자체 테이블을 쓰는 선례를 따른다.
+
+규칙 (main 선례):
+
+- 자체 테이블 PK는 `uuid default gen_random_uuid()`, 사용자 FK는 `text references "user"(id)`.
+- 열거형은 `text` + `check (... in ...)`. Drizzle에서는 `text({ enum })`.
+- 팔로워 확인 없음. 버블과 같이 구독·결제 전까지 누구나 참여 (`subscriptions` 미생성, #12).
+
+테이블:
+
+| 테이블 | 역할 | 키 |
+|---|---|---|
+| `sicham_games` | 게임 카탈로그. 게임은 계속 늘 수 있어 코드 상수가 아닌 테이블 (반응 목록과 다름) | `id` text 슬러그 |
+| `sicham_game_handles` | 게임별 핸들. 크리에이터에게만 노출 | `(user_id, game_id)` |
+| `sicham_sessions` | 시참 방 (방송 1회분 모집) | uuid |
+| `sicham_members` | 3단계 명단. `status`로 queue / ready / party 구분 | uuid |
+| `sicham_bans` | 크리에이터 범위 영속 차단 | `(creator_id, user_id)` |
+| `sicham_notes` | 크리에이터 범위 비공개 메모 | `(creator_id, user_id)` |
+
+결정:
+
+- **대기 순번은 저장하지 않는다.** `queued_at` 순서로 계산. 오류가 보이면 다시 검토.
+- **입장 질문 답은 멤버에 저장하지 않는다.** 정확 일치 게이트라 저장값이 항상 정답과 같다.
+- **세션당 사용자 활성 행 1개.** `(session_id, user_id) where status in ('queue','ready','party')` 부분 유니크 인덱스. 나간·킥된 행은 기록으로 남고 재신청은 새 행.
+- **정원은 party에만 적용.** ready(준비)는 0명부터 무제한. `party_size` 초과 검사는 쓰기 시 세션 행을 잠그고(`for update`) 앱에서 한다.
+- 입장 코드(`join_code`)는 ready·party 상태인 본인에게만 응답에 포함.
+- **크리에이터당 닫히지 않은 시참 방 1개** (버블 선례). 부분 유니크 인덱스.
+- **테이블 이름은 기능 접두어 `sicham_`** (main 관례). 게임 카탈로그도 시참 소유.
+- **전원 대기열로(kick all)는 대기열 맨 뒤로.** 대상의 `queued_at`을 새로 찍는다. FCFS에서 참가자가 순환된다. 고정(locked) 멤버는 제외.
+- **하드코딩 값:** 글자 수 상한(제목 50, 핸들 100, 입장 질문 200, 정답 100, 입장 코드 200, 메모 500)은 SQL `check`에 고정값. 게임 표시 정보(장르, 섬네일 그라데이션, 이모지)는 테이블이 아닌 코드(`src/lib/sicham/mock.ts`)에 있다. 새 게임은 섬네일이 없을 수 있음 — 게임 추가가 드물고 AI로 추가할 예정이라 그대로 둔다.
 
 ---
 
 ## 다음 단계
 
+- `0004` 초안 확정 → Jimin에게 번호 통보 → 마이그레이션 적용 (공유 DB)
+- main 병합 후 `src/lib/schema.ts`에 시참 테이블 정의, `src/lib/sicham/repo.ts` 작성
 - 시참 이벤트/데이터 모양 초안 (미니게임 score API처럼)
-- join method library 데이터 모델 초안
-- 실시간 전송: 시참은 폴링 → SSE로 확정. Render의 SSE 배포 확인은 이슈 #9 연계
+- 실시간 전송: 시참은 폴링 → SSE로 확정. 배포 측 방식은 이슈 #19 연계
