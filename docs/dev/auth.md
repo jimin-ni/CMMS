@@ -16,10 +16,15 @@
 
 ## 로컬 실행
 
-1. PostgreSQL 준비 (로컬 DB 이름 예: `cmms`)
-2. `.env.example`을 `.env.local`로 복사해 값을 채움
-3. 테이블 생성: `npm run auth:migrate`
-4. 개발 서버: `npm run dev` → http://localhost:3000
+팀은 로컬 DB를 쓰지 않고 Render 공유 DB(`cmms-db-01`)를 함께 씁니다.
+
+1. Render 대시보드에서 Postgres의 External Database URL을 복사
+2. `.env.example`을 `.env.local`로 복사하고 `DATABASE_URL`에 위 주소를 넣음 (끝에 `?sslmode=verify-full`)
+3. `BETTER_AUTH_SECRET`에 긴 임의 문자열을 넣음
+4. 테이블 생성(처음 한 번): `npm run auth:migrate`
+5. 개발 서버: `npm run dev` → http://localhost:3000
+
+주의: `.env.local`은 Git에 올리지 않습니다. 공유 DB이므로 테스트 계정이 함께 쌓입니다.
 
 ## 화면
 
