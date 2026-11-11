@@ -2,7 +2,7 @@
 
 - 브랜치: `yoon-claude/feature-sicham` (main에서 분기, 목업 PoC가 올라간 브랜치)
 - 소유: 주요 기능 3 (Yoon) · 이 쪽 기준 1차
-- 상태: **스키마 단계**. `/sicham` 목업 PoC + `db/migrations/0005_sicham.sql` (번호 통보 #25. `0004`는 Jimin의 `creator_talk`가 먼저 적용)
+- 상태: **스키마 적용 완료 (2026-11-12)**. `/sicham` 목업 PoC + `db/migrations/0005_sicham.sql` 공유 DB 적용, `src/lib/schema.ts` 정의. 화면은 아직 목업 데이터 (번호 통보 #25. `0004`는 Jimin의 `creator_talk`가 먼저 적용)
 - 기획 근거: `docs/planning/02-features.md`
 
 ## 현재 목업 (PoC)
@@ -194,7 +194,7 @@
 
 ## 다음 단계
 
-- 공유 DB에 `0005` 적용. 적용 직전 `bubble_migrations`를 확인해 미적용이 `0005`뿐일 때만 `npm run db:bubble`
-- `src/lib/sicham/repo.ts` 작성 (`schema.ts` 정의는 완료)
+- `src/lib/sicham/repo.ts` 작성 → 목업(`mock.ts`)을 DB로 교체
+- 새 마이그레이션은 적용 직전 `bubble_migrations`를 확인한다. 러너는 미적용 파일을 전부 실행한다
 - 시참 이벤트/데이터 모양 초안 (미니게임 score API처럼)
 - 실시간 전송: 시참은 폴링 → SSE로 확정. 배포 측 방식은 이슈 #19 연계
