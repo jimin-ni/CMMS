@@ -18,7 +18,7 @@ import {
 
 export default function RoomPage({ params }: { params: Promise<{ threadId: string }> }) {
   return (
-    <main className="mx-auto w-full max-w-2xl px-6 py-10">
+    <main className="mx-auto w-full max-w-2xl px-4 py-6">
       <Suspense fallback={<p className="text-sm text-key-stone">불러오는 중...</p>}>
         <RoomContent params={params} />
       </Suspense>
@@ -42,58 +42,104 @@ async function RoomContent({ params }: { params: Promise<{ threadId: string }> }
     viewer.id === thread.creator_id ? thread.subscriber_name : thread.creator_name;
 
   return (
-    <div className="flex flex-col rounded-2xl bg-white">
+    <div className="flex h-[calc(100vh-9rem)] min-h-[28rem] flex-col overflow-hidden rounded-2xl bg-talk-bg shadow-sm">
       {isOpen && <RoomRefresher />}
 
-      <header className="flex items-center justify-between border-b border-key-stone/30 px-5 py-4">
-        <div className="flex flex-col">
-          <Link href="/bubble" className="text-xs text-key-stone underline">
-            버블 목록
-          </Link>
-          <h1 className="text-lg font-bold text-key-brown">
-            {otherName}
-            {viewer.role === "admin" && (
-              <span className="ml-2 text-xs font-normal text-key-stone">(관리자 보기)</span>
-            )}
-          </h1>
-        </div>
+      <header className="flex items-center gap-3 bg-talk-bg px-4 py-3">
+        <Link href="/bubble" aria-label="버블 목록으로" className="text-xl text-gray-800">
+          ‹
+        </Link>
+        <h1 className="flex-1 truncate font-semibold text-gray-900">
+          {otherName}
+          {viewer.role === "admin" && (
+            <span className="ml-2 text-xs font-normal text-gray-600">(관리자 보기)</span>
+          )}
+        </h1>
         {canClose && <CloseRoomButton threadId={thread.id} />}
       </header>
 
-      <ul className="flex flex-col gap-3 px-5 py-4">
-        {messages.length === 0 && (
-          <li className="text-sm text-key-stone">아직 메시지가 없어요.</li>
-        )}
-        {messages.map((message) => {
-          const mine = message.sender_id === viewer.id;
-          const deletable = message.can_delete;
-          return (
-            <li key={message.id} className={`flex flex-col ${mine ? "items-end" : "items-start"}`}>
-              <span className="text-xs text-key-stone">{message.sender_name}</span>
+      {/* column-reverse라서 새 메시지가 오면 스크롤이 맨 아래에 머문다. */}
+      <div className="flex flex-1 flex-col-reverse overflow-y-auto px-3 py-2">
+        <ul className="flex flex-col gap-1">
+          {messages.length === 0 && (
+            <li className="py-6 text-center text-sm text-gray-600">아직 메시지가 없어요.</li>
+          )}
+          {messages.map((message, index) => {
+            const mine = message.sender_id === viewer.id;
+            // 같은 사람이 이어서 보낸 메시지는 이름과 프로필을 한 번만 보여준다.
+            const firstOfRun = index === 0 || messages[index - 1].sender_id !== message.sender_id;
+            const bubble = (
               <p
-                className={`mt-1 max-w-[80%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm ${
-                  mine ? "bg-key-blue/30" : "bg-key-mist"
-                } ${message.deleted_at ? "italic text-key-stone" : ""}`}
+                className={`max-w-[70vw] whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-sm sm:max-w-sm ${
+                  mine ? "bg-talk-yellow" : "bg-white"
+                } ${message.deleted_at ? "italic text-gray-500" : "text-gray-900"}`}
               >
                 {message.deleted_at ? "삭제된 메시지입니다." : message.body}
               </p>
-              {deletable && (
-                <span className="mt-1">
-                  <DeleteMessageButton messageId={message.id} />
-                </span>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+            );
+            const time = (
+              <time className="shrink-0 text-[10px] text-gray-600">
+                {formatTime(message.created_at)}
+              </time>
+            );
+
+            if (mine) {
+              return (
+                <li
+                  key={message.id}
+                  className={`flex flex-col items-end ${firstOfRun ? "mt-2" : ""}`}
+                >
+                  <div className="flex items-end gap-1">
+                    {time}
+                    {bubble}
+                  </div>
+                  {message.can_delete && <DeleteMessageButton messageId={message.id} />}
+                </li>
+              );
+            }
+
+            return (
+              <li key={message.id} className={`flex gap-2 ${firstOfRun ? "mt-2" : ""}`}>
+                <div className="w-9 shrink-0">
+                  {firstOfRun && (
+                    <span className="flex h-9 w-9 items-center justify-center rounded-[14px] bg-key-mist text-sm font-semibold text-key-brown">
+                      {Array.from(message.sender_name)[0] ?? "?"}
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-col items-start">
+                  {firstOfRun && (
+                    <span className="mb-1 text-xs text-gray-700">{message.sender_name}</span>
+                  )}
+                  <div className="flex items-end gap-1">
+                    {bubble}
+                    {time}
+                  </div>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
 
       {canSend ? (
         <Composer threadId={thread.id} maxChars={maxCharsFor(viewer.role)} />
       ) : (
-        <p className="border-t border-key-stone/30 px-5 py-4 text-sm text-key-stone">
+        <p className="bg-white px-4 py-3 text-center text-sm text-gray-500">
           {isOpen ? "이 대화방에서는 메시지를 보낼 수 없어요." : "닫힌 대화방입니다."}
         </p>
       )}
     </div>
   );
+}
+
+// 서버 시간대와 관계없이 한국 시간으로 "오후 3:12"처럼 보여준다.
+const timeFormat = new Intl.DateTimeFormat("ko-KR", {
+  hour: "numeric",
+  minute: "2-digit",
+  timeZone: "Asia/Seoul",
+});
+
+function formatTime(date: Date): string {
+  return timeFormat.format(date);
 }

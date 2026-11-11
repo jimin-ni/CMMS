@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { sendMessageAction, type ActionResult } from "@/lib/bubble/actions";
 
@@ -11,6 +11,7 @@ type Preview =
 
 export function Composer({ threadId, maxChars }: { threadId: string; maxChars: number }) {
   const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
   const [draft, setDraft] = useState("");
   const [preview, setPreview] = useState<Preview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -46,7 +47,7 @@ export function Composer({ threadId, maxChars }: { threadId: string; maxChars: n
   }, [draft, length, threadId]);
 
   return (
-    <div className="flex flex-col gap-3 border-t border-key-stone/30 p-4">
+    <div className="flex flex-col gap-2 bg-white p-3">
       {preview && "status" in preview && preview.status === "ok" && (
         <div className="rounded-lg bg-key-mist p-3 text-sm">
           <p className="text-xs text-key-stone">AI 반응 미리보기 (참고용)</p>
@@ -63,32 +64,41 @@ export function Composer({ threadId, maxChars }: { threadId: string; maxChars: n
       )}
       {previewLoading && <p className="text-xs text-key-stone">예상 반응을 확인하는 중...</p>}
 
-      <form action={formAction} className="flex flex-col gap-2">
+      <form ref={formRef} action={formAction} className="flex flex-col gap-1">
         <input type="hidden" name="threadId" value={threadId} />
-        <textarea
-          name="body"
-          value={draft}
-          onChange={(e) => {
-            setDraft(e.target.value);
-            if (Array.from(e.target.value.trim()).length < 2) setPreview(null);
-          }}
-          rows={3}
-          placeholder="메시지를 입력하세요"
-          className="resize-none rounded-lg border border-key-stone/50 px-3 py-2 text-sm"
-        />
+        <div className="flex items-end gap-2">
+          <textarea
+            name="body"
+            value={draft}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              if (Array.from(e.target.value.trim()).length < 2) setPreview(null);
+            }}
+            onKeyDown={(e) => {
+              // Enter는 보내기, Shift+Enter는 줄바꿈. 한글 조합 중인 Enter는 무시한다.
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                if (!pending) formRef.current?.requestSubmit();
+              }
+            }}
+            rows={2}
+            placeholder="메시지 입력"
+            className="flex-1 resize-none bg-transparent px-1 py-1 text-sm outline-none"
+          />
+          <button
+            type="submit"
+            disabled={pending || length === 0}
+            className="rounded-md bg-talk-yellow px-3 py-2 text-sm font-medium text-gray-900 disabled:bg-key-mist disabled:text-key-stone"
+          >
+            {pending ? "..." : "전송"}
+          </button>
+        </div>
         <div className="flex items-center justify-between text-xs">
           <span className={length > maxChars ? "text-red-700" : "text-key-stone"}>
             {length} / {maxChars}자
           </span>
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded-full bg-key-brown px-4 py-1.5 text-sm text-key-mist disabled:opacity-60"
-          >
-            {pending ? "보내는 중..." : "보내기"}
-          </button>
+          {state && !state.ok && <span className="text-red-700">{state.error}</span>}
         </div>
-        {state && !state.ok && <p className="text-sm text-red-700">{state.error}</p>}
       </form>
     </div>
   );

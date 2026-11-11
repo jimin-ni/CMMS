@@ -3,6 +3,8 @@ export type FeatureCard = {
   description: string;
   owner: string;
   status: string;
+  // 카드를 누르면 이동할 화면. 없으면 이동하지 않는다.
+  href?: string;
 };
 
 // 주요 기능 3종 (임시 화면용)
@@ -11,7 +13,8 @@ export const FEATURES: FeatureCard[] = [
     title: "버블 1:1 채팅",
     description: "크리에이터와 구독자의 1:1 메시지, AI 반응 미리보기",
     owner: "주요 기능 1 (본인)",
-    status: "개발 예정",
+    status: "개발 중",
+    href: "/bubble",
   },
   {
     title: "미니게임 + 경쟁 순위 보드",
