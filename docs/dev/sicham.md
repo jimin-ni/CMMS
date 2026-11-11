@@ -136,14 +136,21 @@
 공통 인프라 측(Jimin)이 우리 제안 2건을 채택해 `docs/planning/04-roadmap-and-team.md`에 기록(`a6c53da`). 시참·미니게임 모두 이 규칙을 따른다.
 
 - **ORM: Drizzle.** 직접 `pg` SQL 대신 Drizzle ORM. 타입 검사로 공유 DB 실수 방지, SQL에 가까워 이전 쉬움, pgvector로 AI 확장 대비, Prisma보다 가벼움.
-- **DB 접근은 `repo` 계층에만** 둔다. 컴포넌트·액션·핸들러에서 직접 쿼리하지 않는다.
-- **Better Auth 테이블은 `auth:migrate`가 계속 관리**하고, Drizzle에서는 **조회만** 한다 (마이그레이션 금지).
+- **DB 접근은 `repo` 계층에만** 둔다. 컴포넌트·액션·핸들러에서 직접 쿼리하지 않는다. (예: `src/lib/bubble/repo.ts`)
+- **스키마 기준은 `db/migrations/000N_이름.sql`.** Drizzle 테이블 정의는 `src/lib/schema.ts`에 그에 맞춰 둔다.
+- **Better Auth 테이블은 `npm run auth:migrate`가 계속 관리**하고, Drizzle에서는 **조회만** 한다 (마이그레이션 금지).
 - **읽기/쓰기 3분할:**
   - 쓰기(참여 신청, 큐 나가기, 승인 등) → **Server Action**
   - 첫 화면 읽기 → **Server Component**
   - 실시간 읽기(순번·슬롯·세션 상태 동기화)와 AI 스트림 → **GET Route Handler** (폴링 → 동일 주소로 SSE 업그레이드)
 
 근거: Server Action은 클라이언트당 순차 실행이라 폴링이 전송을 막고 POST 전용. Route Handler는 폴링→SSE 전환과 LLM 스트리밍·외부 연동에 맞음. 위 「실시간 푸시 요구사항」의 폴링→SSE 결정과 일치한다.
+
+**시참(coplay) 테이블 추가 규칙 — 공유 DB:** 새 마이그레이션 번호(`000N`)로 추가하되, 번호가 겹치지 않게 **추가 전에 Jimin에게 통보**(Jimin 요청, #17). Better Auth 테이블은 건드리지 않는다.
+
+**폴링 엔드포인트 참고 형태 (Jimin, 버블 선례):** `GET /api/bubble/rooms/[roomId]/messages?since=<커서>` → 커서 이후 생성·삭제분 + 다음 커서 + 방 상태 반환. 같은 주소로 나중에 SSE 전환. 시참 실시간 읽기(순번·슬롯·세션 상태)도 이 커서 기반 모양을 따른다.
+
+**미정:** 실시간 전달 방식(Socket.IO / SSE / 관리형 서비스)은 공통 인프라 측에서 아직 미정. 정해지면 #17 또는 후속 이슈로 재공지(이슈 #9 연계).
 
 ---
 
