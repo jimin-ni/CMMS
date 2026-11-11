@@ -42,5 +42,6 @@ yarn-error.log*
 next-env.d.ts
 
 # project-local AI files (private, not for the repo)
-/CLAUDE.md
+# /CLAUDE.md is tracked on main (shared rules). Yoon-side notes live in CLAUDE.local.md.
+/CLAUDE.local.md
 /.claude/
