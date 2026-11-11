@@ -1,24 +1,20 @@
 # 05. GitHub 운영 방식
 
-- 상태: 계획 초안. 실제 워크플로 파일은 다음 브랜치에서 추가합니다.
+- 상태: 브랜치·커밋 규칙은 사용 중. GitHub Actions는 아직 없음 (2026-11-12). 세부 규칙은 저장소 루트의 `CLAUDE.md`가 기준입니다.
 
 ## 1. 브랜치 규칙
 
-- 모든 작업 브랜치는 `jimins-claude/` 접두사를 사용합니다.
-  - 예: `jimins-claude/docs-planning`, `jimins-claude/feature-auth-rbac`, `jimins-claude/feature-bubble-chat`
+- 작업 브랜치는 `작업자이름-claude/` 접두사를 사용합니다. 본인은 `jimins-claude/`, 팀원은 `yoon-claude/`입니다.
+  - 예: `jimins-claude/plan-docs`, `jimins-claude/feature-main1-bubble`, `jimins-claude/fix-bubble-member-count`
 - Git 브랜치명에는 대괄호와 공백을 사용할 수 없으므로 `[Jimin's Claude]` 표기 대신 위 형식을 씁니다.
-- 기본 브랜치는 `main`입니다.
-- 머지는 본인이 커밋을 확인한 뒤 직접 합니다.
+- 기본 브랜치는 `main`입니다. main에 직접 커밋하지 않습니다.
+- 작업은 PR로 main에 머지하고, 머지된 브랜치는 지웁니다. 다른 사람의 브랜치는 건드리지 않습니다.
 
 ## 2. 커밋 규칙
 
-- 커밋 메시지는 한글 또는 영문으로 작성하며, 변경 목적이 드러나게 씁니다.
-- Claude가 작성한 커밋에는 다음 줄을 붙입니다.
-
-```
-Co-Authored-By: Claude Haiku 5.5 <noreply@anthropic.com>
-Claude-Session: https://claude.ai/code/session_019RWrzLfuoCywu6ddHkWr2H
-```
+- 커밋 메시지는 `feat:`, `fix:`, `docs:` 형식으로 시작하고, 변경 목적이 드러나게 씁니다.
+- Claude가 작성한 커밋에는 `Co-Authored-By: Claude 모델명 <noreply@anthropic.com>` 줄을 붙입니다.
+- CI가 생기기 전까지는 커밋 전에 `npx tsc --noEmit`, `npx eslint src scripts`, `npm run build`를 로컬에서 돌립니다.
 
 ## 3. GitHub Actions 계획 [가설]
 
