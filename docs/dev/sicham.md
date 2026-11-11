@@ -2,7 +2,7 @@
 
 - 브랜치: `yoon-claude/feature-sicham` (main에서 분기, 목업 PoC가 올라간 브랜치)
 - 소유: 주요 기능 3 (Yoon) · 이 쪽 기준 1차
-- 상태: **스키마 단계**. `/sicham` 목업 PoC + `db/migrations/0004_sicham.sql` 초안 (미적용, 번호 미통보)
+- 상태: **스키마 단계**. `/sicham` 목업 PoC + `db/migrations/0005_sicham.sql` (번호 통보 #25. `0004`는 Jimin의 `creator_talk`가 먼저 적용)
 - 기획 근거: `docs/planning/02-features.md`
 
 ## 현재 목업 (PoC)
@@ -157,7 +157,7 @@
 
 ---
 
-## 데이터 모델 (`0004_sicham.sql` 초안, 2026-11-11)
+## 데이터 모델 (`0005_sicham.sql`, 2026-11-11)
 
 이전 HTML 초안(공유 `rooms` 재사용 + `sicham_session` 1:1 확장)은 폐기. main에 공유 `rooms`가 없고, 버블이 `bubble_*` 자체 테이블을 쓰는 선례를 따른다.
 
@@ -194,7 +194,7 @@
 
 ## 다음 단계
 
-- `0004` 초안 확정 → Jimin에게 번호 통보 → 마이그레이션 적용 (공유 DB)
-- main 병합 후 `src/lib/schema.ts`에 시참 테이블 정의, `src/lib/sicham/repo.ts` 작성
+- 공유 DB에 `0005` 적용. 적용 직전 `bubble_migrations`를 확인해 미적용이 `0005`뿐일 때만 `npm run db:bubble`
+- `src/lib/sicham/repo.ts` 작성 (`schema.ts` 정의는 완료)
 - 시참 이벤트/데이터 모양 초안 (미니게임 score API처럼)
 - 실시간 전송: 시참은 폴링 → SSE로 확정. 배포 측 방식은 이슈 #19 연계
