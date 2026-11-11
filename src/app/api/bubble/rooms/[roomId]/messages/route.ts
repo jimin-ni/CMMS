@@ -1,5 +1,5 @@
 import { BUBBLE_POLICY } from "@/lib/bubble/policy";
-import { canAccessRoom, dbNowMs, getRoom, listMessages } from "@/lib/bubble/repo";
+import { canAccessRoom, dbNowMs, getRoom, listMessages, seesAllMessages } from "@/lib/bubble/repo";
 import { getViewer } from "@/lib/session";
 
 // 늦게 커밋된 메시지를 놓치지 않도록 다음 요청 기준점을 조금 앞당긴다.
@@ -36,5 +36,7 @@ export async function GET(
     messages,
     cursor: new Date(nowMs - CURSOR_OVERLAP_MS).toISOString(),
     status: room.status,
+    // 참여 인원은 모든 메시지를 보는 사람(크리에이터, 관리자)의 머리글에만 쓴다.
+    memberCount: seesAllMessages(room, viewer) ? room.member_count : null,
   });
 }

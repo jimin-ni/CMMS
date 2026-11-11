@@ -15,6 +15,8 @@ type Props = {
   initialMessages: MessageRow[];
   initialCursor: string;
   isOpen: boolean;
+  // 머리글에 보이는 참여 인원. 머리글이 없는 구독자 화면에서는 null.
+  memberCount: number | null;
   canSend: boolean;
   maxChars: number;
   // 크리에이터 예상 반응 미리보기. 구독자에게만 켠다.
@@ -23,7 +25,7 @@ type Props = {
 };
 
 export function RoomChat(props: Props) {
-  const { roomId, viewerId, isOpen } = props;
+  const { roomId, viewerId, isOpen, memberCount } = props;
   const router = useRouter();
   const [messages, setMessages] = useState(props.initialMessages);
   const cursor = useRef(props.initialCursor);
@@ -43,6 +45,7 @@ export function RoomChat(props: Props) {
         messages: MessageRow[];
         cursor: string;
         status: "open" | "closed";
+        memberCount: number | null;
       };
       cursor.current = data.cursor;
       if (data.messages.length > 0) {
@@ -52,12 +55,12 @@ export function RoomChat(props: Props) {
           return [...byId.values()].sort((a, b) => a.created_at.localeCompare(b.created_at));
         });
       }
-      // 방이 닫히면 머리글과 입력창을 서버에서 다시 그린다.
-      if (data.status === "closed") router.refresh();
+      // 방이 닫히거나 참여 인원이 바뀌면 머리글과 입력창을 서버에서 다시 그린다.
+      if (data.status === "closed" || data.memberCount !== memberCount) router.refresh();
     } finally {
       inFlight.current = false;
     }
-  }, [roomId, router]);
+  }, [roomId, router, memberCount]);
 
   useEffect(() => {
     if (!isOpen) return;
