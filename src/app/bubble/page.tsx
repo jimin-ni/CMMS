@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { canAccessRoom, canJoinRoom, listRoomsFor } from "@/lib/bubble/repo";
 import { getViewer } from "@/lib/session";
 import { JoinRoomButton } from "@/components/bubble/room-forms";
+import { ChatTabs } from "@/components/bubble/chat-tabs";
 
 export default function BubbleListPage() {
   return (
@@ -31,6 +32,7 @@ async function BubbleListContent() {
           </Link>
         )}
       </header>
+      {viewer.role === "creator" && <ChatTabs active="subscribers" />}
       {rooms.length === 0 && (
         <p className="px-5 pb-6 text-sm text-key-stone">
           {viewer.role === "creator" ? "아직 연 대화방이 없어요." : "열린 대화방이 없어요."}

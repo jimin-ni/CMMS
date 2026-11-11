@@ -8,6 +8,8 @@ export const user = pgTable("user", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   email: text("email").notNull(),
+  // admin 플러그인이 추가한 열. 값은 public, creator, admin (null이면 public으로 본다).
+  role: text("role"),
 });
 
 export const bubbleRooms = pgTable("bubble_rooms", {
@@ -42,4 +44,32 @@ export const creatorProfiles = pgTable("creator_profiles", {
   userId: text("user_id").primaryKey(),
   persona: text("persona").notNull().default(""),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// 크리에이터 톡 (0004). 크리에이터끼리만 쓰는 1:1 또는 그룹 대화.
+export const creatorChats = pgTable("creator_chats", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  title: text("title"),
+  directKey: text("direct_key").unique(),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const creatorChatMembers = pgTable(
+  "creator_chat_members",
+  {
+    chatId: uuid("chat_id").notNull(),
+    userId: text("user_id").notNull(),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.chatId, t.userId] })],
+);
+
+export const creatorChatMessages = pgTable("creator_chat_messages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  chatId: uuid("chat_id").notNull(),
+  senderId: text("sender_id").notNull(),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });

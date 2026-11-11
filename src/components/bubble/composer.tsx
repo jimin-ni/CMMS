@@ -1,20 +1,26 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
-import { sendMessageAction, type ActionResult } from "@/lib/bubble/actions";
+import type { ActionResult } from "@/lib/bubble/actions";
 import { BUBBLE_POLICY } from "@/lib/bubble/policy";
 import type { PreviewResult } from "@/lib/bubble/ai-preview";
 import { ReactionView } from "./reaction-view";
 
+export type SendAction = (prev: ActionResult | null, formData: FormData) => Promise<ActionResult>;
+
 export function Composer({
-  roomId,
+  sendAction,
+  target,
   maxChars,
-  showReactionPreview,
+  previewRoomId,
   onSent,
 }: {
-  roomId: string;
+  // 버블과 크리에이터 톡이 같은 입력창을 쓰고, 보내기 동작과 대상 id만 다르다.
+  sendAction: SendAction;
+  target: { name: string; value: string };
   maxChars: number;
-  showReactionPreview: boolean;
+  // 크리에이터 예상 반응을 미리 볼 버블 방. 구독자에게만 넘기고, 없으면 미리보기를 끈다.
+  previewRoomId: string | null;
   onSent: () => void;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
@@ -24,7 +30,7 @@ export function Composer({
 
   // 전송 성공 시 입력창을 비우고 목록을 새로 가져온다.
   async function submitAction(prev: ActionResult | null, formData: FormData) {
-    const result = await sendMessageAction(prev, formData);
+    const result = await sendAction(prev, formData);
     if (result.ok) {
       setDraft("");
       setPreview(null);
@@ -39,7 +45,7 @@ export function Composer({
   // 입력이 3초 동안 바뀌지 않으면 크리에이터 예상 반응을 요청한다.
   // 그 사이 입력이 바뀌면 타이머와 진행 중인 요청을 모두 취소한다.
   useEffect(() => {
-    if (!showReactionPreview || length < 2 || length > maxChars) return;
+    if (!previewRoomId || length < 2 || length > maxChars) return;
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       setPreviewLoading(true);
@@ -47,7 +53,7 @@ export function Composer({
         const res = await fetch("/api/bubble/preview", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ roomId, draft }),
+          body: JSON.stringify({ roomId: previewRoomId, draft }),
           signal: controller.signal,
         });
         setPreview(res.ok ? ((await res.json()) as PreviewResult) : null);
@@ -61,7 +67,7 @@ export function Composer({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [draft, length, maxChars, roomId, showReactionPreview]);
+  }, [draft, length, maxChars, previewRoomId]);
 
   return (
     <div className="flex flex-col gap-2 bg-white p-3">
@@ -74,7 +80,7 @@ export function Composer({
       {previewLoading && <p className="text-xs text-key-stone">예상 반응을 확인하는 중...</p>}
 
       <form ref={formRef} action={formAction} className="flex flex-col gap-1">
-        <input type="hidden" name="roomId" value={roomId} />
+        <input type="hidden" name={target.name} value={target.value} />
         <div className="flex items-end gap-2">
           <textarea
             name="body"

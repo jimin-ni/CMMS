@@ -31,10 +31,10 @@ export type MessageRow = {
   can_delete: boolean;
 };
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // col이 지금으로부터 ms 안쪽인지
-function within(col: AnyPgColumn, ms: number): SQL {
+export function within(col: AnyPgColumn, ms: number): SQL {
   return sql`${col} > now() - ${ms}::int * interval '1 millisecond'`;
 }
 
