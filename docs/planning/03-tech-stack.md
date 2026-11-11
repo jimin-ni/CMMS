@@ -67,7 +67,7 @@ Next.js의 기본 서버는 WebSocket 연결을 직접 다루지 않으므로, �
 | subscriptions | id, subscriber_id, creator_id, status, started_at, expires_at | 기념일 표시에 started_at 사용 |
 | rooms | id, type (1:1, creator_pair, broadcast) | 방 구조를 여러 기능이 공유 |
 | room_members | room_id, user_id | |
-| messages | id, room_id, sender_id, body (JSON), created_at, read_at | |
+| messages | id, room_id, sender_id, body (JSON), created_at | |
 | reaction_logs | id, message_draft_hash, persona_version, emojis, latency_ms | 비용 추적과 캐시 기준 |
 
 현재 구현된 테이블 [사실] (2026-11-12)
@@ -99,7 +99,7 @@ Next.js의 기본 서버는 WebSocket 연결을 직접 다루지 않으므로, �
 초안
 
 - REST: `/api/auth/*`, `/api/creators/*`, `/api/subscriptions/*`, `/api/rooms/*`
-- 실시간 이벤트 명명 규칙: `domain:action` (예: `message:send`, `message:read`, `reaction:preview`)
+- 실시간 이벤트 명명 규칙: `domain:action` (예: `message:send`, `message:delete`, `reaction:preview`)
 - AI 미리보기 요청: 서버 라우트에서 처리하고, 실패 시 빈 결과를 반환합니다.
 
 ## 5. Render 트랙 대응 (Render Workflows 사용 필수) [가설]
