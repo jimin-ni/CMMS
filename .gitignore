@@ -40,3 +40,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# project-local AI files (private, not for the repo)
+/CLAUDE.md
+/.claude/

@@ -3,6 +3,7 @@ export type FeatureCard = {
   description: string;
   owner: string;
   status: string;
+  href?: string;
 };
 
 // 주요 기능 3종 (임시 화면용)
@@ -24,5 +25,6 @@ export const FEATURES: FeatureCard[] = [
     description: "방송 접속 코드 공유, 투표, 룰렛, 닉네임 교환",
     owner: "주요 기능 3 (팀원 B)",
     status: "준비 중",
+    href: "/sicham",
   },
 ];
