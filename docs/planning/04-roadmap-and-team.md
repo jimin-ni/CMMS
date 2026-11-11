@@ -57,6 +57,7 @@
 | 2026-11-11 | 버블 DB | `0002` 마이그레이션으로 1:1 테이블 삭제, `bubble_rooms`·`bubble_members`·`bubble_messages` 새로 만듦 |
 | 2026-11-11 | DB 접근 방식 (#17) | `pg` 직접 SQL 대신 Drizzle ORM으로 전환. 이유: 타입 검사로 공유 DB 실수 방지, SQL에 가까워 기존 쿼리 이전 쉬움, pgvector 지원으로 AI 확장 대비, Prisma보다 가벼움. Better Auth 테이블은 `auth:migrate`가 계속 관리하고 Drizzle에서는 조회만 함. DB 접근은 `repo` 계층에만 둠 |
 | 2026-11-11 | 읽기·쓰기 규칙 (#17) | 쓰기는 Server Actions, 첫 화면 읽기는 Server Component, 실시간 읽기와 AI 스트림은 GET Route Handler. 이유: Server Actions는 클라이언트당 순서대로 실행돼 폴링이 전송을 막고 POST 전용임. Route Handler는 폴링에서 SSE로 같은 주소로 옮길 수 있고, LLM 스트리밍과 외부 연동에 맞음 |
+| 2026-11-11 | AI 반응 미리보기 | 구독자 초안이 3초 동안 바뀌지 않으면 Jev(TypeSafe AI)가 크리에이터 성격과 대화 문맥을 읽고 얼굴 이모지 1개를 고름. 이유: 반응 목록에서 고르는 문제라 선택형 응답을 주는 Jev가 맞고 지연이 짧음. 성격은 `0003` 마이그레이션의 `creator_profiles.persona`에 크리에이터별로 저장. 반응은 나중에 이미지 파일로 바꿀 수 있게 `kind`로 구분 |
 
 ## 5. 미결 사항
 

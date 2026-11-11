@@ -17,6 +17,8 @@ type Props = {
   isOpen: boolean;
   canSend: boolean;
   maxChars: number;
+  // 크리에이터 예상 반응 미리보기. 구독자에게만 켠다.
+  showReactionPreview: boolean;
   closedNotice: string;
 };
 
@@ -132,7 +134,12 @@ export function RoomChat(props: Props) {
       </div>
 
       {props.canSend ? (
-        <Composer roomId={roomId} maxChars={props.maxChars} onSent={sync} />
+        <Composer
+          roomId={roomId}
+          maxChars={props.maxChars}
+          showReactionPreview={props.showReactionPreview}
+          onSent={sync}
+        />
       ) : (
         <p className="bg-white px-4 py-3 text-center text-sm text-gray-500">
           {props.closedNotice}

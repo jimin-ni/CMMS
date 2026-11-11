@@ -2,24 +2,24 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { sendMessageAction, type ActionResult } from "@/lib/bubble/actions";
-
-type Preview =
-  | { status: "ok"; fit: "맞음" | "애매" | "어긋남"; expectedReaction: string; reason: string }
-  | { status: "unavailable"; reason: string }
-  | { error: string };
+import { BUBBLE_POLICY } from "@/lib/bubble/policy";
+import type { PreviewResult } from "@/lib/bubble/ai-preview";
+import { ReactionView } from "./reaction-view";
 
 export function Composer({
   roomId,
   maxChars,
+  showReactionPreview,
   onSent,
 }: {
   roomId: string;
   maxChars: number;
+  showReactionPreview: boolean;
   onSent: () => void;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [draft, setDraft] = useState("");
-  const [preview, setPreview] = useState<Preview | null>(null);
+  const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
   // 전송 성공 시 입력창을 비우고 목록을 새로 가져온다.
@@ -36,37 +36,40 @@ export function Composer({
 
   const length = Array.from(draft.trim()).length;
 
-  // 입력이 멈추고 0.8초 뒤에 AI 미리보기를 요청한다.
+  // 입력이 3초 동안 바뀌지 않으면 크리에이터 예상 반응을 요청한다.
+  // 그 사이 입력이 바뀌면 타이머와 진행 중인 요청을 모두 취소한다.
   useEffect(() => {
-    if (length < 2) return;
+    if (!showReactionPreview || length < 2 || length > maxChars) return;
+    const controller = new AbortController();
     const timer = setTimeout(async () => {
       setPreviewLoading(true);
-      const res = await fetch("/api/bubble/preview", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ roomId, draft }),
-      });
-      setPreview((await res.json()) as Preview);
-      setPreviewLoading(false);
-    }, 800);
-    return () => clearTimeout(timer);
-  }, [draft, length, roomId]);
+      try {
+        const res = await fetch("/api/bubble/preview", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ roomId, draft }),
+          signal: controller.signal,
+        });
+        setPreview(res.ok ? ((await res.json()) as PreviewResult) : null);
+      } catch {
+        // 취소되었거나 네트워크 오류. 미리보기는 참고용이라 조용히 넘긴다.
+      } finally {
+        if (!controller.signal.aborted) setPreviewLoading(false);
+      }
+    }, BUBBLE_POLICY.previewDebounceMs);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [draft, length, maxChars, roomId, showReactionPreview]);
 
   return (
     <div className="flex flex-col gap-2 bg-white p-3">
-      {preview && "status" in preview && preview.status === "ok" && (
-        <div className="rounded-lg bg-key-mist p-3 text-sm">
-          <p className="text-xs text-key-stone">AI 반응 미리보기 (참고용)</p>
-          <p className="mt-1">
-            예상 반응: {preview.expectedReaction}
-          </p>
-          <p className="mt-1 text-xs text-key-stone">
-            문맥 반영: {preview.fit} · {preview.reason}
-          </p>
+      {preview?.status === "ok" && (
+        <div className="flex items-center gap-2 rounded-lg bg-key-mist px-3 py-2 text-sm">
+          <ReactionView reaction={preview.reaction} size={28} />
+          <span className="text-xs text-key-stone">예상 반응 (AI 참고용)</span>
         </div>
-      )}
-      {preview && "status" in preview && preview.status === "unavailable" && (
-        <p className="text-xs text-key-stone">{preview.reason}</p>
       )}
       {previewLoading && <p className="text-xs text-key-stone">예상 반응을 확인하는 중...</p>}
 
@@ -78,7 +81,9 @@ export function Composer({
             value={draft}
             onChange={(e) => {
               setDraft(e.target.value);
-              if (Array.from(e.target.value.trim()).length < 2) setPreview(null);
+              // 미리보기는 지금 입력한 문장에 대한 것만 보여준다.
+              setPreview(null);
+              setPreviewLoading(false);
             }}
             onKeyDown={(e) => {
               // Enter는 보내기, Shift+Enter는 줄바꿈. 한글 조합 중인 Enter는 무시한다.

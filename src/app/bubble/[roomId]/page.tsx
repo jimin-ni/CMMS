@@ -72,6 +72,7 @@ async function RoomContent({ params }: { params: Promise<{ roomId: string }> }) 
         isOpen={isOpen}
         canSend={canSendInRoom(room, viewer)}
         maxChars={maxCharsFor(viewer.role)}
+        showReactionPreview={viewer.role === "public" && viewer.id !== room.creator_id}
         closedNotice={isOpen ? "이 대화방에서는 메시지를 보낼 수 없어요." : "닫힌 대화방입니다."}
       />
     </div>
