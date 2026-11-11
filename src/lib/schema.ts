@@ -1,4 +1,9 @@
-import { pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { customType, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+
+// Drizzle에 bytea 기본 타입이 없어서 직접 정의한다. node-postgres는 bytea를 Buffer로 주고받는다.
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType: () => "bytea",
+});
 
 // Drizzle 쿼리용 테이블 정의. 실제 스키마(제약, 인덱스)는 db/migrations의 SQL 파일이 기준이다.
 // 테이블을 바꿀 때는 새 마이그레이션 파일을 추가하고, 여기 정의도 같이 맞춘다.
@@ -72,4 +77,12 @@ export const creatorChatMessages = pgTable("creator_chat_messages", {
   body: text("body").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
+});
+
+// 크리에이터 프로필 사진 (0005). 크리에이터만 등록한다.
+export const creatorAvatars = pgTable("creator_avatars", {
+  userId: text("user_id").primaryKey(),
+  content: bytea("content").notNull(),
+  contentType: text("content_type").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

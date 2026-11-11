@@ -6,6 +6,7 @@ import { canUseTalk, chatDisplayName, listChatsFor, listCreators } from "@/lib/b
 import { getViewer } from "@/lib/session";
 import { ChatTabs } from "@/components/bubble/chat-tabs";
 import { CreatorPicker } from "@/components/bubble/creator-picker";
+import { Avatar } from "@/components/avatar";
 
 // 크리에이터 톡: 크리에이터끼리만 쓰는 1:1 또는 그룹 대화. 크리에이터가 아니면 들어올 수 없다.
 export default function CreatorTalkPage({
@@ -61,9 +62,7 @@ async function CreatorTalkContent({
                   href={`/bubble/talk/${chat.id}`}
                   className="flex items-center gap-3 px-5 py-3 hover:bg-key-mist/60"
                 >
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] bg-key-blue/40 font-semibold text-key-brown">
-                    {Array.from(name)[0] ?? "?"}
-                  </span>
+                  <Avatar name={name} url={chat.avatar_url} size={44} />
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate font-medium text-gray-900">{name}</span>
                     <span className="truncate text-xs text-key-stone">

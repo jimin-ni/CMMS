@@ -4,8 +4,9 @@ import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { startChatAction } from "@/lib/bubble/talk-actions";
 import type { CreatorCard } from "@/lib/bubble/talk-repo";
+import { Avatar } from "@/components/avatar";
 
-// 크리에이터 프로필 카드 목록. 한 명을 고르면 1:1 대화, 여러 명을 고르면 그룹 대화를 연다.
+// 크리에이터 프로필 카드 목록(사진과 닉네임만). 한 명을 고르면 1:1 대화, 여러 명을 고르면 그룹 대화를 연다.
 export function CreatorPicker({ creators, maxPick }: { creators: CreatorCard[]; maxPick: number }) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(startChatAction, null);
@@ -33,7 +34,7 @@ export function CreatorPicker({ creators, maxPick }: { creators: CreatorCard[]; 
           return (
             <li key={creator.id}>
               <label
-                className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-key-brown ${
+                className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-key-brown ${
                   checked ? "border-key-brown bg-key-mist" : "border-key-stone/30 hover:bg-key-mist/50"
                 }`}
               >
@@ -45,26 +46,16 @@ export function CreatorPicker({ creators, maxPick }: { creators: CreatorCard[]; 
                   onChange={() => toggle(creator.id)}
                   className="sr-only"
                 />
-                <span
-                  aria-hidden
-                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] bg-key-blue/40 text-lg font-semibold text-key-brown"
-                >
-                  {Array.from(creator.name)[0] ?? "?"}
-                </span>
-                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="flex items-center gap-2">
-                    <span className="truncate font-medium text-gray-900">{creator.name}</span>
-                    <span className="rounded-full bg-key-blue/30 px-2 py-0.5 text-[10px] text-key-brown">
-                      크리에이터
-                    </span>
-                  </span>
-                  <span className="line-clamp-2 text-xs text-key-stone">
-                    {creator.persona || "아직 소개가 없어요."}
+                <Avatar name={creator.name} url={creator.avatar_url} size={48} />
+                <span className="flex min-w-0 flex-1 items-center gap-2">
+                  <span className="truncate font-medium text-gray-900">{creator.name}</span>
+                  <span className="shrink-0 rounded-full bg-key-blue/30 px-2 py-0.5 text-[10px] text-key-brown">
+                    크리에이터
                   </span>
                 </span>
                 <span
                   aria-hidden
-                  className={`mt-1 h-5 w-5 shrink-0 rounded-full border-2 ${
+                  className={`h-5 w-5 shrink-0 rounded-full border-2 ${
                     checked ? "border-key-brown bg-key-brown" : "border-key-stone/60"
                   }`}
                 />

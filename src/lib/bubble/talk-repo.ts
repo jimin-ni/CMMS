@@ -1,22 +1,24 @@
 import { and, asc, desc, eq, exists, gt, ilike, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
+  creatorAvatars,
   creatorChatMembers,
   creatorChatMessages,
   creatorChats,
-  creatorProfiles,
   user,
 } from "@/lib/schema";
+import { avatarUrl } from "@/lib/creator/avatar";
 import type { Viewer } from "@/lib/session";
 import { UUID_PATTERN, within, type MessageRow } from "./repo";
 
 // 크리에이터 톡: 크리에이터끼리만 쓰는 1:1 또는 그룹 대화.
 // 대화를 만들 때 참여자 모두의 역할을 DB에서 확인하고, 읽고 쓸 때마다 보는 사람의 역할과 참여 여부를 확인한다.
 
+// 다른 크리에이터에게는 프로필 사진과 닉네임만 보여준다. 성격(페르소나)은 본인과 AI 미리보기만 쓴다.
 export type CreatorCard = {
   id: string;
   name: string;
-  persona: string;
+  avatar_url: string | null;
 };
 
 export type ChatRow = {
@@ -26,6 +28,8 @@ export type ChatRow = {
   other_names: string[];
   member_count: number;
   last_message_at: Date | null;
+  // 1:1 대화면 상대의 프로필 사진. 그룹 대화와 사진이 없는 경우 null.
+  avatar_url: string | null;
 };
 
 export function canUseTalk(viewer: Viewer): boolean {
@@ -40,9 +44,9 @@ function escapeLike(text: string): string {
 export async function listCreators(viewer: Viewer, query: string, limit: number): Promise<CreatorCard[]> {
   const q = query.trim();
   const rows = await db
-    .select({ id: user.id, name: user.name, persona: creatorProfiles.persona })
+    .select({ id: user.id, name: user.name, avatar_at: creatorAvatars.updatedAt })
     .from(user)
-    .leftJoin(creatorProfiles, eq(creatorProfiles.userId, user.id))
+    .leftJoin(creatorAvatars, eq(creatorAvatars.userId, user.id))
     .where(
       and(
         eq(user.role, "creator"),
@@ -52,7 +56,7 @@ export async function listCreators(viewer: Viewer, query: string, limit: number)
     )
     .orderBy(asc(user.name))
     .limit(limit);
-  return rows.map((r) => ({ ...r, persona: r.persona ?? "" }));
+  return rows.map((r) => ({ id: r.id, name: r.name, avatar_url: avatarUrl(r.id, r.avatar_at) }));
 }
 
 // 넘겨받은 id가 모두 크리에이터인지 확인하고, 실제 크리에이터 id만 돌려준다.
@@ -135,14 +139,33 @@ function chatSelect(viewerId: string) {
       ), '{}')`,
       member_count: db.$count(creatorChatMembers, eq(creatorChatMembers.chatId, creatorChats.id)),
       last_message_at: sql<Date | null>`${LAST_MESSAGE_AT}`.mapWith(creatorChatMessages.createdAt),
+      // 1:1 대화의 상대 id와 상대 프로필 사진 수정 시각
+      direct_other_id: sql<string | null>`case when ${creatorChats.directKey} is not null then (
+        select m.user_id from ${creatorChatMembers} m
+        where m.chat_id = ${CHAT_ID} and m.user_id <> ${viewerId} limit 1
+      ) end`,
+      direct_other_avatar_at: sql<Date | null>`case when ${creatorChats.directKey} is not null then (
+        select a.updated_at from ${creatorAvatars} a join ${creatorChatMembers} m on m.user_id = a.user_id
+        where m.chat_id = ${CHAT_ID} and m.user_id <> ${viewerId} limit 1
+      ) end`.mapWith(creatorAvatars.updatedAt),
     })
     .from(creatorChats);
 }
 
+type ChatSelectRow = Awaited<ReturnType<typeof chatSelect>>[number];
+
+function toChatRow({ direct_other_id, direct_other_avatar_at, ...chat }: ChatSelectRow): ChatRow {
+  return {
+    ...chat,
+    avatar_url: direct_other_id ? avatarUrl(direct_other_id, direct_other_avatar_at) : null,
+  };
+}
+
 export async function listChatsFor(viewer: Viewer): Promise<ChatRow[]> {
-  return chatSelect(viewer.id)
+  const rows = await chatSelect(viewer.id)
     .where(isChatMember(viewer.id))
     .orderBy(desc(sql`coalesce(${LAST_MESSAGE_AT}, ${creatorChats.createdAt})`));
+  return rows.map(toChatRow);
 }
 
 // 보는 사람이 참여한 대화만 돌려준다. 참여하지 않았거나 크리에이터가 아니면 null.
@@ -151,7 +174,7 @@ export async function getChatFor(chatId: string, viewer: Viewer): Promise<ChatRo
   const rows = await chatSelect(viewer.id).where(
     and(eq(creatorChats.id, chatId), isChatMember(viewer.id)),
   );
-  return rows[0] ?? null;
+  return rows[0] ? toChatRow(rows[0]) : null;
 }
 
 export function chatDisplayName(chat: ChatRow): string {
@@ -174,6 +197,7 @@ export async function listChatMessages(
       id: creatorChatMessages.id,
       sender_id: creatorChatMessages.senderId,
       sender_name: user.name,
+      sender_avatar_at: creatorAvatars.updatedAt,
       body: sql<string | null>`case when ${creatorChatMessages.deletedAt} is null then ${creatorChatMessages.body} end`,
       created_at: creatorChatMessages.createdAt,
       deleted_at: creatorChatMessages.deletedAt,
@@ -183,12 +207,14 @@ export async function listChatMessages(
     })
     .from(creatorChatMessages)
     .innerJoin(user, eq(user.id, creatorChatMessages.senderId))
+    .leftJoin(creatorAvatars, eq(creatorAvatars.userId, creatorChatMessages.senderId))
     .where(and(eq(creatorChatMessages.chatId, chatId), changed))
     .orderBy(desc(creatorChatMessages.createdAt))
     .limit(limit);
 
-  return rows.reverse().map((m) => ({
+  return rows.reverse().map(({ sender_avatar_at, ...m }) => ({
     ...m,
+    sender_avatar_url: avatarUrl(m.sender_id, sender_avatar_at),
     created_at: m.created_at.toISOString(),
     deleted_at: m.deleted_at?.toISOString() ?? null,
   }));

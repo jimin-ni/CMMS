@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { MessageRow } from "@/lib/bubble/repo";
 import { Composer, type SendAction } from "./composer";
 import { DeleteMessageButton, type DeleteAction } from "./room-controls";
+import { Avatar } from "@/components/avatar";
 
 // 새 메시지를 가져오는 간격. (실시간 방식은 PoC 후 결정, 지금은 폴링)
 const POLL_MS = 5000;
@@ -126,9 +127,7 @@ export function RoomChat(props: Props) {
               <li key={message.id} className={`flex gap-2 ${firstOfRun ? "mt-2" : ""}`}>
                 <div className="w-9 shrink-0">
                   {firstOfRun && (
-                    <span className="flex h-9 w-9 items-center justify-center rounded-[14px] bg-key-mist text-sm font-semibold text-key-brown">
-                      {Array.from(message.sender_name)[0] ?? "?"}
-                    </span>
+                    <Avatar name={message.sender_name} url={message.sender_avatar_url} size={36} />
                   )}
                 </div>
                 <div className="flex flex-col items-start">
