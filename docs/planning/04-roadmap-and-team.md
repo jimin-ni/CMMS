@@ -55,6 +55,8 @@
 | 2026-11-11 | 버블 참여 방식 | 구독자가 열린 방 목록에서 직접 참여 (구독·결제 전까지 누구나) |
 | 2026-11-11 | 버블 방 개수 | 크리에이터당 열린 방 1개. 닫아야 새 방을 열 수 있음 |
 | 2026-11-11 | 버블 DB | `0002` 마이그레이션으로 1:1 테이블 삭제, `bubble_rooms`·`bubble_members`·`bubble_messages` 새로 만듦 |
+| 2026-11-11 | DB 접근 방식 (#17) | `pg` 직접 SQL 대신 Drizzle ORM으로 전환. 이유: 타입 검사로 공유 DB 실수 방지, SQL에 가까워 기존 쿼리 이전 쉬움, pgvector 지원으로 AI 확장 대비, Prisma보다 가벼움. Better Auth 테이블은 `auth:migrate`가 계속 관리하고 Drizzle에서는 조회만 함. DB 접근은 `repo` 계층에만 둠 |
+| 2026-11-11 | 읽기·쓰기 규칙 (#17) | 쓰기는 Server Actions, 첫 화면 읽기는 Server Component, 실시간 읽기와 AI 스트림은 GET Route Handler. 이유: Server Actions는 클라이언트당 순서대로 실행돼 폴링이 전송을 막고 POST 전용임. Route Handler는 폴링에서 SSE로 같은 주소로 옮길 수 있고, LLM 스트리밍과 외부 연동에 맞음 |
 
 ## 5. 미결 사항
 
