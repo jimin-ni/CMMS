@@ -1,18 +1,25 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { sendMessageAction, type ActionResult } from "@/lib/bubble/actions";
+import { BUBBLE_POLICY } from "@/lib/bubble/policy";
+import type { PreviewResult } from "@/lib/bubble/ai-preview";
+import { ReactionView } from "./reaction-view";
 
-type Preview =
-  | { status: "ok"; fit: "맞음" | "애매" | "어긋남"; expectedReaction: string; reason: string }
-  | { status: "unavailable"; reason: string }
-  | { error: string };
-
-export function Composer({ threadId, maxChars }: { threadId: string; maxChars: number }) {
-  const router = useRouter();
+export function Composer({
+  roomId,
+  maxChars,
+  showReactionPreview,
+  onSent,
+}: {
+  roomId: string;
+  maxChars: number;
+  showReactionPreview: boolean;
+  onSent: () => void;
+}) {
+  const formRef = useRef<HTMLFormElement>(null);
   const [draft, setDraft] = useState("");
-  const [preview, setPreview] = useState<Preview | null>(null);
+  const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
   // 전송 성공 시 입력창을 비우고 목록을 새로 가져온다.
@@ -21,7 +28,7 @@ export function Composer({ threadId, maxChars }: { threadId: string; maxChars: n
     if (result.ok) {
       setDraft("");
       setPreview(null);
-      router.refresh();
+      onSent();
     }
     return result;
   }
@@ -29,66 +36,80 @@ export function Composer({ threadId, maxChars }: { threadId: string; maxChars: n
 
   const length = Array.from(draft.trim()).length;
 
-  // 입력이 멈추고 0.8초 뒤에 AI 미리보기를 요청한다.
+  // 입력이 3초 동안 바뀌지 않으면 크리에이터 예상 반응을 요청한다.
+  // 그 사이 입력이 바뀌면 타이머와 진행 중인 요청을 모두 취소한다.
   useEffect(() => {
-    if (length < 2) return;
+    if (!showReactionPreview || length < 2 || length > maxChars) return;
+    const controller = new AbortController();
     const timer = setTimeout(async () => {
       setPreviewLoading(true);
-      const res = await fetch("/api/bubble/preview", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ threadId, draft }),
-      });
-      setPreview((await res.json()) as Preview);
-      setPreviewLoading(false);
-    }, 800);
-    return () => clearTimeout(timer);
-  }, [draft, length, threadId]);
+      try {
+        const res = await fetch("/api/bubble/preview", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ roomId, draft }),
+          signal: controller.signal,
+        });
+        setPreview(res.ok ? ((await res.json()) as PreviewResult) : null);
+      } catch {
+        // 취소되었거나 네트워크 오류. 미리보기는 참고용이라 조용히 넘긴다.
+      } finally {
+        if (!controller.signal.aborted) setPreviewLoading(false);
+      }
+    }, BUBBLE_POLICY.previewDebounceMs);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [draft, length, maxChars, roomId, showReactionPreview]);
 
   return (
-    <div className="flex flex-col gap-3 border-t border-key-stone/30 p-4">
-      {preview && "status" in preview && preview.status === "ok" && (
-        <div className="rounded-lg bg-key-mist p-3 text-sm">
-          <p className="text-xs text-key-stone">AI 반응 미리보기 (참고용)</p>
-          <p className="mt-1">
-            예상 반응: {preview.expectedReaction}
-          </p>
-          <p className="mt-1 text-xs text-key-stone">
-            문맥 반영: {preview.fit} · {preview.reason}
-          </p>
+    <div className="flex flex-col gap-2 bg-white p-3">
+      {preview?.status === "ok" && (
+        <div className="flex items-center gap-2 rounded-lg bg-key-mist px-3 py-2 text-sm">
+          <ReactionView reaction={preview.reaction} size={28} />
+          <span className="text-xs text-key-stone">예상 반응 (AI 참고용)</span>
         </div>
-      )}
-      {preview && "status" in preview && preview.status === "unavailable" && (
-        <p className="text-xs text-key-stone">{preview.reason}</p>
       )}
       {previewLoading && <p className="text-xs text-key-stone">예상 반응을 확인하는 중...</p>}
 
-      <form action={formAction} className="flex flex-col gap-2">
-        <input type="hidden" name="threadId" value={threadId} />
-        <textarea
-          name="body"
-          value={draft}
-          onChange={(e) => {
-            setDraft(e.target.value);
-            if (Array.from(e.target.value.trim()).length < 2) setPreview(null);
-          }}
-          rows={3}
-          placeholder="메시지를 입력하세요"
-          className="resize-none rounded-lg border border-key-stone/50 px-3 py-2 text-sm"
-        />
+      <form ref={formRef} action={formAction} className="flex flex-col gap-1">
+        <input type="hidden" name="roomId" value={roomId} />
+        <div className="flex items-end gap-2">
+          <textarea
+            name="body"
+            value={draft}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              // 미리보기는 지금 입력한 문장에 대한 것만 보여준다.
+              setPreview(null);
+              setPreviewLoading(false);
+            }}
+            onKeyDown={(e) => {
+              // Enter는 보내기, Shift+Enter는 줄바꿈. 한글 조합 중인 Enter는 무시한다.
+              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                if (!pending) formRef.current?.requestSubmit();
+              }
+            }}
+            rows={2}
+            placeholder="메시지 입력"
+            className="flex-1 resize-none bg-transparent px-1 py-1 text-sm outline-none"
+          />
+          <button
+            type="submit"
+            disabled={pending || length === 0}
+            className="rounded-md bg-talk-yellow px-3 py-2 text-sm font-medium text-gray-900 disabled:bg-key-mist disabled:text-key-stone"
+          >
+            {pending ? "..." : "전송"}
+          </button>
+        </div>
         <div className="flex items-center justify-between text-xs">
           <span className={length > maxChars ? "text-red-700" : "text-key-stone"}>
             {length} / {maxChars}자
           </span>
-          <button
-            type="submit"
-            disabled={pending}
-            className="rounded-full bg-key-brown px-4 py-1.5 text-sm text-key-mist disabled:opacity-60"
-          >
-            {pending ? "보내는 중..." : "보내기"}
-          </button>
+          {state && !state.ok && <span className="text-red-700">{state.error}</span>}
         </div>
-        {state && !state.ok && <p className="text-sm text-red-700">{state.error}</p>}
       </form>
     </div>
   );
