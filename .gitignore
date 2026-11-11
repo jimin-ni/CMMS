@@ -40,3 +40,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Claude Code local settings (Yoon-side)
+.claude/settings.local.json
+/.claude/
+/CLAUDE.md

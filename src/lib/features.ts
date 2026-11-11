@@ -3,6 +3,7 @@ export type FeatureCard = {
   description: string;
   owner: string;
   status: string;
+  href?: string;
 };
 
 // 주요 기능 3종 (임시 화면용)
@@ -18,6 +19,7 @@ export const FEATURES: FeatureCard[] = [
     description: "미니게임 결과를 집계해 순위를 보여줍니다",
     owner: "주요 기능 2 (팀원 A)",
     status: "준비 중",
+    href: "/minigame",
   },
   {
     title: "시참 도구",
