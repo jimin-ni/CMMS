@@ -79,7 +79,7 @@ export const creatorChatMessages = pgTable("creator_chat_messages", {
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
 });
 
-// 크리에이터 프로필 사진 (0005). 크리에이터만 등록한다.
+// 크리에이터 프로필 사진 (0006). 크리에이터만 등록한다.
 export const creatorAvatars = pgTable("creator_avatars", {
   userId: text("user_id").primaryKey(),
   content: bytea("content").notNull(),
