@@ -65,6 +65,18 @@
 - `dev-panel.tsx`는 배포 전에 제거합니다.
 - 브라우저가 보낸 점수는 위조할 수 있습니다.
 
+## 아키텍처 전환 (#17, 2026-11-11 확정)
+
+공통 인프라 측(Jimin)이 DB 접근·읽기/쓰기 규칙을 확정해 `docs/planning/04-roadmap-and-team.md`에 기록(`a6c53da`). 미니게임도 이를 따른다. 상세 규칙은 `docs/dev/sicham.md`의 「DB 접근 · 읽기/쓰기 규칙」과 동일.
+
+**해야 할 전환:**
+
+- **점수 제출을 Route Handler → Server Action으로 이전.** 점수 제출은 *쓰기*이고, 확정 규칙상 쓰기는 Server Action이다. 현재 미니게임은 route handler(`POST`)로 제출한다. 이전 시 `resolveMockPlayer`(`x-mock-player`) 교체도 함께: Server Action 안에서 `auth.api.getSession`으로 신원 확인.
+- **저장소를 Drizzle `repo` 계층으로.** `mock-store.ts`(메모리) → Drizzle ORM 통한 `repo` 계층. 컴포넌트·액션에서 직접 쿼리 금지. Better Auth 테이블은 조회만.
+- **리더보드 실시간 읽기는 GET Route Handler 유지.** 확정 규칙상 실시간 읽기는 Route Handler(폴링→SSE)가 정식 패턴이라 변경 없음. 첫 화면 순위는 Server Component로 읽을 수 있음.
+
+요약: **쓰기(점수 제출) = Server Action, 실시간 읽기(리더보드) = GET Route Handler, 저장 = Drizzle repo 계층.**
+
 ## 2048 샘플 확인 결과
 
 [mateuszsokola/2048-in-react](https://github.com/mateuszsokola/2048-in-react) (MIT)를 React 19.3, Next 16.4.6으로 올려 저장소 밖에서 시험했습니다.
