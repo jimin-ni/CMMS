@@ -45,10 +45,9 @@ Claude Code가 이 저장소에서 작업할 때 따를 규칙입니다. 답변�
 - 다른 사람의 브랜치(예: `yoon-claude/...`)는 건드리지 않습니다.
 - 커밋 메시지는 `feat:`, `fix:`, `docs:` 형식을 씁니다. 끝에 다음 두 줄을 붙입니다.
   ```
-  Co-Authored-By: Claude Haiku 5.5 <noreply@anthropic.com>
-  Claude-Session: https://claude.ai/code/session_019RWrzLfuoCywu6ddHkWr2H
+  Co-Authored-By: Claude 모델명 
   ```
-- PR 본문 끝에는 `🤖 Generated with [Claude Code](https://claude.com/claude-code)`를 붙입니다.
+- PR 본문 끝에는 `🤖  작업자: Jimin & Generated with [Claude Code](https://claude.com/claude-code)`를 붙입니다.
 
 ## 커밋 전 확인
 - 타입 검사: `npx tsc --noEmit`
