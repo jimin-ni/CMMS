@@ -131,6 +131,22 @@
 
 ---
 
+## DB 접근 · 읽기/쓰기 규칙 (#17, 2026-11-11 확정)
+
+공통 인프라 측(Jimin)이 우리 제안 2건을 채택해 `docs/planning/04-roadmap-and-team.md`에 기록(`a6c53da`). 시참·미니게임 모두 이 규칙을 따른다.
+
+- **ORM: Drizzle.** 직접 `pg` SQL 대신 Drizzle ORM. 타입 검사로 공유 DB 실수 방지, SQL에 가까워 이전 쉬움, pgvector로 AI 확장 대비, Prisma보다 가벼움.
+- **DB 접근은 `repo` 계층에만** 둔다. 컴포넌트·액션·핸들러에서 직접 쿼리하지 않는다.
+- **Better Auth 테이블은 `auth:migrate`가 계속 관리**하고, Drizzle에서는 **조회만** 한다 (마이그레이션 금지).
+- **읽기/쓰기 3분할:**
+  - 쓰기(참여 신청, 큐 나가기, 승인 등) → **Server Action**
+  - 첫 화면 읽기 → **Server Component**
+  - 실시간 읽기(순번·슬롯·세션 상태 동기화)와 AI 스트림 → **GET Route Handler** (폴링 → 동일 주소로 SSE 업그레이드)
+
+근거: Server Action은 클라이언트당 순차 실행이라 폴링이 전송을 막고 POST 전용. Route Handler는 폴링→SSE 전환과 LLM 스트리밍·외부 연동에 맞음. 위 「실시간 푸시 요구사항」의 폴링→SSE 결정과 일치한다.
+
+---
+
 ## 다음 단계
 
 - 시참 이벤트/데이터 모양 초안 (미니게임 score API처럼)
