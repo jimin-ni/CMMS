@@ -77,6 +77,11 @@
 
 요약: **쓰기(점수 제출) = Server Action, 실시간 읽기(리더보드) = GET Route Handler, 저장 = Drizzle repo 계층.**
 
+**스키마·공유 DB (Jimin 후속, #17):**
+
+- 점수 테이블은 `db/migrations/000N_이름.sql`로 추가하고 Drizzle 정의를 `src/lib/schema.ts`에 맞춘다. 공유 DB라 **추가 전 Jimin에게 번호 통보**.
+- 리더보드 폴링은 버블 선례(`GET /api/.../messages?since=<커서>` → 커서 이후 변경분 + 다음 커서 + 상태)와 같은 커서 기반 모양으로.
+
 ## 2048 샘플 확인 결과
 
 [mateuszsokola/2048-in-react](https://github.com/mateuszsokola/2048-in-react) (MIT)를 React 19.3, Next 16.4.6으로 올려 저장소 밖에서 시험했습니다.
