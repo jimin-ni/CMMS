@@ -1,7 +1,6 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { sendMessageAction, type ActionResult } from "@/lib/bubble/actions";
 
 type Preview =
@@ -9,8 +8,15 @@ type Preview =
   | { status: "unavailable"; reason: string }
   | { error: string };
 
-export function Composer({ roomId, maxChars }: { roomId: string; maxChars: number }) {
-  const router = useRouter();
+export function Composer({
+  roomId,
+  maxChars,
+  onSent,
+}: {
+  roomId: string;
+  maxChars: number;
+  onSent: () => void;
+}) {
   const formRef = useRef<HTMLFormElement>(null);
   const [draft, setDraft] = useState("");
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -22,7 +28,7 @@ export function Composer({ roomId, maxChars }: { roomId: string; maxChars: numbe
     if (result.ok) {
       setDraft("");
       setPreview(null);
-      router.refresh();
+      onSent();
     }
     return result;
   }

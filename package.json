@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "better-auth": "^1.7.19",
+    "drizzle-orm": "^0.45.4",
     "next": "16.4.6",
     "pg": "^8.23.1",
     "react": "19.3.0",
