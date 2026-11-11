@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import { listThreadsFor } from "@/lib/bubble/repo";
+import { listRoomsFor } from "@/lib/bubble/repo";
 import { getViewer } from "@/lib/session";
-import { OpenRoomForm } from "@/components/bubble/open-room-form";
+import { OpenRoomForm } from "@/components/bubble/room-forms";
 import { CloseRoomButton } from "@/components/bubble/room-controls";
+import { PersonaForm } from "@/components/creator/persona-form";
+import { getPersona, PERSONA_MAX } from "@/lib/creator/profile";
 
 export default function CreatorPage() {
   return (
@@ -21,33 +23,62 @@ async function CreatorContent() {
   if (!viewer) redirect("/login");
   if (viewer.role !== "creator") redirect("/");
 
-  const threads = await listThreadsFor(viewer);
+  const [rooms, persona] = await Promise.all([listRoomsFor(viewer), getPersona(viewer.id)]);
+  // 크리에이터는 열린 방을 하나만 가질 수 있다.
+  const openRoom = rooms.find((room) => room.status === "open");
+  const closedRooms = rooms.filter((room) => room.status === "closed");
 
   return (
     <div className="flex flex-col gap-8">
       <section className="flex flex-col gap-3 rounded-2xl bg-white p-6">
         <h1 className="text-xl font-bold text-key-brown">크리에이터 페이지</h1>
-        <p className="text-sm text-key-stone">{viewer.name}님의 대화방을 열고 관리합니다.</p>
-        <OpenRoomForm />
+        {openRoom ? (
+          <>
+            <p className="text-sm text-key-stone">
+              지금 열린 대화방입니다. 새 대화방은 이 방을 닫은 뒤에 열 수 있어요.
+            </p>
+            <div className="flex items-center justify-between gap-3 rounded-xl bg-key-mist/60 px-4 py-3 text-sm">
+              <Link href={`/bubble/${openRoom.id}`} className="min-w-0 flex-1">
+                <span className="block truncate font-medium text-key-brown underline">
+                  {openRoom.title}
+                </span>
+                <span className="text-xs text-key-stone">참여 {openRoom.member_count}명</span>
+              </Link>
+              <CloseRoomButton roomId={openRoom.id} />
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-key-stone">
+              {viewer.name}님의 대화방을 엽니다. 구독자가 직접 참여하고, 내 메시지는 참여한 모든
+              구독자에게 보여요.
+            </p>
+            <OpenRoomForm />
+          </>
+        )}
       </section>
 
       <section className="flex flex-col gap-3 rounded-2xl bg-white p-6">
-        <h2 className="text-lg font-medium text-key-brown">내 대화방</h2>
-        {threads.length === 0 && (
-          <p className="text-sm text-key-stone">아직 연 대화방이 없어요.</p>
+        <h2 className="text-lg font-medium text-key-brown">AI 반응 미리보기 설정</h2>
+        <p className="text-sm text-key-stone">
+          구독자가 메시지를 보내기 전에 내 예상 반응을 이모지로 미리 보여줘요. AI가 아래 성격을
+          참고합니다.
+        </p>
+        <PersonaForm initialPersona={persona} maxChars={PERSONA_MAX} />
+      </section>
+
+      <section className="flex flex-col gap-3 rounded-2xl bg-white p-6">
+        <h2 className="text-lg font-medium text-key-brown">닫힌 대화방</h2>
+        {closedRooms.length === 0 && (
+          <p className="text-sm text-key-stone">아직 닫은 대화방이 없어요.</p>
         )}
         <ul className="flex flex-col divide-y divide-key-stone/20">
-          {threads.map((thread) => (
-            <li key={thread.id} className="flex items-center justify-between py-3 text-sm">
-              <Link href={`/bubble/${thread.id}`} className="font-medium text-key-brown underline">
-                {thread.subscriber_name}
+          {closedRooms.map((room) => (
+            <li key={room.id} className="flex items-center justify-between py-3 text-sm">
+              <Link href={`/bubble/${room.id}`} className="font-medium text-key-brown underline">
+                {room.title}
               </Link>
-              <span className="flex items-center gap-3">
-                <span className="text-xs text-key-stone">
-                  {thread.status === "open" ? "열림" : "닫힘"}
-                </span>
-                {thread.status === "open" && <CloseRoomButton threadId={thread.id} />}
-              </span>
+              <span className="text-xs text-key-stone">참여 {room.member_count}명</span>
             </li>
           ))}
         </ul>

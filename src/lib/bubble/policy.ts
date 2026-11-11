@@ -15,6 +15,9 @@ export const BUBBLE_POLICY = {
   // AI 미리보기에 넣는 최근 대화 개수와 메시지당 자르는 길이
   previewContextMessages: 10,
   previewContextCharsPerMessage: 200,
+
+  // 구독자가 입력을 멈추고 이만큼 지나면 크리에이터 예상 반응을 요청한다.
+  previewDebounceMs: 3000,
 } as const;
 
 export function maxCharsFor(role: "admin" | "creator" | "public"): number {
