@@ -1,0 +1,16 @@
+{
+  "palette": { "wall": "#EADCC4", "trim": "#565344", "accent": "#A6613C" },
+  "window": { "wall": "back", "at": -2.6, "w": 1.6, "h": 1.2, "y": 2.55 },
+  "door": { "wall": "left", "at": 3.0 },
+  "screen": { "wall": "back", "at": 0 },
+  "posters": { "wall": "left", "at": [0.0, 0.95, 1.9] },
+  "table": { "x": 0.4, "z": 0.4, "projector": "left" },
+  "items": [
+    { "type": "bed", "x": 2.55, "z": -3.2, "rot": 0 },
+    { "type": "shelf", "x": -3.7, "z": -1.4, "rot": 90 },
+    { "type": "plant", "x": -3.55, "z": -3.55, "size": 1.6 },
+    { "type": "snake", "x": -1.25, "z": -3.65 },
+    { "type": "lamp", "x": 0.95, "z": -3.5 },
+    { "type": "books", "x": -3.4, "z": 0.4 }
+  ]
+}

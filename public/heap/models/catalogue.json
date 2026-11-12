@@ -1,0 +1,31 @@
+{
+  "source": "Kenney Furniture Kit 2.0 (CC0)",
+  "licence": "kenney-furniture/License.txt",
+  "models": [
+    { "id": "bedDouble", "file": "kenney-furniture/bedDouble.glb", "label": "더블 침대", "category": "bed" },
+    { "id": "bedSingle", "file": "kenney-furniture/bedSingle.glb", "label": "싱글 침대", "category": "bed" },
+    { "id": "desk", "file": "kenney-furniture/desk.glb", "label": "책상", "category": "table" },
+    { "id": "table", "file": "kenney-furniture/table.glb", "label": "식탁", "category": "table" },
+    { "id": "tableCoffee", "file": "kenney-furniture/tableCoffee.glb", "label": "낮은 탁자", "category": "table" },
+    { "id": "chairDesk", "file": "kenney-furniture/chairDesk.glb", "label": "책상 의자", "category": "chair" },
+    { "id": "chair", "file": "kenney-furniture/chair.glb", "label": "의자", "category": "chair" },
+    { "id": "chairCushion", "file": "kenney-furniture/chairCushion.glb", "label": "방석 의자", "category": "chair" },
+    { "id": "loungeSofa", "file": "kenney-furniture/loungeSofa.glb", "label": "소파", "category": "sofa" },
+    { "id": "loungeSofaCorner", "file": "kenney-furniture/loungeSofaCorner.glb", "label": "코너 소파", "category": "sofa" },
+    { "id": "loungeChair", "file": "kenney-furniture/loungeChair.glb", "label": "안락의자", "category": "sofa" },
+    { "id": "bookcaseOpen", "file": "kenney-furniture/bookcaseOpen.glb", "label": "열린 책장", "category": "shelf" },
+    { "id": "bookcaseClosedWide", "file": "kenney-furniture/bookcaseClosedWide.glb", "label": "넓은 책장", "category": "shelf" },
+    { "id": "cabinetTelevision", "file": "kenney-furniture/cabinetTelevision.glb", "label": "TV장", "category": "shelf" },
+    { "id": "lampRoundFloor", "file": "kenney-furniture/lampRoundFloor.glb", "label": "스탠드 조명", "category": "lamp" },
+    { "id": "lampRoundTable", "file": "kenney-furniture/lampRoundTable.glb", "label": "탁상 조명", "category": "lamp" },
+    { "id": "pottedPlant", "file": "kenney-furniture/pottedPlant.glb", "label": "화분", "category": "plant" },
+    { "id": "plantSmall1", "file": "kenney-furniture/plantSmall1.glb", "label": "작은 화분", "category": "plant" },
+    { "id": "rugRound", "file": "kenney-furniture/rugRound.glb", "label": "둥근 러그", "category": "rug" },
+    { "id": "rugRectangle", "file": "kenney-furniture/rugRectangle.glb", "label": "네모 러그", "category": "rug" },
+    { "id": "televisionModern", "file": "kenney-furniture/televisionModern.glb", "label": "TV", "category": "screen" },
+    { "id": "laptop", "file": "kenney-furniture/laptop.glb", "label": "노트북", "category": "screen" },
+    { "id": "computerScreen", "file": "kenney-furniture/computerScreen.glb", "label": "모니터", "category": "screen" },
+    { "id": "pillow", "file": "kenney-furniture/pillow.glb", "label": "쿠션", "category": "decor" },
+    { "id": "books", "file": "kenney-furniture/books.glb", "label": "책 더미", "category": "decor" }
+  ]
+}

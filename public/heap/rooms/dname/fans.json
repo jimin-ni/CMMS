@@ -1,0 +1,15 @@
+{
+  "_note": "시연용 예시 데이터예요. 실제 팬이나 실제 작품이 아니에요.",
+  "today": 42,
+  "total": 9310,
+  "pieces": [
+    { "id": "fan-dn-1", "by": "블럭장인", "date": "2026.11.10", "motif": "block", "caption": "럭키블럭 배틀 장면 따라 그림" },
+    { "id": "fan-dn-2", "by": "다이아캐는중", "date": "2026.11.11", "motif": "diamond", "caption": "다이아 찾기 응원 포스터" },
+    { "id": "fan-dn-3", "by": "크리퍼친구", "date": "2026.11.12", "motif": "creeper", "caption": "쉬는 시간에 그린 낙서" }
+  ],
+  "guestbook": [
+    { "name": "블럭장인", "date": "2026.11.12" },
+    { "name": "minecart", "date": "2026.11.12" },
+    { "name": "다이아캐는중", "date": "2026.11.11" }
+  ]
+}
