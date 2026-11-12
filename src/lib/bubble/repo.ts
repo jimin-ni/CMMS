@@ -1,7 +1,8 @@
 import { and, desc, eq, exists, gt, isNull, or, sql, type SQL } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { db } from "@/lib/db";
-import { bubbleMembers, bubbleMessages, bubbleRooms, user } from "@/lib/schema";
+import { bubbleMembers, bubbleMessages, bubbleRooms, creatorAvatars, user } from "@/lib/schema";
+import { avatarUrl } from "@/lib/creator/avatar";
 import type { Viewer } from "@/lib/session";
 
 // 버블 대화방: 크리에이터 1명이 열고, 구독자 여러 명이 직접 참여한다.
@@ -12,6 +13,8 @@ export type RoomRow = {
   id: string;
   creator_id: string;
   creator_name: string;
+  // 크리에이터 프로필 사진. 없으면 null.
+  creator_avatar_url: string | null;
   title: string;
   status: "open" | "closed";
   created_at: Date;
@@ -25,16 +28,18 @@ export type MessageRow = {
   id: string;
   sender_id: string;
   sender_name: string;
+  // 보낸 사람의 프로필 사진. 크리에이터만 등록할 수 있어 구독자는 항상 null.
+  sender_avatar_url: string | null;
   body: string | null;
   created_at: string;
   deleted_at: string | null;
   can_delete: boolean;
 };
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // col이 지금으로부터 ms 안쪽인지
-function within(col: AnyPgColumn, ms: number): SQL {
+export function within(col: AnyPgColumn, ms: number): SQL {
   return sql`${col} > now() - ${ms}::int * interval '1 millisecond'`;
 }
 
@@ -53,6 +58,7 @@ function roomSelect(viewerId: string) {
       id: bubbleRooms.id,
       creator_id: bubbleRooms.creatorId,
       creator_name: user.name,
+      creator_avatar_at: creatorAvatars.updatedAt,
       title: bubbleRooms.title,
       status: bubbleRooms.status,
       created_at: bubbleRooms.createdAt,
@@ -60,14 +66,19 @@ function roomSelect(viewerId: string) {
       joined: sql<boolean>`${isMember(viewerId)}`,
     })
     .from(bubbleRooms)
-    .innerJoin(user, eq(user.id, bubbleRooms.creatorId));
+    .innerJoin(user, eq(user.id, bubbleRooms.creatorId))
+    .leftJoin(creatorAvatars, eq(creatorAvatars.userId, bubbleRooms.creatorId));
+}
+
+function toRoomRow({ creator_avatar_at, ...room }: Awaited<ReturnType<typeof roomSelect>>[number]): RoomRow {
+  return { ...room, creator_avatar_url: avatarUrl(room.creator_id, creator_avatar_at) };
 }
 
 export async function getRoom(roomId: string, viewerId: string): Promise<RoomRow | null> {
   // 주소에서 온 값이 uuid가 아니면 DB 오류 대신 없는 방으로 본다.
   if (!UUID_PATTERN.test(roomId)) return null;
   const rows = await roomSelect(viewerId).where(eq(bubbleRooms.id, roomId));
-  return rows[0] ?? null;
+  return rows[0] ? toRoomRow(rows[0]) : null;
 }
 
 export function seesAllMessages(room: RoomRow, viewer: Viewer): boolean {
@@ -89,19 +100,22 @@ export function canJoinRoom(room: RoomRow, viewer: Viewer): boolean {
 }
 
 export async function listRoomsFor(viewer: Viewer): Promise<RoomRow[]> {
-  if (viewer.role === "admin") {
-    return roomSelect(viewer.id).orderBy(desc(bubbleRooms.createdAt));
-  }
-  // 'open'이 'closed'보다 뒤라서 status 내림차순이면 열린 방이 먼저 온다.
-  if (viewer.role === "creator") {
+  const rows = await (() => {
+    if (viewer.role === "admin") {
+      return roomSelect(viewer.id).orderBy(desc(bubbleRooms.createdAt));
+    }
+    // 'open'이 'closed'보다 뒤라서 status 내림차순이면 열린 방이 먼저 온다.
+    if (viewer.role === "creator") {
+      return roomSelect(viewer.id)
+        .where(eq(bubbleRooms.creatorId, viewer.id))
+        .orderBy(desc(bubbleRooms.status), desc(bubbleRooms.createdAt));
+    }
+    // 구독자: 참여한 방(닫힌 방 포함)과 참여할 수 있는 열린 방
     return roomSelect(viewer.id)
-      .where(eq(bubbleRooms.creatorId, viewer.id))
+      .where(or(eq(bubbleRooms.status, "open"), isMember(viewer.id)))
       .orderBy(desc(bubbleRooms.status), desc(bubbleRooms.createdAt));
-  }
-  // 구독자: 참여한 방(닫힌 방 포함)과 참여할 수 있는 열린 방
-  return roomSelect(viewer.id)
-    .where(or(eq(bubbleRooms.status, "open"), isMember(viewer.id)))
-    .orderBy(desc(bubbleRooms.status), desc(bubbleRooms.createdAt));
+  })();
+  return rows.map(toRoomRow);
 }
 
 export async function createRoom(creatorId: string, title: string): Promise<string | null> {
@@ -149,6 +163,7 @@ export async function listMessages(
       id: bubbleMessages.id,
       sender_id: bubbleMessages.senderId,
       sender_name: user.name,
+      sender_avatar_at: creatorAvatars.updatedAt,
       // 삭제된 메시지는 본문을 가리고 자리만 남긴다.
       body: sql<string | null>`case when ${bubbleMessages.deletedAt} is null then ${bubbleMessages.body} end`,
       created_at: bubbleMessages.createdAt,
@@ -160,13 +175,15 @@ export async function listMessages(
     })
     .from(bubbleMessages)
     .innerJoin(user, eq(user.id, bubbleMessages.senderId))
+    .leftJoin(creatorAvatars, eq(creatorAvatars.userId, bubbleMessages.senderId))
     .where(and(eq(bubbleMessages.roomId, room.id), visibleTo(room, viewer), changed))
     .orderBy(desc(bubbleMessages.createdAt))
     .limit(limit);
 
   // 최근 것부터 잘랐으니 시간순으로 되돌린다.
-  return rows.reverse().map((m) => ({
+  return rows.reverse().map(({ sender_avatar_at, ...m }) => ({
     ...m,
+    sender_avatar_url: avatarUrl(m.sender_id, sender_avatar_at),
     created_at: m.created_at.toISOString(),
     deleted_at: m.deleted_at?.toISOString() ?? null,
   }));

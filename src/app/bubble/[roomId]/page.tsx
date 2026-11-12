@@ -13,6 +13,7 @@ import {
 import { getViewer } from "@/lib/session";
 import { RoomChat } from "@/components/bubble/room-chat";
 import { CloseRoomButton } from "@/components/bubble/room-controls";
+import { deleteMessageAction, sendMessageAction } from "@/lib/bubble/actions";
 
 export default function RoomPage({ params }: { params: Promise<{ roomId: string }> }) {
   return (
@@ -65,7 +66,10 @@ async function RoomContent({ params }: { params: Promise<{ roomId: string }> }) 
       {/* key: 방이 닫히는 등 서버에서 다시 그리면 메시지 상태도 새로 시작한다. */}
       <RoomChat
         key={`${room.id}:${room.status}`}
-        roomId={room.id}
+        pollUrl={`/api/bubble/rooms/${room.id}/messages`}
+        sendAction={sendMessageAction}
+        deleteAction={deleteMessageAction}
+        target={{ name: "roomId", value: room.id }}
         viewerId={viewer.id}
         initialMessages={messages}
         initialCursor={new Date(nowMs).toISOString()}
@@ -73,7 +77,7 @@ async function RoomContent({ params }: { params: Promise<{ roomId: string }> }) 
         memberCount={seesAllMessages(room, viewer) ? room.member_count : null}
         canSend={canSendInRoom(room, viewer)}
         maxChars={maxCharsFor(viewer.role)}
-        showReactionPreview={viewer.role === "public" && viewer.id !== room.creator_id}
+        previewRoomId={viewer.role === "public" && viewer.id !== room.creator_id ? room.id : null}
         closedNotice={isOpen ? "이 대화방에서는 메시지를 보낼 수 없어요." : "닫힌 대화방입니다."}
       />
     </div>

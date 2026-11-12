@@ -1,0 +1,104 @@
+"use client";
+
+import { useActionState, useState } from "react";
+import { useRouter } from "next/navigation";
+import { startChatAction, type StartChatResult } from "@/lib/bubble/talk-actions";
+import type { CreatorCard } from "@/lib/bubble/talk-repo";
+import { Avatar } from "@/components/avatar";
+
+// 크리에이터 프로필 카드 목록(사진과 닉네임만). 한 명을 고르면 1:1 대화, 여러 명을 고르면 그룹 대화를 연다.
+export function CreatorPicker({ creators, maxPick }: { creators: CreatorCard[]; maxPick: number }) {
+  const router = useRouter();
+  const [picked, setPicked] = useState<string[]>([]);
+
+  // 대화가 열리면 그 자리에서 한 번만 이동한다. effect로 이동하면 목록 화면 상태가 보존되어
+  // 목록으로 돌아올 때마다 같은 대화로 다시 이동해 버린다.
+  async function submitAction(prev: StartChatResult | null, formData: FormData) {
+    const result = await startChatAction(prev, formData);
+    if (result.ok) {
+      setPicked([]);
+      router.push(`/bubble/talk/${result.chatId}`);
+    }
+    return result;
+  }
+  const [state, formAction, pending] = useActionState(submitAction, null);
+
+  function toggle(id: string) {
+    setPicked((prev) =>
+      prev.includes(id) ? prev.filter((p) => p !== id) : prev.length < maxPick ? [...prev, id] : prev,
+    );
+  }
+
+  if (creators.length === 0) {
+    return <p className="px-5 py-6 text-sm text-key-stone">찾는 크리에이터가 없어요.</p>;
+  }
+
+  return (
+    <form action={formAction} className="flex flex-col gap-3">
+      <ul className="grid grid-cols-1 gap-2 px-5 sm:grid-cols-2">
+        {creators.map((creator) => {
+          const checked = picked.includes(creator.id);
+          return (
+            <li key={creator.id}>
+              <label
+                className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-key-brown ${
+                  checked ? "border-key-brown bg-key-mist" : "border-key-stone/30 hover:bg-key-mist/50"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  name="memberId"
+                  value={creator.id}
+                  checked={checked}
+                  onChange={() => toggle(creator.id)}
+                  className="sr-only"
+                />
+                <Avatar name={creator.name} url={creator.avatar_url} size={48} />
+                <span className="flex min-w-0 flex-1 items-center gap-2">
+                  <span className="truncate font-medium text-gray-900">{creator.name}</span>
+                  <span className="shrink-0 rounded-full bg-key-blue/30 px-2 py-0.5 text-[10px] text-key-brown">
+                    크리에이터
+                  </span>
+                </span>
+                <span
+                  aria-hidden
+                  className={`h-5 w-5 shrink-0 rounded-full border-2 ${
+                    checked ? "border-key-brown bg-key-brown" : "border-key-stone/60"
+                  }`}
+                />
+              </label>
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="sticky bottom-0 flex flex-col gap-2 border-t border-key-mist bg-white px-5 py-3">
+        {picked.length > 1 && (
+          <input
+            name="title"
+            maxLength={50}
+            placeholder="그룹 대화 이름 (선택)"
+            className="rounded-lg border border-key-stone/50 px-3 py-2 text-sm"
+          />
+        )}
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-sm text-key-stone">
+            {picked.length === 0
+              ? "대화할 크리에이터를 골라 주세요."
+              : picked.length === 1
+                ? "1:1 대화"
+                : `그룹 대화 · 나 포함 ${picked.length + 1}명`}
+          </span>
+          <button
+            type="submit"
+            disabled={pending || picked.length === 0}
+            className="rounded-full bg-key-brown px-5 py-2 text-sm text-key-mist disabled:opacity-50"
+          >
+            {pending ? "여는 중..." : "대화 시작"}
+          </button>
+        </div>
+        {state && !state.ok && <p className="text-sm text-red-700">{state.error}</p>}
+      </div>
+    </form>
+  );
+}
