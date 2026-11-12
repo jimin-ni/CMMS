@@ -6,6 +6,10 @@
   --color-key-mist: #e6eaec;
   --color-key-stone: #9ea09e;
   --color-key-brown: #6b4e37;
+
+  /* 버블 대화방 (카카오톡 느낌의 임시 색) */
+  --color-talk-bg: #b2c7da;
+  --color-talk-yellow: #fee500;
 }
 
 body {

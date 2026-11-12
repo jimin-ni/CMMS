@@ -18,8 +18,8 @@ async function FeaturesContent() {
 
       <div className="mt-8 grid gap-6 md:grid-cols-3">
         {FEATURES.map((feature) => {
-          const card = (
-            <article className="flex h-full flex-col rounded-2xl bg-white p-6 shadow-sm">
+          const body = (
+            <>
               <span className="w-fit rounded-full bg-key-mist px-2.5 py-0.5 text-xs text-key-brown">
                 {feature.status}
               </span>
@@ -28,15 +28,21 @@ async function FeaturesContent() {
               <p className="mt-4 border-t border-key-mist pt-3 text-xs text-key-stone">
                 {feature.owner}
               </p>
-            </article>
+            </>
           );
-
+          const cardClass = "flex flex-col rounded-2xl bg-white p-6 shadow-sm";
           return feature.href ? (
-            <Link key={feature.title} href={feature.href} className="block rounded-2xl hover:shadow-md">
-              {card}
+            <Link
+              key={feature.title}
+              href={feature.href}
+              className={`${cardClass} transition hover:-translate-y-0.5 hover:shadow-md`}
+            >
+              {body}
             </Link>
           ) : (
-            <div key={feature.title}>{card}</div>
+            <article key={feature.title} className={cardClass}>
+              {body}
+            </article>
           );
         })}
       </div>

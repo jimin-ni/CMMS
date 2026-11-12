@@ -41,7 +41,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Claude Code local settings (Yoon-side)
-.claude/settings.local.json
+# project-local AI files (private, not for the repo)
+# /CLAUDE.md is tracked on main (shared rules). Yoon-side notes live in CLAUDE.local.md.
+/CLAUDE.local.md
 /.claude/
-/CLAUDE.md
