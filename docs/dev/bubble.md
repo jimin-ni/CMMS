@@ -58,6 +58,14 @@
 | `TYPESAFE_API_KEY` | 선택 | Jev 키. 비워 두면 미리보기가 꺼짐 |
 | `BUBBLE_PREVIEW_MODEL` | 선택 | 기본값 `jev-latest` |
 
+## 미리보기 디버그
+
+- `npm run dev`(`NODE_ENV=development`)에서만 `/api/bubble/preview` 응답에 `debug`가 붙습니다. `npm run build` 후 `npm start`로 띄운 운영 빌드에는 붙지 않습니다.
+- `debug.request`: Jev에 보낸 요청 본문(모델, 성격, 대화 문맥, 초안, 반응 기준). API 키는 헤더에만 있어 담기지 않습니다.
+- `debug.response`: Jev 원본 응답. `answers.reaction.choice`가 고른 반응 id, `confidence`가 확신도입니다.
+- `debug.error`: 실패 원인(`HTTP 401`, `TimeoutError: ...`, `반응 목록에 없는 선택`).
+- 확인 방법: 구독자로 버블 방에 들어가 초안을 쓰고 3초 기다린 뒤, 브라우저 개발자 도구 Network 탭에서 `preview` 요청의 응답을 엽니다.
+
 ## 확인한 동작 (2026-11-11~12, Edge + Playwright, 크리에이터 1명 + 구독자 2명)
 
 - 가입, 성격 저장, 방 열기, 목록에서 참여

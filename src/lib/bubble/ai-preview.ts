@@ -7,12 +7,18 @@ import { FACE_REACTIONS, findReaction, type Reaction } from "./reactions";
 
 export type ContextMessage = { role: "creator" | "subscriber"; body: string };
 
-export type PreviewResult =
+// 개발 환경(npm run dev)에서만 붙는다. Jev에 보낸 요청 본문과 받은 원본 응답(또는 오류)을 담는다.
+// 요청에 구독자 초안과 대화가 들어 있으므로 운영 빌드에서는 절대 붙이지 않는다. API 키는 헤더에만 있어 담기지 않는다.
+export type PreviewDebug = { request: unknown; response?: unknown; error?: string };
+
+export type PreviewResult = (
   | { status: "ok"; reaction: Reaction; confidence: number }
-  | { status: "unavailable"; reason: string };
+  | { status: "unavailable"; reason: string }
+) & { debug?: PreviewDebug };
 
 const JEV_ENDPOINT = "https://api.typesafe.ai/v1/systemone";
 const TIMEOUT_MS = 5000;
+const DEBUG = process.env.NODE_ENV === "development";
 
 // 질문 이름은 모델에 전달되지 않으므로 할 일을 instructions에 모두 적는다.
 const INSTRUCTIONS = `You predict how a creator will react to a fan's message in a fan chat app.
@@ -31,29 +37,37 @@ export async function previewReaction(
     return { status: "unavailable", reason: "AI 미리보기 설정이 아직 없어요." };
   }
 
+  const request = {
+    model: process.env.BUBBLE_PREVIEW_MODEL ?? "jev-latest",
+    state: {
+      creator_persona: persona || "(no persona given; assume a friendly creator)",
+      conversation: context.map((m) => ({ from: m.role, text: m.body })),
+      fan_draft: draft,
+    },
+    questions: {
+      reaction: {
+        type: "choice",
+        instructions: INSTRUCTIONS,
+        criteria: Object.fromEntries(FACE_REACTIONS.map((r) => [r.id, r.description])),
+      },
+    },
+  };
+  const debug = (extra: Omit<PreviewDebug, "request">) =>
+    DEBUG ? { debug: { request, ...extra } } : {};
+
   try {
     const res = await fetch(JEV_ENDPOINT, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: process.env.BUBBLE_PREVIEW_MODEL ?? "jev-latest",
-        state: {
-          creator_persona: persona || "(no persona given; assume a friendly creator)",
-          conversation: context.map((m) => ({ from: m.role, text: m.body })),
-          fan_draft: draft,
-        },
-        questions: {
-          reaction: {
-            type: "choice",
-            instructions: INSTRUCTIONS,
-            criteria: Object.fromEntries(FACE_REACTIONS.map((r) => [r.id, r.description])),
-          },
-        },
-      }),
+      body: JSON.stringify(request),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     if (!res.ok) {
-      return { status: "unavailable", reason: "AI 미리보기를 가져오지 못했어요." };
+      return {
+        status: "unavailable",
+        reason: "AI 미리보기를 가져오지 못했어요.",
+        ...debug({ error: `HTTP ${res.status}`, response: DEBUG ? await res.text() : undefined }),
+      };
     }
 
     const data = (await res.json()) as {
@@ -62,10 +76,18 @@ export async function previewReaction(
     const answer = data.answers?.reaction;
     const reaction = answer?.choice ? findReaction(answer.choice) : undefined;
     if (!reaction) {
-      return { status: "unavailable", reason: "AI 미리보기를 처리하지 못했어요." };
+      return {
+        status: "unavailable",
+        reason: "AI 미리보기를 처리하지 못했어요.",
+        ...debug({ response: data, error: "반응 목록에 없는 선택" }),
+      };
     }
-    return { status: "ok", reaction, confidence: answer?.confidence ?? 0 };
-  } catch {
-    return { status: "unavailable", reason: "AI 미리보기를 처리하지 못했어요." };
+    return { status: "ok", reaction, confidence: answer?.confidence ?? 0, ...debug({ response: data }) };
+  } catch (e) {
+    return {
+      status: "unavailable",
+      reason: "AI 미리보기를 처리하지 못했어요.",
+      ...debug({ error: e instanceof Error ? `${e.name}: ${e.message}` : String(e) }),
+    };
   }
 }
