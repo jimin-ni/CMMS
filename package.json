@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "auth:migrate": "npx @better-auth/cli migrate --config src/lib/auth.ts",
-    "db:bubble": "node --env-file=.env.local scripts/db-migrate.mjs"
+    "db:bubble": "node --env-file=.env.local scripts/db-migrate.mjs",
+    "heap:seed": "node --env-file=.env.local scripts/heap-seed.mjs"
   },
   "dependencies": {
     "better-auth": "^1.7.19",

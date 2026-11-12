@@ -1,13 +1,18 @@
+import { sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   customType,
+  date,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   text,
   timestamp,
   uuid,
 } from "drizzle-orm/pg-core";
+import { HEAP_CHANNEL_PLATFORMS, HEAP_PIECE_PLATFORMS } from "./heap/platform";
 
 // Drizzle에 bytea 기본 타입이 없어서 직접 정의한다. node-postgres는 bytea를 Buffer로 주고받는다.
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
@@ -168,3 +173,107 @@ export const creatorAvatars = pgTable("creator_avatars", {
   contentType: text("content_type").notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// 힙 미니룸 (0007). 기준은 db/migrations/0007_heap_rooms.sql (제약·인덱스는 SQL에만 있다).
+// 플랫폼 목록은 src/lib/heap/platform.ts의 상수를 쓴다. SQL의 check와 같아야 한다.
+
+// 크리에이터가 연결한 공식 채널. 방이 아니라 크리에이터에 붙는다.
+export const heapCreatorChannels = pgTable("heap_creator_channels", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  creatorId: text("creator_id").notNull(),
+  platform: text("platform", { enum: HEAP_CHANNEL_PLATFORMS }).notNull(),
+  externalId: text("external_id").notNull(),
+  channelUrl: text("channel_url").notNull(),
+  title: text("title").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// 크리에이터별 방 1개. layout은 꾸미기 결과이며 형식은 앱이 검사한다.
+export const heapRooms = pgTable("heap_rooms", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  creatorId: text("creator_id").notNull().unique(),
+  slug: text("slug").notNull().unique(),
+  name: text("name").notNull(),
+  blurb: text("blurb").notNull().default(""),
+  layout: jsonb("layout").$type<Record<string, unknown>>().notNull().default({}),
+  voteThreshold: integer("vote_threshold").notNull().default(3),
+  creatorVisitedAt: timestamp("creator_visited_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// 더미에 쌓이는 크리에이터의 영상. (room_id, platform, external_id)가 유니크다.
+export const heapReels = pgTable("heap_reels", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  roomId: uuid("room_id").notNull(),
+  channelId: uuid("channel_id"),
+  platform: text("platform", { enum: HEAP_CHANNEL_PLATFORMS }).notNull(),
+  externalId: text("external_id").notNull(),
+  sourceUrl: text("source_url").notNull(),
+  thumbnailUrl: text("thumbnail_url"),
+  title: text("title").notNull().default(""),
+  // 가로면 true, 세로면 false, 알 수 없으면 null
+  wide: boolean("wide"),
+  viewCount: bigint("view_count", { mode: "number" }),
+  publishedAt: timestamp("published_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// 방명록. 이름과 날짜만 남는다.
+export const heapGuestbook = pgTable("heap_guestbook", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  roomId: uuid("room_id").notNull(),
+  userId: text("user_id").notNull(),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// 방문 기록. 사용자당 하루 한 줄. visit_day는 한국 시간 날짜이며 DB 기본값만 쓴다.
+export const heapVisits = pgTable(
+  "heap_visits",
+  {
+    roomId: uuid("room_id").notNull(),
+    userId: text("user_id").notNull(),
+    visitDay: date("visit_day")
+      .notNull()
+      .default(sql`((now() at time zone 'Asia/Seoul')::date)`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.roomId, t.userId, t.visitDay] })],
+);
+
+// 팬이 올린 조각. (room_id, platform, external_id)가 유니크다.
+// 상태와 landed_at·lifted_at은 SQL check로 묶여 있다.
+export const heapPieces = pgTable("heap_pieces", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  roomId: uuid("room_id").notNull(),
+  // 제출한 사용자의 계정이 지워지면 null이 된다.
+  submitterId: text("submitter_id"),
+  platform: text("platform", { enum: HEAP_PIECE_PLATFORMS }).notNull(),
+  externalId: text("external_id").notNull(),
+  sourceUrl: text("source_url").notNull(),
+  thumbnailUrl: text("thumbnail_url"),
+  title: text("title").notNull().default(""),
+  wide: boolean("wide"),
+  note: text("note").notNull().default(""),
+  status: text("status", { enum: ["pending", "rejected", "voting", "landed", "lifted"] })
+    .notNull()
+    .default("pending"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  landedAt: timestamp("landed_at", { withTimezone: true }),
+  liftedAt: timestamp("lifted_at", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// 조각 투표. 사용자당 조각 하나에 한 표.
+export const heapPieceVotes = pgTable(
+  "heap_piece_votes",
+  {
+    pieceId: uuid("piece_id").notNull(),
+    userId: text("user_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.pieceId, t.userId] })],
+);
