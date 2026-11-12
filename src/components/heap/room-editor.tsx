@@ -60,6 +60,7 @@ const GROUPS = [
   { label: "책상·탁자", cats: ["table"] },
   { label: "의자·소파", cats: ["chair", "sofa"] },
   { label: "책장", cats: ["shelf"] },
+  { label: "주방", cats: ["kitchen"] },
   { label: "조명", cats: ["lamp"] },
   { label: "화분", cats: ["plant"] },
   { label: "러그", cats: ["rug"] },
