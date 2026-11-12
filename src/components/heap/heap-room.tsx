@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { RoomEditor } from "./room-editor";
 import "./heap-room.css";
 
 // 방 데이터(JSON)는 public/heap/rooms/ 아래에 있다.
@@ -12,15 +13,33 @@ const FONTS_HREF =
 
 // 미니룸 화면. 마크업은 room.html의 HUD/오버레이 그대로이고, 엔진(room-engine.js)이 id로 찾아 채운다.
 // three는 브라우저에서만 돌아야 하므로 엔진은 effect 안에서 dynamic import로 불러온다.
-export function HeapRoom({ roomId, viewerName }: { roomId: string; viewerName: string | null }) {
+// canEdit: 꾸미기 버튼을 보여 줄지. 방을 걸어 다니는 동안(엔진의 room 모드)에만 버튼이 나온다.
+export function HeapRoom({
+  roomId,
+  viewerName,
+  canEdit = false,
+}: {
+  roomId: string;
+  viewerName: string | null;
+  canEdit?: boolean;
+}) {
   const rootRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  // 엔진이 알려 주는 값: 방이 화면에 떴는지(heap:ready), 지금 모드(heap:mode).
+  const [ready, setReady] = useState(false);
+  const [mode, setMode] = useState("room");
+  const [editing, setEditing] = useState(false);
+  const closeEditor = useCallback(() => setEditing(false), []);
 
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
     let cancelled = false;
     let dispose: (() => void) | null = null;
+    const onReady = () => setReady(true);
+    const onMode = (e: Event) => setMode((e as CustomEvent<string>).detail);
+    root.addEventListener("heap:ready", onReady);
+    root.addEventListener("heap:mode", onMode);
     import("./room-engine").then(({ mountRoom }) => {
       // StrictMode의 첫 번째 mount는 여기서 걸러져 엔진이 한 번만 뜬다.
       if (cancelled) return;
@@ -34,12 +53,14 @@ export function HeapRoom({ roomId, viewerName }: { roomId: string; viewerName: s
     });
     return () => {
       cancelled = true;
+      root.removeEventListener("heap:ready", onReady);
+      root.removeEventListener("heap:mode", onMode);
       dispose?.();
     };
   }, [roomId, viewerName, router]);
 
   return (
-    <div ref={rootRef} className="heap-room">
+    <div ref={rootRef} className={editing ? "heap-room editing" : "heap-room"}>
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       <link rel="stylesheet" href={FONTS_HREF} precedence="default" />
@@ -50,6 +71,7 @@ export function HeapRoom({ roomId, viewerName }: { roomId: string; viewerName: s
         <header className="who">
           <span className="name" id="cname" />
           <span className="meta" id="meta" />
+          <span className="meta" id="visit" hidden />
         </header>
         <div className="bottom">
           <div className="row" id="albumrow" hidden />
@@ -72,11 +94,17 @@ export function HeapRoom({ roomId, viewerName }: { roomId: string; viewerName: s
             <button id="sortexit" className="btn ghost" type="button" hidden>
               책장에서 물러나기
             </button>
+            {canEdit && ready && mode === "room" && !editing && (
+              <button className="btn ghost" type="button" onClick={() => setEditing(true)}>
+                꾸미기
+              </button>
+            )}
           </div>
           <p className="hint" id="hint" />
         </div>
       </div>
       <p id="toast" />
+      {editing && <RoomEditor rootRef={rootRef} onClose={closeEditor} />}
 
       <div id="player" hidden>
         <div className="player-bar">

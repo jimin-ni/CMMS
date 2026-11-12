@@ -20,11 +20,13 @@ function disposeScene(scene, keep) {
 
 // ids of the nodes heap-room.tsx renders and the engine fills or shows
 const LISTS = ['albumrow', 'player-frame', 'phone-feed', 'grid-list', 'gb-list', 'roomlist'];
-const HIDDEN = ['albumrow', 'stand', 'flip', 'srclink', 'eject', 'ytlink', 'sortexit', 'player', 'player-note', 'phone', 'grid', 'guestbook', 'rooms'];
+const HIDDEN = ['visit', 'albumrow', 'stand', 'flip', 'srclink', 'eject', 'ytlink', 'sortexit', 'player', 'player-note', 'phone', 'grid', 'guestbook', 'rooms'];
 
 /**
  * Mounts the room into `root` (the element heap-room.tsx renders) and returns a dispose function.
  * Live hooks, as CustomEvents dispatched on `root`: `heap:time` (section 4b), `heap:items` and `heap:get` (section 6).
+ * The engine dispatches two of its own on `root`: `heap:mode` (detail: 'room' | 'sit' | 'watch' | 'sort') whenever the mode is set,
+ * and `heap:ready` once the room is on screen.
  * `modelBase` is the folder that holds the furniture models and their catalogue.json. Left out, it is "models/" beside `dataBase`.
  * @param {HTMLElement} root
  * @param {{ roomId: string, dataBase: string, modelBase?: string, viewerName: string | null, onNavigate: (roomId: string) => void }} opts
@@ -79,6 +81,17 @@ const flat =(color, extra = {}) => new THREE.MeshStandardMaterial({ color, flatS
 const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
 const KEY = k => `heap:${roomId}:${k}`;
 
+// 꾸미기 (room-editor.tsx, through the hooks in section 6): a layout saved on this device, { items, time } under heap:<roomId>:layout,
+// replaces layout.items and layout.time here, so the first build already uses it. ORIGINAL keeps layout.json's own for the editor's 처음으로.
+const ORIGINAL = { items: (layout.items || []).map(it => ({ ...it })), time: layout.time ?? 'auto' };
+try {
+  const saved = JSON.parse(store.get(KEY('layout')) || 'null');
+  if (Array.isArray(saved?.items)) {
+    layout.items = saved.items.filter(it => it && typeof it.type === 'string' && Number.isFinite(it.x) && Number.isFinite(it.z));
+    if (saved.time != null) layout.time = saved.time;
+  }
+} catch {}
+
 // ---------- reels ----------
 const byCh = {};
 for (const r of raw) (byCh[r.channel] ??= []).push(r);
@@ -100,6 +113,9 @@ const todayStr = (() => { const d = new Date(); return `${d.getFullYear()}.${Str
 store.set(KEY('visit-' + todayStr), '1');
 const counter = FANS.today != null ? ` · TODAY ${FANS.today + 1} · TOTAL ${(FANS.total + 1).toLocaleString('ko-KR')} (예시)` : '';
 $('meta').textContent = (nWide ? `쇼츠 ${nShorts} · 영상 ${nWide}` : `쇼츠 ${nShorts}`) + counter + (opts.viewerName ? ` · ${opts.viewerName}` : '');
+// 다녀감: the day the creator last came by, "2026.11.12", or null. Mock for now (fans.json's creatorVisit); the real value will come from the database.
+function creatorVisit() { const v = FANS.creatorVisit; return typeof v === 'string' && /^\d{4}\.\d{1,2}\.\d{1,2}$/.test(v) ? v : null; }
+if (creatorVisit()) { $('visit').textContent = `주인 다녀감 ${creatorVisit().split('.').slice(1).join('.')} (예시)`; $('visit').hidden = false; }
 const fanReels = (FANS.pieces || []).map((p, i) => ({ ...p, kind: 'fan', wide: false, title: p.caption, channel: p.by, views: '', age: 0.05, seed: 7000 + i * 131 }));
 let landedIds = []; try { landedIds = JSON.parse(store.get(KEY('landed')) || '[]'); } catch {}
 const ytUrl = r => r.wide ? `https://www.youtube.com/watch?v=${r.id}` : `https://www.youtube.com/shorts/${r.id}`;
@@ -441,9 +457,21 @@ if (DOOR) {
 // ====================================================================================
 // OBST: the fixed walk obstacles (the table first, then the guestbook stand). Each item's own obstacle is in ITEMS.obst.
 const OBST = [], shelfParts = [];
-let SHELF = null, LAMP = null;
-// shadeNow: the lamp shade's glow at the current hour (section 4b sets it) · irand: where the builders draw their random numbers
+let SHELF = null;
+// shadeNow: a lamp shade's glow at the current hour (section 4b sets it) · irand: where the builders draw their random numbers
 let shadeNow = 0.9, irand = rand;
+// Lamps: the hand-built lamp and any model whose catalogue category is "lamp". Each adds { light, shades } to its build's lamps:
+// a PointLight inside the shade (or null) and the shade's materials. Section 4b sets every shade's glow and frame() every light's
+// intensity, so all the lamps in a room follow the hour together.
+// Only MAX_LAMP_LIGHTS lamps get a light: the hand-built ones first, then the lamp models, each in list order. A lamp past that glows and lights nothing.
+const MAX_LAMP_LIGHTS = 3, LAMP_GLOW = '#ffb767';
+let CATALOGUE = null; // catalogue.json once it has been read (getCatalogue below)
+const isLampModel = it => it.type === 'model' && CATALOGUE?.models?.find(m => m.id === it.model)?.category === 'lamp';
+function lampLight(build, it) {
+  const hand = build.items.filter(o => o.type === 'lamp');
+  const rank = it.type === 'lamp' ? hand.indexOf(it) : hand.length + build.items.filter(isLampModel).indexOf(it);
+  return rank < MAX_LAMP_LIGHTS ? new THREE.PointLight(0xffb86b, 3.2, 9, 1.2) : null;
+}
 const bookCols = [C.accent, C.olive, '#c9a46a', '#7d8a5a', '#d8c7a8', '#8a4f33'];
 function pottedPlant(parent, x, z, y, s) {
   box(0.36 * s, 0.34 * s, 0.36 * s, flat(C.accent), x, y + 0.17 * s, z, { parent });
@@ -493,12 +521,14 @@ const BUILD = {
     for (let i = 0; i < 6; i++) { const b = box(0.07, 0.8 + irand() * 0.5, 0.03, flat([C.leaf, C.leafDark][i % 2]), (irand() - 0.5) * 0.2, 0.75, (irand() - 0.5) * 0.2, { parent: g }); b.rotation.set((irand() - 0.5) * 0.3, irand() * 3, (irand() - 0.5) * 0.3); }
     return { hw: 0.4, hd: 0.4 };
   },
-  lamp(g) {
+  lamp(g, it, build) {
     box(0.3, 0.04, 0.3, flat(C.olive), 0, 0.02, 0, { parent: g });
     box(0.04, 1.7, 0.04, flat(C.olive), 0, 0.87, 0, { parent: g });
-    const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.26, 0.3, 8, 1, true), new THREE.MeshStandardMaterial({ color: '#f6dcb2', emissive: '#ffb767', emissiveIntensity: shadeNow, side: THREE.DoubleSide, flatShading: true }));
+    const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.26, 0.3, 8, 1, true), new THREE.MeshStandardMaterial({ color: '#f6dcb2', emissive: LAMP_GLOW, emissiveIntensity: shadeNow, side: THREE.DoubleSide, flatShading: true }));
     shade.position.y = 1.8; g.add(shade);
-    LAMP = new THREE.PointLight(0xffb86b, 3.2, 9, 1.2); LAMP.position.y = 1.72; g.add(LAMP); LAMP.userData.shade = shade.material;
+    const light = lampLight(build, it);
+    if (light) { light.position.y = 1.72; g.add(light); }
+    build.lamps.push({ light, shades: [shade.material] });
     return { hw: 0.35, hd: 0.35 };
   },
   books(g) {
@@ -516,16 +546,18 @@ const BUILD = {
 const MODEL_BASE = opts.modelBase ?? dataBase.replace(/[^/]+\/$/, 'models/');
 const MODEL_SCALE = 2.0; // the kit is built at about 1 unit per floor tile, half this room's scale
 const darkAccent = '#' + new THREE.Color(C.accent).multiplyScalar(0.55).getHexString();
-// material name → colour. A name that is missing here (glass) is left alone.
+// material name → colour. A name that is missing here (glass) is left alone. This is the base look of every model.
+// Wood takes the hand-built table's two browns (top and legs), so a wooden frame reads apart from its fabric, which stays on the accent.
+// Kept as one plain object so a per-creator theme can replace it later.
 const TINT = {
-  wood: C.accent, woodDark: darkAccent, carpet: C.accent, carpetDarker: darkAccent, carpetBlue: C.olive, carpetWhite: C.paper, _defaultMat: C.paper,
+  wood: C.woodB, woodDark: C.woodDark, carpet: C.accent, carpetDarker: darkAccent, carpetBlue: C.olive, carpetWhite: C.paper, _defaultMat: C.paper,
   plant: C.leaf, lamp: '#f6dcb2', fur: C.woodB, metal: '#a39d90', metalLight: '#c9c3b6', metalMedium: '#8f8a7e', metalDark: '#4a463e',
 };
 // MODELS: catalogue id → Promise of { root, entry, size } or null · KEPT: geometries and materials the cache owns · modelRoots: the parsed scenes
 const MODELS = new Map(), KEPT = new Set(), modelRoots = [];
 let catalogueP = null, gltfP = null;
 cleanups.push(() => { for (const r of modelRoots) disposeScene(r); });
-const getCatalogue = () => catalogueP ??= getJSON(MODEL_BASE + 'catalogue.json').catch(e => { if (!disposed) console.error('[heap-room]', e); return null; });
+const getCatalogue = () => catalogueP ??= getJSON(MODEL_BASE + 'catalogue.json').then(c => CATALOGUE = c).catch(e => { if (!disposed) console.error('[heap-room]', e); return null; });
 function loadModel(id) {
   if (!MODELS.has(id)) MODELS.set(id, (async () => {
     const entry = (await getCatalogue())?.models?.find(m => m.id === id);
@@ -546,19 +578,37 @@ function loadModel(id) {
 BUILD.model = (g, it, build) => {
   loadModel(it.model).then(m => {
     if (!m || disposed || build !== ITEMS) return; // a failed load, or the items were replaced while it loaded
-    const inst = m.root.clone(), rug = m.entry.category === 'rug', own = new Map();
+    const inst = m.root.clone(), rug = m.entry.category === 'rug', lamp = m.entry.category === 'lamp', own = new Map(), shades = [];
     inst.traverse(o => {
       if (!o.isMesh) return;
-      const col = it.tint !== false && TINT[o.material.name];
-      if (col) { // a tinted copy of the material for this instance; the cached original keeps the file's colour
-        if (!own.has(o.material)) { const c = o.material.clone(); c.color.set(col); own.set(o.material, c); }
+      const col = it.tint !== false && TINT[o.material.name], glow = lamp && o.material.name === 'lamp';
+      if (col || glow) { // a copy of the material for this instance, tinted and (a lamp's shade) glowing; the cached original stays as the file has it
+        if (!own.has(o.material)) {
+          const c = o.material.clone();
+          if (col) c.color.set(col);
+          if (glow) { c.emissive.set(LAMP_GLOW); c.emissiveIntensity = shadeNow; }
+          own.set(o.material, c);
+        }
         o.material = own.get(o.material);
+        if (glow) shades.push(o);
       }
       o.castShadow = !rug && !o.material.transparent; o.receiveShadow = true;
     });
     const hold = new THREE.Group();
     hold.scale.setScalar(MODEL_SCALE); hold.position.y = (it.y || 0) + (rug ? 0.012 : 0); // a rug lies just above the floor so the two do not flicker
     hold.add(inst); g.add(hold);
+    if (shades.length) { // the light sits at the centre of the shade: the box around the vertices the shade's own triangles use
+      const light = lampLight(build, it), bb = new THREE.Box3(), v = new THREE.Vector3(); // (a model's meshes share one vertex buffer)
+      if (light) {
+        g.updateMatrixWorld(true);
+        for (const o of shades) {
+          const pos = o.geometry.getAttribute('position'), idx = o.geometry.index;
+          for (let i = 0, n = idx ? idx.count : pos.count; i < n; i++) bb.expandByPoint(v.fromBufferAttribute(pos, idx ? idx.getX(i) : i).applyMatrix4(o.matrixWorld));
+        }
+        g.add(light); g.worldToLocal(bb.getCenter(light.position));
+      }
+      build.lamps.push({ light, shades: [...new Set(shades.map(o => o.material))] });
+    }
     if (rug || it.y) return; // a rug is walked over; a piece standing on other furniture adds no obstacle of its own
     const swap = Math.round((it.rot || 0) / 90) % 2 !== 0, hw = m.size.x / 2 + 0.2, hd = m.size.z / 2 + 0.2;
     build.obst.push({ x: it.x, z: it.z, hw: swap ? hd : hw, hd: swap ? hw : hd });
@@ -567,11 +617,12 @@ BUILD.model = (g, it, build) => {
 };
 
 // ITEMS: what the last buildItems() made. group: every object built from the items · obst: their walk obstacles · items: the list itself
-let ITEMS = { group: null, obst: [], items: [] };
+//   lamps: its lamps, { light, shades } each (see MAX_LAMP_LIGHTS above)
+let ITEMS = { group: null, obst: [], items: [], lamps: [] };
 function buildItems(items, first = false) {
-  if (ITEMS.group) { scene.remove(ITEMS.group); disposeScene(ITEMS.group, KEPT); }
-  shelfParts.length = 0; SHELF = LAMP = null;
-  const build = ITEMS = { group: new THREE.Group(), obst: [], items };
+  if (ITEMS.group) { for (const l of ITEMS.lamps) l.light?.dispose(); scene.remove(ITEMS.group); disposeScene(ITEMS.group, KEPT); }
+  shelfParts.length = 0; SHELF = null;
+  const build = ITEMS = { group: new THREE.Group(), obst: [], items, lamps: [] };
   scene.add(build.group);
   items.forEach((it, i) => {
     // The first build draws from the room's shared sequence, as the room always has. A rebuild seeds each item by its place in the list,
@@ -626,6 +677,7 @@ function parseTime(v) { // → an hour in [0, 24), 'auto', or null when it says 
   return Number.isFinite(n) ? ((n % 24) + 24) % 24 : null;
 }
 let timeSpec = parseTime(new URLSearchParams(location.search).get('time')) ?? parseTime(layout.time) ?? 'auto';
+let timeChoice = parseTime(layout.time) == null ? 'auto' : layout.time; // the room's own choice, as it was given; ?time= does not change it. heap:get reports it.
 const seoulFmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 function seoulHour() {
   const part = Object.fromEntries(seoulFmt.formatToParts(new Date()).map(p => [p.type, Number(p.value)]));
@@ -658,9 +710,9 @@ function applyTime(hour) {
     gr.addColorStop(0, css(k.sky[0])); gr.addColorStop(0.55, css(k.sky[1])); gr.addColorStop(1, css(k.sky[2])); sg.fillStyle = gr; sg.fillRect(0, 0, 4, 128);
     skyTex.needsUpdate = true;
   }
-  lampBase = k.lampI;
+  lampBase = k.lampI; // frame() gives it to every lamp's light
   shadeNow = k.shadeI;
-  if (LAMP) LAMP.userData.shade.emissiveIntensity = shadeNow;
+  for (const l of ITEMS.lamps) for (const s of l.shades) s.emissiveIntensity = shadeNow;
 }
 function tickClock() { // auto only: called from frame(), so it stops with the rAF loop on dispose (no timer of its own)
   if (timeSpec !== 'auto' || Date.now() < nextClock) return;
@@ -672,7 +724,7 @@ if (timeSpec === 'auto') tickClock(); else applyTime(timeSpec);
 on(root, 'heap:time', e => {
   const spec = parseTime(e.detail);
   if (spec == null) return;
-  timeSpec = spec; nextClock = 0;
+  timeSpec = spec; timeChoice = e.detail; nextClock = 0;
   if (timeSpec === 'auto') tickClock(); else applyTime(timeSpec);
 });
 
@@ -1062,8 +1114,11 @@ const goTo = cam => { camGoal = cam; controls.enabled = false; };
 //   root.dispatchEvent(new CustomEvent('heap:items', { detail: itemsArray }))
 //     replaces everything built from layout.items. Same item shapes as layout.json.
 //   root.dispatchEvent(new CustomEvent('heap:get', { detail: cb }))
-//     calls cb({ room: { w, d }, items, catalogue }) once the model catalogue has been read (catalogue is null if it could not be).
-//     items is a copy of the list now in the room; catalogue is catalogue.json as it is.
+//     calls cb({ room: { w, d }, items, catalogue, table, door, window, time, original, saveKey }) once the model catalogue has been read
+//     (catalogue is null if it could not be). items is a copy of the list now in the room; catalogue is catalogue.json as it is.
+//     table { x, z, w, d }, door { wall, at } and window { wall, at, w } are the fixed parts a floor plan shows (door and window may be null).
+//     time is the room's time choice as it was given ('auto', a name or an hour); original { items, time } is layout.json's own;
+//     saveKey is the localStorage key a saved { items, time } is read from at mount (section 1).
 // Walls, floor, table, heap, projector, phone, reception box and guestbook stay as they were built.
 on(root, 'heap:items', e => {
   if (!Array.isArray(e.detail)) return;
@@ -1073,7 +1128,15 @@ on(root, 'heap:items', e => {
 });
 on(root, 'heap:get', e => {
   if (typeof e.detail !== 'function') return;
-  getCatalogue().then(catalogue => { if (!disposed) e.detail({ room: { w: 2 * RX, d: 2 * RZ }, items: ITEMS.items.map(it => ({ ...it })), catalogue }); });
+  getCatalogue().then(catalogue => {
+    if (disposed) return;
+    e.detail({
+      room: { w: 2 * RX, d: 2 * RZ }, items: ITEMS.items.map(it => ({ ...it })), catalogue,
+      table: { x: TABLE.x, z: TABLE.z, w: TABLE.w, d: TABLE.d },
+      door: DOOR ? { wall: DOOR.wall, at: DOOR.at } : null, window: WIN ? { wall: WIN.wall, at: WIN.at, w: WIN.w } : null,
+      time: timeChoice, original: { items: ORIGINAL.items.map(it => ({ ...it })), time: ORIGINAL.time }, saveKey: KEY('layout'),
+    });
+  });
 });
 
 ALBUMS.forEach((a, i) => {
@@ -1093,6 +1156,7 @@ function syncUI() {
   $('ytlink').hidden = mode !== 'watch' || isFan(loaded);
   $('sortexit').hidden = mode !== 'sort';
   $('albumrow').hidden = mode !== 'sort';
+  root.dispatchEvent(new CustomEvent('heap:mode', { detail: mode })); // heap-room.tsx shows its 꾸미기 button in room mode only
 }
 
 function sit() {
@@ -1248,6 +1312,12 @@ function guestRows() {
 }
 function openGuestbook() {
   const list = $('gb-list'); list.innerHTML = '';
+  if (creatorVisit()) { // 다녀감: the creator's own row comes first
+    const row = el('div', 'gb-row owner');
+    row.appendChild(el('span', null, creator.name));
+    row.appendChild(el('small', null, `주인 · ${creatorVisit()} · 예시`));
+    list.appendChild(row);
+  }
   for (const e of guestRows()) {
     const row = el('div', 'gb-row');
     row.appendChild(el('span', null, e.name));
@@ -1346,6 +1416,7 @@ const OVERLAYS = ['phone', 'grid', 'rooms', 'guestbook'];
 const anyOverlay = () => OVERLAYS.some(id => !$(id).hidden);
 on(window, 'keydown', ev => {
   if (ev.target.closest?.('input, textarea')) { if (ev.key === 'Escape') $('guestbook').hidden = true; return; }
+  if (ev.target.closest?.('.room-editor')) return; // a key pressed inside the 꾸미기 panel belongs to the panel (it closes itself on Esc)
   const k = ev.key.toLowerCase(); keys.add(k);
   if (mode === 'room' && !anyOverlay() && (k === 'e' || k === 'enter')) { if (nearTable()) sit(); else if (nearShelf()) enterSort(); else if (nearDoor()) openRooms(); else if (nearBook()) openGuestbook(); }
   if (mode === 'sit' && held && k === 'f') flip();
@@ -1514,8 +1585,15 @@ function stepCharacter(dt) {
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const clock = new THREE.Clock(), dir = new THREE.Vector3(), camUp = new THREE.Vector3(), want = new THREE.Vector3(), wantQ = new THREE.Quaternion();
 const roomGoal = new THREE.Vector3(), flyQ = new THREE.Quaternion(), FLIP = new THREE.Quaternion().setFromAxisAngle(Yv, Math.PI);
-function resize() { const w = root.clientWidth, h = root.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+// The canvas is sized by CSS: the whole room area, or what the 꾸미기 panel leaves of it. The observer catches both that and a window resize.
+function resize() {
+  const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+  if (raf) renderer.render(scene, camera); // setSize clears the canvas; draw again so no blank frame shows
+}
 on(window, 'resize', resize);
+const sizeWatch = new ResizeObserver(resize); sizeWatch.observe(canvas);
+cleanups.push(() => sizeWatch.disconnect());
 
 function frame() {
   if (disposed) return;
@@ -1541,7 +1619,8 @@ function frame() {
   if (on) { screenOn.color.setScalar(flick); reelA.rotation.x = reelB.rotation.x = t * 3; }
   phoneDot.visible = Math.sin(t * 3) > -0.2;
   tickClock();
-  if (LAMP) LAMP.intensity = Math.max(0, lampBase + Math.sin(t * 1.3) * 0.05);
+  const lampNow = Math.max(0, lampBase + Math.sin(t * 1.3) * 0.05);
+  for (const l of ITEMS.lamps) if (l.light) l.light.intensity = lampNow;
   stepMotes(t);
   // cards
   const tn = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
@@ -1594,6 +1673,7 @@ camera.position.copy(ROOM_CAM.pos); controls.target.copy(ROOM_CAM.target); camer
 setHint('room'); syncUI();
 $('status').hidden = true;
 frame();
+root.dispatchEvent(new CustomEvent('heap:ready'));
 }
 
 run().catch(e => { if (!disposed) console.error('[heap-room]', e); });
@@ -1608,7 +1688,7 @@ return function dispose() {
   for (const id of LISTS) $(id).innerHTML = '';
   for (const id of HIDDEN) $(id).hidden = true;
   $('status').hidden = false; $('fade').classList.remove('on');
-  $('toast').textContent = ''; $('hint').textContent = ''; delete $('hint').dataset.k;
+  $('toast').textContent = ''; $('visit').textContent = ''; $('hint').textContent = ''; delete $('hint').dataset.k;
   root.style.removeProperty('--clay');
   if (roomTitle && document.title === roomTitle) document.title = prevTitle;
 };

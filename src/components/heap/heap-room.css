@@ -46,6 +46,7 @@
 .heap-room .gb-row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px dashed rgba(86, 83, 68, 0.25); font-size: 14px; }
 .heap-room .gb-row span:first-child { font-family: var(--hand); font-size: 22px; line-height: 1; }
 .heap-room .gb-row small { color: rgba(47, 44, 36, 0.62); font-variant-numeric: tabular-nums; }
+.heap-room .gb-row.owner span:first-child { color: var(--clay); }
 .heap-room .gb-form { display: flex; gap: 8px; }
 .heap-room .gb-form input { flex: 1; min-width: 0; font: 15px var(--ui); padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(86, 83, 68, 0.3); background: #fff8ec; color: var(--ink); }
 .heap-room .gb-form input:focus-visible { outline: 2px solid var(--clay); }
@@ -104,3 +105,42 @@
 .heap-room #fade.on { opacity: 1; pointer-events: auto; }
 .heap-room #status { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; font-family: var(--hand); font-size: 28px; color: var(--paper-dim); pointer-events: none; }
 .heap-room #status[hidden] { display: none; }
+
+/* 꾸미기 (room-editor.tsx): the panel docks to the right edge. While it is open (.editing) the scene and the HUD keep what is left
+   of the room area, so the whole room stays in view beside the panel. The engine follows the canvas's size. */
+.heap-room { --editor-w: 360px; }
+.heap-room.editing #scene { width: calc(100% - var(--editor-w)); }
+.heap-room.editing .hud { right: var(--editor-w); }
+.heap-room.editing #toast { left: calc(50% - var(--editor-w) / 2); }
+.heap-room .room-editor { position: absolute; top: 0; right: 0; bottom: 0; width: var(--editor-w); max-width: 100%; max-height: none; border-radius: 0; }
+.heap-room .room-editor .panel-body { flex: 1 1 0; min-height: 0; }
+.heap-room .room-editor .row { justify-content: flex-start; }
+.heap-room .room-editor .btn:disabled { opacity: 0.45; cursor: default; }
+.heap-room .btn.small { font-size: 12px; padding: 6px 11px; }
+.heap-room .ed-foot { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-top: 1px dashed rgba(86, 83, 68, 0.25); }
+/* the plan: back wall on top, left wall on the left (the two sides that have a wall); the open sides are dashed */
+.heap-room .ed-walls { border: 1px dashed rgba(86, 83, 68, 0.35); border-top: 4px solid var(--olive); border-left: 4px solid var(--olive); }
+.heap-room .ed-plan {
+  position: relative; background-color: #fff8ec;
+  /* hairlines every 0.5 unit; room-editor.tsx sets background-size to that step */
+  background-image: linear-gradient(to right, rgba(86, 83, 68, 0.14) 1px, transparent 1px), linear-gradient(to bottom, rgba(86, 83, 68, 0.14) 1px, transparent 1px);
+}
+.heap-room .ed-mark { position: absolute; font-size: 10px; line-height: 1; color: rgba(47, 44, 36, 0.62); pointer-events: none; }
+.heap-room .ed-mark.back { top: -4px; border-top: 4px solid; padding-top: 2px; text-align: center; }
+.heap-room .ed-mark.left { left: -4px; border-left: 4px solid; padding-left: 3px; display: flex; align-items: center; }
+.heap-room .ed-mark.door { border-color: var(--clay); }
+.heap-room .ed-mark.window { border-color: var(--paper); }
+.heap-room .ed-table { position: absolute; display: grid; place-items: center; background: #b9b4a8; color: var(--ink); font-size: 10px; pointer-events: none; }
+.heap-room .ed-item {
+  position: absolute; transform: translate(-50%, -50%); box-sizing: border-box; min-width: 12px; min-height: 12px; margin: 0; padding: 0;
+  display: grid; place-items: center; border: 1px solid var(--olive); border-radius: 0; background: rgba(243, 234, 219, 0.85);
+  color: var(--ink); font: 10px var(--ui); white-space: nowrap; cursor: pointer;
+}
+.heap-room .ed-item.rug { background: rgba(243, 234, 219, 0.4); }
+.heap-room .ed-item.sel { outline: 3px solid var(--clay); outline-offset: -1px; }
+.heap-room .ed-item:focus-visible { outline: 3px solid var(--ink); outline-offset: -1px; }
+.heap-room .ed-plan.arming { cursor: copy; }
+.heap-room .ed-plan.arming .ed-item { pointer-events: none; }
+.heap-room .ed-pick { font: 600 13px var(--ui); color: var(--ink); background: none; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 999px; padding: 5px 10px; cursor: pointer; }
+.heap-room .ed-pick[aria-pressed="true"] { border-color: var(--clay); color: var(--clay); }
+.heap-room .ed-pick:focus-visible { outline: 2px solid var(--clay); outline-offset: 1px; }
