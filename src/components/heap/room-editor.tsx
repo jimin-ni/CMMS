@@ -283,12 +283,15 @@ export function RoomEditor({
   const shownNotice = st?.notice && st.notice.seq !== goneSeq ? st.notice : null;
 
   const models = room?.catalogue?.models ?? [];
-  // 독에 내놓는 모델: 벽·천장에 거는 것과 벽 조각(catalogue.json 의 mount)은 아직 놓을 수 없어 뺀다.
+  // 독에 내놓는 모델: 벽 조각(catalogue.json 의 mount "structure")은 뺀다. 벽에 거는 것("wall")과 천장에 다는 것("ceiling")은 엔진이 벽과 천장에 붙인다.
   // 이미 방에 놓인 것은 그대로 그려지고 고르고 옮기고 넣을 수 있다 (이름은 models 전체에서 찾는다).
-  const placeable = models.filter((m) => !m.mount);
+  const placeable = models.filter((m) => m.mount !== "structure");
   const items = st?.items ?? [];
   const sel = st?.sel ?? null;
   const selItem = sel != null ? items[sel] : undefined;
+  // 고른 가구가 어디에 거는 것인지 ("wall" | "ceiling" | undefined). 벽 가구는 돌리지 않고 높이를 바꾼다.
+  const mountOf = (it: Item | undefined) => (it?.type === "model" ? models.find((m) => m.id === it.model)?.mount : undefined);
+  const selMount = mountOf(selItem);
   const busy = !!st?.busy;
   const bubbleOpen = bubbleFor != null && bubbleFor === sel && !!selItem && !st?.moving && !busy && canCarryFn(selItem);
   // 고른 가구가 바뀌면 모양 바꾸기 목록도 닫는다 (렌더 중에 앞의 값과 견준다)
@@ -454,8 +457,9 @@ export function RoomEditor({
     const need = selItem.fn ? [selItem.fn.kind] : slotKindsFor(selItem.type, selItem.model);
     if (!need.length) return [];
     const fits = (kinds: SlotKind[]) => kinds.some((k) => need.includes(k));
-    const list = placeable.filter((m) => m.id !== selItem.model && fits(slotKindsFor("model", m.id)));
-    if (selItem.type !== "shelf" && fits(slotKindsFor("shelf"))) list.push({ id: `${HAND_PREFIX}shelf`, label: "앨범 책장", category: "shelf" });
+    // 벽·천장 가구는 같은 자리에 거는 것끼리만 바꾼다 (엔진의 swap 도 막는다)
+    const list = placeable.filter((m) => m.id !== selItem.model && m.mount === selMount && fits(slotKindsFor("model", m.id)));
+    if (selItem.type !== "shelf" && !selMount && fits(slotKindsFor("shelf"))) list.push({ id: `${HAND_PREFIX}shelf`, label: "앨범 책장", category: "shelf" });
     return list;
   })();
 
@@ -495,7 +499,9 @@ export function RoomEditor({
       ? "눌러서 놓기 · Shift+클릭 계속 놓기 · R 돌리기 · Alt 스냅 끄기 · Esc 취소"
       : "놓을 곳에서 떼기 · R 돌리기 · Alt 스냅 끄기 · 아래 목록에 놓으면 넣기"
     : selItem
-      ? "끌어서 옮기기 · R 돌리기 · Del 넣기 · Ctrl+D 복제 · Esc 고르기 취소"
+      ? selMount === "wall"
+        ? "벽을 따라 끌기 · 다른 벽으로 끌면 그 벽에 걸려요 · PageUp/PageDown 높이 · Del 넣기 · Esc 고르기 취소"
+        : "끌어서 옮기기 · R 돌리기 · Del 넣기 · Ctrl+D 복제 · Esc 고르기 취소"
       : "가구를 눌러 고르고 끌어서 옮겨요 · 휠 확대 · 오른쪽 끌기 이동 · T 위에서 보기 · 0 맞추기";
 
   // 말풍선에 보이는 기능: 들고 있는 값(올바르지 않은 것)이 있으면 그것, 아니면 가구에 달린 것
@@ -591,10 +597,20 @@ export function RoomEditor({
       {selItem && !st?.moving && !busy && (
         <div id="ed-bar" className="ed-bar" role="toolbar" aria-label={`${itemLabel(selItem, models)} 고치기`}>
           <span className="lbl">{itemLabel(selItem, models)}</span>
-          {selItem.type !== "frame" && (
+          {selItem.type !== "frame" && selMount !== "wall" && (
             <button type="button" onClick={() => cmd({ op: "rotate", dir: 1 })} title="R">
               회전
             </button>
+          )}
+          {selMount === "wall" && (
+            <>
+              <button type="button" onClick={() => cmd({ op: "lift", dir: 1 })} title="높이 올리기 (PageUp)" aria-label="높이 올리기">
+                ▲
+              </button>
+              <button type="button" onClick={() => cmd({ op: "lift", dir: -1 })} title="높이 내리기 (PageDown)" aria-label="높이 내리기">
+                ▼
+              </button>
+            </>
           )}
           <button type="button" onClick={() => cmd({ op: "copy" })} title="Ctrl+D">
             복제
