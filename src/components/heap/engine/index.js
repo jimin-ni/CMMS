@@ -31,6 +31,7 @@ import { setupLive } from './live.js';
 import { setupInput } from './input.js';
 import { setupPath } from './path.js';
 import { setupEdit } from './edit.js';
+import { setupDockThumbs } from './dock-thumbs.js';
 
 // heap-room.tsx 가 그리고 엔진이 채우거나 보이게 하는 노드의 id. dispose 가 첫 렌더 상태로 되돌린다.
 const LISTS = ['albumrow', 'player-frame', 'music-frame', 'phone-feed', 'pc-list', 'ks-body', 'cal-body', 'grid-list', 'gb-list', 'roomlist'];
@@ -38,7 +39,10 @@ const HIDDEN = ['visit', 'albumrow', 'stand', 'flip', 'srclink', 'eject', 'ytlin
 
 /**
  * 방을 `root`(heap-room.tsx 가 그린 요소)에 올리고 dispose 함수를 돌려준다.
- * 라이브 훅은 `root` 에 보내는 CustomEvent 다: `heap:time`(time.js), `heap:items`, `heap:get`, `heap:saved`, `heap:edit`(editor-bridge.js).
+ * 라이브 훅은 `root` 에 보내는 CustomEvent 다: `heap:time`(time.js), `heap:items`, `heap:get`, `heap:saved`, `heap:edit`(editor-bridge.js),
+ * `heap:editcmd`(edit.js), `heap:thumb`(dock-thumbs.js).
+ * 꾸미기가 팔레트를 바꾸면 엔진은 `heap:remount`(detail: 편집 상태)를 보낸다. heap-room.tsx 가 그 상태를 opts.resume 으로 넘겨 다시 마운트한다:
+ * resume { edit, items, time, palette, hist, future, saved, original, baseLayout } (edit.js 의 remount 참고).
  * 엔진이 `root` 에 직접 보내는 것은 둘이다. `heap:mode`(detail: 'room' | 'sit' | 'watch' | 'sort')는 모드가 정해질 때마다,
  * `heap:ready` 는 방이 화면에 뜬 뒤에 한 번.
  * `modelBase` 는 가구 모델과 catalogue.json 이 있는 폴더다. 없으면 `dataBase` 옆의 "models/" 다.
@@ -51,7 +55,7 @@ const HIDDEN = ['visit', 'albumrow', 'stand', 'flip', 'srclink', 'eject', 'ytlin
  * 꾸미기(edit.js)는 서버와 같은 규칙을 쓴다: opts.itemHalfExtents, opts.placementError 는 layout.ts 의 itemHalfExtents, itemPlacementError 이고
  * opts.policy 는 policy.ts 의 HEAP_POLICY 다 (frameY, frameWallMargin).
  * @param {HTMLElement} root
- * @param {{ roomId: string, roomUuid: string, dataBase: string, modelBase?: string, data: any, viewerName: string | null, signedIn: boolean, pollMs: number, bubbleHref: string, navigate: (href: string) => void, parseLink: (url: string) => ({ platform: string, externalId: string, wide: boolean | null } | null), parseMusic: (url: string) => ({ video: string | null, list: string | null } | null), isSafeLink: (v: unknown) => boolean, isWebLink: (v: unknown) => boolean, isEmail: (v: unknown) => boolean, recordVisit: () => Promise<any>, addGuestbook: (name: string) => Promise<any>, onNavigate: (roomId: string) => void, itemHalfExtents: (item: any) => ({ hx: number, hz: number } | null), placementError: (item: any, room: { w: number, d: number }, table: { x: number, z: number }) => (string | null), policy: { frameY: number, frameWallMargin: number } }} opts
+ * @param {{ roomId: string, roomUuid: string, dataBase: string, modelBase?: string, data: any, viewerName: string | null, signedIn: boolean, pollMs: number, bubbleHref: string, navigate: (href: string) => void, parseLink: (url: string) => ({ platform: string, externalId: string, wide: boolean | null } | null), parseMusic: (url: string) => ({ video: string | null, list: string | null } | null), isSafeLink: (v: unknown) => boolean, isWebLink: (v: unknown) => boolean, isEmail: (v: unknown) => boolean, recordVisit: () => Promise<any>, addGuestbook: (name: string) => Promise<any>, onNavigate: (roomId: string) => void, itemHalfExtents: (item: any) => ({ hx: number, hz: number } | null), placementError: (item: any, room: { w: number, d: number }, table: { x: number, z: number }) => (string | null), policy: { frameY: number, frameWallMargin: number }, resume?: any }} opts
  * @returns {() => void}
  */
 export function mountRoom(root, opts) {
@@ -96,6 +100,7 @@ async function run(ctx) {
   setupLive(ctx);
   setupInput(ctx);
   setupPath(ctx);
+  setupDockThumbs(ctx); // 꾸미기 가구 목록의 그림 (heap:thumb)
   setupEdit(ctx); // 꾸미기. 포인터를 방 루트의 capture 단계에서 먼저 받으므로 input.js 뒤에 세워도 된다
 
   await fontsReady(); // 썸네일은 기다리지 않는다: buildHeap() 이 줄을 세우고 카드는 그림이 오는 대로 채워진다

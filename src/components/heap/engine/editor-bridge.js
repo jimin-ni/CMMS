@@ -17,8 +17,9 @@ export function setupEditorBridge(ctx) {
   //     seats 는 지금까지 지은 가구의 앉는 자리 { id, kind, x, y, z, yaw } 목록이다 (addSeats 참고): 앉는 모델은 첫 빌드 뒤에 읽힌다.
   //     time 은 방의 시간 선택을 준 그대로('auto', 이름, 시각)이고 original { items, time } 은 DB 에 마지막으로 저장된 레이아웃이다.
   //     layout 은 저장된 레이아웃 전체의 복사본이다: 패널은 저장하기 전에 자기 items, time, room 을 여기에 합친다.
-  //   root.dispatchEvent(new CustomEvent('heap:saved', { detail: layout }))
+  //   root.dispatchEvent(new CustomEvent('heap:saved', { detail: { roomUuid, layout } }))
   //     패널이 이 레이아웃 전체를 저장했다고 엔진에 알린다: 이것이 새 original 이자 처음으로 의 목표가 된다.
+  //     roomUuid 가 이 방(opts.roomUuid)이 아니면 버린다: 방을 옮긴 뒤 늦게 끝난 저장이 이 방의 기준을 바꾸지 못하게.
   // 벽, 바닥, 탁자, 더미, 영사기, 휴대폰, 방명록 받침대는 지은 그대로 둔다.
   // 가구 목록을 바꾸고 그에 딸린 것(앉은 자리, 음악, 앨범 책장, 기능)을 맞춘다. 꾸미기(edit.js)도 놓을 때마다 이것을 부른다.
   function applyItems(list) {
@@ -32,10 +33,11 @@ export function setupEditorBridge(ctx) {
   on(root, 'heap:items', e => { if (Array.isArray(e.detail)) applyItems(e.detail); });
   on(root, 'heap:edit', e => { if (e.detail) ctx.closeMusic(); }); // heap-room.tsx: the 꾸미기 panel opened (true) or closed (false); the panel takes the dock's corner, so the music stops
   on(root, 'heap:saved', e => {
-    const l = e.detail;
+    if (e.detail?.roomUuid !== ctx.opts.roomUuid) return;
+    const l = e.detail.layout;
     if (!l || typeof l !== 'object' || !Array.isArray(l.items)) return;
     ctx.baseLayout = structuredClone(l);
-    ctx.original = { items: l.items.map(it => ({ ...it })), time: l.time ?? 'auto' };
+    ctx.original = { items: l.items.map(it => ({ ...it })), time: l.time ?? 'auto', palette: l.palette ?? null };
   });
   on(root, 'heap:get', e => {
     if (typeof e.detail !== 'function') return;
@@ -45,7 +47,7 @@ export function setupEditorBridge(ctx) {
         room: { w: 2 * RX, d: 2 * RZ }, layout: structuredClone(ctx.baseLayout), items: ctx.build.items.map(it => ({ ...it })), catalogue,
         table: { x: TABLE.x, z: TABLE.z, w: TABLE.w, d: TABLE.d },
         door: DOOR ? { wall: DOOR.wall, at: DOOR.at } : null, window: WIN ? { wall: WIN.wall, at: WIN.at, w: WIN.w } : null,
-        time: ctx.timeChoice, original: { items: ctx.original.items.map(it => ({ ...it })), time: ctx.original.time },
+        time: ctx.timeChoice, original: { items: ctx.original.items.map(it => ({ ...it })), time: ctx.original.time, palette: ctx.original.palette },
         creatorLinks: creator.links.map(L => ({ ...L })), linktree: creator.linktree ?? null,
         seats: ctx.build.seats.map(s => ({ id: s.id, kind: s.kind, x: s.pos.x, y: s.pos.y, z: s.pos.z, yaw: s.yaw })),
       });

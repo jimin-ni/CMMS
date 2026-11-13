@@ -5,7 +5,8 @@ import { HEAP_POLICY } from "@/lib/heap/policy";
 import { parseMusicUrl, slotKindsFor, slotLabel, type CalendarEntry, type PcLink, type SlotFn, type SlotKind } from "@/lib/heap/slots";
 
 // 꾸미기의 기능 칸. 고른 가구에 기능(item.fn)을 달고 내용을 적는다 (종류와 허용 가구: catalogue.json의 slots, 검사: slots.ts).
-// room-editor.tsx의 기능 시트가 그린다. 예전 평면도 패널에 있던 칸을 그대로 옮겨 왔다.
+// room-editor.tsx의 기능 말풍선(가구 아래에 붙는다)이 그린다. 예전 평면도 패널에 있던 칸을 그대로 옮겨 왔다.
+// 칸은 고칠 때마다 onChange 로 새 값을 올린다. 그 값을 저장할지(올바를 때만)는 말풍선이 slots.ts 의 checkFn 으로 정한다.
 
 export type Item = {
   type: string;
@@ -20,7 +21,8 @@ export type Item = {
   // 조명 스위치. 없으면 켜진 것(밤에 불이 들어온다), false면 늘 꺼져 있다.
   lit?: boolean;
 };
-export type Model = { id: string; label: string; category: string; w?: number; d?: number; lift?: number };
+// mount: 벽·천장에 거는 것이나 벽 조각 ("wall" | "ceiling" | "structure"). 꾸미기 독에는 나오지 않는다.
+export type Model = { id: string; label: string; category: string; w?: number; d?: number; lift?: number; mount?: string };
 
 // 엔진이 직접 만드는 가구의 이름 (engine/edit.js의 HAND_LABEL과 같다).
 export const HAND_LABEL: Record<string, string> = {
@@ -37,8 +39,8 @@ export const itemLabel = (it: Item, models: Model[]) =>
   (it.type === "model" ? models.find((m) => m.id === it.model)?.label : HAND_LABEL[it.type]) ?? it.model ?? it.type;
 export const isLamp = (it: Item, models: Model[]) =>
   it.type === "lamp" || (it.type === "model" && models.find((m) => m.id === it.model)?.category === "lamp");
-// 기능 시트를 열 수 있는 가구: 기능을 달 수 있거나 조명이다.
-export const hasFnSheet = (it: Item, models: Model[]) => slotKindsFor(it.type, it.model).length > 0 || isLamp(it, models);
+// 기능(음악, 최신 영상, PC 링크, 기념품, 달력)을 달 수 있는 가구인지. 조명 스위치는 가구 위 막대에 따로 있다.
+export const canCarryFn = (it: Pick<Item, "type" | "model">) => slotKindsFor(it.type, it.model).length > 0;
 
 const chars = (v: string) => [...v].length;
 
@@ -97,8 +99,8 @@ export function FnForm({
   );
 }
 
-// 새로 다는 기능의 처음 값. 비워 둔 칸은 저장할 때 서버가 알려 준다.
-function newFn(kind: SlotKind, prefill: () => PcLink[]): SlotFn {
+// 새로 다는 기능의 처음 값. 비워 둔 칸이 있으면 올바르지 않은 값이라 말풍선이 저장하지 않고 들고 있는다.
+export function newFn(kind: SlotKind, prefill: () => PcLink[]): SlotFn {
   if (kind === "pc") return { kind: "pc", links: prefill() };
   if (kind === "music") return { kind: "music", url: "" };
   if (kind === "latest") return { kind: "latest" };

@@ -31,6 +31,7 @@ export async function setupData(ctx) {
     leaf: '#6f7d4f', leaf2: '#87925f', leafDark: '#556240',
   };
   const C = { ...DEFAULT_PALETTE, ...(layout.palette || {}) };
+  ctx.DEFAULT_PALETTE = DEFAULT_PALETTE;
 
   const ALBUMS = creator.albums.map(a => ({ ...a, re: a.match ? new RegExp(a.match, 'i') : null }));
   const albumName = k => ALBUMS.find(a => a.key === k)?.name ?? k;
@@ -43,8 +44,12 @@ export async function setupData(ctx) {
 
   // 꾸미기 (room-editor.tsx, through the hooks in section 6): ORIGINAL is the layout as last saved in the database (the page's, or the one the editor just saved via heap:saved).
   // It is the editor's 처음으로 target. BASE_LAYOUT is the whole stored layout; the editor merges its items, time and room into it when it saves.
-  ctx.baseLayout = structuredClone(DATA.layout);
-  ctx.original = { items: (layout.items || []).map(it => ({ ...it })), time: layout.time ?? 'auto' };
+  // 팔레트를 바꾸며 다시 마운트할 때(opts.resume, edit.js 의 remount)는 그 전 마운트의 기준을 그대로 잇는다: 그 사이에 저장했을 수 있다.
+  const R = opts.resume;
+  ctx.baseLayout = structuredClone(R?.baseLayout ?? DATA.layout);
+  ctx.original = R?.original
+    ? { items: R.original.items.map(it => ({ ...it })), time: R.original.time, palette: R.original.palette ?? null }
+    : { items: (layout.items || []).map(it => ({ ...it })), time: layout.time ?? 'auto', palette: layout.palette ?? null };
 
   // ---------- 카드 목록 ----------
   // 영상은 연결된 채널의 제목(heap_creator_channels)을 가진다. 카드 뒷면에 보이고 `channel` 앨범 규칙이 이것으로 맞춘다.

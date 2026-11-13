@@ -1,10 +1,14 @@
-// 꾸미기: 방 안에서 가구를 집고, 끌고, 돌리고, 넣는다 (design/editor.md 의 B1, B2).
+// 꾸미기: 방 안에서 가구를 집고, 끌고, 돌리고, 넣는다 (design/editor.md 의 B1, B2). 팔레트(B4)와 모양 바꾸기(B5)도 여기서 한 걸음이 된다.
 // 편집 중의 가구 목록, 고른 가구, 되돌리기 기록은 이 모듈이 갖는다. 화면 위 단추(위 막대, 가구 목록, 가구 위 막대, 기능 칸)는
 // room-editor.tsx 가 그리고, 이 모듈과는 방 루트의 이벤트로만 이야기한다.
 //   받는 것  heap:edit (true 면 들어오고 false 면 나간다, heap-room.tsx)
-//            heap:editcmd { op, ... }  op: arm(template), rotate(dir), copy, remove, undo, redo, time(value), fn(index, fn), lit, select(index | null), cancel, reset(처음으로), discard(나가며 버리기)
-//            heap:saved (editor-bridge.js 와 함께): 저장된 레이아웃이 새 기준이 된다
-//   보내는 것 heap:editstate { items, sel, moving, canUndo, canRedo, dirty, time, notice }  바뀔 때마다
+//            heap:editcmd { op, ... }  op: arm(template), rotate(dir), copy, remove, undo, redo, time(value), fn(index, fn), lit, select(index | null), cancel, reset(처음으로), discard(나가며 버리기),
+//                                     palette(palette | null), swap(index, to { type, model? })
+//            heap:saved { roomUuid, layout } (editor-bridge.js 와 함께): 저장된 레이아웃이 새 기준이 된다. 다른 방의 것은 버린다
+//   보내는 것 heap:editstate { items, sel, moving, canUndo, canRedo, dirty, time, notice, palette, look, mount, placed, busy }  바뀔 때마다
+//            heap:remount { edit, items, time, palette, hist, future, saved, original, baseLayout }  팔레트가 바뀔 때 (아래 remount)
+// 팔레트는 벽, 바닥과 여러 곳의 색이 마운트 때 한 번 읽는 값(data.js 의 C)이라, 바꾸면 방을 다시 마운트한다 (1초쯤). 편집 상태와 되돌리기 기록은
+// heap:remount 로 heap-room.tsx 에 넘기고, 새 마운트가 opts.resume 으로 받아 이어 간다. 그 사이 방 안의 상태(앉은 자리, 음악)는 처음으로 돌아간다.
 // 끄는 동안에는 그 가구의 그룹만 프레임마다 옮기고, 놓을 때 한 번 buildItems 로 다시 짓는다 (applyItems, editor-bridge.js).
 // 가구끼리 겹치는 것은 막지 않는다. 막는 것은 서버가 거절하는 자리(opts.placementError = layout.ts 의 itemPlacementError)와,
 // 기능에 닿지 못하게 하는 자리(사진 탁자와 그 앞자리, 문 앞, 방명록 앞, 창문·스크린·문 위의 액자)뿐이다. 방 밖은 막지 않고 안으로 당긴다.
@@ -35,7 +39,11 @@ export function setupEdit(ctx) {
   const ed = {
     on: false, items: [], time: 'auto', sel: null, move: null, press: null, hist: [], future: [], tag: null, saved: '',
     alt: false, last: null, notice: null, seq: 0, fnTimer: 0,
+    // palette: layout.palette (없으면 null = 기본 올리브 오후) · placed: 방금 내려놓은 새 가구 { index, seq } (기능 말풍선을 연다) · busy: 다시 마운트를 기다린다
+    palette: null, placed: null, busy: false,
   };
+  // 이 마운트의 번호와, 이 마운트가 실제로 칠한 색 (가구 목록의 그림은 이 색으로 그려진다: dock-thumbs.js)
+  const MOUNT = Math.floor(Math.random() * 1e9), LOOK = JSON.stringify(ctx.C);
   ctx.onDispose(() => clearTimeout(ed.fnTimer));
 
   // ---------- 규칙 ----------
@@ -119,14 +127,16 @@ export function setupEdit(ctx) {
   }
 
   // ---------- 상태 알리기, 되돌리기 ----------
-  const snap = () => JSON.stringify({ items: ed.items, time: ed.time });
-  const keyOf = (items, time) => JSON.stringify({ items, time });
+  const snap = () => JSON.stringify({ items: ed.items, time: ed.time, palette: ed.palette });
+  const keyOf = (items, time, palette) => JSON.stringify({ items, time, palette: palette ?? null });
+  const palKey = p => JSON.stringify(p ?? null);
   function emit() {
     if (ctx.disposed) return;
     root.dispatchEvent(new CustomEvent('heap:editstate', { detail: {
       on: ed.on, items: ed.items.map(it => ({ ...it })), sel: ed.sel, time: ed.time,
       moving: ed.move ? { isNew: ed.move.isNew, label: labelOf(ed.move.base) } : null,
       canUndo: ed.hist.length > 0, canRedo: ed.future.length > 0, dirty: snap() !== ed.saved, notice: ed.notice,
+      palette: ed.palette, look: LOOK, mount: MOUNT, placed: ed.placed, busy: ed.busy,
     } }));
   }
   function notice(text, undo = false) { ed.notice = { text, undo, seq: ++ed.seq }; }
@@ -141,7 +151,34 @@ export function setupEdit(ctx) {
     const o = JSON.parse(s);
     ed.items = o.items; ed.sel = null; ed.tag = null;
     if (o.time !== ed.time) setTime(o.time);
-    rebuild();
+    const pal = o.palette ?? null;
+    if (palKey(pal) !== palKey(ed.palette)) { ed.palette = pal; remount(); } else rebuild();
+  }
+
+  // ---------- 팔레트: 다시 마운트 ----------
+  // 지금 편집 상태를 heap-room.tsx 에 넘긴다. heap-room.tsx 는 이 방을 버리고 items, time, palette 를 얹은 레이아웃으로 다시 마운트하며,
+  // 새 마운트의 edit.js 가 heap:ready 에서 이 상태로 다시 들어온다 (edit 이 false 면 들어오지 않는다: 나가며 버릴 때).
+  function remount(edit = true) {
+    clearTimeout(ed.fnTimer); ed.fnTimer = 0;
+    ed.move = null; ed.press = null; ed.sel = null; grid.visible = false; ed.busy = edit;
+    root.dispatchEvent(new CustomEvent('heap:remount', { detail: {
+      edit, items: ed.items.map(it => ({ ...it })), time: ed.time, palette: ed.palette,
+      hist: ed.hist.slice(), future: ed.future.slice(), saved: ed.saved, seq: ed.seq,
+      original: { items: ctx.original.items.map(it => ({ ...it })), time: ctx.original.time, palette: ctx.original.palette ?? null },
+      baseLayout: structuredClone(ctx.baseLayout),
+    } }));
+  }
+  // 팔레트 하나를 통째로 칠한다 (프리셋 또는 직접 고른 색). 한 걸음이고, 저장하기 전까지는 팔로워에게 보이지 않는다.
+  // 값의 검사는 저장할 때 서버(layout.ts 의 palette)가 한다. 여기서는 모양만 본다: 색 이름 → #RRGGBB, floor 는 그 목록 (1~6개).
+  const HEXC = /^#[0-9a-fA-F]{6}$/;
+  function setPalette(p) {
+    const ok = p === null || (typeof p === 'object' && !Array.isArray(p) && Object.entries(p).every(([k, v]) => (k === 'floor'
+      ? Array.isArray(v) && v.length >= 1 && v.length <= 6 && v.every(c => HEXC.test(c))
+      : typeof v === 'string' && HEXC.test(v))));
+    if (!ok || palKey(p) === palKey(ed.palette)) return;
+    endMove(); pushUndo();
+    ed.palette = p ? structuredClone(p) : null; ed.notice = null;
+    remount();
   }
   function undo() { endMove(); if (!ed.hist.length) return; ed.future.push(snap()); restore(ed.hist.pop()); ed.notice = null; }
   function redo() { endMove(); if (!ed.future.length) return; ed.hist.push(snap()); restore(ed.future.pop()); ed.notice = null; }
@@ -271,7 +308,7 @@ export function setupEdit(ctx) {
     pushUndo();
     ed.items = [...ed.items, m.cand];
     if (keep) { m.i = ed.items.length; m.base = { ...m.cand }; }
-    else { ed.move = null; grid.visible = false; ed.sel = ed.items.length - 1; }
+    else { ed.move = null; grid.visible = false; ed.sel = ed.items.length - 1; ed.placed = { index: ed.sel, seq: ++ed.seq }; }
     ed.notice = null; seatNote(ed.items.length - 1);
     rebuild();
   }
@@ -342,13 +379,36 @@ export function setupEdit(ctx) {
     ed.items = ed.items.map((o, j) => (j === i ? next : o));
     rebuild();
   }
+  // 모양 바꾸기: 같은 자리, 같은 방향, 같은 기능으로 모델만 바꾼다 (F5). 고를 수 있는 모델은 room-editor.tsx 가 같은 기능을 달 수 있는 것으로 거른다.
+  // 높이는 받침 높이(lift)의 차이만큼 옮긴다: 책상 위의 노트북을 모니터로 바꾸면 책상 위에 그대로 있다. 새 크기가 자리에 맞지 않으면 바꾸지 않는다.
+  function swap(i, to) {
+    const it = ed.items[i];
+    if (!it || !to || (to.type !== 'model' && to.type !== 'shelf') || (to.type === 'model' && typeof to.model !== 'string')) return;
+    if (it.type === 'frame' || it.type === 'calendar') return; // 벽 액자와 탁상 달력은 모양이 하나뿐이다
+    const next = { ...it, type: to.type };
+    if (to.type === 'model') next.model = to.model; else delete next.model;
+    if (next.type === it.type && next.model === it.model) return;
+    const lift = o => (o.type === 'model' ? entryOf(o)?.lift ?? 0 : 0);
+    const y = r2((it.y || 0) - lift(it) + lift(next));
+    if (y > 0) next.y = y; else delete next.y;
+    if (!(next.type === 'lamp' || entryOf(next)?.category === 'lamp')) delete next.lit;
+    const e = ext(next);
+    if (!next.y) { next.x = r2(clamp(next.x, -RX + e.hx, RX - e.hx)); next.z = r2(clamp(next.z, -RZ + e.hz, RZ - e.hz)); }
+    const w = why(next);
+    if (w) { notice(`그 모양은 이 자리에 맞지 않아요 · ${w}`); return; }
+    endMove(); pushUndo();
+    ed.items = ed.items.map((o, j) => (j === i ? next : o)); ed.sel = i;
+    notice(`모양을 바꿨어요 · ${labelOf(it)} → ${labelOf(next)}`, true);
+    rebuild();
+  }
   // 처음으로: 마지막으로 저장한 모습. 되돌리기로 돌아올 수 있다
   function reset() {
     endMove(); pushUndo();
     ed.items = ctx.original.items.map(it => ({ ...it })); ed.sel = null;
     if (ed.time !== ctx.original.time) setTime(ctx.original.time);
     notice('마지막으로 저장한 모습으로 돌아왔어요', true);
-    rebuild();
+    const pal = ctx.original.palette ?? null;
+    if (palKey(pal) !== palKey(ed.palette)) { ed.palette = pal; remount(); } else rebuild();
   }
   // 앉는 가구가 다른 가구와 겹치면 저장은 되지만 그 자리에는 앉을 수 없다 (예전 꾸미기 패널의 안내)
   function seatNote(i) {
@@ -366,12 +426,14 @@ export function setupEdit(ctx) {
     endMove();
     ed.items = ctx.original.items.map(it => ({ ...it })); ed.sel = null; ed.hist = []; ed.future = []; ed.tag = null; ed.notice = null;
     if (ed.time !== ctx.original.time) setTime(ctx.original.time);
-    rebuild();
+    const pal = ctx.original.palette ?? null;
+    if (palKey(pal) !== palKey(ed.palette)) { ed.palette = pal; remount(false); } else rebuild(); // 칠한 색은 다시 마운트해야 돌아간다
   }
   const overDock = ev => { const d = root.querySelector('.ed-dock')?.getBoundingClientRect(); return !!d && ev.clientX >= d.left && ev.clientX <= d.right && ev.clientY >= d.top && ev.clientY <= d.bottom; };
 
   // ---------- 들어오기, 나가기 ----------
-  function enter() {
+  // resume: 팔레트를 바꾸며 다시 마운트했을 때 그 전 마운트의 편집 상태 (opts.resume). 가구, 시간, 팔레트는 이미 이 마운트의 레이아웃에 있다.
+  function enter(resume = null) {
     if (ed.on || ctx.disposed) return;
     if (ctx.perch) ctx.unperch();
     for (const id of OVERLAYS) $(id).hidden = true;
@@ -381,8 +443,10 @@ export function setupEdit(ctx) {
     me.position.y = 0;
     ctx.syncUI();
     ed.on = true; ed.items = ctx.build.items.map(it => ({ ...it })); ed.time = ctx.timeChoice; ed.sel = null;
-    ed.hist = []; ed.future = []; ed.tag = null; ed.notice = null; ed.move = null; ed.press = null;
-    ed.saved = keyOf(ctx.original.items, ctx.original.time);
+    ed.palette = ctx.layout.palette ?? null; ed.placed = null; ed.busy = false;
+    ed.hist = resume?.hist ?? []; ed.seq = resume?.seq ?? ed.seq; // 알림과 내려놓기의 번호는 마운트를 건너 이어진다 (room-editor.tsx 가 번호로 새것을 가린다)
+    ed.future = resume?.future ?? []; ed.tag = null; ed.notice = null; ed.move = null; ed.press = null;
+    ed.saved = keyOf(ctx.original.items, ctx.original.time, ctx.original.palette);
     emit();
     getCatalogue().then(() => { if (ed.on) emit(); }); // 이름과 러그 여부는 카탈로그에서 온다
   }
@@ -397,9 +461,11 @@ export function setupEdit(ctx) {
     emit();
   }
   on(root, 'heap:edit', e => { if (e.detail) enter(); else exit(); });
+  if (opts.resume?.edit) on(root, 'heap:ready', () => enter(opts.resume), { once: true });
   on(root, 'heap:saved', e => {
-    const l = e.detail;
-    if (l && Array.isArray(l.items)) { ed.saved = keyOf(l.items, l.time ?? 'auto'); if (ed.on) emit(); }
+    if (e.detail?.roomUuid !== opts.roomUuid) return; // 다른 방에서 늦게 끝난 저장
+    const l = e.detail.layout;
+    if (l && Array.isArray(l.items)) { ed.saved = keyOf(l.items, l.time ?? 'auto', l.palette); if (ed.on) emit(); }
   });
   on(root, 'heap:editcmd', e => {
     const c = e.detail;
@@ -419,6 +485,8 @@ export function setupEdit(ctx) {
       case 'cancel': cancel(); break;
       case 'reset': reset(); break;
       case 'discard': discard(); break;
+      case 'palette': setPalette(c.palette ?? null); break;
+      case 'swap': if (Number.isInteger(c.index)) swap(c.index, c.to); break;
       default: return;
     }
     emit();
@@ -464,7 +532,7 @@ export function setupEdit(ctx) {
   on(window, 'keydown', ev => {
     if (!ed.on) return;
     if (ev.key === 'Alt') { ed.alt = true; ev.preventDefault(); if (ed.move && ed.last) { update(ed.last); } return; }
-    if (ev.target.closest?.('input, textarea, select, .ed-sheet')) return; // 기능 칸의 글자는 칸의 것이다
+    if (ev.target.closest?.('input, textarea, select, .ed-bubble')) return; // 기능 말풍선의 글자는 말풍선의 것이다
     const k = ev.key.toLowerCase(), mod = ev.ctrlKey || ev.metaKey;
     let done = true;
     if (mod && k === 'z') { if (ev.shiftKey) redo(); else undo(); }
@@ -497,15 +565,36 @@ export function setupEdit(ctx) {
       }
       if (chip.hidden === show) chip.hidden = !show;
     }
+    const cr = canvas.getBoundingClientRect(), rr = root.getBoundingClientRect();
+    const L = cr.left - rr.left, T = cr.top - rr.top, R = cr.right - rr.left, B = cr.bottom - rr.top;
+    // 그룹의 윗면(또는 밑면) 가운데가 화면의 어디인지 (방 루트 기준 px)
+    const at = (g, bottom) => {
+      bb.setFromObject(g);
+      if (bb.isEmpty()) top.set(g.position.x, bottom ? 0 : 1, g.position.z);
+      else top.set((bb.min.x + bb.max.x) / 2, bottom ? bb.min.y : bb.max.y, (bb.min.z + bb.max.z) / 2);
+      top.project(camera);
+      return { x: L + (top.x + 1) / 2 * cr.width, y: T + (1 - top.y) / 2 * cr.height };
+    };
     const g = !m && ed.sel != null ? ctx.build.groups[ed.sel] : null;
     if (bar && g) {
-      bb.setFromObject(g);
-      if (bb.isEmpty()) top.set(g.position.x, 1, g.position.z); else top.set((bb.min.x + bb.max.x) / 2, bb.max.y, (bb.min.z + bb.max.z) / 2);
-      top.project(camera);
-      const cr = canvas.getBoundingClientRect(), rr = root.getBoundingClientRect();
-      const x = cr.left - rr.left + (top.x + 1) / 2 * cr.width, y = cr.top - rr.top + (1 - top.y) / 2 * cr.height;
-      bar.style.left = `${Math.round(clamp(x, cr.left - rr.left + 120, cr.right - rr.left - 120))}px`;
-      bar.style.top = `${Math.round(clamp(y, cr.top - rr.top + 52, cr.bottom - rr.top))}px`;
+      const p = at(g, false);
+      bar.style.left = `${Math.round(clamp(p.x, L + 120, R - 120))}px`;
+      bar.style.top = `${Math.round(clamp(p.y, T + 52, B))}px`;
+    }
+    // 기능 말풍선 (room-editor.tsx 의 #ed-bubble, data-index): 가구의 밑면 아래에 단다. 캔버스 밖으로 나가지 않게 당긴다
+    const bub = root.querySelector('#ed-bubble'), bg = bub && ctx.build.groups[Number(bub.dataset.index)];
+    if (bub && bg) {
+      const p = at(bg, true), w = bub.offsetWidth, h = bub.offsetHeight;
+      bub.style.left = `${Math.round(clamp(p.x, L + w / 2 + 8, R - w / 2 - 8))}px`;
+      bub.style.top = `${Math.round(Math.max(T + 8, Math.min(p.y + 14, B - 8 - h)))}px`;
+    }
+    // 기능 표 (room-editor.tsx 의 .ed-badge, data-badge): 가구의 윗면 위에 단다. 캔버스 밖이면 숨긴다
+    for (const el of root.querySelectorAll('.ed-badge')) {
+      const bgp = ctx.build.groups[Number(el.dataset.badge)];
+      if (!bgp) { el.style.visibility = 'hidden'; continue; }
+      const p = at(bgp, false), inside = p.x > L && p.x < R && p.y > T && p.y < B;
+      el.style.visibility = inside ? '' : 'hidden';
+      el.style.left = `${Math.round(p.x)}px`; el.style.top = `${Math.round(p.y)}px`;
     }
   }
 

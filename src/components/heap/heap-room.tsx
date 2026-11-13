@@ -37,6 +37,17 @@ export type HeapRoomData = {
   creatorVisit: string | null;
 };
 
+// 꾸미기가 팔레트를 바꿀 때 엔진이 보내는 편집 상태 (engine/edit.js 의 remount). 다음 마운트에 opts.resume 으로 그대로 넘긴다.
+type EditResume = {
+  edit: boolean;
+  items: unknown[];
+  time: string | number;
+  palette: Record<string, unknown> | null;
+  original: unknown;
+  baseLayout: Record<string, unknown>;
+  [key: string]: unknown;
+};
+
 // 미니룸 화면. 마크업은 room.html의 HUD/오버레이 그대로이고, 엔진(engine/)이 id로 찾아 채운다.
 // three는 브라우저에서만 돌아야 하므로 엔진은 effect 안에서 dynamic import로 불러온다.
 // canEdit: 꾸미기 버튼을 보여 줄지. 방을 걸어 다니는 동안(엔진의 room 모드)에만 버튼이 나온다.
@@ -60,6 +71,15 @@ export function HeapRoom({
   const [mode, setMode] = useState("room");
   const [editing, setEditing] = useState(false);
   const closeEditor = useCallback(() => setEditing(false), []);
+  // 팔레트를 바꾸며 다시 마운트할 때의 편집 상태. 이 data로 띄운 방에만 쓴다 (방을 옮기거나 data가 새로 오면 버려진다).
+  const [resume, setResume] = useState<{ data: HeapRoomData; state: EditResume } | null>(null);
+  // 방을 옮기면 꾸미기를 닫고 이어 붙일 편집 상태도 버린다 (렌더 중에 앞의 방과 견준다). 앞 방의 편집이 새 방으로 새지 않게.
+  const [shownRoom, setShownRoom] = useState(data.roomUuid);
+  if (shownRoom !== data.roomUuid) {
+    setShownRoom(data.roomUuid);
+    setEditing(false);
+    setResume(null);
+  }
 
   // 꾸미기가 열리고 닫힐 때 엔진에 알린다. 엔진은 편집 모드로 들어가고(engine/edit.js) 음악을 멈춘다.
   useEffect(() => {
@@ -73,15 +93,27 @@ export function HeapRoom({
     let dispose: (() => void) | null = null;
     const onReady = () => setReady(true);
     const onMode = (e: Event) => setMode((e as CustomEvent<string>).detail);
+    const onRemount = (e: Event) => setResume({ data, state: (e as CustomEvent<EditResume>).detail });
     root.addEventListener("heap:ready", onReady);
     root.addEventListener("heap:mode", onMode);
+    root.addEventListener("heap:remount", onRemount);
+    // 다시 마운트할 때는 편집 중인 가구, 시간, 팔레트를 저장된 레이아웃 위에 얹어 띄운다. palette가 null이면 기본 색이다.
+    const r = resume && resume.data === data ? resume.state : null;
+    let mountData = data;
+    if (r) {
+      const layout: Record<string, unknown> = { ...r.baseLayout, items: r.items, time: r.time };
+      if (r.palette) layout.palette = r.palette;
+      else delete layout.palette;
+      mountData = { ...data, layout };
+    }
     import("./engine").then(({ mountRoom }) => {
       // StrictMode의 첫 번째 mount는 여기서 걸러져 엔진이 한 번만 뜬다.
       if (cancelled) return;
       dispose = mountRoom(root, {
         roomId,
         dataBase: DATA_BASE,
-        data,
+        data: mountData,
+        resume: r,
         viewerName,
         signedIn,
         roomUuid: data.roomUuid,
@@ -110,9 +142,10 @@ export function HeapRoom({
       cancelled = true;
       root.removeEventListener("heap:ready", onReady);
       root.removeEventListener("heap:mode", onMode);
+      root.removeEventListener("heap:remount", onRemount);
       dispose?.();
     };
-  }, [roomId, data, viewerName, signedIn, router]);
+  }, [roomId, data, viewerName, signedIn, router, resume]);
 
   return (
     <div ref={rootRef} className={editing ? "heap-room editing" : "heap-room"}>
@@ -159,7 +192,7 @@ export function HeapRoom({
         </div>
       </div>
       <p id="toast" />
-      {editing && <RoomEditor rootRef={rootRef} roomUuid={data.roomUuid} roomName={data.name} onClose={closeEditor} />}
+      {editing && <RoomEditor key={data.roomUuid} rootRef={rootRef} roomUuid={data.roomUuid} roomName={data.name} onClose={closeEditor} />}
 
       <div id="player" hidden>
         <div className="player-bar">
