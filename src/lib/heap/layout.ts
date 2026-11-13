@@ -204,6 +204,24 @@ function frameError(it: Obj, room: { w: number; d: number } | undefined): string
   return null;
 }
 
+// 벽에 거는 모델(catalogue.json 의 mount 가 "wall": 상부장, 후드, 거울, 벽 조명, 리스, 전구 줄)은 뒷벽에 0도로 또는 왼쪽 벽에 90도로,
+// 등을 벽에 붙여(바닥 크기의 뒷면이 벽에 닿게) 건다. 높이 y 는 있어야 하고 범위(0..layoutItemYMax)는 checkItem 이 본다.
+// 모델의 키는 서버가 모르므로 천장을 뚫는지는 보지 않는다 (꾸미기가 모델 크기로 막는다). 허용 오차는 액자와 같다.
+// 천장에 다는 것(mount "ceiling")과 벽 조각(mount "structure")은 여기서 보지 않는다.
+const WALL_MOUNT_IDS = new Set(catalogue.models.filter((model) => "mount" in model && model.mount === "wall").map((model) => model.id));
+function wallMountError(it: Obj, room: { w: number; d: number } | undefined): string | null {
+  if (it.type !== "model" || !WALL_MOUNT_IDS.has(it.model as string)) return null;
+  const w = room?.w ?? 8, d = room?.d ?? 8, eps = 0.01;
+  if (it.y === undefined) return "벽에 거는 가구는 높이가 있어야 해요.";
+  const e = itemHalfExtents(it);
+  if (!e) return null;
+  const x = it.x as number, z = it.z as number, rot = ((it.rot as number | undefined) ?? 0);
+  const onBack = rot === 0 && Math.abs(z - (-d / 2 + e.hz)) <= eps;
+  const onLeft = rot === 90 && Math.abs(x - (-w / 2 + e.hx)) <= eps;
+  if (!onBack && !onLeft) return "벽에 거는 가구는 뒷벽이나 왼쪽 벽에 등을 붙여 걸어야 해요.";
+  return null;
+}
+
 // 목록 전체에 검사 하나를 돈다. 처음 걸린 가구의 번호를 붙여 돌려준다.
 function firstError(items: Obj[] | undefined, check: (it: Obj) => string | null): string | null {
   for (let i = 0; i < (items?.length ?? 0); i++) {
@@ -221,7 +239,7 @@ export function itemPlacementError(
   room: { w: number; d: number } | undefined,
   table: { x: number; z: number },
 ): string | null {
-  return frameError(item, room) ?? boundsError(item, room) ?? seatError(item, table);
+  return frameError(item, room) ?? wallMountError(item, room) ?? boundsError(item, room) ?? seatError(item, table);
 }
 
 export function validateLayout(input: unknown): LayoutCheck {
@@ -344,6 +362,8 @@ export function validateLayout(input: unknown): LayoutCheck {
   const room = out.room as { w: number; d: number } | undefined;
   const frameFail = firstError(items, (it) => frameError(it, room));
   if (frameFail) return fail(frameFail);
+  const wallFail = firstError(items, (it) => wallMountError(it, room));
+  if (wallFail) return fail(wallFail);
   const boundsFail = firstError(items, (it) => boundsError(it, room));
   if (boundsFail) return fail(boundsFail);
   // 엔진이 가드 없이 읽는 필드: table.x/z, screen.wall/at. 빠진 layout은 방을 그리다 멈춘다.

@@ -32,6 +32,7 @@ import { setupInput } from './input.js';
 import { setupPath } from './path.js';
 import { setupEdit } from './edit.js';
 import { setupDockThumbs } from './dock-thumbs.js';
+import { setupEditCamera } from './edit-camera.js';
 
 // heap-room.tsx 가 그리고 엔진이 채우거나 보이게 하는 노드의 id. dispose 가 첫 렌더 상태로 되돌린다.
 const LISTS = ['albumrow', 'player-frame', 'music-frame', 'phone-feed', 'pc-list', 'ks-body', 'cal-body', 'grid-list', 'gb-list', 'roomlist'];
@@ -55,7 +56,7 @@ const HIDDEN = ['visit', 'albumrow', 'stand', 'flip', 'srclink', 'eject', 'ytlin
  * 꾸미기(edit.js)는 서버와 같은 규칙을 쓴다: opts.itemHalfExtents, opts.placementError 는 layout.ts 의 itemHalfExtents, itemPlacementError 이고
  * opts.policy 는 policy.ts 의 HEAP_POLICY 다 (frameY, frameWallMargin).
  * @param {HTMLElement} root
- * @param {{ roomId: string, roomUuid: string, dataBase: string, modelBase?: string, data: any, viewerName: string | null, signedIn: boolean, pollMs: number, bubbleHref: string, navigate: (href: string) => void, parseLink: (url: string) => ({ platform: string, externalId: string, wide: boolean | null } | null), parseMusic: (url: string) => ({ video: string | null, list: string | null } | null), isSafeLink: (v: unknown) => boolean, isWebLink: (v: unknown) => boolean, isEmail: (v: unknown) => boolean, recordVisit: () => Promise<any>, addGuestbook: (name: string) => Promise<any>, onNavigate: (roomId: string) => void, itemHalfExtents: (item: any) => ({ hx: number, hz: number } | null), placementError: (item: any, room: { w: number, d: number }, table: { x: number, z: number }) => (string | null), policy: { frameY: number, frameWallMargin: number }, resume?: any }} opts
+ * @param {{ roomId: string, roomUuid: string, dataBase: string, modelBase?: string, data: any, viewerName: string | null, signedIn: boolean, pollMs: number, bubbleHref: string, navigate: (href: string) => void, parseLink: (url: string) => ({ platform: string, externalId: string, wide: boolean | null } | null), parseMusic: (url: string) => ({ video: string | null, list: string | null } | null), isSafeLink: (v: unknown) => boolean, isWebLink: (v: unknown) => boolean, isEmail: (v: unknown) => boolean, recordVisit: () => Promise<any>, addGuestbook: (name: string) => Promise<any>, onNavigate: (roomId: string) => void, itemHalfExtents: (item: any) => ({ hx: number, hz: number } | null), placementError: (item: any, room: { w: number, d: number }, table: { x: number, z: number }) => (string | null), surfaces?: any, policy: { frameY: number, frameWallMargin: number }, resume?: any }} opts
  * @returns {() => void}
  */
 export function mountRoom(root, opts) {
@@ -85,6 +86,15 @@ async function run(ctx) {
   setupFurniture(ctx);
   setupSlots(ctx);
   setupModels(ctx);
+  // 받침 위에 선 작은 가구를 받침의 윗면에 딱 맞춰 짓는다 (surfaces.ts 의 settleItems: 러브쑤 방의 조리대 위 물건 0.9 → 0.84).
+  // DB 는 고치지 않는다. 기준(original, baseLayout)도 맞춘 값으로 두어 꾸미기가 바뀐 것으로 보지 않고, 다음 저장에 맞춘 값이 들어간다.
+  // 다시 마운트(opts.resume)는 이미 맞춘 목록을 이어받는다.
+  const settled = !ctx.opts.resume && ctx.opts.surfaces ? ctx.opts.surfaces.settleItems(ctx.layout.items || []) : null;
+  if (settled?.moved.length) {
+    ctx.layout.items = settled.items;
+    ctx.original.items = settled.items.map(it => ({ ...it }));
+    if (Array.isArray(ctx.baseLayout.items)) ctx.baseLayout.items = settled.items.map(it => ({ ...it }));
+  }
   ctx.buildItems(ctx.layout.items || [], true); // 첫 빌드는 방의 공용 난수 수열을 쓴다
   setupShelf(ctx);
   setupTime(ctx);
@@ -101,6 +111,7 @@ async function run(ctx) {
   setupInput(ctx);
   setupPath(ctx);
   setupDockThumbs(ctx); // 꾸미기 가구 목록의 그림 (heap:thumb)
+  setupEditCamera(ctx); // 꾸미기의 카메라: 맞춤, 확대, 이동, 평면도 (loop.js 의 ROOM_CAM 을 쓴다)
   setupEdit(ctx); // 꾸미기. 포인터를 방 루트의 capture 단계에서 먼저 받으므로 input.js 뒤에 세워도 된다
 
   await fontsReady(); // 썸네일은 기다리지 않는다: buildHeap() 이 줄을 세우고 카드는 그림이 오는 대로 채워진다

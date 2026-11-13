@@ -26,6 +26,8 @@ export function setupModels(ctx) {
   };
   // MODELS: catalogue id → Promise of { root, entry, size } or null · KEPT: geometries and materials the cache owns · modelRoots: the parsed scenes
   const MODELS = new Map(), KEPT = new Set(), modelRoots = [];
+  // SIZES: 읽은 모델의 실제 크기 (배율을 곱한 경계 상자, Vector3). 꾸미기(edit.js)가 벽·천장 가구의 높이를 이것으로 정한다
+  const SIZES = new Map();
   let catalogueP = null, gltfP = null;
   onDispose(() => { for (const r of modelRoots) disposeScene(r); });
   const getCatalogue = () => catalogueP ??= getJSON(MODEL_BASE + 'catalogue.json').then(c => ctx.catalogue = c).catch(e => { if (!ctx.disposed) console.error('[heap-room]', e); return null; });
@@ -42,10 +44,12 @@ export function setupModels(ctx) {
       root.traverse(o => { if (o.isMesh) { KEPT.add(o.geometry); for (const m of [].concat(o.material)) KEPT.add(m); } });
       const bb = new THREE.Box3().setFromObject(root, true), mid = bb.getCenter(new THREE.Vector3());
       root.position.set(-mid.x, -bb.min.y, -mid.z); // 파일의 노드 변환은 그대로 두고 모델 전체를 옮긴다
-      return { root, entry, size: bb.getSize(new THREE.Vector3()).multiplyScalar(scaleOf(entry)) };
+      const size = bb.getSize(new THREE.Vector3()).multiplyScalar(scaleOf(entry));
+      SIZES.set(id, size);
+      return { root, entry, size };
     })().catch(e => { if (!ctx.disposed) console.error('[heap-room]', e); return null; }));
     return MODELS.get(id);
   }
 
-  Object.assign(ctx, { loadModel, TINT, MODEL_SCALE, scaleOf, KEPT, getCatalogue });
+  Object.assign(ctx, { loadModel, TINT, MODEL_SCALE, scaleOf, KEPT, getCatalogue, modelSize: id => SIZES.get(id) ?? null });
 }

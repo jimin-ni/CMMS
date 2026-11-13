@@ -21,8 +21,8 @@ export type Item = {
   // 조명 스위치. 없으면 켜진 것(밤에 불이 들어온다), false면 늘 꺼져 있다.
   lit?: boolean;
 };
-// mount: 벽·천장에 거는 것이나 벽 조각 ("wall" | "ceiling" | "structure"). 꾸미기 독에는 나오지 않는다.
-export type Model = { id: string; label: string; category: string; w?: number; d?: number; lift?: number; mount?: string };
+// mount: 벽에 거는 것, 천장에 다는 것, 벽 조각 ("wall" | "ceiling" | "structure"). 벽 조각은 꾸미기 독에 나오지 않는다 (room-editor.tsx).
+export type Model = { id: string; label: string; category: string; w?: number; d?: number; mount?: string };
 
 // 엔진이 직접 만드는 가구의 이름 (engine/edit.js의 HAND_LABEL과 같다).
 export const HAND_LABEL: Record<string, string> = {
