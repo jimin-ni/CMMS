@@ -5,7 +5,7 @@ import { disposeScene } from './util.js';
 import { flat } from './draw.js';
 
 export function setupScene(ctx) {
-  const { $, cleanups, C, layout } = ctx;
+  const { $, onDispose, C, layout } = ctx;
 
   // ====================================================================================
   // 3. Renderer, lights, walls (built from layout)
@@ -13,7 +13,7 @@ export function setupScene(ctx) {
   const canvas = document.createElement('canvas'); canvas.id = 'scene';
   canvas.setAttribute('aria-label', '크리에이터의 미니룸. 탁자 위에 지난 영상들이 사진처럼 쌓여 있고, 영사기와 휴대폰, 앨범 책장, 다른 방으로 가는 문이 있다');
   $('scene-host').appendChild(canvas);
-  cleanups.push(() => canvas.remove());
+  onDispose(() => canvas.remove());
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -22,7 +22,7 @@ export function setupScene(ctx) {
   scene.background = new THREE.Color(C.olive);
   const camera = new THREE.PerspectiveCamera(30, 1, 0.05, 80);
   const controls = new OrbitControls(camera, canvas);
-  cleanups.push(() => { controls.dispose(); disposeScene(scene); renderer.dispose(); renderer.forceContextLoss(); });
+  onDispose(() => { controls.dispose(); disposeScene(scene); renderer.dispose(); renderer.forceContextLoss(); });
   controls.enabled = false; controls.enableDamping = true; controls.enablePan = false;
   controls.minDistance = 0.6; controls.maxDistance = 4; controls.maxPolarAngle = 1.25;
   const hemi = new THREE.HemisphereLight(0xffe6c4, 0x5a4a38, 0.7); scene.add(hemi);

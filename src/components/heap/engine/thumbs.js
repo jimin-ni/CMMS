@@ -3,7 +3,7 @@ import { thumbUrl } from './util.js';
 import { cropToShape } from './draw.js';
 
 export function setupThumbs(ctx) {
-  const { cleanups, drawCard, paintPoster, drawProjection, cards } = ctx;
+  const { onDispose, drawCard, paintPoster, drawProjection, cards } = ctx;
 
   // ====================================================================================
   // 5b. Thumbnails: each card shows the video's chosen thumbnail in three tiers, loaded lazily and sharpened in place
@@ -16,7 +16,7 @@ export function setupThumbs(ctx) {
   const thumbFiles = (reel, tier) => tier === FAR ? ['mqdefault'] : tier === NEAR ? ['hqdefault'] : reel.wide ? ['hq720', 'hqdefault'] : ['oardefault'];
   const loadQueue = [], inFlight = new Set(); // { card, tier } jobs waiting in load order · Images still downloading
   let loading = 0;
-  cleanups.push(() => { loadQueue.length = 0; for (const im of inFlight) { im.onload = im.onerror = null; im.src = ''; } inFlight.clear(); });
+  onDispose(() => { loadQueue.length = 0; for (const im of inFlight) { im.onload = im.onerror = null; im.src = ''; } inFlight.clear(); });
 
   function landed(card, tier, im) {
     const u = card.userData;

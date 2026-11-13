@@ -4,7 +4,7 @@ import * as THREE from 'three';
 export function setupLoop(ctx) {
   const {
     Yv, camera, WALL_H, tA, RX, RZ, TABLE, SEAT, SCREEN_C, WALLS, SCR, canvas, renderer, scene, on,
-    cleanups, stepCharacter, controls, me, legL, legR, $, beamMat, projLight, screenOn, reelA, reelB,
+    onDispose, stepCharacter, controls, me, legL, legR, $, beamMat, projLight, screenOn, reelA, reelB,
     phoneDot, tickClock, stepMotes, cards, SLOT, inPile, supportAt, restPose, stepAnim,
   } = ctx;
 
@@ -45,7 +45,8 @@ export function setupLoop(ctx) {
   }
   on(window, 'resize', resize);
   const sizeWatch = new ResizeObserver(resize); sizeWatch.observe(canvas);
-  cleanups.push(() => sizeWatch.disconnect());
+  onDispose(() => sizeWatch.disconnect());
+  onDispose(() => cancelAnimationFrame(ctx.raf));
 
   function frame() {
     if (ctx.disposed) return;

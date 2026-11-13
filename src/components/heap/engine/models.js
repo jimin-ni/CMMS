@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { disposeScene } from './util.js';
 
 export function setupModels(ctx) {
-  const { opts, dataBase, C, cleanups, getJSON, ac } = ctx;
+  const { opts, dataBase, C, onDispose, getJSON, ac } = ctx;
 
   // ---------- models: { type: 'model', model: <catalogue id>, x, z, rot, y, tint } ----------
   // <modelBase>catalogue.json lists the GLB files (Kenney Furniture Kit, CC0). A model is fetched and parsed once per mount,
@@ -24,7 +24,7 @@ export function setupModels(ctx) {
   // MODELS: catalogue id → Promise of { root, entry, size } or null · KEPT: geometries and materials the cache owns · modelRoots: the parsed scenes
   const MODELS = new Map(), KEPT = new Set(), modelRoots = [];
   let catalogueP = null, gltfP = null;
-  cleanups.push(() => { for (const r of modelRoots) disposeScene(r); });
+  onDispose(() => { for (const r of modelRoots) disposeScene(r); });
   const getCatalogue = () => catalogueP ??= getJSON(MODEL_BASE + 'catalogue.json').then(c => ctx.catalogue = c).catch(e => { if (!ctx.disposed) console.error('[heap-room]', e); return null; });
   function loadModel(id) {
     if (!MODELS.has(id)) MODELS.set(id, (async () => {

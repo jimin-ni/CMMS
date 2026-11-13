@@ -5,7 +5,7 @@ import { fmtDay } from './format.js';
 export function setupLive(ctx) {
   const {
     makeCard, TABLE, Xv, clampPlace, gauss, settle, startAnim, toast, DATA, $, creatorVisit, creator,
-    root, on, opts, ac, renderMeta, renderCreatorVisit, fanReels, fanReelOf, cleanups,
+    root, on, opts, ac, renderMeta, renderCreatorVisit, fanReels, fanReelOf, onDispose,
   } = ctx;
 
   // fan pieces: one that lands while the visitor is in the room drops onto the top of the heap from above the table
@@ -98,7 +98,7 @@ export function setupLive(ctx) {
     ctx.pollTimer = setTimeout(async () => { await poll(); schedulePoll(); }, opts.pollMs);
   }
   on(document, 'visibilitychange', () => { if (document.hidden) clearTimeout(ctx.pollTimer); else { poll().then(schedulePoll); } });
-  cleanups.push(() => clearTimeout(ctx.pollTimer));
+  onDispose(() => clearTimeout(ctx.pollTimer));
 
   Object.assign(ctx, { openGuestbook, poll, schedulePoll });
 }
