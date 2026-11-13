@@ -4,8 +4,9 @@ import { ytUrl } from './format.js';
 
 export function setupModes(ctx) {
   const {
-    controls, me, SEAT, setHint, syncUI, requestPile, NEAR, settle, request, CLOSE, clampPlace, TABLE,
-    gauss, toTop, startAnim, on, $, drawProjection, screen, screenOn, screenIdle, unperch,
+    controls, me, SEAT, setHint, SIT_CAM, syncUI, requestPile, NEAR, settle, request, CLOSE, clampPlace,
+    TABLE, gauss, toTop, startAnim, on, $, drawProjection, screen, screenOn, WATCH_CAM, screenIdle,
+    unperch,
   } = ctx;
 
   ctx.mode = 'room'; ctx.camGoal = null; ctx.held = null; ctx.heldFlipped = false; ctx.loaded = null; ctx.hovered = null; ctx.presenting = null; ctx.dragging = null;
@@ -18,7 +19,7 @@ export function setupModes(ctx) {
   function sit() {
     ctx.mode = 'sit'; ctx.walkTo = null; ctx.arrive = null; ctx.waypoints = []; ctx.perch = null;
     me.position.copy(SEAT); me.rotation.y = Math.PI;
-    setHint('sit'); goTo(ctx.SIT_CAM); syncUI();
+    setHint('sit'); goTo(SIT_CAM); syncUI();
     requestPile(NEAR);
   }
   function stand() {
@@ -55,14 +56,14 @@ export function setupModes(ctx) {
     const { reel, img } = ctx.loaded.userData;
     drawProjection(reel, img); screen.material = screenOn;
     if (reel.kind !== 'fan') $('ytlink').href = ytUrl(reel);
-    setHint('watch'); goTo(ctx.WATCH_CAM); syncUI();
+    setHint('watch'); goTo(WATCH_CAM); syncUI();
     if (reel.kind !== 'fan') ctx.openPlayer(reel); // a fan piece is just projected
   }
   function eject() {
     ctx.closePlayer();
     const c = ctx.loaded; ctx.loaded = null; dropOnTop(c); settle(); startAnim(c, 'drop');
     screen.material = screenIdle;
-    ctx.mode = 'sit'; setHint('sit'); goTo(ctx.SIT_CAM); syncUI();
+    ctx.mode = 'sit'; setHint('sit'); goTo(SIT_CAM); syncUI();
   }
   on($('stand'), 'click', () => (ctx.perch ? unperch() : stand()));
   on($('eject'), 'click', eject);

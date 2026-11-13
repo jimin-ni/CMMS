@@ -4,9 +4,10 @@ import * as THREE from 'three';
 export function setupInput(ctx) {
   const {
     canvas, camera, projParts, phoneParts, $, on, nearTable, sit, nearShelf, enterSort, nearDoor,
-    nearBook, flip, eject, exitSort, putBack, stand, unperch, TABLE, pickables, controls, settle,
-    setHint, clampPlace, toTop, startAnim, screen, albumAction, feed, pickUp, tableTop, shelfParts,
-    doorParts, bookParts, floor, sitOn, walkRoute, SEAT,
+    openRooms, nearBook, openGuestbook, flip, eject, exitSort, putBack, stand, unperch, TABLE, pickables,
+    controls, settle, setHint, clampPlace, toTop, startAnim, player, screen, openPlayer, albumAction,
+    feed, openPhone, pickUp, tableTop, shelfParts, doorParts, bookParts, floor, openSlot, sitOn,
+    walkRoute, SEAT,
   } = ctx;
 
   // ====================================================================================
@@ -26,7 +27,7 @@ export function setupInput(ctx) {
     if (ev.target.closest?.('input, textarea')) { if (ev.key === 'Escape') $('guestbook').hidden = true; return; }
     if (ev.target.closest?.('.room-editor')) return; // a key pressed inside the 꾸미기 panel belongs to the panel (it closes itself on Esc)
     const k = ev.key.toLowerCase(); keys.add(k);
-    if (ctx.mode === 'room' && !anyOverlay() && (k === 'e' || k === 'enter')) { if (nearTable()) sit(); else if (nearShelf()) enterSort(); else if (nearDoor()) ctx.openRooms(); else if (nearBook()) ctx.openGuestbook(); }
+    if (ctx.mode === 'room' && !anyOverlay() && (k === 'e' || k === 'enter')) { if (nearTable()) sit(); else if (nearShelf()) enterSort(); else if (nearDoor()) openRooms(); else if (nearBook()) openGuestbook(); }
     if (ctx.mode === 'sit' && ctx.held && k === 'f') flip();
     if (k === 'escape') {
       for (const id of OVERLAYS) if (!$(id).hidden) { $(id).hidden = true; return; }
@@ -83,7 +84,7 @@ export function setupInput(ctx) {
     const d = down; down = null;
     if (wasDrag || !d || Math.hypot(ev.clientX - d.x, ev.clientY - d.y) > 6) return;
     rayFrom(ev);
-    if (ctx.mode === 'watch') { if (ctx.player.hidden && ray.intersectObject(screen, false).length) ctx.openPlayer(ctx.loaded.userData.reel); return; }
+    if (ctx.mode === 'watch') { if (player.hidden && ray.intersectObject(screen, false).length) openPlayer(ctx.loaded.userData.reel); return; }
     if (ctx.camGoal) return;
     if (ctx.mode === 'sort') { const h = ctx.shelf && ray.intersectObjects(ctx.shelf.albums.flatMap(a => [a.mesh, a.label]), false)[0]; if (h) albumAction(h.object.userData.album); return; }
     if (ctx.mode === 'sit') {
@@ -91,14 +92,14 @@ export function setupInput(ctx) {
       if (ctx.held && hits[0]?.object.userData.card === ctx.held) return flip();
       const hit = hits.find(h => h.object.userData.card !== ctx.held);
       if (hit && isProj(hit.object)) return ctx.held ? feed() : setHint('needcard');
-      if (hit && isPhone(hit.object)) return ctx.openPhone();
+      if (hit && isPhone(hit.object)) return openPhone();
       if (ctx.held) return putBack();
       if (hit) pickUp(hit.object.userData.card);
       return;
     }
     const hit = ray.intersectObjects([tableTop, ...pickables, ...projParts, ...phoneParts, ...ctx.build.slotMeshes, ...ctx.build.seatMeshes, ...shelfParts, ...doorParts, ...bookParts, floor], false)[0];
     if (!hit) return;
-    if (hit.object.userData.slot) return ctx.openSlot(hit.object.userData.slot); // a PC, a frame, a TV, a radio or a calendar: it acts where the visitor stands
+    if (hit.object.userData.slot) return openSlot(hit.object.userData.slot); // a PC, a frame, a TV, a radio or a calendar: it acts where the visitor stands
     if (hit.object.userData.seats) return sitOn(hit.object.userData.seats, hit.point); // a chair, a sofa or a rug: walk there and sit
     const p = hit.point, onTableFoot = p.x > ctx.TBOX.x0 && p.x < ctx.TBOX.x1 && p.z > ctx.TBOX.z0 && p.z < ctx.TBOX.z1;
     if (doorParts.includes(hit.object)) walkRoute(ctx.doorSpot.clone(), 'door');
