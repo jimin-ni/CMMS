@@ -1,5 +1,5 @@
 import catalogue from "../../../public/heap/models/catalogue.json";
-import { HEAP_POLICY } from "@/lib/heap/policy";
+import { HEAP_FUNNEL_POLICY, HEAP_POLICY } from "@/lib/heap/policy";
 import { checkFn } from "@/lib/heap/slots";
 
 // 방 꾸미기(layout) 검사. 서버 액션이 저장하기 전에 부른다. DB도 repo도 건드리지 않는다.
@@ -38,6 +38,8 @@ const PALETTE_KEYS = new Set([
 ]);
 const HEX = /^#[0-9a-fA-F]{6}$/;
 const FLOOR_BOARDS_MAX = 6;
+// 영상 하나를 가리키는 키: 플랫폼 이름 + ":" + 플랫폼 안의 ID (heap_reels.platform, external_id)
+export const REEL_KEY = /^(youtube|chzzk|twitch|soop|instagram|tiktok):[A-Za-z0-9_:.-]{1,255}$/;
 
 function isObj(value: unknown): value is Obj {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
@@ -304,6 +306,17 @@ export function validateLayout(input: unknown): LayoutCheck {
           items.push(r.item);
         }
         out.items = items;
+        break;
+      }
+      case "excludedReels": {
+        // 힙에서 뺀 영상의 "<platform>:<externalId>" 목록. 서버만 고치는 값이다 (repo.setReelExcluded, saveRoomLayout이 지킨다).
+        if (!Array.isArray(value) || value.length > HEAP_FUNNEL_POLICY.excludedReelsMax) {
+          return fail("excludedReels: 목록이 올바르지 않아요.");
+        }
+        if (!value.every((key) => typeof key === "string" && REEL_KEY.test(key))) {
+          return fail("excludedReels: 항목 형식이 올바르지 않아요.");
+        }
+        out.excludedReels = [...new Set(value as string[])];
         break;
       }
       default:

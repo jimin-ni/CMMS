@@ -1,5 +1,5 @@
-import { and, asc, desc, eq, gte, inArray, or, sql, type SQL } from "drizzle-orm";
-import { db } from "@/lib/db";
+import { and, asc, desc, eq, gte, inArray, notInArray, or, sql, type SQL } from "drizzle-orm";
+import { db, pool } from "@/lib/db";
 import {
   bubbleRooms,
   heapCreatorChannels,
@@ -11,8 +11,12 @@ import {
   heapVisits,
   user,
 } from "@/lib/schema";
-import { HEAP_POLICY } from "@/lib/heap/policy";
+import { HEAP_FUNNEL_POLICY, HEAP_POLICY } from "@/lib/heap/policy";
 import type { HeapChannelPlatform, HeapPiecePlatform, ParsedPiece } from "@/lib/heap/platform";
+import { allocateCaps, classifyReel, REEL_CLASSES, type ReelClass, type ReelCounts } from "@/lib/heap/caps";
+import { REEL_KEY } from "@/lib/heap/layout";
+import { likePattern } from "@/lib/heap/search";
+import type { ImportCandidate } from "@/lib/heap/import";
 
 // 힙 미니룸의 DB 접근은 전부 이 파일에 둔다. 서버에서만 불러 쓴다 (Server Component, Server Action, Route Handler).
 // 역할(creator, admin) 검사는 부르는 쪽이 하고, 여기서는 데이터로 알 수 있는 것만 검사한다
@@ -240,8 +244,22 @@ export async function listChangedRoomSlugs(viewerId: string): Promise<string[]> 
   return result.rows.map((row) => row.slug);
 }
 
+// heap_reels 한 줄을 가리키는 키 "<platform>:<external_id>". 방 layout의 excludedReels가 이 키를 쓴다.
+const reelKeySql = sql<string>`${heapReels.platform} || ':' || ${heapReels.externalId}`;
+
+// layout에서 힙에서 뺀 영상 키만 꺼낸다 (형식이 맞는 문자열만).
+export function excludedReelKeys(layout: HeapLayout): string[] {
+  const list = layout.excludedReels;
+  return Array.isArray(list) ? list.filter((key): key is string => typeof key === "string" && REEL_KEY.test(key)) : [];
+}
+
 // 최근에 올라온 영상부터. 게시 시각을 모르는 영상은 등록 순서를 따른다.
-export async function listReels(roomId: string, limit: number = HEAP_POLICY.snapshotReelsMax): Promise<HeapReel[]> {
+// excluded: 힙에서 뺀 영상의 "<platform>:<externalId>" 키 (방 layout의 excludedReels). 이 영상은 읽지 않는다.
+export async function listReels(
+  roomId: string,
+  limit: number = HEAP_POLICY.snapshotReelsMax,
+  excluded: readonly string[] = [],
+): Promise<HeapReel[]> {
   if (!isUuid(roomId)) return [];
   return db
     .select({
@@ -258,7 +276,12 @@ export async function listReels(roomId: string, limit: number = HEAP_POLICY.snap
     })
     .from(heapReels)
     .leftJoin(heapCreatorChannels, eq(heapCreatorChannels.id, heapReels.channelId))
-    .where(eq(heapReels.roomId, roomId))
+    .where(
+      and(
+        eq(heapReels.roomId, roomId),
+        excluded.length > 0 ? notInArray(reelKeySql, [...excluded]) : undefined,
+      ),
+    )
     .orderBy(
       sql`${heapReels.publishedAt} desc nulls last`,
       desc(heapReels.createdAt),
@@ -382,7 +405,7 @@ export async function getRoomSnapshot(
 
   // 영상과 조각은 상한만큼만 읽는다 (최근 것이 남는다). 조각은 안착한 것과 투표 중인 것을 따로 센다.
   const [reels, landed, voting, guestbook, visits, channels] = await Promise.all([
-    listReels(room.id, HEAP_POLICY.snapshotReelsMax),
+    listReels(room.id, HEAP_POLICY.snapshotReelsMax, excludedReelKeys(room.layout)),
     pieceSelect(db, viewerId)
       .where(and(eq(heapPieces.roomId, room.id), eq(heapPieces.status, "landed")))
       .orderBy(desc(heapPieces.landedAt), asc(heapPieces.id))
@@ -575,9 +598,16 @@ export async function saveRoomLayout(
 ): Promise<{ ok: true } | Fail<"not-found" | "not-owner">> {
   const ownership = await roomOwnership(db, roomId, creatorId);
   if (ownership !== "ok") return fail(ownership);
+  // 힙에서 뺀 영상 목록(excludedReels)은 서버만 고친다. 클라이언트가 보낸 값은 버리고, DB에 있는 값을 그대로 남긴다.
+  // 오래된 꾸미기 화면이 저장하면서 뺀 영상을 되살리는 일을 막는다.
+  const { excludedReels: _ignored, ...fromClient } = layout;
+  void _ignored;
   await db
     .update(heapRooms)
-    .set({ layout, updatedAt: sql`now()` })
+    .set({
+      layout: sql`${JSON.stringify(fromClient)}::jsonb || case when ${heapRooms.layout} -> 'excludedReels' is not null then jsonb_build_object('excludedReels', ${heapRooms.layout} -> 'excludedReels') else '{}'::jsonb end`,
+      updatedAt: sql`now()`,
+    })
     .where(and(eq(heapRooms.id, roomId), eq(heapRooms.creatorId, creatorId)));
   return { ok: true };
 }
@@ -897,4 +927,376 @@ export async function linkReelsToChannel(
     )
     .returning({ id: heapReels.id });
   return rows.length;
+}
+
+// ---------- 크리에이터 깔때기: 방 만들기 ----------
+
+export type HeapOwnRoom = { id: string; slug: string; name: string };
+
+// 이 크리에이터의 방. 없으면 null. creator_id가 unique라서 한 줄이다.
+export async function getRoomByCreator(creatorId: string): Promise<HeapOwnRoom | null> {
+  const rows = await db
+    .select({ id: heapRooms.id, slug: heapRooms.slug, name: heapRooms.name })
+    .from(heapRooms)
+    .where(eq(heapRooms.creatorId, creatorId))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+// 방을 만든다. 주소 중복과 "이미 방이 있음"의 최종 판단은 DB의 unique 제약이 한다:
+// slug와 creator_id 어느 쪽이 부딪혀도 insert가 조용히 비켜 가고, 어느 쪽이었는지는 다시 읽어서 가린다.
+// 검사(역할, 슬러그 규칙, 템플릿)는 부르는 쪽이 먼저 한다.
+export async function claimRoom(input: {
+  creatorId: string;
+  slug: string;
+  name: string;
+  layout: HeapLayout;
+}): Promise<{ ok: true; roomId: string; slug: string } | Fail<"slug-taken" | "already-has-room">> {
+  const rows = await db
+    .insert(heapRooms)
+    .values({ creatorId: input.creatorId, slug: input.slug, name: input.name, blurb: "", layout: input.layout })
+    .onConflictDoNothing()
+    .returning({ id: heapRooms.id, slug: heapRooms.slug });
+  if (rows[0]) return { ok: true, roomId: rows[0].id, slug: rows[0].slug };
+  const own = await getRoomByCreator(input.creatorId);
+  return fail(own ? "already-has-room" : "slug-taken");
+}
+
+// base 대신 쓸 만한 빈 주소 하나(base-2 ~ base-9). 모두 차 있으면 null.
+export async function suggestFreeSlug(base: string): Promise<string | null> {
+  const max = HEAP_FUNNEL_POLICY.slugMaxChars;
+  const stem = base.slice(0, max - 2).replace(/-$/, "");
+  const candidates = [2, 3, 4, 5, 6, 7, 8, 9].map((n) => `${stem}-${n}`);
+  const taken = await db
+    .select({ slug: heapRooms.slug })
+    .from(heapRooms)
+    .where(inArray(heapRooms.slug, candidates));
+  const used = new Set(taken.map((row) => row.slug));
+  return candidates.find((slug) => !used.has(slug)) ?? null;
+}
+
+// ---------- 크리에이터 깔때기: 방 목록 (/rooms) ----------
+
+export type HeapRoomCard = { slug: string; name: string; blurb: string; creatorName: string };
+
+const cardSelect = () =>
+  db
+    .select({ slug: heapRooms.slug, name: heapRooms.name, blurb: heapRooms.blurb, creatorName: user.name })
+    .from(heapRooms)
+    .innerJoin(user, eq(user.id, heapRooms.creatorId));
+
+// 따라가는 방: 이 사람이 참여한 버블 대화방(bubble_members)을 연 크리에이터의 방. 본인 방은 뺀다. 최근에 바뀐 방부터.
+// 그런 방이 하나도 없으면 방문 기록(heap_visits)이 있는 방을 최근 방문 순으로 돌려준다. 읽기만 한다.
+export async function listFollowedRooms(
+  viewerId: string,
+  limit: number = HEAP_FUNNEL_POLICY.roomsFollowedMax,
+): Promise<{ source: "joined" | "visited"; rooms: HeapRoomCard[] }> {
+  const joined = await cardSelect()
+    .where(
+      and(
+        sql`${heapRooms.creatorId} <> ${viewerId}`,
+        sql`exists (
+          select 1 from ${bubbleRooms} b
+          join bubble_members m on m.room_id = b.id
+          where b.creator_id = ${heapRooms.creatorId} and m.user_id = ${viewerId}
+        )`,
+      ),
+    )
+    .orderBy(desc(heapRooms.updatedAt), asc(heapRooms.slug))
+    .limit(limit);
+  if (joined.length > 0) return { source: "joined", rooms: joined };
+
+  const visited = await cardSelect()
+    .innerJoin(
+      sql`(select room_id, max(visit_day) as last_day from heap_visits where user_id = ${viewerId} group by room_id) as v`,
+      sql`v.room_id = ${heapRooms.id}`,
+    )
+    .orderBy(sql`v.last_day desc`, asc(heapRooms.slug))
+    .limit(limit);
+  return { source: "visited", rooms: visited };
+}
+
+// 추천 방. slugs의 순서를 지키고, 없는 방은 건너뛴다.
+export async function listFeaturedRooms(slugs: readonly string[]): Promise<HeapRoomCard[]> {
+  const wanted = slugs.slice(0, HEAP_FUNNEL_POLICY.roomsFeaturedMax);
+  if (wanted.length === 0) return [];
+  const rows = await cardSelect().where(inArray(heapRooms.slug, wanted));
+  return wanted.flatMap((slug) => rows.filter((row) => row.slug === slug));
+}
+
+// 크리에이터 닉네임과 방 이름의 부분 일치(대소문자 무시). query는 normalizeSearchQuery를 거친 값이어야 한다.
+// 검색어는 파라미터로만 보내고 %, _, \는 글자 그대로 찾는다. 결과 수는 roomsSearchMax로 끊는다.
+export async function searchRooms(query: string): Promise<HeapRoomCard[]> {
+  const pattern = likePattern(query);
+  return cardSelect()
+    .where(or(sql`${user.name} ilike ${pattern}`, sql`${heapRooms.name} ilike ${pattern}`))
+    .orderBy(asc(heapRooms.name), asc(heapRooms.slug))
+    .limit(HEAP_FUNNEL_POLICY.roomsSearchMax);
+}
+
+// ---------- 크리에이터 깔때기: 영상 가져오기와 빼기 ----------
+
+// 같은 크리에이터의 가져오기를 한 번에 하나만 돌린다. 락을 못 잡으면 locked: false (이미 가져오는 중).
+// 세션 advisory lock을 전용 연결에 잡고 run이 끝날 때까지 쥔다. 연결이 끊기면 락도 풀린다.
+export async function withImportLock<T>(
+  creatorId: string,
+  run: () => Promise<T>,
+): Promise<{ locked: true; value: T } | { locked: false }> {
+  const key = `heap:import:${creatorId}`;
+  const client = await pool.connect();
+  let broken = false;
+  try {
+    const got = await client.query<{ ok: boolean }>("select pg_try_advisory_lock(hashtextextended($1, 0)) as ok", [key]);
+    if (!got.rows[0]?.ok) return { locked: false };
+    try {
+      return { locked: true, value: await run() };
+    } finally {
+      // 락을 못 풀었으면 이 연결을 풀에 돌려보내지 않고 닫는다.
+      await client.query("select pg_advisory_unlock(hashtextextended($1, 0))", [key]).catch(() => {
+        broken = true;
+      });
+    }
+  } finally {
+    client.release(broken);
+  }
+}
+
+// 이 크리에이터의 마지막 가져오기 시각. 채널을 연결할 때 channels 행의 updated_at이 갱신되므로 그 최댓값이다. 없으면 null.
+export async function getLastImportAt(creatorId: string): Promise<Date | null> {
+  const rows = await db
+    .select({ at: sql<string | null>`max(${heapCreatorChannels.updatedAt})` })
+    .from(heapCreatorChannels)
+    .where(eq(heapCreatorChannels.creatorId, creatorId));
+  const at = rows[0]?.at;
+  return at ? new Date(at) : null;
+}
+
+// 연결하려는 채널의 상태: 이미 내가 연결했는지, 다른 크리에이터가 연결했는지, 내 같은 플랫폼 채널이 몇 개인지.
+export async function getChannelState(
+  creatorId: string,
+  platform: HeapChannelPlatform,
+  externalId: string,
+): Promise<{ mine: boolean; heldByOther: boolean; mineCount: number }> {
+  const rows = await db
+    .select({ creatorId: heapCreatorChannels.creatorId, externalId: heapCreatorChannels.externalId })
+    .from(heapCreatorChannels)
+    .where(
+      and(
+        eq(heapCreatorChannels.platform, platform),
+        or(eq(heapCreatorChannels.creatorId, creatorId), eq(heapCreatorChannels.externalId, externalId)),
+      ),
+    );
+  return {
+    mine: rows.some((row) => row.creatorId === creatorId && row.externalId === externalId),
+    heldByOther: rows.some((row) => row.creatorId !== creatorId && row.externalId === externalId),
+    mineCount: rows.filter((row) => row.creatorId === creatorId).length,
+  };
+}
+
+// 채널을 이 크리에이터에게 연결한다 (이미 연결했으면 주소와 이름만 새로 고친다). 확인과 넣기를 한 트랜잭션에서 하고,
+// 같은 채널에 대한 트랜잭션을 advisory lock으로 줄 세운다. heap_creator_channels의 unique 키에 creator_id가 들어 있어서
+// 락이 없으면 두 크리에이터가 같은 채널을 동시에 넣을 수 있다. 늦은 쪽은 먼저 넣은 쪽을 보고 channel-taken을 받는다.
+export async function claimCreatorChannel(
+  input: HeapChannelInput,
+  maxPerCreator: number,
+): Promise<{ ok: true; id: string } | Fail<"channel-taken" | "channel-limit">> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`set local lock_timeout = '5s'`);
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${`heap:channel:${input.platform}:${input.externalId}`}, 0))`,
+    );
+    const rows = await tx
+      .select({ creatorId: heapCreatorChannels.creatorId, externalId: heapCreatorChannels.externalId })
+      .from(heapCreatorChannels)
+      .where(
+        and(
+          eq(heapCreatorChannels.platform, input.platform),
+          or(eq(heapCreatorChannels.creatorId, input.creatorId), eq(heapCreatorChannels.externalId, input.externalId)),
+        ),
+      );
+    if (rows.some((row) => row.creatorId !== input.creatorId && row.externalId === input.externalId)) {
+      return fail("channel-taken");
+    }
+    const mine = rows.some((row) => row.creatorId === input.creatorId && row.externalId === input.externalId);
+    if (!mine && rows.filter((row) => row.creatorId === input.creatorId).length >= maxPerCreator) {
+      return fail("channel-limit");
+    }
+    const [saved] = await tx
+      .insert(heapCreatorChannels)
+      .values(input)
+      .onConflictDoUpdate({
+        target: [heapCreatorChannels.creatorId, heapCreatorChannels.platform, heapCreatorChannels.externalId],
+        set: { channelUrl: sql`excluded.channel_url`, title: sql`excluded.title`, updatedAt: sql`now()` },
+      })
+      .returning({ id: heapCreatorChannels.id });
+    return { ok: true as const, id: saved.id };
+  });
+}
+
+export type ImportReelsResult = {
+  added: Record<"shorts" | "long", number>;
+  refreshed: number;
+  // 상한 때문에 넣지 않은 새 영상 수
+  skippedByCap: number;
+  // 크리에이터가 힙에서 빼 둔 영상이라 건너뛴 수
+  skippedExcluded: number;
+  // 이 가져오기 뒤, 힙에 보이는 영상 수 (갈래별)
+  visible: ReelCounts;
+};
+
+// 후보(candidates: 최근 순)를 방에 넣는다. 한 트랜잭션에서 방 행을 잠그고 다음 순서로 한다.
+// 1) 크리에이터가 힙에서 뺀 영상은 건너뛴다. 2) 이미 있는 영상은 제목·조회수·채널만 새로 고친다 (가로 여부와 등록 시각은 두지 않는다).
+// 3) 새 영상은 갈래별 상한(allocateCaps)이 허락하는 만큼 최근 것부터 넣는다. 이미 상한을 넘은 갈래는 새로 넣지 않을 뿐 지우지 않는다.
+// 같은 후보로 다시 불러도 결과가 같다.
+export async function importReels(input: {
+  roomId: string;
+  creatorId: string;
+  channelId: string;
+  candidates: ImportCandidate[];
+}): Promise<ImportReelsResult | Fail<"no-room">> {
+  return db.transaction(async (tx) => {
+    const roomRows = await tx
+      .select({ id: heapRooms.id, layout: heapRooms.layout })
+      .from(heapRooms)
+      .where(and(eq(heapRooms.id, input.roomId), eq(heapRooms.creatorId, input.creatorId)))
+      .for("update");
+    const room = roomRows[0];
+    if (!room) return fail("no-room");
+
+    const excluded = new Set(excludedReelKeys(room.layout));
+    const existing = await tx
+      .select({ platform: heapReels.platform, externalId: heapReels.externalId, wide: heapReels.wide })
+      .from(heapReels)
+      .where(eq(heapReels.roomId, room.id));
+    const existingKeys = new Set(existing.map((reel) => `${reel.platform}:${reel.externalId}`));
+
+    // 지금 힙에 보이는 영상의 갈래별 수 (뺀 영상은 세지 않는다)
+    const have: ReelCounts = { shorts: 0, long: 0, instagram: 0 };
+    for (const reel of existing) {
+      if (!excluded.has(`${reel.platform}:${reel.externalId}`)) have[classifyReel(reel)] += 1;
+    }
+
+    let skippedExcluded = 0;
+    const fresh: Record<ReelClass, ImportCandidate[]> = { shorts: [], long: [], instagram: [] };
+    const refresh: ImportCandidate[] = [];
+    for (const candidate of input.candidates) {
+      const key = `youtube:${candidate.externalId}`;
+      if (excluded.has(key)) skippedExcluded += 1;
+      else if (existingKeys.has(key)) refresh.push(candidate);
+      else fresh[classifyReel({ platform: "youtube", wide: candidate.wide })].push(candidate);
+    }
+
+    const available: ReelCounts = {
+      shorts: have.shorts + fresh.shorts.length,
+      long: have.long + fresh.long.length,
+      instagram: have.instagram + fresh.instagram.length,
+    };
+    const allocation = allocateCaps(available);
+    const chosen: ImportCandidate[] = [];
+    const added = { shorts: 0, long: 0 };
+    let skippedByCap = 0;
+    for (const cls of REEL_CLASSES) {
+      const slots = Math.max(0, allocation[cls] - have[cls]);
+      const take = fresh[cls].slice(0, slots);
+      skippedByCap += fresh[cls].length - take.length;
+      chosen.push(...take);
+      if (cls !== "instagram") added[cls] = take.length;
+    }
+
+    const rows = [...chosen, ...refresh].map((candidate) => ({
+      roomId: room.id,
+      channelId: input.channelId,
+      platform: "youtube" as const,
+      externalId: candidate.externalId,
+      sourceUrl: candidate.sourceUrl,
+      title: candidate.title,
+      wide: candidate.wide,
+      viewCount: candidate.viewCount,
+      publishedAt: candidate.publishedAt,
+    }));
+    for (let i = 0; i < rows.length; i += 100) {
+      await tx
+        .insert(heapReels)
+        .values(rows.slice(i, i + 100))
+        .onConflictDoUpdate({
+          target: [heapReels.roomId, heapReels.platform, heapReels.externalId],
+          // 이미 있는 줄은 달라진 것만 고친다. 가로 여부(wide)와 등록 시각(created_at)은 그대로 둔다.
+          set: {
+            title: sql`excluded.title`,
+            viewCount: sql`excluded.view_count`,
+            channelId: sql`excluded.channel_id`,
+            publishedAt: sql`coalesce(${heapReels.publishedAt}, excluded.published_at)`,
+            updatedAt: sql`now()`,
+          },
+          setWhere: sql`${heapReels.title} is distinct from excluded.title
+            or ${heapReels.viewCount} is distinct from excluded.view_count
+            or ${heapReels.channelId} is distinct from excluded.channel_id
+            or ${heapReels.publishedAt} is null`,
+        });
+    }
+
+    const visible: ReelCounts = { ...have };
+    visible.shorts += added.shorts;
+    visible.long += added.long;
+    return { added, refreshed: refresh.length, skippedByCap, skippedExcluded, visible };
+  });
+}
+
+// 영상 하나를 힙에서 빼거나(excluded: true) 되돌린다. 방 주인만, 자기 방의 영상만 할 수 있다.
+// 영상 행은 지우지 않는다. 방 layout의 excludedReels 목록("<platform>:<external_id>")에 키를 넣고 뺀다.
+// 읽기 쪽(listReels)이 목록에 있는 영상을 걸러 내고, 가져오기도 뺀 영상은 다시 넣지 않는다.
+// 이 목록은 서버만 고친다 (saveRoomLayout이 클라이언트 값을 버린다). 방이 바뀐 것으로 치지 않아 updated_at은 올리지 않는다.
+export async function setReelExcluded(
+  creatorId: string,
+  reelId: string,
+  excluded: boolean,
+): Promise<{ ok: true; changed: boolean } | Fail<"no-room" | "reel-not-found" | "excluded-full">> {
+  if (!isUuid(reelId)) return fail("reel-not-found");
+  return db.transaction(async (tx) => {
+    const roomRows = await tx
+      .select({ id: heapRooms.id, layout: heapRooms.layout })
+      .from(heapRooms)
+      .where(eq(heapRooms.creatorId, creatorId))
+      .for("update");
+    const room = roomRows[0];
+    if (!room) return fail("no-room");
+    const reelRows = await tx
+      .select({ platform: heapReels.platform, externalId: heapReels.externalId })
+      .from(heapReels)
+      .where(and(eq(heapReels.id, reelId), eq(heapReels.roomId, room.id)));
+    const reel = reelRows[0];
+    const key = reel ? `${reel.platform}:${reel.externalId}` : "";
+    if (!reel || !REEL_KEY.test(key)) return fail("reel-not-found");
+
+    const list = excludedReelKeys(room.layout);
+    const has = list.includes(key);
+    if (excluded === has) return { ok: true as const, changed: false };
+    if (excluded && list.length >= HEAP_FUNNEL_POLICY.excludedReelsMax) return fail("excluded-full");
+    const next = excluded ? [...list, key] : list.filter((item) => item !== key);
+    await tx
+      .update(heapRooms)
+      .set({ layout: sql`jsonb_set(${heapRooms.layout}, '{excludedReels}', ${JSON.stringify(next)}::jsonb, true)` })
+      .where(eq(heapRooms.id, room.id));
+    return { ok: true as const, changed: true };
+  });
+}
+
+export type HeapExcludedReel = { id: string; platform: HeapChannelPlatform; title: string; sourceUrl: string };
+
+// 힙에서 뺀 영상 목록 (되돌리기 화면용). 이 크리에이터 방의 것만, 최근 순으로 돌려준다.
+export async function listExcludedReels(creatorId: string): Promise<HeapExcludedReel[]> {
+  const room = await db
+    .select({ id: heapRooms.id, layout: heapRooms.layout })
+    .from(heapRooms)
+    .where(eq(heapRooms.creatorId, creatorId))
+    .limit(1);
+  if (!room[0]) return [];
+  const keys = excludedReelKeys(room[0].layout);
+  if (keys.length === 0) return [];
+  return db
+    .select({ id: heapReels.id, platform: heapReels.platform, title: heapReels.title, sourceUrl: heapReels.sourceUrl })
+    .from(heapReels)
+    .where(and(eq(heapReels.roomId, room[0].id), inArray(reelKeySql, keys)))
+    .orderBy(sql`${heapReels.publishedAt} desc nulls last`, asc(heapReels.id))
+    .limit(HEAP_FUNNEL_POLICY.excludedReelsMax);
 }

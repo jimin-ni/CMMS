@@ -5,9 +5,9 @@
 // 방 주인의 채널이 아닌 영상은 채널 없이 두고 보고만 한다. API 키는 어디에도 출력하지 않는다.
 import { readFileSync } from "node:fs";
 import pg from "pg";
+import { createYoutubeClient, youtubeHandles } from "../src/lib/heap/youtube-api.mjs";
 
 const dir = "public/heap/rooms";
-const API = "https://www.googleapis.com/youtube/v3";
 
 function usage(message) {
   if (message) console.error(`오류: ${message}\n`);
@@ -37,56 +37,13 @@ function parseArgs(argv) {
   return { room, dryRun };
 }
 
-let quota = 0;
-
-// 키는 쿼리에만 실리고, 오류 메시지에는 경로와 상태 코드만 남긴다.
-async function apiGet(path, params) {
-  const key = process.env.YOUTUBE_API_KEY;
-  if (!key) throw new Error("YOUTUBE_API_KEY가 없습니다. .env.local을 확인하세요.");
-  const query = new URLSearchParams({ ...params, key });
-  quota += 1;
-  let res;
-  try {
-    res = await fetch(`${API}/${path}?${query}`);
-  } catch {
-    throw new Error(`YouTube API ${path} 연결 실패`);
-  }
-  if (!res.ok) {
-    let reason = "";
-    try {
-      reason = (await res.json())?.error?.errors?.[0]?.reason ?? "";
-    } catch {}
-    throw new Error(`YouTube API ${path} 실패: HTTP ${res.status} ${reason}`.trim());
-  }
-  return res.json();
-}
-
-// creator.json 링크에서 YouTube @핸들을 뽑는다. 퍼센트 인코딩된 한글 핸들은 풀어 둔다.
-function youtubeHandles(links) {
-  const handles = [];
-  for (const link of links ?? []) {
-    if (typeof link.url !== "string") continue;
-    let url;
-    try {
-      url = new URL(link.url);
-    } catch {
-      continue;
-    }
-    if (!["youtube.com", "www.youtube.com", "m.youtube.com"].includes(url.hostname)) continue;
-    const match = /^\/(@[^/]+)\/?$/.exec(url.pathname);
-    if (!match) continue;
-    let handle;
-    try {
-      handle = decodeURIComponent(match[1]);
-    } catch {
-      continue;
-    }
-    if (!handles.includes(handle)) handles.push(handle);
-  }
-  return handles;
-}
+// API 호출과 핸들 해석은 앱의 가져오기와 같은 코드를 쓴다.
+let youtube;
+// 키는 요청 헤더로만 가고, 오류 메시지에는 경로와 상태 코드만 남는다.
+const apiGet = (path, params) => youtube.get(path, params);
 
 const { room: onlyRoom, dryRun } = parseArgs(process.argv.slice(2));
+youtube = createYoutubeClient(process.env.YOUTUBE_API_KEY);
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL이 없습니다. .env.local을 확인하세요.");
 
@@ -200,7 +157,7 @@ try {
 
   await client.query(dryRun ? "rollback" : "commit");
   console.log(
-    `\n${dryRun ? "dry-run 끝: DB에 아무것도 쓰지 않았습니다." : "채널 가져오기 완료"} (API 할당량 약 ${quota}유닛)`,
+    `\n${dryRun ? "dry-run 끝: DB에 아무것도 쓰지 않았습니다." : "채널 가져오기 완료"} (API 할당량 약 ${youtube.units()}유닛)`,
   );
 } catch (error) {
   await client.query("rollback").catch(() => {});
