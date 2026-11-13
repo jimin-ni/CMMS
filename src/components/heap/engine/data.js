@@ -56,10 +56,15 @@ export async function setupData(ctx) {
   // ---------- 카드 목록 ----------
   // 영상은 연결된 채널의 제목(heap_creator_channels)을 가진다. 카드 뒷면에 보이고 `channel` 앨범 규칙이 이것으로 맞춘다.
   // 채널이 연결되지 않은 영상은 크리에이터 이름으로 대신한다. 그래서 `channel` 앨범 규칙은 그런 영상을 찾지 못한다 (제목 규칙은 그대로 통한다).
+  // prepReel: 서버의 영상 한 줄을 카드가 쓰는 모양으로. i, n 은 최신순 목록에서의 자리와 길이다 (age: 오래될수록 1).
+  // 채널 탭이 영상을 넣고 빼면 live.js 의 replaceReels 가 새로 온 영상에도 이것을 쓴다.
+  const prepReel = (r, i, n) => {
+    const reel = { ...r, channel: r.channel || creator.name };
+    reel.age = n > 1 ? 1 - i / (n - 1) : 0; reel.seed = Math.floor(rand() * 1e9); reel.gold = goldOf(reel);
+    return reel;
+  };
   const raw = DATA.reels;
-  const reels = raw.map(r => ({ ...r, channel: r.channel || creator.name }));
-  reels.forEach((r, i) => { r.age = reels.length > 1 ? 1 - i / (reels.length - 1) : 0; r.seed = Math.floor(rand() * 1e9); r.gold = goldOf(r); });
-  const nShorts = raw.filter(r => !r.wide).length, nWide = raw.length - nShorts;
+  const reels = raw.map((r, i) => prepReel(r, i, raw.length));
 
   const fanReelOf = (p, i) => ({ ...p, kind: 'fan', wide: false, title: p.caption, channel: p.by, views: '', age: 0.05, seed: 7000 + i * 131 });
   const fanReels = (DATA.pieces || []).map(fanReelOf);
@@ -68,7 +73,7 @@ export async function setupData(ctx) {
   for (const r of reels) if (r.gold) filed.set(r.id, { album: r.gold });
 
   Object.assign(ctx, {
-    C, creator, DATA, nWide, nShorts, layout, ALBUMS, reels, fanReels, fanReelOf, ROOMS, roomId,
-    filed, albumName,
+    C, creator, DATA, layout, ALBUMS, reels, fanReels, fanReelOf, ROOMS, roomId,
+    filed, albumName, prepReel,
   });
 }

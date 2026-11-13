@@ -113,5 +113,20 @@ export function setupLoop(ctx) {
     ctx.raf = requestAnimationFrame(frame);
   }
 
+  // 공유(heap-room.tsx): 지금 구도를 한 장 그려 2D 캔버스에 옮겨 cb 에 준다. 화면 위 글자와 단추는 DOM 이라 들어가지 않는다.
+  // 렌더러는 그린 뒤 버퍼를 지운다(preserveDrawingBuffer 끔): 그리고 바로 같은 틱에 옮겨야 빈 그림이 아니다.
+  on(ctx.root, 'heap:capture', e => {
+    if (typeof e.detail !== 'function') return;
+    let out = null;
+    try {
+      if (!ctx.disposed && canvas.width && canvas.height) {
+        renderer.render(scene, camera);
+        out = document.createElement('canvas'); out.width = canvas.width; out.height = canvas.height;
+        out.getContext('2d').drawImage(canvas, 0, 0);
+      }
+    } catch (err) { console.warn('[heap-room] capture', err); out = null; }
+    e.detail(out);
+  });
+
   Object.assign(ctx, { SIT_CAM, WATCH_CAM, resize, ROOM_CAM, frame });
 }

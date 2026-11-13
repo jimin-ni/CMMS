@@ -149,7 +149,30 @@
 }
 .heap-room .ed-top > * { flex: none; }
 .heap-room .ed-top b { font-size: 15px; }
-.heap-room .ed-room { font-family: var(--hand); font-size: 26px; line-height: 1; color: var(--clay); margin-right: 6px; }
+.heap-room .ed-room { font-family: var(--hand); font-size: 26px; line-height: 1; color: var(--clay); margin-right: 6px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.heap-room .ed-top .btn { white-space: nowrap; }
+.heap-room .ed-top .ed-save { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.heap-room .ed-more { font-size: 15px; line-height: 1; padding-inline: 10px; }
+/* 위 막대의 ⋯ 메뉴: 막대 아래에 펼친다 (막대는 넘치면 가로로 넘겨서 그 안에 두면 잘린다) */
+.heap-room .ed-menu {
+  position: absolute; top: calc(var(--ed-top) + 4px); z-index: 8; width: 220px; box-sizing: border-box;
+  display: flex; flex-direction: column; padding: 4px; border-radius: 10px; background: var(--paper); border: 2px solid var(--olive); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+.heap-room .ed-menu button { display: flex; justify-content: space-between; align-items: center; font: 600 13px var(--ui); color: var(--ink); background: none; border: 0; border-radius: 7px; padding: 7px 10px; text-align: left; cursor: pointer; }
+.heap-room .ed-menu button:hover:not(:disabled) { background: rgba(86, 83, 68, 0.12); }
+.heap-room .ed-menu button:disabled { opacity: 0.45; cursor: default; }
+.heap-room .ed-menu button:focus-visible { outline: 2px solid var(--clay); }
+.heap-room .ed-menu kbd { font: 11px var(--ui); color: rgba(47, 44, 36, 0.55); }
+/* 좁은 창: 위 막대가 900px 아래로 줄면 글자를 덜어 낸다 (꾸미기 제목, 방 이름 폭, 저장 상태 글) */
+@container (max-width: 860px) {
+  .heap-room .ed-top > b { display: none; }
+  .heap-room .ed-room { max-width: 150px; }
+}
+@container (max-width: 700px) {
+  .heap-room .ed-top { gap: 5px; padding: 0 8px; }
+  .heap-room .ed-room { max-width: 96px; font-size: 22px; }
+  .heap-room .ed-top .ed-save { display: none; }
+}
 .heap-room .ed-top .ed-sp { flex: 1 1 0; }
 .heap-room .ed-top .btn.ghost[aria-pressed="true"] { background: var(--clay); } /* 켜진 위에서 보기 */
 .heap-room .ed-save { font-size: 13px; color: rgba(47, 44, 36, 0.62); }
@@ -241,11 +264,18 @@
 .heap-room .ed-ok { color: #4f6a2a; }
 .heap-room .ed-why { position: absolute; z-index: 5; padding: 3px 9px; border-radius: 8px; background: #c2452d; color: #fff; font: 600 13px var(--ui); white-space: nowrap; pointer-events: none; }
 .heap-room .ed-why[hidden] { display: none; }
-.heap-room .ed-hint { position: absolute; left: 50%; bottom: calc(var(--ed-dock) + 10px); transform: translateX(-50%); z-index: 2; margin: 0; max-width: calc(100% - 32px); padding: 4px 14px; border-radius: 999px; background: rgba(47, 44, 36, 0.82); color: var(--paper); font-size: 12.5px; text-align: center; pointer-events: none; }
-.heap-room .ed-toast {
-  position: absolute; left: 50%; bottom: calc(var(--ed-dock) + 46px); transform: translateX(-50%); z-index: 6;
-  display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 14px; border-radius: 10px; background: var(--ink); color: var(--paper); font-size: 14px; white-space: nowrap;
+/* 안내(아래)와 알림(위)을 한 줄기로 쌓는다. 둘 중 하나가 두 줄이 되어도 겹치지 않는다 */
+.heap-room .ed-float {
+  position: absolute; left: 50%; bottom: calc(var(--ed-dock) + 10px); transform: translateX(-50%); z-index: 6; width: max-content; max-width: calc(100% - 32px);
+  display: flex; flex-direction: column-reverse; align-items: center; gap: 8px; pointer-events: none;
 }
+.heap-room .ed-hint { margin: 0; max-width: 100%; padding: 4px 14px; border-radius: 999px; background: rgba(47, 44, 36, 0.82); color: var(--paper); font-size: 12.5px; text-align: center; }
+.heap-room .ed-toast {
+  pointer-events: auto; max-width: 100%; box-sizing: border-box;
+  display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 14px; border-radius: 10px; background: var(--ink); color: var(--paper); font-size: 14px;
+}
+.heap-room .ed-toast span { text-wrap: balance; }
+.heap-room .ed-toast button { flex: none; }
 .heap-room .ed-toast button { font: 600 13px var(--ui); color: var(--paper); background: var(--clay); border: 0; border-radius: 7px; padding: 4px 10px; cursor: pointer; }
 /* 꾸미기: 고른 가구에 기능을 달아 내용을 적는 칸 */
 .heap-room .ed-fn { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px dashed rgba(86, 83, 68, 0.25); }
@@ -305,7 +335,52 @@
 .heap-room .setup-label { min-width: 0; display: flex; flex-direction: column; }
 .heap-room .setup-label small { font-size: 11px; color: rgba(47, 44, 36, 0.55); overflow-wrap: anywhere; }
 .heap-room .setup-check li button { margin-left: auto; flex: none; border: 0; background: var(--clay); color: #fff; border-radius: 6px; padding: 1px 8px; cursor: pointer; font: 600 12px var(--ui); }
-.heap-room .setup-soon { margin-left: auto; flex: none; font-size: 11px; color: rgba(47, 44, 36, 0.55); }
 .heap-room .setup-note { margin: 6px 0 0; font-size: 12px; color: #4f6a2a; overflow-wrap: anywhere; }
 .heap-room .setup-pill { position: absolute; overflow: hidden; border: 0; border-radius: 999px; padding: 6px 14px 8px; background: rgba(243, 234, 219, 0.96); color: var(--ink); font: 600 13px var(--ui); cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); }
 .heap-room .setup-pill i { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--olive); }
+
+/* 공유 (J5, share-button.tsx): 아래 단추 줄 위에 뜨는 작은 판 */
+.heap-room .share-pop {
+  position: absolute; left: 50%; bottom: 112px; transform: translateX(-50%); z-index: 6; pointer-events: auto;
+  width: min(380px, calc(100% - 32px)); box-sizing: border-box; padding: 10px 12px; border-radius: 12px;
+  background: var(--paper); color: var(--ink); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3); font-size: 13px;
+}
+.heap-room .share-pop p { margin: 0 0 8px; }
+.heap-room .share-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.heap-room .share-pop .btn.ghost { color: var(--paper); }
+.heap-room .share-pop .share-note { margin: 8px 0 0; font-size: 12px; color: #4f6a2a; overflow-wrap: anywhere; }
+
+/* 채널 탭 (J6, channel-tab.tsx): 왼쪽은 연결과 채널, 오른쪽은 가져온 영상 목록. 글줄이 많아 이 탭에서만 독을 높인다 */
+.heap-room:has(.ch-pane) { --ed-dock: 220px; }
+.heap-room .ch-pane { gap: 14px; }
+.heap-room .ch-side { flex: 0 1 380px; min-width: 240px; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; font-size: 12.5px; }
+.heap-room .ch-connect { display: flex; gap: 6px; align-items: center; }
+.heap-room .ch-connect .ed-search { flex: 1 1 auto; min-width: 0; width: auto; padding: 4px 8px; }
+.heap-room .ch-note { margin: 0; font-size: 12px; overflow-wrap: anywhere; }
+.heap-room .ch-totals { margin: 0; font-size: 12px; color: rgba(47, 44, 36, 0.75); }
+.heap-room .ch-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.heap-room .ch-list li { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.heap-room .ch-list b { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.heap-room .ch-list small { color: rgba(47, 44, 36, 0.66); white-space: nowrap; }
+.heap-room .ch-list .ed-chip { margin-left: auto; flex: none; }
+.heap-room .ch-pane a { color: inherit; }
+.heap-room .ch-pane a:hover { color: var(--clay); }
+.heap-room .ch-main { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.heap-room .ch-tools { display: flex; align-items: center; gap: 6px; flex: none; }
+.heap-room .ch-tools small { font-size: 12px; color: rgba(47, 44, 36, 0.62); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.heap-room .ch-reels { list-style: none; margin: 0; padding: 0; overflow-y: auto; min-height: 0; flex: 1 1 0; scrollbar-width: thin; scrollbar-color: var(--olive) transparent; }
+.heap-room .ch-reels li { display: flex; align-items: center; gap: 8px; padding: 2px 4px; border-bottom: 1px dashed rgba(86, 83, 68, 0.2); font-size: 12.5px; }
+.heap-room .ch-reels li.out { opacity: 0.6; }
+.heap-room .ch-reels li.out .ch-title { text-decoration: line-through; }
+.heap-room .ch-kind { flex: none; width: 4.5em; font-size: 11px; color: var(--clay); font-weight: 600; }
+.heap-room .ch-title { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.heap-room .ch-reels small { flex: none; color: rgba(47, 44, 36, 0.55); font-size: 11.5px; white-space: nowrap; }
+.heap-room .ch-reels .ed-chip { flex: none; }
+.heap-room .ed-chip:disabled { opacity: 0.5; cursor: default; }
+@container (max-width: 760px) {
+  .heap-room .ch-side { flex: 0 1 42%; min-width: 0; }
+  .heap-room .ch-tools .ed-search { width: 0; flex: 1 1 auto; }
+  .heap-room .ch-reels small { display: none; }
+  .heap-room .ch-list li { flex-wrap: wrap; row-gap: 0; }
+  .heap-room .ch-list b { max-width: 100%; }
+}

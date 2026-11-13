@@ -41,7 +41,7 @@ const HIDDEN = ['visit', 'albumrow', 'stand', 'flip', 'srclink', 'eject', 'ytlin
 /**
  * 방을 `root`(heap-room.tsx 가 그린 요소)에 올리고 dispose 함수를 돌려준다.
  * 라이브 훅은 `root` 에 보내는 CustomEvent 다: `heap:time`(time.js), `heap:items`, `heap:get`, `heap:saved`, `heap:edit`(editor-bridge.js),
- * `heap:editcmd`(edit.js), `heap:thumb`(dock-thumbs.js).
+ * `heap:editcmd`(edit.js), `heap:thumb`(dock-thumbs.js), `heap:reels`(live.js: 새 영상 목록으로 더미를 맞춘다), `heap:capture`(loop.js: 지금 구도를 한 장 그려 준다).
  * 꾸미기가 팔레트나 방의 틀(템플릿)을 바꾸면 엔진은 `heap:remount`(detail: 편집 상태)를 보낸다. heap-room.tsx 가 그 상태를 opts.resume 으로 넘겨 다시 마운트한다:
  * resume { edit, items, time, palette, shell, name, savedName, hist, future, saved, original, baseLayout } (edit.js 의 remount 참고).
  * 엔진이 `root` 에 직접 보내는 것은 둘이다. `heap:mode`(detail: 'room' | 'sit' | 'watch' | 'sort')는 모드가 정해질 때마다,

@@ -134,13 +134,24 @@ export function setupSlots(ctx) {
     const tex = canvasTexture(canvas);
     const plane = new THREE.Mesh(new THREE.PlaneGeometry(s.w, s.h), new THREE.MeshBasicMaterial({ map: tex, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
     plane.position.set(s.x, s.y, s.z); inst.add(plane);
-    const what = tvContent(slot.fn);
+    let what = tvContent(slot.fn);
     paintTv(canvas, null, what);
-    registerSlot(build, slot, [plane], () => {
-      paintTv(canvas, null, what); tex.needsUpdate = true;
-      if (what.id) ksLoad(build, { id: what.id, tall: what.tall }, what.tall ? ['hqdefault'] : ['mqdefault'], pic => { if (build === ctx.build) { paintTv(canvas, pic, what); tex.needsUpdate = true; } });
-    });
+    const show = () => {
+      const shown = what;
+      paintTv(canvas, null, shown); tex.needsUpdate = true;
+      if (shown.id) ksLoad(build, { id: shown.id, tall: shown.tall }, shown.tall ? ['hqdefault'] : ['mqdefault'], pic => { if (build === ctx.build && what === shown) { paintTv(canvas, pic, shown); tex.needsUpdate = true; } });
+    };
+    registerSlot(build, slot, [plane], show);
+    // 최신 영상 TV: 영상 목록이 바뀌면(live.js 의 replaceReels) 가장 최근 영상을 다시 골라 그린다. 같은 영상이면 그대로 둔다.
+    slot.refresh = () => {
+      if (slot.fn.kind !== 'latest' || build !== ctx.build) return;
+      const next = tvContent(slot.fn);
+      if (next.id === what.id) return;
+      what = next;
+      if (slot.started) show(); else { paintTv(canvas, null, what); tex.needsUpdate = true; }
+    };
   }
+  function refreshLatestTv() { for (const s of ctx.build.slots) s.refresh?.(); }
 
   // 책상 위 달력(type "calendar", fn.kind "calendar"): 종이 한 장이 달린 작은 스탠드. 쪽은 다음 날짜가 있는 달(없으면 이번 달)을 보여 주고
   // 항목이 있는 날에 동그라미를 친다. 손으로 만든다: 키트에 달력이 없다.
@@ -181,5 +192,5 @@ export function setupSlots(ctx) {
   };
   function startSlots() { ctx.slotsLive = true; for (const s of ctx.build.slots) s.start?.(); }
 
-  Object.assign(ctx, { keepsakeObject, tvScreen, startSlots, keepsakeLook, newestReel });
+  Object.assign(ctx, { keepsakeObject, tvScreen, startSlots, keepsakeLook, newestReel, refreshLatestTv });
 }

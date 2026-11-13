@@ -41,6 +41,14 @@ const FLOOR_BOARDS_MAX = 6;
 // 영상 하나를 가리키는 키: 플랫폼 이름 + ":" + 플랫폼 안의 ID (heap_reels.platform, external_id)
 export const REEL_KEY = /^(youtube|chzzk|twitch|soop|instagram|tiktok):[A-Za-z0-9_:.-]{1,255}$/;
 
+// 방 화면(누구나 보는 페이지)에 넘기는 layout. 힙에서 뺀 영상 목록(excludedReels)은 뺀다: 방문자에게 뺀 영상의 ID가 드러난다.
+// 엔진과 꾸미기는 이 값을 쓰지 않는다. 방 주인의 채널 탭은 repo.ts 의 listOwnerReels 로 읽는다.
+export function publicLayout(layout: Record<string, unknown>): Record<string, unknown> {
+  const { excludedReels: _hidden, ...rest } = layout;
+  void _hidden;
+  return rest;
+}
+
 function isObj(value: unknown): value is Obj {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const proto = Object.getPrototypeOf(value);

@@ -2,7 +2,7 @@
 import { ytUrl } from './format.js';
 
 export function setupHud(ctx) {
-  const { root, C, creator, $, DATA, nWide, nShorts, opts } = ctx;
+  const { root, C, creator, $, DATA, reels, opts } = ctx;
 
   root.style.setProperty('--clay', C.accent);
   // 방 이름을 화면에 쓴다. 꾸미기(edit.js)가 이름을 고치면 저장하기 전에도 바로 바꿔 쓴다 (팔로워로 보기에 보인다).
@@ -16,8 +16,12 @@ export function setupHud(ctx) {
   $('phone-sub').textContent = '버블';
 
   ctx.visits = { today: DATA.visits.today, total: DATA.visits.total };
-  const metaBase = nWide ? `쇼츠 ${nShorts} · 영상 ${nWide}` : `쇼츠 ${nShorts}`;
-  function renderMeta() { $('meta').textContent = `${metaBase} · TODAY ${ctx.visits.today} · TOTAL ${ctx.visits.total.toLocaleString('ko-KR')}` + (opts.viewerName ? ` · ${opts.viewerName}` : ''); }
+  // 영상 수는 그릴 때마다 센다: 채널 탭이 영상을 넣고 빼면 reels 가 바뀐다 (live.js 의 replaceReels)
+  function renderMeta() {
+    const nShorts = reels.filter(r => !r.wide).length, nWide = reels.length - nShorts;
+    const metaBase = nWide ? `쇼츠 ${nShorts} · 영상 ${nWide}` : `쇼츠 ${nShorts}`;
+    $('meta').textContent = `${metaBase} · TODAY ${ctx.visits.today} · TOTAL ${ctx.visits.total.toLocaleString('ko-KR')}` + (opts.viewerName ? ` · ${opts.viewerName}` : '');
+  }
   renderMeta();
   // 다녀감: the day the creator last came by, "2026.11.12" (Asia/Seoul), or null. From heap_rooms.creator_visited_at.
   ctx.creatorDay = typeof DATA.creatorVisit === 'string' && /^\d{4}\.\d{1,2}\.\d{1,2}$/.test(DATA.creatorVisit) ? DATA.creatorVisit : null;
