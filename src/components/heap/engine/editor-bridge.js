@@ -18,7 +18,7 @@ export function setupEditorBridge(ctx) {
   //     time 은 방의 시간 선택을 준 그대로('auto', 이름, 시각)이고 original { items, time } 은 DB 에 마지막으로 저장된 레이아웃이다.
   //     layout 은 저장된 레이아웃 전체의 복사본이다: 패널은 저장하기 전에 자기 items, time, room 을 여기에 합친다.
   //   root.dispatchEvent(new CustomEvent('heap:saved', { detail: layout }))
-  //     tells the engine the editor saved this whole layout: it becomes the new original / 처음으로 target.
+  //     패널이 이 레이아웃 전체를 저장했다고 엔진에 알린다: 이것이 새 original 이자 처음으로 의 목표가 된다.
   // 벽, 바닥, 탁자, 더미, 영사기, 휴대폰, 방명록 받침대는 지은 그대로 둔다.
   on(root, 'heap:items', e => {
     if (!Array.isArray(e.detail)) return;
