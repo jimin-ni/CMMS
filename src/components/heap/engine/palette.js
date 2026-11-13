@@ -23,7 +23,35 @@ export function tintOf(C) {
   };
 }
 
+// 가구 하나만 따로 칠하기 (색 묶음 C2): item.colors = { 부분: '#RRGGBB' }. 부분 → 그 부분에 드는 모델 재질 이름.
+// 짝은 src/lib/heap/parts.ts 와 measure-parts.mjs 와 같다. 첫 이름이 고른 색 그대로이고, 나머지는 그 색에서 셈한다 (partShade).
+export const PART_MATS = {
+  wood: ['wood', 'woodDark'],
+  fabric: ['carpet', 'carpetDarker', 'carpetBlue'],
+  pale: ['carpetWhite'],
+  metal: ['metal', 'metalLight', 'metalMedium', 'metalDark'],
+  leaf: ['plant'],
+  paint: ['_defaultMat'],
+};
+export const PART_OF = Object.fromEntries(Object.entries(PART_MATS).flatMap(([p, names]) => names.map(n => [n, p])));
+// 고른 색 hex 로 재질 name 의 색. 짙은 쪽의 비율은 기본 팔레트의 짝에서 잰 것이다 (woodDark/woodB ≈ 0.79, metal* 은 tintOf 의 네 회색).
+const SHADE = { woodDark: 0.79, carpetDarker: 0.55, metalMedium: 0.88, metalDark: 0.45 };
+const WHITE = new THREE.Color('#ffffff');
+export function partShade(name, hex) {
+  const c = new THREE.Color(hex);
+  if (SHADE[name]) c.multiplyScalar(SHADE[name]);
+  else if (name === 'metalLight') c.lerp(WHITE, 0.35);
+  return '#' + c.getHexString();
+}
+// 재질 name 에 다는 이름(userData.pal): 가구가 칠한 부분이면 'part:<재질>:<색>', 아니면 팔레트를 따르는 'tint:<재질>'.
+// 'part:' 는 팔레트와 상관없는 색이라, 팔레트를 바꿔도(recolour) 그대로 남는다.
+export const partSpec = (name, colors) => {
+  const hex = colors?.[PART_OF[name]];
+  return hex ? `part:${name}:${hex}` : 'tint:' + name;
+};
+
 export function palColour(C, spec) {
+  if (spec.startsWith('part:')) { const [, name, hex] = spec.split(':'); return partShade(name, hex); }
   if (spec.startsWith('floor:')) { const i = Number(spec.slice(6)); return C.floor[i % C.floor.length]; }
   if (spec.startsWith('tint:')) return tintOf(C)[spec.slice(5)];
   if (spec.startsWith('book:')) { const i = Number(spec.slice(5)) % BOOK_COUNT; return i === 0 ? C.accent : i === 1 ? C.olive : BOOK_FIXED[i - 2]; }

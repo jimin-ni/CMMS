@@ -20,9 +20,12 @@ export type Item = {
   fn?: SlotFn;
   // 조명 스위치. 없으면 켜진 것(밤에 불이 들어온다), false면 늘 꺼져 있다.
   lit?: boolean;
+  // 가구 하나만 따로 칠한 색 { 부분: "#RRGGBB" } (색 묶음 C2, src/lib/heap/parts.ts). Kenney 모델만
+  colors?: Record<string, string>;
 };
 // mount: 벽에 거는 것, 천장에 다는 것, 벽 조각 ("wall" | "ceiling" | "structure"). 벽 조각은 꾸미기 독에 나오지 않는다 (room-editor.tsx).
-export type Model = { id: string; label: string; category: string; w?: number; d?: number; mount?: string };
+// parts: 따로 칠할 수 있는 부분 (catalogue.json, 색 묶음 C2)
+export type Model = { id: string; label: string; category: string; w?: number; d?: number; mount?: string; parts?: string[] };
 
 // 엔진이 직접 만드는 가구의 이름 (engine/edit.js의 HAND_LABEL과 같다).
 export const HAND_LABEL: Record<string, string> = {

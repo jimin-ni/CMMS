@@ -256,6 +256,21 @@
 .heap-room .ed-bar .ed-swap { position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%); display: flex; gap: 6px; max-width: min(560px, 90cqw); overflow-x: auto; padding: 6px; border-radius: 10px; background: var(--paper); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3); }
 .heap-room .ed-bar .ed-swap .ed-tile { color: var(--ink); background: #fff8ec; padding: 3px; font: 600 11.5px/1.2 var(--ui); border-radius: 10px; }
 .heap-room .ed-bar .ed-swap .ed-tile:hover { background: #fff; }
+/* 가구 하나만 칠하기 (색 묶음 C2, piece-colour.tsx): 막대 위에 뜨는 부분별 줄 */
+.heap-room .ed-bar .ed-paint { position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%); display: grid; gap: 4px; width: max-content; max-width: min(620px, 92cqw); padding: 6px 8px; border-radius: 10px; background: var(--paper); color: var(--ink); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3); white-space: nowrap; }
+.heap-room .ed-bar .ed-paint[data-below="1"] { bottom: auto; top: calc(100% + 6px); }
+.heap-room .ed-bar .ed-prow { display: flex; align-items: center; gap: 6px; overflow-x: auto; }
+.heap-room .ed-bar .ed-plbl { display: inline-flex; align-items: center; gap: 5px; width: 5.2em; flex: none; font: 600 12px var(--ui); }
+.heap-room .ed-bar .ed-plbl i { width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(47, 44, 36, 0.35); }
+.heap-room .ed-bar .ed-pdots { display: inline-flex; gap: 3px; flex: none; }
+.heap-room .ed-bar .ed-pdots.mine { padding-left: 6px; border-left: 1px solid rgba(86, 83, 68, 0.3); }
+.heap-room .ed-bar .ed-paint .ed-pdot { width: 20px; height: 20px; padding: 0; border-radius: 50%; border: 1px solid rgba(47, 44, 36, 0.35); cursor: pointer; }
+.heap-room .ed-bar .ed-paint .ed-pdot:hover { outline: 2px solid var(--clay); outline-offset: 1px; }
+.heap-room .ed-bar .ed-paint .ed-pdot[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 1px; }
+.heap-room .ed-bar .ed-paint input[type="color"] { flex: none; width: 28px; height: 22px; padding: 0; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 4px; background: none; cursor: pointer; }
+.heap-room .ed-bar .ed-paint .ed-preset { flex: none; padding: 2px 8px; font: 600 11.5px var(--ui); color: var(--clay); background: none; border: 1px solid var(--clay); border-radius: 999px; }
+.heap-room .ed-bar .ed-paint .ed-preset:hover { color: var(--paper); background: var(--clay); }
+.heap-room .ed-bar .ed-pnote { flex: none; font-size: 11px; color: rgba(47, 44, 36, 0.55); }
 /* 기능 표: 가구 윗면 위. 채운 표는 쓰는 중, 점선 + 는 달 수 있는 빈 가구 */
 .heap-room .ed-badge {
   position: absolute; left: 0; top: 0; z-index: 3; transform: translate(-50%, calc(-100% - 6px)); width: 24px; height: 24px; padding: 0; border-radius: 50%;

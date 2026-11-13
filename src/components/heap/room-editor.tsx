@@ -12,6 +12,7 @@ import { ChannelTab } from "./channel-tab";
 import type { ChecklistAction } from "./setup-checklist";
 import { FnForm, canCarryFn, isLamp, itemLabel, newFn, type Item, type Model } from "./fn-form";
 import { ColourPane, type Backdrop } from "./colour-pane";
+import { PieceColour } from "./piece-colour";
 
 // 꾸미기 화면. 방 주인이 방 안에서 가구를 놓고 옮긴 뒤 저장한다 (design/editor.md, B1~B9).
 // B8: 방 이름 고치기(위 막대의 이름을 누른다, 저장 한 번에 레이아웃과 함께 간다), 팔로워로 보기(V), 저장 안 된 채 창을 닫을 때의 브라우저 경고,
@@ -62,6 +63,8 @@ type EditState = {
   name: string;
   savedName: string;
   preview: boolean;
+  // 고른 가구의 부분마다 지금 보이는 색 (색 묶음 C2, engine/furniture.js 의 partColours). 고른 것이 없으면 null
+  partColours: Record<string, string> | null;
 };
 
 const HAND_PREFIX = "hand:";
@@ -241,6 +244,8 @@ export function RoomEditor({
   // 올바르지 않아 아직 저장하지 않은 기능 값. base 는 그때의 가구 기능이다: 되돌리기 등으로 가구 쪽이 바뀌면 이 값은 버린다.
   const [draft, setDraft] = useState<{ index: number; fn: SlotFn; base: string; error: string } | null>(null);
   const [swapOpen, setSwapOpen] = useState(false);
+  // 고른 가구 위 막대의 「색」 창 (piece-colour.tsx)
+  const [paintOpen, setPaintOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveNote, setSaveNote] = useState("");
   const [leaving, setLeaving] = useState(false);
@@ -329,7 +334,11 @@ export function RoomEditor({
   if (swapSel !== sel) {
     setSwapSel(sel);
     setSwapOpen(false);
+    setPaintOpen(false);
   }
+  // 고른 가구가 칠할 수 있는 부분 (카탈로그의 parts). Kenney 모델만 갖는다
+  const selParts = selItem?.type === "model" ? (models.find((m) => m.id === selItem.model)?.parts ?? []) : [];
+  const paintShown = paintOpen && !!selItem && selParts.length > 0 && !st?.moving && !busy;
 
   // PC를 처음 만들 때 채우는 링크: creator.json의 목록 + 링크트리. 칸 수와 글자 수 한도에 맞춰 자른다.
   const prefill = useCallback((): PcLink[] => {
@@ -920,14 +929,47 @@ export function RoomEditor({
               기능
             </button>
           )}
+          {selParts.length > 0 && (
+            <button
+              type="button"
+              aria-expanded={paintOpen}
+              title="이 가구만 다른 색으로"
+              onClick={() => {
+                // 열 때 지금 보이는 색을 다시 받는다 (방금 놓은 가구는 고를 때 모델이 아직 읽히지 않았을 수 있다)
+                if (!paintOpen && sel != null) cmd({ op: "select", index: sel });
+                setPaintOpen(!paintOpen);
+                setSwapOpen(false);
+              }}
+            >
+              색
+            </button>
+          )}
           {swapChoices.length > 0 && (
-            <button type="button" aria-expanded={swapOpen} onClick={() => setSwapOpen(!swapOpen)}>
+            <button
+              type="button"
+              aria-expanded={swapOpen}
+              onClick={() => {
+                setSwapOpen(!swapOpen);
+                setPaintOpen(false);
+              }}
+            >
               모양 바꾸기
             </button>
           )}
           <button type="button" onClick={() => cmd({ op: "remove" })} title="Del">
             넣기
           </button>
+          {paintOpen && sel != null && selParts.length > 0 && (
+            <PieceColour
+              index={sel}
+              parts={selParts}
+              colors={selItem.colors}
+              shown={st?.partColours ?? null}
+              palette={st?.palette ?? null}
+              brand={st?.brand ?? null}
+              cmd={cmd}
+            />
+          )}
           {swapOpen && sel != null && (
             <div className="ed-swap" role="list" aria-label="같은 기능을 달 수 있는 모양">
               {swapChoices.map((m) => (
@@ -951,7 +993,7 @@ export function RoomEditor({
       <div id="ed-why" className="ed-why" hidden />
       {/* 안내와 알림은 한 줄기로 쌓는다: 알림이 길어 줄이 바뀌어도 안내 위에 겹치지 않는다 */}
       <div className="ed-float">
-      {!bubbleOpen && <p className="ed-hint">{hint}</p>}
+      {!bubbleOpen && !paintShown && <p className="ed-hint">{hint}</p>}
       {shownNotice && (
         <div className="ed-toast" role="status">
           <span>{shownNotice.text}</span>

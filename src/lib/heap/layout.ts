@@ -1,5 +1,6 @@
 import catalogue from "../../../public/heap/models/catalogue.json";
 import { HEAP_FUNNEL_POLICY, HEAP_POLICY } from "@/lib/heap/policy";
+import { checkColors } from "@/lib/heap/parts";
 import { checkFn } from "@/lib/heap/slots";
 
 // 방 꾸미기(layout) 검사. 서버 액션이 저장하기 전에 부른다. DB도 repo도 건드리지 않는다.
@@ -68,10 +69,10 @@ function unknownKey(obj: Obj, allowed: readonly string[]): string | null {
 function checkItem(raw: unknown, index: number): Fail | { item: Obj } {
   const at = `items[${index}]`;
   if (!isObj(raw)) return { error: `${at}: 객체가 아니에요.` };
-  const bad = unknownKey(raw, ["type", "x", "z", "rot", "size", "model", "tint", "y", "fn", "lit"]);
+  const bad = unknownKey(raw, ["type", "x", "z", "rot", "size", "model", "tint", "y", "fn", "lit", "colors"]);
   if (bad) return { error: `${at}: 알 수 없는 필드 ${bad}` };
 
-  const { type, x, z, rot, size, model, tint, y, fn, lit } = raw;
+  const { type, x, z, rot, size, model, tint, y, fn, lit, colors } = raw;
   if (typeof type !== "string" || !(type === "model" || HAND_TYPES.has(type))) {
     return { error: `${at}: 알 수 없는 가구 종류` };
   }
@@ -110,6 +111,13 @@ function checkItem(raw: unknown, index: number): Fail | { item: Obj } {
       return { error: `${at}: lit는 조명에만 쓸 수 있어요.` };
     }
     item.lit = lit;
+  }
+  if (colors !== undefined) {
+    // 가구 하나만 따로 칠한 색 (색 묶음 C2, parts.ts). 모델 가구에만, 그 모델이 가진 부분에만
+    const have = type === "model" ? (MODEL_BY_ID.get(item.model as string) as { parts?: string[] } | undefined)?.parts ?? [] : [];
+    const r = checkColors(colors, type, have, `${at}.colors`);
+    if ("error" in r) return r;
+    item.colors = r.colors;
   }
   if (fn !== undefined) {
     // 가구에 붙는 기능. 그 가구가 달 수 있는 종류인지는 catalogue.json의 slots로 본다.

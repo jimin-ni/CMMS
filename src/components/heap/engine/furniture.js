@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { disposeScene, mulberry32 } from './util.js';
 import { flat, makeCanvas, canvasTexture } from './draw.js';
-import { tone, mark } from './palette.js';
+import { tone, mark, palColour, partSpec, PART_OF, PART_MATS } from './palette.js';
 
 export function setupFurniture(ctx) {
   const { rand, C, box, ALBUMS, scene } = ctx;
@@ -104,11 +104,13 @@ export function setupFurniture(ctx) {
       const inst = m.root.clone(), rug = m.entry.category === 'rug', lamp = m.entry.category === 'lamp', own = new Map(), shades = [];
       inst.traverse(o => {
         if (!o.isMesh) return;
-        const col = it.tint !== false && ctx.TINT[o.material.name], glow = lamp && o.material.name === 'lamp';
-        if (col || glow) { // 이 가구만의 재질 복사본: 물들이고 (램프 갓은) 빛나게 한다. 캐시에 있는 원본은 파일 그대로 둔다
+        const name = o.material.name, spec = specOf(it, name), glow = lamp && name === 'lamp';
+        // 칠할 수 있는 부분(PART_OF)의 재질은 물들이지 않는 가구(tint false)도 복사해 둔다: 나중에 그 자리에서 칠한다 (paintItem)
+        if (spec || glow || PART_OF[name]) { // 이 가구만의 재질 복사본: 물들이고 (램프 갓은) 빛나게 한다. 캐시에 있는 원본은 파일 그대로 둔다
           if (!own.has(o.material)) {
             const c = o.material.clone();
-            if (col) { c.color.set(col); mark(c, 'tint:' + o.material.name); } // 팔레트가 바뀌면 recolour.js 가 이름으로 다시 칠한다
+            SRC.set(c, o.material);
+            if (spec) { c.color.set(palColour(C, spec)); mark(c, spec); } // 팔레트가 바뀌면 recolour.js 가 이름으로 다시 칠한다 (가구가 칠한 부분은 그대로)
             if (glow) { c.emissive.set(LAMP_GLOW); c.emissiveIntensity = isLit(it) ? ctx.shadeNow : 0; }
             own.set(o.material, c);
           }
@@ -148,6 +150,53 @@ export function setupFurniture(ctx) {
     });
     return {};
   };
+
+  // ---------- 가구 하나만 따로 칠하기 (색 묶음 C2) ----------
+  // item.colors 의 부분(palette.js 의 PART_MATS)은 고른 색으로, 나머지는 방 팔레트(TINT)로 칠한다. tint 가 false 면 칠하지 않은 부분은 파일의 색이다.
+  // SRC: 가구의 재질 복사본 → 캐시의 원본 (파일의 색으로 돌아갈 때 쓴다)
+  const SRC = new WeakMap();
+  function specOf(it, name) {
+    const part = PART_OF[name];
+    if (part && it.colors?.[part]) return partSpec(name, it.colors);
+    return it.tint !== false && ctx.TINT[name] ? 'tint:' + name : null;
+  }
+  // items[i] 의 그룹을 colors 로 다시 칠한다. 다시 짓지 않는다. colors 가 null 이면 모두 팔레트 색으로.
+  // keep 이 true 면 미리보기다: 지은 목록(build.items)의 값은 그대로 두어, 미리보기를 끝낼 때 paintItem(i, 원래 colors) 로 돌아간다.
+  // 모델을 아직 못 읽었으면 칠할 재질이 없다: 지은 목록의 값을 고쳐 두면 읽힌 뒤에 그 색으로 짓는다.
+  function paintItem(i, colors, keep = false) {
+    const build = ctx.build, it = build.items[i], g = build.groups[i];
+    if (!it) return 0;
+    const probe = { ...it };
+    if (colors) probe.colors = colors; else delete probe.colors;
+    if (!keep) { if (colors) it.colors = colors; else delete it.colors; }
+    let n = 0;
+    const seen = new Set();
+    g?.traverse(o => {
+      if (!o.isMesh) return;
+      for (const m of [].concat(o.material)) {
+        if (seen.has(m) || !SRC.has(m)) continue;
+        seen.add(m);
+        const name = SRC.get(m).name, spec = specOf(probe, name);
+        if (spec) { mark(m, spec); m.color.set(palColour(C, spec)); }
+        else { delete m.userData.pal; m.color.copy(SRC.get(m).color); }
+        n++;
+      }
+    });
+    return n;
+  }
+  // items[i] 의 부분마다 지금 보이는 색 { 부분: '#rrggbb' } (꾸미기의 색 단추가 칠하지 않은 부분의 색으로 보여 준다). 모델을 아직 못 읽었으면 {}
+  function partColours(i) {
+    const out = {};
+    ctx.build.groups[i]?.traverse(o => {
+      if (!o.isMesh) return;
+      for (const m of [].concat(o.material)) {
+        const name = SRC.get(m)?.name, part = name && PART_OF[name];
+        if (part && PART_MATS[part][0] === name) out[part] = '#' + m.color.getHexString();
+        else if (part && !out[part]) out[part] = '#' + m.color.getHexString(); // 첫 이름이 없는 모델(천이 carpetBlue 뿐인 소파)은 있는 것으로
+      }
+    });
+    return out;
+  }
 
   // 앉는 자리: 방문자(나중에는 팬의 유령)가 앉을 수 있는 점. 모델의 바닥 크기와 카탈로그의 `seats` 규칙(의자, 소파, 러그)에서 계산한다.
   // 레이아웃에는 저장하지 않는다. 모델의 `seatY`(파일 단위)는 규칙의 `top` 비율이 맞지 않을 때 그 비율을 대신한다.
@@ -199,5 +248,5 @@ export function setupFurniture(ctx) {
     });
   }
 
-  Object.assign(ctx, { BUILD, buildItems, OBST, shelfParts });
+  Object.assign(ctx, { BUILD, buildItems, OBST, shelfParts, paintItem, partColours });
 }
