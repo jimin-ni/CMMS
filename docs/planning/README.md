@@ -11,6 +11,7 @@ CMMS(Creator Message Management System, 가제)의 기획 문서 모음입니다
 | [05-github-workflow.md](./05-github-workflow.md) | 브랜치 규칙, GitHub Actions, GitHub Projects 운영 |
 | [06-auth.md](./06-auth.md) | 인증 방식 비교 (Better Auth, Supabase Auth, Clerk) |
 | [07-database.md](./07-database.md) | 데이터베이스 선택 이유 (관계형, PostgreSQL) |
+| [08-design.md](./08-design.md) | 현재 화면의 디자인 토큰, 컴포넌트, 사용자 흐름, Figma 파일 구조 |
 
 ## 표기 규칙
 
