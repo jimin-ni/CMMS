@@ -14,11 +14,14 @@ import { setupModels } from './models.js';
 import { setupShelf } from './shelf.js';
 import { setupTime } from './time.js';
 import { setupProps } from './props.js';
+import { setupWalk } from './walk.js';
 import { setupHeap } from './heap.js';
 import { setupThumbs } from './thumbs.js';
-import { flat } from './draw.js';
-import { ytUrl, ksDay, seoulDay, fmtDay } from './format.js';
+import { setupModes } from './modes.js';
+import { setupInput } from './input.js';
+import { setupPath } from './path.js';
 import { el, link, shortUrl } from './dom.js';
+import { ytUrl, ksDay, seoulDay, fmtDay } from './format.js';
 import { thumbUrl } from './util.js';
 
 // ids of the nodes heap-room.tsx renders and the engine fills or shows
@@ -48,54 +51,33 @@ const { ac, cleanups, dataBase, prevTitle, $, on } = ctx;
 async function run() {
 const { rand, gauss } = ctx;
 await setupData(ctx);
-const { layout, C, creator, DATA, fanReels, fanReelOf, ROOMS, roomId } = ctx;
+const { layout, creator, DATA, fanReels, fanReelOf, ROOMS, roomId } = ctx;
 if (ctx.disposed) return;
 setupHud(ctx);
-const { setHint, syncUI, toast, creatorVisit, renderMeta, renderCreatorVisit } = ctx;
+const { toast, creatorVisit, renderMeta, renderCreatorVisit, setHint, syncUI } = ctx;
 setupCardArt(ctx);
 setupScene(ctx);
-const { WALLS, scene, Yv, camera, WALL_H, RX, RZ, controls, canvas, Xv, floor, renderer } = ctx;
+const { Yv, camera, WALL_H, RX, RZ, WALLS, canvas, Xv, renderer, scene, controls } = ctx;
 setupShell(ctx);
-const { DOOR, tA, WIN, doorParts, stepMotes } = ctx;
+const { tA, DOOR, WIN, stepMotes } = ctx;
 setupFurniture(ctx);
-const { buildItems, shelfParts, OBST } = ctx;
+const { buildItems } = ctx;
 setupSlots(ctx);
 const { startSlots, keepsakeLook, newestReel } = ctx;
 setupModels(ctx);
 const { getCatalogue } = ctx;
 buildItems(layout.items || [], true);
 setupShelf(ctx);
-const { linkShelf, updateAlbums, enterSort, exitSort, albumAction } = ctx;
+const { linkShelf, updateAlbums, enterSort, exitSort } = ctx;
 setupTime(ctx);
 const { tickClock } = ctx;
 setupProps(ctx);
-const {
-  TABLE, SEAT, SCREEN_C, SCR, drawProjection, screen, screenOn, screenIdle, projParts, phoneParts,
-  tableTop, bookParts, beamMat, projLight, reelA, reelB, phoneDot, SLOT,
-} = ctx;
-// ---------- character ----------
-const me = new THREE.Group();
-ctx.me = me;
-const body = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.25, 0.45, 7), flat(C.accent)); body.position.y = 0.5;
-const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.26, 1), flat('#f2cfb3')); head.position.y = 0.95;
-const hair = new THREE.Mesh(new THREE.SphereGeometry(0.28, 7, 4, 0, Math.PI * 2, 0, Math.PI / 2), flat('#3a2a22')); hair.position.set(0, 0.98, -0.02);
-const legL = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.3, 5), flat(C.olive)), legR = legL.clone();
-legL.geometry.translate(0, -0.15, 0); legL.position.set(-0.09, 0.3, 0); legR.position.set(0.09, 0.3, 0);
-const eyeGeo = new THREE.SphereGeometry(0.035, 5, 4), eyeMat = flat('#2a2230');
-const eyeL = new THREE.Mesh(eyeGeo, eyeMat), eyeR = new THREE.Mesh(eyeGeo, eyeMat);
-eyeL.position.set(-0.09, 0.97, 0.23); eyeR.position.set(0.09, 0.97, 0.23);
-for (const m of [body, head, hair, legL, legR]) { m.castShadow = true; me.add(m); }
-me.add(eyeL, eyeR);
-if (ctx.doorSpot) { me.position.copy(ctx.doorSpot); me.rotation.y = Math.atan2(WALLS[DOOR.wall].n.x, WALLS[DOOR.wall].n.z); }
-else me.position.set(2.2, 0, 2.4);
-scene.add(me);
+const { TABLE, SEAT, SCREEN_C, SCR, beamMat, projLight, screenOn, reelA, reelB, phoneDot, SLOT } = ctx;
+setupWalk(ctx);
+const { unperch, stepCharacter, me, legL, legR } = ctx;
 setupHeap(ctx);
-const {
-  settle, clampPlace, toTop, startAnim, cards, makeCard, pickables, inPile, supportAt, restPose,
-  stepAnim, buildHeap,
-} = ctx;
+const { cards, makeCard, clampPlace, settle, startAnim, inPile, supportAt, restPose, stepAnim, buildHeap } = ctx;
 setupThumbs(ctx);
-const { requestPile, NEAR, request, CLOSE } = ctx;
 // ====================================================================================
 // 6. Modes: room · sit (sift, move cards) · watch (projector) · sort (album shelf)
 // ====================================================================================
@@ -116,13 +98,11 @@ function needDist(hx, hz, aspect) {
 const roomFit = aspect => needDist(RX, RZ, aspect) / needDist(4, 4, aspect);
 const tableCentre = new THREE.Vector3(TABLE.x, TABLE.top, TABLE.z);
 const SIT_CAM = { pos: tableCentre.clone().add(new THREE.Vector3(0, 2.0, 2.1)), target: tableCentre.clone() };
+ctx.SIT_CAM = SIT_CAM;
 const WATCH_CAM = { pos: SEAT.clone().add(new THREE.Vector3(0.7, 1.75, 2.1)), target: SCREEN_C.clone().addScaledVector(WALLS[SCR.wall].n, 1).add(new THREE.Vector3(0, -0.75, 0)) };
-ctx.mode = 'room'; ctx.camGoal = null; ctx.held = null; ctx.heldFlipped = false; ctx.loaded = null; ctx.hovered = null; ctx.presenting = null; ctx.dragging = null;
-ctx.walkTo = null; ctx.arrive = null; ctx.waypoints = [];
-ctx.perch = null; ctx.seatTarget = null; // perch: the seat the visitor sits on in room mode · seatTarget: the seat being walked to
-ctx.seatFrom = null; ctx.perchFrom = null; // the stand point the walk to seatTarget ends at · the stand point the visitor came to the perch from (they get up there)
-const goTo = cam => { ctx.camGoal = cam; controls.enabled = false; };
-ctx.goTo = goTo;
+ctx.WATCH_CAM = WATCH_CAM;
+setupModes(ctx);
+const { sit, pickUp, feed } = ctx;
 // Live room contents, for a creator's editor. Dispatch on the element given to mountRoom once the room is up (#status hidden):
 //   root.dispatchEvent(new CustomEvent('heap:items', { detail: itemsArray }))
 //     replaces everything built from layout.items. Same item shapes as layout.json.
@@ -167,59 +147,10 @@ on(root, 'heap:get', e => {
     });
   });
 });
-function sit() {
-  ctx.mode = 'sit'; ctx.walkTo = null; ctx.arrive = null; ctx.waypoints = []; ctx.perch = null;
-  me.position.copy(SEAT); me.rotation.y = Math.PI;
-  setHint('sit'); goTo(SIT_CAM); syncUI();
-  requestPile(NEAR);
-}
-function stand() {
-  if (ctx.loaded) eject();
-  if (ctx.held) putBack();
-  ctx.mode = 'room'; ctx.hovered = null; controls.enabled = false; ctx.camGoal = null;
-  me.position.copy(SEAT).add(new THREE.Vector3(0.6, 0, 0.5));
-  setHint('room'); syncUI();
-}
-function glowCard(c, v) { // both faces glow by their own picture, so the card reads in a dim room
-  for (const m of c.children) {
-    const mat = m.material;
-    if (!mat || !mat.map) continue;
-    mat.emissive.set(v ? '#ffffff' : '#000000'); mat.emissiveMap = v ? mat.map : null; mat.emissiveIntensity = v; mat.needsUpdate = true;
-  }
-}
-function pickUp(c) { ctx.held = c; ctx.heldFlipped = false; ctx.hovered = null; controls.enabled = false; settle(); setHint('held'); syncUI(); request(c, CLOSE, true); glowCard(c, ctx.readGlow); }
-function dropOnTop(c) { // gently toward the middle of the pile, then fall into place
-  const p = c.userData.place;
-  c.userData.place = clampPlace({ x: TABLE.x + (p.x - TABLE.x) * 0.5 + gauss() * 0.15, z: TABLE.z + (p.z - TABLE.z) * 0.5 + gauss() * 0.1, yaw: p.yaw + gauss() * 0.6, faceUp: true });
-  toTop(c);
-}
-function putBack() {
-  const c = ctx.held; ctx.held = null; ctx.heldFlipped = false; glowCard(c, 0);
-  dropOnTop(c); settle(); startAnim(c, 'drop');
-  if (!ctx.camGoal && ctx.mode === 'sit') controls.enabled = true;
-  setHint('sit'); syncUI();
-}
-function flip() { if (ctx.held) ctx.heldFlipped = !ctx.heldFlipped; }
-on($('flip'), 'click', flip);
-function feed() {
-  ctx.loaded = ctx.held; ctx.held = null; ctx.heldFlipped = false; ctx.mode = 'watch'; glowCard(ctx.loaded, 0);
-  const { reel, img } = ctx.loaded.userData;
-  drawProjection(reel, img); screen.material = screenOn;
-  if (reel.kind !== 'fan') $('ytlink').href = ytUrl(reel);
-  setHint('watch'); goTo(WATCH_CAM); syncUI();
-  if (reel.kind !== 'fan') openPlayer(reel); // a fan piece is just projected
-}
-function eject() {
-  closePlayer();
-  const c = ctx.loaded; ctx.loaded = null; dropOnTop(c); settle(); startAnim(c, 'drop');
-  screen.material = screenIdle;
-  ctx.mode = 'sit'; setHint('sit'); goTo(SIT_CAM); syncUI();
-}
-on($('stand'), 'click', () => (ctx.perch ? unperch() : stand()));
-on($('eject'), 'click', eject);
 // official YouTube embed, flat and unobstructed; if this host forbids embeds, fall back to the link out
 ctx.embedBlocked = false;
 const player = $('player'), frameBox = $('player-frame'), note = $('player-note');
+ctx.player = player;
 // One official player at a time: the projector's and the music dock's share these two helpers, and opening either closes the other.
 const embedSrc = ({ video, list }) => `https://www.youtube-nocookie.com/embed/${video ?? 'videoseries'}?${new URLSearchParams({ autoplay: '1', playsinline: '1', rel: '0', ...(list ? { list } : {}) })}`;
 function makeFrame(src, title) {
@@ -245,7 +176,9 @@ function openPlayer(reel) {
   } else { frameBox.style.width = frameBox.style.height = '0px'; }
   player.hidden = false;
 }
+ctx.openPlayer = openPlayer;
 function closePlayer() { frameBox.innerHTML = ''; player.hidden = true; }
+ctx.closePlayer = closePlayer;
 on($('player-close'), 'click', closePlayer);
 // music: the docked player at the room's top right, opposite the room name (item.fn kind "music" on a radio, speaker or TV).
 // A visible official embed of 200 px or more with nothing laid over it: heap-room.css keeps the overlays and the 꾸미기 panel out of its corner (--music-w).
@@ -341,6 +274,7 @@ function openPhone() {
   if (!hasPc()) legacyLinks(feedEl);
   $('phone').hidden = false;
 }
+ctx.openPhone = openPhone;
 on($('phone-close'), 'click', () => { $('phone').hidden = true; });
 on($('phone'), 'click', e => { if (e.target.id === 'phone') $('phone').hidden = true; });
 // PC (a desk, monitor or laptop with fn.kind "pc"): the creator's links. fn.links is the owner's own list; without one the creator.json links stand in.
@@ -405,6 +339,7 @@ const openSlot = slot => {
   if (k === 'pc') openPc(slot.fn); else if (k === 'keepsake') openKeepsake(slot.fn);
   else if (k === 'music') openMusic(slot.fn); else if (k === 'latest') watchLatest(); else if (k === 'calendar') openCalendar(slot.fn);
 };
+ctx.openSlot = openSlot;
 // fan pieces: one that lands while the visitor is in the room drops onto the top of the heap from above the table
 function landPiece(p) {
   const c = makeCard(p);
@@ -439,6 +374,7 @@ function openGuestbook() {
   $('guestbook').hidden = false;
   setTimeout(() => $('gb-name')?.focus(), 50);
 }
+ctx.openGuestbook = openGuestbook;
 let gbBusy = false;
 const gbForm = root.querySelector('#gb-form'); // absent for a signed-out viewer: heap-room.tsx shows a sign-in line instead
 if (gbForm) on(gbForm, 'submit', async e => {
@@ -512,284 +448,14 @@ function openRooms() {
   $('rooms-legend').hidden = !anyChanged;
   $('rooms').hidden = false;
 }
+ctx.openRooms = openRooms;
 function jump(id) {
   $('rooms').hidden = true; $('fade').classList.add('on');
   setTimeout(() => { if (!ctx.disposed) opts.onNavigate(id); }, 380);
 }
 on($('rooms-close'), 'click', () => { $('rooms').hidden = true; });
-// ====================================================================================
-// 7. Input
-// ====================================================================================
-const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
-function rayFrom(ev) {
-  const b = canvas.getBoundingClientRect();
-  ndc.set(((ev.clientX - b.left) / b.width) * 2 - 1, -((ev.clientY - b.top) / b.height) * 2 + 1);
-  ray.setFromCamera(ndc, camera);
-}
-const isProj = o => projParts.includes(o), isPhone = o => phoneParts.includes(o);
-const keys = new Set();
-const OVERLAYS = ['phone', 'pc', 'keepsake', 'calendar', 'grid', 'rooms', 'guestbook'];
-const anyOverlay = () => OVERLAYS.some(id => !$(id).hidden);
-on(window, 'keydown', ev => {
-  if (ev.target.closest?.('input, textarea')) { if (ev.key === 'Escape') $('guestbook').hidden = true; return; }
-  if (ev.target.closest?.('.room-editor')) return; // a key pressed inside the 꾸미기 panel belongs to the panel (it closes itself on Esc)
-  const k = ev.key.toLowerCase(); keys.add(k);
-  if (ctx.mode === 'room' && !anyOverlay() && (k === 'e' || k === 'enter')) { if (nearTable()) sit(); else if (nearShelf()) enterSort(); else if (nearDoor()) openRooms(); else if (nearBook()) openGuestbook(); }
-  if (ctx.mode === 'sit' && ctx.held && k === 'f') flip();
-  if (k === 'escape') {
-    for (const id of OVERLAYS) if (!$(id).hidden) { $(id).hidden = true; return; }
-    if (ctx.mode === 'watch') eject();
-    else if (ctx.mode === 'sort') exitSort();
-    else if (ctx.held) putBack();
-    else if (ctx.mode === 'sit') stand();
-    else if (ctx.perch) unperch();
-  }
-});
-on(window, 'keyup', ev => keys.delete(ev.key.toLowerCase()));
-on(window, 'blur', () => keys.clear());
-// dragging a card across the desk (sit mode). Capture phase so orbit controls stand aside.
-const deskPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(TABLE.top + 0.12)), _hit = new THREE.Vector3();
-let down = null, dragOff = new THREE.Vector2();
-canvas.addEventListener('pointerdown', ev => {
-  down = { x: ev.clientX, y: ev.clientY, card: null };
-  if (ctx.mode !== 'sit' || ctx.held || ctx.camGoal) return;
-  rayFrom(ev);
-  const hit = ray.intersectObjects(pickables, false)[0];
-  if (hit) {
-    down.card = hit.object.userData.card; controls.enabled = false;
-    if (ray.ray.intersectPlane(deskPlane, _hit)) dragOff.set(down.card.userData.place.x - _hit.x, down.card.userData.place.z - _hit.z); // grab offset where it was pressed
-  }
-}, { capture: true });
-canvas.addEventListener('pointermove', ev => {
-  if (down?.card && !ctx.dragging && Math.hypot(ev.clientX - down.x, ev.clientY - down.y) > 6) {
-    ctx.dragging = down.card; ctx.hovered = null; canvas.setPointerCapture?.(ev.pointerId);
-    settle(); setHint('drag');
-  }
-  if (ctx.dragging) {
-    rayFrom(ev);
-    if (ray.ray.intersectPlane(deskPlane, _hit)) Object.assign(ctx.dragging.userData.place, clampPlace({ x: _hit.x + dragOff.x, z: _hit.z + dragOff.y, yaw: ctx.dragging.userData.place.yaw, faceUp: ctx.dragging.userData.place.faceUp }));
-    canvas.style.cursor = 'grabbing';
-    return;
-  }
-  if (ev.buttons) return;
-  rayFrom(ev);
-  if (ctx.mode === 'sort') { canvas.style.cursor = ctx.shelf && ray.intersectObjects(ctx.shelf.albums.flatMap(a => [a.mesh, a.label]), false).length ? 'pointer' : 'default'; return; }
-  if (ctx.mode === 'room') { canvas.style.cursor = ray.intersectObjects([...ctx.build.slotMeshes, ...ctx.build.seatMeshes], false).length ? 'pointer' : ''; return; }
-  if (ctx.mode !== 'sit' || ctx.camGoal) return;
-  const hit = ray.intersectObjects([...pickables, ...projParts, ...phoneParts], false)[0];
-  ctx.hovered = hit && !ctx.held && hit.object.userData.card ? hit.object.userData.card : null;
-  canvas.style.cursor = hit ? 'pointer' : 'grab';
-});
-canvas.addEventListener('pointerup', ev => {
-  const wasDrag = ctx.dragging;
-  if (ctx.dragging) {
-    const c = ctx.dragging; ctx.dragging = null; toTop(c); settle(); startAnim(c, 'drop'); c.userData.anim.arc = 0.02;
-    setHint('sit');
-  }
-  if (ctx.mode === 'sit' && !ctx.held && !ctx.camGoal) controls.enabled = true;
-  const d = down; down = null;
-  if (wasDrag || !d || Math.hypot(ev.clientX - d.x, ev.clientY - d.y) > 6) return;
-  rayFrom(ev);
-  if (ctx.mode === 'watch') { if (player.hidden && ray.intersectObject(screen, false).length) openPlayer(ctx.loaded.userData.reel); return; }
-  if (ctx.camGoal) return;
-  if (ctx.mode === 'sort') { const h = ctx.shelf && ray.intersectObjects(ctx.shelf.albums.flatMap(a => [a.mesh, a.label]), false)[0]; if (h) albumAction(h.object.userData.album); return; }
-  if (ctx.mode === 'sit') {
-    const hits = ray.intersectObjects([...pickables, ...projParts, ...phoneParts], false);
-    if (ctx.held && hits[0]?.object.userData.card === ctx.held) return flip();
-    const hit = hits.find(h => h.object.userData.card !== ctx.held);
-    if (hit && isProj(hit.object)) return ctx.held ? feed() : setHint('needcard');
-    if (hit && isPhone(hit.object)) return openPhone();
-    if (ctx.held) return putBack();
-    if (hit) pickUp(hit.object.userData.card);
-    return;
-  }
-  const hit = ray.intersectObjects([tableTop, ...pickables, ...projParts, ...phoneParts, ...ctx.build.slotMeshes, ...ctx.build.seatMeshes, ...shelfParts, ...doorParts, ...bookParts, floor], false)[0];
-  if (!hit) return;
-  if (hit.object.userData.slot) return openSlot(hit.object.userData.slot); // a PC, a frame, a TV, a radio or a calendar: it acts where the visitor stands
-  if (hit.object.userData.seats) return sitOn(hit.object.userData.seats, hit.point); // a chair, a sofa or a rug: walk there and sit
-  const p = hit.point, onTableFoot = p.x > TBOX.x0 && p.x < TBOX.x1 && p.z > TBOX.z0 && p.z < TBOX.z1;
-  if (doorParts.includes(hit.object)) walkRoute(ctx.doorSpot.clone(), 'door');
-  else if (bookParts.includes(hit.object)) walkRoute(ctx.bookSpot.clone(), 'book');
-  else if (shelfParts.includes(hit.object)) walkRoute(ctx.shelfSpot.clone(), 'sort');
-  else if (hit.object === floor && !onTableFoot) walkRoute(p.clone().setY(0), null);
-  else walkRoute(SEAT.clone(), 'sit');
-});
-// ---------- walking ----------
-const TBOX = { x0: TABLE.x - TABLE.w / 2 - 0.45, x1: TABLE.x + TABLE.w / 2 + 0.45, z0: TABLE.z - TABLE.d / 2 - 0.45, z1: TABLE.z + TABLE.d / 2 + 0.45 };
-function crossesTable(a, b) {
-  for (let i = 1; i < 20; i++) {
-    const x = a.x + (b.x - a.x) * i / 20, z = a.z + (b.z - a.z) * i / 20;
-    if (x > TBOX.x0 + 0.1 && x < TBOX.x1 - 0.1 && z > TBOX.z0 + 0.1 && z < TBOX.z1 - 0.1) return true;
-  }
-  return false;
-}
-// ---------- sitting on furniture (room mode) ----------
-// A seat is entered from one of its stand points, reached by a walk planned around every walk obstacle, and the visitor sits only on arriving there.
-// A seat whose centre lies inside the photo table, the guestbook stand or another item's own footprint is refused, so nobody ends up inside furniture.
-// perchOn / unperch: the seat's pose is held every frame by stepCharacter; any walking key, a click on the floor or Esc stands the visitor up at the stand point they came from.
-const walkBoxes = () => [OBST[0], ...ctx.build.obst, ...OBST.slice(1)];
-const walkFree = (x, z, margin = 0.05) => x > -RX + 0.35 && x < RX - 0.3 && z > -RZ + 0.35 && z < RZ - 0.3 && !walkBoxes().some(o => Math.abs(x - o.x) < o.hw + margin && Math.abs(z - o.z) < o.hd + margin);
-const seatUsable = s => s.pos.x > -RX + 0.2 && s.pos.x < RX - 0.2 && s.pos.z > -RZ + 0.2 && s.pos.z < RZ - 0.2 &&
-  !walkBoxes().some(o => o.owner !== s.item && Math.abs(s.pos.x - o.x) < (o.rhw ?? o.hw) + 0.1 && Math.abs(s.pos.z - o.z) < (o.rhd ?? o.hd) + 0.1);
-// A* over a 0.25 grid of the floor (cells inside an obstacle's walk box plus 0.15 are closed), then the path is pulled straight wherever a line stays clear.
-// Returns the points to walk through, the last being `to` itself, or null when `to` cannot be reached.
-function planPath(from, to) {
-  const S = 0.25, M = 0.15, x0 = -RX + 0.35, z0 = -RZ + 0.35, nx = Math.floor((2 * RX - 0.65) / S) + 1, nz = Math.floor((2 * RZ - 0.65) / S) + 1;
-  const open = new Uint8Array(nx * nz);
-  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) open[j * nx + i] = walkFree(x0 + i * S, z0 + j * S, M) ? 1 : 0;
-  const cellOf = (x, z) => [THREE.MathUtils.clamp(Math.round((x - x0) / S), 0, nx - 1), THREE.MathUtils.clamp(Math.round((z - z0) / S), 0, nz - 1)];
-  let [si, sj] = cellOf(from.x, from.z);
-  if (!open[sj * nx + si]) { // the start may stand in an obstacle's margin: begin from the nearest open cell
-    let best = null;
-    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) if (open[j * nx + i]) { const d = Math.hypot(i - si, j - sj); if (d <= 8 && (!best || d < best[0])) best = [d, i, j]; }
-    if (!best) return null;
-    [, si, sj] = best;
-  }
-  const [gi, gj] = cellOf(to.x, to.z);
-  if (!open[gj * nx + gi]) return null;
-  const g = new Float32Array(nx * nz).fill(Infinity), came = new Int32Array(nx * nz).fill(-1), done = new Uint8Array(nx * nz), heap = [[0, sj * nx + si]];
-  g[sj * nx + si] = 0;
-  const h = (i, j) => { const dx = Math.abs(i - gi), dz = Math.abs(j - gj); return Math.max(dx, dz) + 0.414 * Math.min(dx, dz); };
-  let reached = false;
-  while (heap.length) {
-    let k = 0; for (let n = 1; n < heap.length; n++) if (heap[n][0] < heap[k][0]) k = n;
-    const [, cur] = heap.splice(k, 1)[0];
-    if (done[cur]) continue;
-    done[cur] = 1;
-    const ci = cur % nx, cj = (cur - ci) / nx;
-    if (ci === gi && cj === gj) { reached = true; break; }
-    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
-      if (!di && !dj) continue;
-      const ni = ci + di, nj = cj + dj;
-      if (ni < 0 || nj < 0 || ni >= nx || nj >= nz || !open[nj * nx + ni]) continue;
-      if (di && dj && !(open[cj * nx + ni] && open[nj * nx + ci])) continue; // no cutting a corner
-      const n = nj * nx + ni, cost = g[cur] + (di && dj ? 1.414 : 1);
-      if (cost < g[n]) { g[n] = cost; came[n] = cur; heap.push([cost + h(ni, nj), n]); }
-    }
-  }
-  if (!reached) return null;
-  const cells = [];
-  for (let c = gj * nx + gi; c !== -1; c = came[c]) { const ci = c % nx; cells.unshift({ x: x0 + ci * S, z: z0 + (c - ci) / nx * S }); }
-  cells[cells.length - 1] = { x: to.x, z: to.z };
-  const clear = (a, b) => { const n = Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 0.1); for (let t = 1; t <= n; t++) if (!walkFree(a.x + (b.x - a.x) * t / n, a.z + (b.z - a.z) * t / n, 0.1)) return false; return true; };
-  const out = []; let cur = { x: from.x, z: from.z }, k = 0;
-  while (k < cells.length) {
-    let m = k; for (let n = cells.length - 1; n > k; n--) if (clear(cur, cells[n])) { m = n; break; }
-    out.push(new THREE.Vector3(cells[m].x, 0, cells[m].z)); cur = cells[m]; k = m + 1;
-  }
-  return out;
-}
-function sitOn(seats, point) { // the seat of this item nearest to where the click landed
-  const s = seats.reduce((a, b) => (Math.hypot(a.pos.x - point.x, a.pos.z - point.z) <= Math.hypot(b.pos.x - point.x, b.pos.z - point.z) ? a : b));
-  if (!seatUsable(s)) { toast('여기에는 앉을 수 없어요'); return; }
-  if (ctx.perch) unperch();
-  const from = me.position.clone().setY(0);
-  let best = null;
-  for (const st of s.stands) {
-    if (!walkFree(st.x, st.z)) continue;
-    const path = planPath(from, st);
-    if (!path) continue;
-    let len = 0, prev = from; for (const p of path) { len += prev.distanceTo(p); prev = p; }
-    if (!best || len < best.len) best = { st, path, len };
-  }
-  if (!best) { toast('거기까지 갈 길이 없어요'); return; }
-  ctx.waypoints = best.path.slice(); ctx.walkTo = ctx.waypoints.shift(); ctx.arrive = 'seat'; ctx.seatTarget = s; ctx.seatFrom = best.st;
-}
-function perchOn(s) {
-  if (!s || !ctx.seatFrom || Math.hypot(me.position.x - ctx.seatFrom.x, me.position.z - ctx.seatFrom.z) > 0.3) return; // only from the stand point the walk was planned to
-  ctx.perch = s; ctx.perchFrom = ctx.seatFrom; ctx.walkTo = null; ctx.arrive = null; ctx.waypoints = [];
-  setHint('perch'); syncUI();
-}
-function unperch() {
-  if (!ctx.perch) return;
-  ctx.perch = null;
-  me.position.copy(ctx.perchFrom).setY(0); collide(me.position); // back onto the floor where the seat was entered from
-  setHint('room'); syncUI();
-}
-function walkRoute(to, action) {
-  if (ctx.perch) unperch();
-  const from = me.position.clone().setY(0);
-  ctx.waypoints = [to]; ctx.arrive = action;
-  if (crossesTable(from, to)) {
-    const corners = [[TBOX.x0, TBOX.z0], [TBOX.x1, TBOX.z0], [TBOX.x0, TBOX.z1], [TBOX.x1, TBOX.z1]].map(([x, z]) => new THREE.Vector3(x, 0, z));
-    const ok = corners.filter(c => !crossesTable(from, c) && !crossesTable(c, to));
-    if (ok.length) ctx.waypoints = [ok.sort((p, q) => (from.distanceTo(p) + p.distanceTo(to)) - (from.distanceTo(q) + q.distanceTo(to)))[0], to];
-    else {
-      const near = corners.filter(c => !crossesTable(from, c)).sort((p, q) => from.distanceTo(p) - from.distanceTo(q))[0];
-      const second = near && corners.filter(c => c !== near && !crossesTable(near, c) && !crossesTable(c, to)).sort((p, q) => p.distanceTo(to) - q.distanceTo(to))[0];
-      ctx.waypoints = second ? [near, second, to] : [to];
-    }
-  }
-  ctx.walkTo = ctx.waypoints.shift();
-}
-function collide(p) {
-  p.x = THREE.MathUtils.clamp(p.x, -RX + 0.35, RX - 0.3);
-  p.z = THREE.MathUtils.clamp(p.z, -RZ + 0.35, RZ - 0.3);
-  // the table, the items, then the guestbook stand: the order they were checked in when all of them shared OBST
-  for (const o of [OBST[0], ...ctx.build.obst, ...OBST.slice(1)]) {
-    const dx = p.x - o.x, dz = p.z - o.z;
-    if (Math.abs(dx) < o.hw && Math.abs(dz) < o.hd) {
-      const px = o.hw - Math.abs(dx), pz = o.hd - Math.abs(dz);
-      if (px < pz) p.x = o.x + Math.sign(dx || 1) * o.hw; else p.z = o.z + Math.sign(dz || 1) * o.hd;
-    }
-  }
-}
-const nearTable = () => me.position.distanceTo(SEAT) < 1.1;
-const nearShelf = () => !!ctx.shelfSpot && me.position.distanceTo(ctx.shelfSpot) < 1.1;
-const nearDoor = () => !!ctx.doorSpot && me.position.distanceTo(ctx.doorSpot) < 0.7;
-const nearBook = () => !!ctx.bookSpot && me.position.distanceTo(ctx.bookSpot) < 0.7;
-const UP = new THREE.Vector3(-1, 0, -1).normalize(), RIGHT = new THREE.Vector3(1, 0, -1).normalize();
-const mv = new THREE.Vector3();
-let walkPhase = 0;
-function arrived() {
-  if (ctx.waypoints.length) { ctx.walkTo = ctx.waypoints.shift(); return; }
-  const a = ctx.arrive; ctx.walkTo = null; ctx.arrive = null;
-  if (a === 'sit') sit(); else if (a === 'sort') enterSort(); else if (a === 'door') openRooms(); else if (a === 'book') openGuestbook(); else if (a === 'seat') perchOn(ctx.seatTarget);
-}
-const WALK_KEYS = ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
-function stepCharacter(dt) {
-  if (ctx.perch) {
-    if (anyOverlay() || !WALK_KEYS.some(k => keys.has(k))) { // sitting: the pose stays until a walking key is pressed
-      me.position.set(ctx.perch.pos.x, ctx.perch.pos.y - 0.28, ctx.perch.pos.z); me.rotation.y = ctx.perch.yaw; legL.rotation.x = legR.rotation.x = -1.2;
-      return;
-    }
-    unperch();
-  }
-  mv.set(0, 0, 0);
-  if (!anyOverlay()) {
-    if (keys.has('w') || keys.has('arrowup')) mv.add(UP);
-    if (keys.has('s') || keys.has('arrowdown')) mv.sub(UP);
-    if (keys.has('d') || keys.has('arrowright')) mv.add(RIGHT);
-    if (keys.has('a') || keys.has('arrowleft')) mv.sub(RIGHT);
-  }
-  if (mv.lengthSq()) { ctx.walkTo = null; ctx.arrive = null; ctx.waypoints = []; mv.normalize(); }
-  else if (ctx.walkTo) {
-    mv.subVectors(ctx.walkTo, me.position).setY(0);
-    const gap = mv.length();
-    // a seat is entered only from its stand point, so the last step onto it never overshoots: within one step the visitor lands on it
-    if (ctx.arrive === 'seat' && !ctx.waypoints.length && gap <= 2.4 * dt) { me.position.x = ctx.walkTo.x; me.position.z = ctx.walkTo.z; mv.set(0, 0, 0); return arrived(); }
-    if (gap < (ctx.waypoints.length ? 0.2 : 0.08)) { mv.set(0, 0, 0); return arrived(); }
-    mv.normalize();
-  }
-  const moving = mv.lengthSq() > 0;
-  if (moving) {
-    const before = me.position.clone();
-    me.position.addScaledVector(mv, 2.4 * dt); collide(me.position);
-    if (ctx.walkTo && me.position.distanceTo(before) < 0.2 * 2.4 * dt) {
-      if (ctx.waypoints.length) return arrived();
-      if ((ctx.arrive === 'sit' && nearTable()) || (ctx.arrive === 'sort' && nearShelf()) || (ctx.arrive === 'door' && nearDoor()) || (ctx.arrive === 'book' && nearBook())) return arrived();
-      ctx.walkTo = null; ctx.arrive = null;
-    }
-    const want = Math.atan2(mv.x, mv.z);
-    let dr = want - me.rotation.y; dr = Math.atan2(Math.sin(dr), Math.cos(dr));
-    me.rotation.y += dr * Math.min(1, dt * 12);
-    walkPhase += dt * 11;
-  } else walkPhase = 0;
-  const swing = Math.sin(walkPhase) * 0.6;
-  legL.rotation.x = swing; legR.rotation.x = -swing;
-  me.position.y = moving ? Math.abs(Math.sin(walkPhase)) * 0.04 : 0;
-  setHint(nearTable() ? 'near' : nearShelf() ? 'nearShelf' : nearDoor() ? 'nearDoor' : nearBook() ? 'nearBook' : 'room');
-}
+setupInput(ctx);
+setupPath(ctx);
 // ====================================================================================
 // 8. Loop
 // ====================================================================================
