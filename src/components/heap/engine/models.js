@@ -15,6 +15,7 @@ export function setupModels(ctx) {
   //   tint  (기본 true) 재질 이름으로 방 팔레트에 물들인다. false 면 파일의 색을 그대로 둔다
   const MODEL_BASE = opts.modelBase ?? dataBase.replace(/[^/]+\/$/, 'models/');
   const MODEL_SCALE = 2.0; // 키트는 타일 하나에 단위 1쯤으로 만들어져, 이 방의 절반 크기다
+  const scaleOf = entry => MODEL_SCALE * (entry.scale ?? 1); // 카탈로그 항목의 scale(예: 크리스마스 키트 0.4~0.64)을 곱한 실제 배율
   const darkAccent = '#' + new THREE.Color(C.accent).multiplyScalar(0.55).getHexString();
   // material name → colour. A name that is missing here (glass) is left alone. This is the base look of every model.
   // 나무는 손으로 만든 탁자의 두 갈색(상판과 다리)을 받아, 나무 틀이 천과 구분되어 보인다. 천은 강조색이다.
@@ -41,10 +42,10 @@ export function setupModels(ctx) {
       root.traverse(o => { if (o.isMesh) { KEPT.add(o.geometry); for (const m of [].concat(o.material)) KEPT.add(m); } });
       const bb = new THREE.Box3().setFromObject(root, true), mid = bb.getCenter(new THREE.Vector3());
       root.position.set(-mid.x, -bb.min.y, -mid.z); // 파일의 노드 변환은 그대로 두고 모델 전체를 옮긴다
-      return { root, entry, size: bb.getSize(new THREE.Vector3()).multiplyScalar(MODEL_SCALE) };
+      return { root, entry, size: bb.getSize(new THREE.Vector3()).multiplyScalar(scaleOf(entry)) };
     })().catch(e => { if (!ctx.disposed) console.error('[heap-room]', e); return null; }));
     return MODELS.get(id);
   }
 
-  Object.assign(ctx, { loadModel, TINT, MODEL_SCALE, KEPT, getCatalogue });
+  Object.assign(ctx, { loadModel, TINT, MODEL_SCALE, scaleOf, KEPT, getCatalogue });
 }

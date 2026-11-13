@@ -116,7 +116,7 @@ export function setupFurniture(ctx) {
         o.castShadow = !rug && !o.material.transparent; o.receiveShadow = true;
       });
       const hold = new THREE.Group();
-      hold.scale.setScalar(ctx.MODEL_SCALE); hold.position.y = (it.y || 0) + (rug ? 0.012 : 0); // 러그는 바닥 바로 위에 눕혀 둘이 깜박이지 않게 한다
+      hold.scale.setScalar(ctx.scaleOf(m.entry)); hold.position.y = (it.y || 0) + (rug ? 0.012 : 0); // 러그는 바닥 바로 위에 눕혀 둘이 깜박이지 않게 한다
       hold.add(inst); g.add(hold);
       if (it.fn?.kind === 'keepsake') ctx.keepsakeObject(g, it, build, 'standee', 0, (it.y || 0) + m.size.y, 0); // 선반 같은 가구 위에
       else if (it.fn && ['pc', 'music', 'latest'].includes(it.fn.kind)) { // 모델 전체가 버튼이다. 기능이 달린 TV 는 그려 넣은 화면도 갖는다
@@ -156,7 +156,7 @@ export function setupFurniture(ctx) {
   function addSeats(build, g, it, m, rule, inst) {
     g.updateMatrixWorld(true);
     const w = m.size.x, d = m.size.z, floor = !!rule.floor;
-    const top = (it.y || 0) + (floor ? 0.012 : 0) + (m.entry.seatY != null ? m.entry.seatY * ctx.MODEL_SCALE : m.size.y * rule.top);
+    const top = (it.y || 0) + (floor ? 0.012 : 0) + (m.entry.seatY != null ? m.entry.seatY * ctx.scaleOf(m.entry) : m.size.y * rule.top);
     const kx = floor ? Math.max(1, Math.floor(w)) : rule.per ? Math.max(1, Math.round(w / rule.per)) : 1, kz = floor ? Math.max(1, Math.floor(d)) : 1;
     const kind = floor ? 'floor' : rule.per ? 'sofa' : 'chair', yaw = THREE.MathUtils.degToRad(it.rot || 0), index = build.items.indexOf(it), seats = [];
     for (let i = 0; i < kx; i++) for (let j = 0; j < kz; j++) {

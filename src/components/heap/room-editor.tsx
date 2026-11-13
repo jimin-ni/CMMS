@@ -90,6 +90,7 @@ const GROUPS = [
   { label: "러그", cats: ["rug"] },
   { label: "화면", cats: ["screen"] },
   { label: "소품", cats: ["decor"] },
+  { label: "크리스마스", cats: ["크리스마스"] },
 ];
 const KNOWN = GROUPS.flatMap((g) => g.cats);
 
