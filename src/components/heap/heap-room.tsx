@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { addGuestbookAction, recordVisitAction } from "@/lib/heap/actions";
+import { itemHalfExtents, itemPlacementError } from "@/lib/heap/layout";
 import { HEAP_POLICY } from "@/lib/heap/policy";
 import { parsePieceUrl } from "@/lib/heap/platform";
 import { isEmailAddress, isSafeLink, isWebLink, parseMusicUrl } from "@/lib/heap/slots";
@@ -60,7 +61,7 @@ export function HeapRoom({
   const [editing, setEditing] = useState(false);
   const closeEditor = useCallback(() => setEditing(false), []);
 
-  // 꾸미기 패널이 열리고 닫힐 때 엔진에 알린다. 패널이 음악 플레이어 자리를 차지하므로 열리면 음악이 멈춘다.
+  // 꾸미기가 열리고 닫힐 때 엔진에 알린다. 엔진은 편집 모드로 들어가고(engine/edit.js) 음악을 멈춘다.
   useEffect(() => {
     rootRef.current?.dispatchEvent(new CustomEvent("heap:edit", { detail: editing }));
   }, [editing]);
@@ -95,6 +96,10 @@ export function HeapRoom({
         isSafeLink,
         isWebLink,
         isEmail: isEmailAddress,
+        // 꾸미기(engine/edit.js)가 옮기는 동안 쓰는 서버의 자리 규칙: 바닥 크기, 자리 검사(서버와 같은 문구), 액자 높이와 벽 여백
+        itemHalfExtents,
+        placementError: itemPlacementError,
+        policy: HEAP_POLICY,
         recordVisit: () => recordVisitAction(data.roomUuid),
         addGuestbook: (name: string) => addGuestbookAction(data.roomUuid, name),
         // 원본의 hash + reload 자리. 이동하면 이 방의 effect가 정리되면서 엔진이 dispose된다.
@@ -154,7 +159,7 @@ export function HeapRoom({
         </div>
       </div>
       <p id="toast" />
-      {editing && <RoomEditor rootRef={rootRef} roomUuid={data.roomUuid} onClose={closeEditor} />}
+      {editing && <RoomEditor rootRef={rootRef} roomUuid={data.roomUuid} roomName={data.name} onClose={closeEditor} />}
 
       <div id="player" hidden>
         <div className="player-bar">

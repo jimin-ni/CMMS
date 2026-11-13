@@ -70,9 +70,8 @@
 .heap-room #player-note[hidden] { display: none; }
 
 /* 음악 플레이어: 방 오른쪽 위, 방 이름의 반대편. 안에 영상 말고는 아무것도 겹치지 않는다.
-   --music-w(엔진이 정한 영상 폭)가 있는 동안 오버레이와 방 이름 줄과 토스트는 이 자리를 비켜 간다. 꾸미기 패널이 열려 있으면 그 왼쪽에 붙는다. */
+   --music-w(엔진이 정한 영상 폭)가 있는 동안 오버레이와 방 이름 줄과 토스트는 이 자리를 비켜 간다. 꾸미기 중에는 음악이 멈춘다. */
 .heap-room { --music-right: 16px; }
-.heap-room.editing { --music-right: calc(var(--editor-w) + 16px); }
 .heap-room #music { position: absolute; top: 16px; right: var(--music-right); z-index: 2; display: flex; flex-direction: column; gap: 8px; padding: 8px; border-radius: 12px; background: rgba(47, 44, 36, 0.78); }
 .heap-room #music[hidden] { display: none; }
 .heap-room #music-frame { background: #000; }
@@ -135,44 +134,64 @@
 .heap-room #status { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; font-family: var(--hand); font-size: 28px; color: var(--paper-dim); pointer-events: none; }
 .heap-room #status[hidden] { display: none; }
 
-/* 꾸미기 (room-editor.tsx): the panel docks to the right edge. While it is open (.editing) the scene and the HUD keep what is left
-   of the room area, so the whole room stays in view beside the panel. The engine follows the canvas's size. */
-.heap-room { --editor-w: 360px; }
-.heap-room.editing #scene { width: calc(100% - var(--editor-w)); }
-.heap-room.editing .hud { right: var(--editor-w); }
-.heap-room.editing #toast { left: calc(50% - var(--editor-w) / 2); }
-.heap-room .room-editor { position: absolute; top: 0; right: 0; bottom: 0; width: var(--editor-w); max-width: 100%; max-height: none; border-radius: 0; }
-.heap-room .room-editor .panel-body { flex: 1 1 0; min-height: 0; }
-.heap-room .room-editor .row { justify-content: flex-start; }
-.heap-room .room-editor .btn:disabled { opacity: 0.45; cursor: default; }
+/* 꾸미기 (room-editor.tsx, engine/edit.js): 위 막대와 아래 가구 목록 사이에 방이 그대로 보인다. 캔버스가 그 사이로 줄고, 엔진은 캔버스 크기를 따른다.
+   방 위의 것: 고른 가구 위의 막대(#ed-bar, 엔진이 left/top 을 정한다), 커서 옆의 이유 칩(#ed-why, 엔진이 채운다), 알림, 안내, 기능 시트. */
+.heap-room { --ed-top: 52px; --ed-dock: 150px; }
+.heap-room.editing #scene { top: var(--ed-top); height: calc(100% - var(--ed-top) - var(--ed-dock)); }
+.heap-room.editing .hud, .heap-room.editing #toast { display: none; }
 .heap-room .btn.small { font-size: 12px; padding: 6px 11px; }
-.heap-room .ed-foot { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-top: 1px dashed rgba(86, 83, 68, 0.25); }
-/* the plan: back wall on top, left wall on the left (the two sides that have a wall); the open sides are dashed */
-.heap-room .ed-walls { border: 1px dashed rgba(86, 83, 68, 0.35); border-top: 4px solid var(--olive); border-left: 4px solid var(--olive); }
-.heap-room .ed-plan {
-  position: relative; background-color: #fff8ec;
-  /* hairlines every 0.5 unit; room-editor.tsx sets background-size to that step */
-  background-image: linear-gradient(to right, rgba(86, 83, 68, 0.14) 1px, transparent 1px), linear-gradient(to bottom, rgba(86, 83, 68, 0.14) 1px, transparent 1px);
+.heap-room .btn:disabled { opacity: 0.45; cursor: default; }
+.heap-room .ed-top {
+  position: absolute; top: 0; left: 0; right: 0; height: var(--ed-top); box-sizing: border-box; z-index: 3;
+  display: flex; align-items: center; gap: 8px; padding: 0 12px; overflow-x: auto;
+  background: var(--paper); color: var(--ink); border-bottom: 2px solid var(--olive);
 }
-.heap-room .ed-mark { position: absolute; font-size: 10px; line-height: 1; color: rgba(47, 44, 36, 0.62); pointer-events: none; }
-.heap-room .ed-mark.back { top: -4px; border-top: 4px solid; padding-top: 2px; text-align: center; }
-.heap-room .ed-mark.left { left: -4px; border-left: 4px solid; padding-left: 3px; display: flex; align-items: center; }
-.heap-room .ed-mark.door { border-color: var(--clay); }
-.heap-room .ed-mark.window { border-color: var(--paper); }
-.heap-room .ed-table { position: absolute; display: grid; place-items: center; background: #b9b4a8; color: var(--ink); font-size: 10px; pointer-events: none; }
-.heap-room .ed-item {
-  position: absolute; transform: translate(-50%, -50%); box-sizing: border-box; min-width: 12px; min-height: 12px; margin: 0; padding: 0;
-  display: grid; place-items: center; border: 1px solid var(--olive); border-radius: 0; background: rgba(243, 234, 219, 0.85);
-  color: var(--ink); font: 10px var(--ui); white-space: nowrap; cursor: pointer;
+.heap-room .ed-top > * { flex: none; }
+.heap-room .ed-top b { font-size: 15px; }
+.heap-room .ed-room { font-family: var(--hand); font-size: 26px; line-height: 1; color: var(--clay); margin-right: 6px; }
+.heap-room .ed-top .ed-sp { flex: 1 1 0; }
+.heap-room .ed-save { font-size: 13px; color: rgba(47, 44, 36, 0.62); }
+.heap-room .ed-save.dirty { color: var(--clay); font-weight: 600; }
+.heap-room .ed-leave { position: absolute; top: calc(var(--ed-top) + 8px); right: 12px; width: min(300px, calc(100% - 24px)); z-index: 7; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3); }
+.heap-room .ed-leave .row, .heap-room .ed-sheet .row { justify-content: flex-start; }
+.heap-room .ed-dock {
+  position: absolute; left: 0; right: 0; bottom: 0; height: var(--ed-dock); box-sizing: border-box; z-index: 3;
+  display: flex; flex-direction: column; background: var(--paper); color: var(--ink); border-top: 2px solid var(--olive);
 }
-.heap-room .ed-item.rug { background: rgba(243, 234, 219, 0.4); }
-.heap-room .ed-item.sel { outline: 3px solid var(--clay); outline-offset: -1px; }
-.heap-room .ed-item:focus-visible { outline: 3px solid var(--ink); outline-offset: -1px; }
-.heap-room .ed-plan.arming { cursor: copy; }
-.heap-room .ed-plan.arming .ed-item { pointer-events: none; }
-.heap-room .ed-pick { font: 600 13px var(--ui); color: var(--ink); background: none; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 999px; padding: 5px 10px; cursor: pointer; }
-.heap-room .ed-pick[aria-pressed="true"] { border-color: var(--clay); color: var(--clay); }
-.heap-room .ed-pick:focus-visible { outline: 2px solid var(--clay); outline-offset: 1px; }
+.heap-room .ed-dock.drop::after {
+  content: "여기에 놓으면 넣어 둬요"; position: absolute; inset: 0; display: grid; place-items: center;
+  font: 600 18px var(--ui); color: #a23a2a; background: rgba(246, 217, 204, 0.92);
+}
+.heap-room .ed-tabs { flex: none; display: flex; align-items: center; gap: 4px; padding: 6px 10px 0; overflow-x: auto; }
+.heap-room .ed-tab { flex: none; font: 600 13px var(--ui); color: rgba(47, 44, 36, 0.7); background: none; border: 0; border-radius: 8px 8px 0 0; padding: 5px 11px; cursor: pointer; white-space: nowrap; }
+.heap-room .ed-tab[aria-selected="true"] { background: var(--olive); color: var(--paper); }
+.heap-room .ed-tab:focus-visible, .heap-room .ed-tile:focus-visible { outline: 2px solid var(--clay); outline-offset: 1px; }
+.heap-room .ed-credit { margin-left: auto; padding-left: 12px; font-size: 12px; color: rgba(47, 44, 36, 0.62); white-space: nowrap; }
+.heap-room .ed-strip { flex: 1 1 0; min-height: 0; display: flex; align-items: flex-start; gap: 6px; padding: 8px 10px; overflow-x: auto; overflow-y: hidden; border-top: 2px solid var(--olive); }
+.heap-room .ed-tile {
+  flex: none; width: 86px; height: 72px; box-sizing: border-box; padding: 6px; display: grid; place-items: center; text-align: center; word-break: keep-all;
+  font: 600 12.5px var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 10px; cursor: pointer;
+}
+.heap-room .ed-tile:hover { border-color: var(--clay); }
+.heap-room .ed-tile[aria-pressed="true"] { border: 2px solid var(--clay); color: var(--clay); }
+.heap-room .ed-bar {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, calc(-100% - 10px)); z-index: 4;
+  display: flex; align-items: center; gap: 4px; padding: 4px; border-radius: 10px; background: var(--ink); white-space: nowrap;
+}
+.heap-room .ed-bar .lbl { font-size: 12px; color: var(--paper-dim); padding: 0 6px 0 4px; }
+.heap-room .ed-bar button { font: 600 13px var(--ui); color: var(--paper); background: #4a4338; border: 0; border-radius: 7px; padding: 5px 10px; cursor: pointer; }
+.heap-room .ed-bar button:hover, .heap-room .ed-bar button.fn { background: var(--clay); }
+.heap-room .ed-bar button:focus-visible { outline: 2px solid var(--paper); outline-offset: 1px; }
+.heap-room .ed-why { position: absolute; z-index: 5; padding: 3px 9px; border-radius: 8px; background: #c2452d; color: #fff; font: 600 13px var(--ui); white-space: nowrap; pointer-events: none; }
+.heap-room .ed-why[hidden] { display: none; }
+.heap-room .ed-hint { position: absolute; left: 50%; bottom: calc(var(--ed-dock) + 10px); transform: translateX(-50%); z-index: 2; margin: 0; max-width: calc(100% - 32px); padding: 4px 14px; border-radius: 999px; background: rgba(47, 44, 36, 0.82); color: var(--paper); font-size: 12.5px; text-align: center; pointer-events: none; }
+.heap-room .ed-toast {
+  position: absolute; left: 50%; bottom: calc(var(--ed-dock) + 46px); transform: translateX(-50%); z-index: 6;
+  display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 14px; border-radius: 10px; background: var(--ink); color: var(--paper); font-size: 14px; white-space: nowrap;
+}
+.heap-room .ed-toast button { font: 600 13px var(--ui); color: var(--paper); background: var(--clay); border: 0; border-radius: 7px; padding: 4px 10px; cursor: pointer; }
+.heap-room .ed-sheet { position: absolute; top: calc(var(--ed-top) + 12px); right: 12px; bottom: calc(var(--ed-dock) + 12px); width: min(340px, calc(100% - 24px)); max-height: none; z-index: 5; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3); }
+.heap-room .ed-sheet .panel-body { flex: 1 1 0; min-height: 0; }
 /* 꾸미기: 고른 가구에 기능을 달아 내용을 적는 칸 */
 .heap-room .ed-fn { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px dashed rgba(86, 83, 68, 0.25); }
 .heap-room .ed-fn b { font-size: 13px; }

@@ -100,6 +100,6 @@ export function setupProps(ctx) {
 
   Object.assign(ctx, {
     PROJ, MUG, PHONE, TABLE, drawProjection, SEAT, SCREEN_C, SCR, screen, screenOn, screenIdle,
-    projParts, phoneParts, tableTop, bookParts, beamMat, projLight, reelA, reelB, phoneDot, SLOT,
+    projParts, phoneParts, tableTop, bookParts, beamMat, projLight, reelA, reelB, phoneDot, SLOT, GB,
   });
 }
