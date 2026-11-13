@@ -4,8 +4,11 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createContext } from './context.js';
-import { paper, drawFit, NO_PHOTO, wrap, crayon, ring, flat, cropToShape } from './draw.js';
-import { ytShort, ksDay, seoulDay, viewsNum, ytUrl, fmtDay } from './format.js';
+import { setupData } from './data.js';
+import { setupHud } from './hud.js';
+import { setupCardArt } from './card-art.js';
+import { flat, paper, wrap, drawFit, NO_PHOTO, cropToShape } from './draw.js';
+import { ksDay, seoulDay, viewsNum, ytUrl, fmtDay } from './format.js';
 import { el, link, shortUrl } from './dom.js';
 import { mulberry32, thumbUrl, disposeScene } from './util.js';
 
@@ -35,204 +38,13 @@ const { ac, cleanups, dataBase, prevTitle, $, on } = ctx;
 
 async function run() {
 const { rand, gauss } = ctx;
-// ====================================================================================
-// 1. Room data: the database part arrives in opts.data (rooms, layout, reels, pieces, guestbook, visits, creatorVisit).
-//    <dataBase><id>/creator.json (links, albums, linktree, phoneTitle) is still a static file.
-// ====================================================================================
-const getJSON = async p => { const r = await fetch(p, { signal: ac.signal }); if (!r.ok) throw new Error(`${p}: ${r.status}`); return r.json(); };
-const DATA = opts.data;
-const ROOMS = DATA.rooms;
-const roomId = opts.roomId;
-const BASE = `${dataBase}${roomId}/`;
-// creator.json holds links and albums. A room without one (404) falls back to no links, no albums; the title is always the room's own name (heap_rooms.name).
-let creatorJson = {};
-{
-  const r = await fetch(BASE + 'creator.json', { signal: ac.signal });
-  if (r.ok) creatorJson = await r.json(); else if (r.status !== 404) throw new Error(`${BASE}creator.json: ${r.status}`);
-}
-const creator = { links: [], albums: [], linktree: null, ...creatorJson, name: DATA.name, phoneTitle: creatorJson.phoneTitle || DATA.name };
-// creator.json is a static file. Only links that pass the server's checks reach the page: an absolute http(s) address with a host, or a mailto to one recipient, or an email address. The rest are dropped.
-creator.links = (Array.isArray(creator.links) ? creator.links : []).flatMap(L => {
-  if (!L || typeof L.title !== 'string') return [];
-  if (L.email != null) return L.url == null && opts.isEmail(L.email) ? [{ title: L.title, email: L.email }] : [];
-  return opts.isSafeLink(L.url) ? [{ title: L.title, url: L.url }] : [];
-});
-creator.linktree = opts.isWebLink(creator.linktree) ? creator.linktree : null;
-const layout = structuredClone(DATA.layout);
+await setupData(ctx);
+const { C, layout, ALBUMS, reels, getJSON, fanReels, creator, DATA, fanReelOf, ROOMS, roomId, filed, albumName } = ctx;
 if (ctx.disposed) return;
-const DEFAULT_PALETTE = {
-  olive: '#565344', accent: '#A6613C', paper: '#F3EADB', ink: '#2f2c24',
-  wall: '#EADCC4', trim: '#565344', floor: ['#9a6a43', '#8b5d3a', '#a7774d'], woodB: '#8b5d3a', woodDark: '#6e4a30',
-  leaf: '#6f7d4f', leaf2: '#87925f', leafDark: '#556240',
-};
-const C = { ...DEFAULT_PALETTE, ...(layout.palette || {}) };
-root.style.setProperty('--clay', C.accent);
-document.title = ctx.roomTitle = `${creator.name} Miniroom`;
-$('cname').textContent = creator.name;
-$('avatar').textContent = Array.from(creator.name)[0] ?? '';
-$('phone-title').textContent = creator.phoneTitle || creator.name;
-$('phone-sub').textContent = '버블';
-const ALBUMS = creator.albums.map(a => ({ ...a, re: a.match ? new RegExp(a.match, 'i') : null }));
-const albumName = k => ALBUMS.find(a => a.key === k)?.name ?? k;
-function goldOf(r) { // album is certain from the channel or exactly one title rule; anything else is open for votes
-  const byChannel = ALBUMS.find(a => a.channel && a.channel === r.channel);
-  if (byChannel) return byChannel.key;
-  const m = ALBUMS.filter(a => a.re && a.re.test(r.title || ''));
-  return m.length === 1 ? m[0].key : null;
-}
-/* draw: lib */
-// 꾸미기 (room-editor.tsx, through the hooks in section 6): ORIGINAL is the layout as last saved in the database (the page's, or the one the editor just saved via heap:saved).
-// It is the editor's 처음으로 target. BASE_LAYOUT is the whole stored layout; the editor merges its items, time and room into it when it saves.
-ctx.baseLayout = structuredClone(DATA.layout);
-ctx.original = { items: (layout.items || []).map(it => ({ ...it })), time: layout.time ?? 'auto' };
-// ---------- reels ----------
-// A reel carries its linked channel's title (heap_creator_channels); the card back shows it and album rules with `channel` match it.
-// Reels with no linked channel fall back to the creator's name, so a `channel` album rule finds nothing for them (title rules still work).
-const raw = DATA.reels;
-const reels = raw.map(r => ({ ...r, channel: r.channel || creator.name }));
-reels.forEach((r, i) => { r.age = reels.length > 1 ? 1 - i / (reels.length - 1) : 0; r.seed = Math.floor(rand() * 1e9); r.gold = goldOf(r); });
-const nShorts = raw.filter(r => !r.wide).length, nWide = raw.length - nShorts;
-/* format: lib */
-ctx.visits = { today: DATA.visits.today, total: DATA.visits.total };
-const metaBase = nWide ? `쇼츠 ${nShorts} · 영상 ${nWide}` : `쇼츠 ${nShorts}`;
-function renderMeta() { $('meta').textContent = `${metaBase} · TODAY ${ctx.visits.today} · TOTAL ${ctx.visits.total.toLocaleString('ko-KR')}` + (opts.viewerName ? ` · ${opts.viewerName}` : ''); }
-renderMeta();
-// 다녀감: the day the creator last came by, "2026.11.12" (Asia/Seoul), or null. From heap_rooms.creator_visited_at.
-ctx.creatorDay = typeof DATA.creatorVisit === 'string' && /^\d{4}\.\d{1,2}\.\d{1,2}$/.test(DATA.creatorVisit) ? DATA.creatorVisit : null;
-function creatorVisit() { return ctx.creatorDay; }
-function renderCreatorVisit() { if (ctx.creatorDay) { $('visit').textContent = `주인 다녀감 ${ctx.creatorDay.split('.').slice(1).join('.')}`; $('visit').hidden = false; } }
-renderCreatorVisit();
-const fanReelOf = (p, i) => ({ ...p, kind: 'fan', wide: false, title: p.caption, channel: p.by, views: '', age: 0.05, seed: 7000 + i * 131 });
-const fanReels = (DATA.pieces || []).map(fanReelOf);
-const filed = new Map(); // reel id → { album }: only cards whose album is certain from the title or channel
-for (const r of reels) if (r.gold) filed.set(r.id, { album: r.gold });
-// ====================================================================================
-// 2. Card textures
-// ====================================================================================
-const PX = 340, PXB = 220, S = 0.26;
-const DIMS = {
-  tall: { CW: 1, B: 0.06, PW: 0.88, PH: 0.88 * 16 / 9, STRIP: 0.30 },
-  wide: { CW: 1.5, B: 0.05, PW: 1.4, PH: 1.4 * 9 / 16, STRIP: 0.27 },
-};
-for (const d of Object.values(DIMS)) { d.CH = d.B + d.PH + d.STRIP; d.w = d.CW * S; d.h = d.CH * S; d.geo = new THREE.PlaneGeometry(d.w, d.h); }
-// Passing a card's own canvas repaints it in place: the seed makes the frame and caption come out the same, only the photo changes.
-function drawCard(reel, img, c = document.createElement('canvas')) {
-  const d = reel.wide ? DIMS.wide : DIMS.tall, r = mulberry32(reel.seed), age = reel.age;
-  const W = Math.round(d.CW * PX), H = Math.round(d.CH * PX);
-  c.width = W; c.height = H;
-  const g = c.getContext('2d');
-  paper(g, W, H, r, age);
-  const x0 = d.B * PX, y0 = d.B * PX, w = d.PW * PX, h = d.PH * PX;
-  g.save(); g.beginPath(); g.rect(x0, y0, w, h); g.clip();
-  if (img) drawFit(g, img, x0, y0, w, h, true); else { g.fillStyle = NO_PHOTO; g.fillRect(x0, y0, w, h); }
-  g.fillStyle = `rgba(214, 170, 120, ${0.04 + age * 0.12})`; g.fillRect(x0, y0, w, h);
-  const sh = g.createLinearGradient(0, y0 + h * 0.78, 0, y0 + h);
-  sh.addColorStop(0, 'rgba(0,0,0,0)'); sh.addColorStop(1, 'rgba(0,0,0,0.45)');
-  g.fillStyle = sh; g.fillRect(x0, y0 + h * 0.78, w, h * 0.22);
-  const fs = Math.round(Math.min(w, h * 0.6) * 0.075), tx = x0 + fs * 0.8, ty = y0 + h - fs * 0.8;
-  g.fillStyle = 'rgba(255,255,255,0.95)';
-  g.beginPath(); g.moveTo(tx, ty - fs * 0.8); g.lineTo(tx + fs * 0.62, ty - fs * 0.42); g.lineTo(tx, ty - fs * 0.04); g.closePath(); g.fill();
-  g.font = `600 ${fs}px "IBM Plex Sans KR", system-ui, sans-serif`; g.textBaseline = 'alphabetic';
-  g.fillText(reel.views || '', tx + fs * 0.9, ty);
-  g.restore();
-  g.strokeStyle = 'rgba(0,0,0,0.18)'; g.lineWidth = 1; g.strokeRect(x0 + 0.5, y0 + 0.5, w - 1, h - 1);
-  const sy = (d.B + d.PH) * PX, maxW = W * 0.84, room = d.STRIP * PX * 0.8;
-  g.save(); g.translate(W * 0.08, sy + d.STRIP * PX * 0.12); g.rotate((r() - 0.5) * 0.04);
-  g.fillStyle = `rgba(86, 83, 68, ${0.95 - age * 0.25})`; g.textBaseline = 'top';
-  let size = Math.round(PX * 0.09), lines;
-  for (;;) {
-    g.font = `${size}px "Nanum Pen Script", cursive`;
-    lines = wrap(g, reel.title || '', maxW);
-    if (lines.length * size * 1.05 <= room || size < 16) break;
-    size -= 2;
-  }
-  lines.slice(0, Math.floor(room / (size * 1.05)) || 1).forEach((l, i) => g.fillText(l, 0, i * size * 1.05));
-  g.restore();
-  return c;
-}
-function drawBack(reel) {
-  const d = reel.wide ? DIMS.wide : DIMS.tall, r = mulberry32(reel.seed + 7);
-  const W = Math.round(d.CW * PXB), H = Math.round(d.CH * PXB);
-  const c = document.createElement('canvas'); c.width = W; c.height = H;
-  const g = c.getContext('2d');
-  paper(g, W, H, r, reel.age * 0.6);
-  const pad = W * 0.09, maxW = W - pad * 2;
-  g.textBaseline = 'top';
-  g.fillStyle = C.accent; g.font = `${Math.round(PXB * 0.1)}px "Nanum Pen Script", cursive`;
-  g.fillText(reel.channel, pad, pad);
-  g.fillStyle = 'rgba(86, 83, 68, 0.95)';
-  let size = Math.round(PXB * 0.095), y = pad + PXB * 0.15, lines;
-  const room = H * (reel.wide ? 0.42 : 0.5);
-  for (;;) { g.font = `${size}px "Nanum Pen Script", cursive`; lines = wrap(g, reel.title || '', maxW); if (lines.length * size * 1.05 <= room || size < 12) break; size -= 1; }
-  lines.forEach((l, i) => g.fillText(l, pad, y + i * size * 1.05));
-  y += lines.length * size * 1.05 + PXB * 0.04;
-  g.font = `${Math.round(PXB * 0.08)}px "Nanum Pen Script", cursive`;
-  g.fillText(`조회수 ${reel.views || '-'}${reel.published ? ' · ' + reel.published : ''}`, pad, y);
-  g.strokeStyle = 'rgba(86, 83, 68, 0.35)'; g.beginPath(); g.moveTo(pad, H - pad * 2.4); g.lineTo(W - pad, H - pad * 2.4); g.stroke();
-  g.fillStyle = 'rgba(86, 83, 68, 0.85)'; g.font = `600 ${Math.max(9, Math.round(PXB * 0.042))}px "IBM Plex Sans KR", sans-serif`;
-  ['원본 · ' + ytShort(reel).split('/')[0] + '/', ytShort(reel).split('/').slice(1).join('/')].forEach((l, i) => g.fillText(l, pad, H - pad * 2.1 + i * PXB * 0.05));
-  g.save(); g.translate(W - pad - PXB * 0.09, H - pad * 1.6); g.rotate(-0.25);
-  g.strokeStyle = C.accent; g.lineWidth = 2; g.beginPath(); g.arc(0, 0, PXB * 0.075, 0, Math.PI * 2); g.stroke();
-  g.fillStyle = C.accent; g.font = `600 ${Math.round(PXB * 0.045)}px "IBM Plex Sans KR", sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.fillText('출처', 0, 0); g.restore();
-  return c;
-}
-function drawFanFront(p) {
-  const d = DIMS.tall, r = mulberry32(p.seed);
-  const W = Math.round(d.CW * PX), H = Math.round(d.CH * PX);
-  const c = document.createElement('canvas'); c.width = W; c.height = H;
-  const g = c.getContext('2d');
-  paper(g, W, H, r, 0);
-  const x0 = d.B * PX, y0 = d.B * PX, w = d.PW * PX, h = d.PH * PX, cx = x0 + w / 2, cy = y0 + h * 0.42, s = w * 0.36;
-  g.fillStyle = '#fbf5e8'; g.fillRect(x0, y0, w, h);
-  for (let i = 0; i < 18; i++) crayon(g, [[x0 + r() * w, y0 + h * 0.85 + r() * h * 0.12], [x0 + r() * w, y0 + h * 0.85 + r() * h * 0.12]], '#9fbf7a', 6, r);
-  const M = p.motif;
-  if (M === 'heart') {
-    const pts = Array.from({ length: 30 }, (_, i) => { const t = i / 30 * Math.PI * 2; return [cx + s * 0.06 * 16 * Math.sin(t) ** 3, cy - s * 0.06 * (13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t))]; });
-    crayon(g, pts, '#d9534f', 9, r, true);
-    for (let i = 0; i < 40; i++) { const [a, b] = pts[Math.floor(r() * pts.length)]; crayon(g, [[a, b], [cx + (a - cx) * 0.2, cy + (b - cy) * 0.2]], '#e8837f', 7, r); }
-  } else if (M === 'magnet') {
-    crayon(g, [[cx - s, cy - s * 0.6], [cx + s, cy - s * 0.6], [cx + s, cy + s * 0.6], [cx - s, cy + s * 0.6]], C.accent, 10, r, true);
-    g.fillStyle = C.accent; g.font = `${Math.round(s * 0.42)}px "Nanum Pen Script", cursive`; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText(creator.name, cx, cy);
-    crayon(g, [[cx - s * 0.9, cy - s * 0.85], [cx + s * 0.9, cy - s * 0.85]], '#888', 5, r);
-  } else if (M === 'face') {
-    crayon(g, ring(cx, cy, s * 0.75, s * 0.85), '#e0a37a', 8, r, true);
-    crayon(g, ring(cx, cy - s * 0.35, s * 0.85, s * 0.55, 16, a => (Math.sin(a) < 0 ? 1 : 0.2)), '#4a3328', 12, r);
-    crayon(g, [[cx - s * 0.3, cy], [cx - s * 0.22, cy]], '#333', 8, r); crayon(g, [[cx + s * 0.22, cy], [cx + s * 0.3, cy]], '#333', 8, r);
-    crayon(g, [[cx - s * 0.25, cy + s * 0.3], [cx, cy + s * 0.42], [cx + s * 0.25, cy + s * 0.3]], '#c0392b', 6, r);
-  } else if (M === 'block' || M === 'creeper') {
-    const col = M === 'creeper' ? '#5aa64a' : '#c79a4a';
-    crayon(g, [[cx - s * 0.8, cy - s * 0.8], [cx + s * 0.8, cy - s * 0.8], [cx + s * 0.8, cy + s * 0.8], [cx - s * 0.8, cy + s * 0.8]], col, 10, r, true);
-    for (let i = 0; i < 30; i++) { const y = cy - s * 0.75 + i * s * 0.05; crayon(g, [[cx - s * 0.75, y], [cx + s * 0.75, y]], col, 6, r); }
-    if (M === 'creeper') for (const [a, b, ww, hh] of [[-0.5, -0.4, 0.3, 0.3], [0.2, -0.4, 0.3, 0.3], [-0.15, 0, 0.3, 0.45], [-0.35, 0.2, 0.2, 0.4], [0.15, 0.2, 0.2, 0.4]]) { g.fillStyle = '#222'; g.fillRect(cx + a * s, cy + b * s, ww * s, hh * s); }
-    else { g.fillStyle = '#fff'; g.font = `${Math.round(s * 0.9)}px "Nanum Pen Script", cursive`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('?', cx, cy); }
-  } else {
-    crayon(g, [[cx, cy - s], [cx + s * 0.8, cy - s * 0.2], [cx, cy + s], [cx - s * 0.8, cy - s * 0.2]], '#4fb3c9', 10, r, true);
-    crayon(g, [[cx - s * 0.8, cy - s * 0.2], [cx + s * 0.8, cy - s * 0.2]], '#4fb3c9', 6, r);
-  }
-  g.fillStyle = 'rgba(86,83,68,0.85)'; g.font = `${Math.round(PX * 0.07)}px "Nanum Pen Script", cursive`; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
-  g.fillText(`${creator.name} ♥`, cx, y0 + h * 0.82);
-  g.strokeStyle = 'rgba(0,0,0,0.12)'; g.strokeRect(x0 + 0.5, y0 + 0.5, w - 1, h - 1);
-  const sy = (d.B + d.PH) * PX;
-  g.fillStyle = 'rgba(86, 83, 68, 0.95)'; g.textAlign = 'left'; g.textBaseline = 'top';
-  g.font = `${Math.round(PX * 0.085)}px "Nanum Pen Script", cursive`;
-  wrap(g, p.caption, W * 0.84).slice(0, 2).forEach((l, i) => g.fillText(l, W * 0.08, sy + d.STRIP * PX * 0.12 + i * PX * 0.09));
-  return c;
-}
-function drawFanBack(p) {
-  const d = DIMS.tall, r = mulberry32(p.seed + 7);
-  const W = Math.round(d.CW * PXB), H = Math.round(d.CH * PXB);
-  const c = document.createElement('canvas'); c.width = W; c.height = H;
-  const g = c.getContext('2d');
-  paper(g, W, H, r, 0);
-  const pad = W * 0.09; g.textBaseline = 'top';
-  g.fillStyle = C.accent; g.font = `${Math.round(PXB * 0.1)}px "Nanum Pen Script", cursive`; g.fillText('팬 작품', pad, pad);
-  g.fillStyle = 'rgba(86, 83, 68, 0.95)'; g.font = `${Math.round(PXB * 0.095)}px "Nanum Pen Script", cursive`;
-  let y = pad + PXB * 0.16;
-  for (const l of [`보낸 사람 · ${p.by}`, p.date, ...wrap(g, p.caption, W - pad * 2)]) { g.fillText(l, pad, y); y += PXB * 0.1; }
-  return c;
-}
+setupHud(ctx);
+const { setHint, syncUI, toast, creatorVisit, renderMeta, renderCreatorVisit } = ctx;
+setupCardArt(ctx);
+const { DIMS, drawFanFront, drawCard, drawFanBack, drawBack } = ctx;
 // ====================================================================================
 // 3. Renderer, lights, walls (built from layout)
 // ====================================================================================
@@ -1188,22 +1000,6 @@ ctx.mode = 'room'; ctx.camGoal = null; ctx.held = null; ctx.heldFlipped = false;
 ctx.walkTo = null; ctx.arrive = null; ctx.waypoints = [];
 ctx.perch = null; ctx.seatTarget = null; // perch: the seat the visitor sits on in room mode · seatTarget: the seat being walked to
 ctx.seatFrom = null; ctx.perchFrom = null; // the stand point the walk to seatTarget ends at · the stand point the visitor came to the perch from (they get up there)
-const hint = $('hint');
-const HINTS = {
-  room: '방향키·WASD 또는 바닥을 눌러 걷기 · 탁자, 책장, 문을 눌러 보세요',
-  near: 'E 또는 탁자를 눌러 앉기',
-  nearShelf: 'E 또는 책장을 눌러 앨범 정리하기',
-  nearDoor: 'E 또는 문을 눌러 다른 방으로',
-  sit: '사진을 눌러 집기 · 끌어서 옮기기 · 휴대폰을 눌러 버블 열기',
-  held: '사진을 눌러 뒤집기 · 영사기를 눌러 상영 · 바깥을 눌러 내려놓기',
-  drag: '원하는 곳에 놓으세요',
-  needcard: '사진을 먼저 집어 든 다음 영사기를 눌러 보세요',
-  watch: '상영 중 · 스크린을 눌러 다시 재생 · Esc로 사진 꺼내기',
-  shelf: '앨범을 눌러 안을 보기 · Esc로 물러나기',
-  nearBook: 'E 또는 방명록을 눌러 이름 남기기',
-  perch: '방향키·WASD 또는 바닥을 눌러 일어나기 · Esc로도 일어나요',
-};
-const setHint = k => { if (hint.dataset.k !== k) { hint.dataset.k = k; hint.textContent = HINTS[k]; } };
 const goTo = cam => { ctx.camGoal = cam; controls.enabled = false; };
 // Live room contents, for a creator's editor. Dispatch on the element given to mountRoom once the room is up (#status hidden):
 //   root.dispatchEvent(new CustomEvent('heap:items', { detail: itemsArray }))
@@ -1255,19 +1051,6 @@ ALBUMS.forEach((a, i) => {
   b.addEventListener('click', () => albumAction(a.key));
   $('albumrow').appendChild(b);
 });
-function syncUI() {
-  const seated = ctx.mode === 'sit' || ctx.mode === 'watch';
-  $('stand').hidden = !(seated || ctx.perch);
-  $('flip').hidden = !(ctx.mode === 'sit' && ctx.held);
-  const isFan = c => c?.userData.reel.kind === 'fan';
-  $('srclink').hidden = !(ctx.mode === 'sit' && ctx.held) || isFan(ctx.held);
-  if (ctx.held && !isFan(ctx.held)) $('srclink').href = ytUrl(ctx.held.userData.reel);
-  $('eject').hidden = ctx.mode !== 'watch';
-  $('ytlink').hidden = ctx.mode !== 'watch' || isFan(ctx.loaded);
-  $('sortexit').hidden = ctx.mode !== 'sort';
-  $('albumrow').hidden = ctx.mode !== 'sort';
-  root.dispatchEvent(new CustomEvent('heap:mode', { detail: ctx.mode })); // heap-room.tsx shows its 꾸미기 button in room mode only
-}
 function sit() {
   ctx.mode = 'sit'; ctx.walkTo = null; ctx.arrive = null; ctx.waypoints = []; ctx.perch = null;
   me.position.copy(SEAT); me.rotation.y = Math.PI;
@@ -1388,7 +1171,6 @@ on(document, 'securitypolicyviolation', e => {
   if (!player.hidden) { frameBox.innerHTML = ''; frameBox.style.width = frameBox.style.height = '0px'; note.hidden = false; }
   if (!dock.hidden) { dockFrame.replaceChildren(); layoutMusic(); }
 });
-/* dom: lib */
 const safeHref = u => (opts.isSafeLink(u) ? u : null); // the server checks layout links before saving; this is the same check on what the DOM gets
 // one link as a bubble: a titled link, or (L.email) the address with a copy button. The phone's fallback list and the PC panel share it.
 function linkBubble(L) {
@@ -1659,8 +1441,6 @@ function openAlbum(key) {
   $('grid').hidden = false;
 }
 on($('grid-close'), 'click', () => { $('grid').hidden = true; });
-ctx.toastTimer = 0;
-function toast(t) { $('toast').textContent = t; ctx.toastTimer = 2.2; }
 // ====================================================================================
 // 7. Input
 // ====================================================================================
