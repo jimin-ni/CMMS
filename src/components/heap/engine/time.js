@@ -26,7 +26,7 @@ export function setupTime(ctx) {
   const TIME_NAMES = { night: 1, dawn: 6, morning: 9, noon: 13, golden: 17.5, dusk: 19.5 };
   function toRGB(v) { return typeof v === 'string' ? [1, 3, 5].map(i => parseInt(v.slice(i, i + 2), 16)) : Array.isArray(v) ? v.map(toRGB) : v; }
   const mix = (a, b, t) => Array.isArray(a) ? a.map((x, i) => mix(x, b[i], t)) : a + (b - a) * t;
-  function timeAt(hour) { // the two neighbouring rows, eased; on a row's own hour the result is that row exactly
+  function timeAt(hour) { // 이웃한 두 줄을 부드럽게 섞는다. 줄 자신의 시각에서는 그 줄 그대로다
     let i = TIMES.length - 1;
     TIMES.forEach((k, n) => { if (k.h <= hour) i = n; });
     const a = TIMES[i], b = TIMES[(i + 1) % TIMES.length];
@@ -41,7 +41,7 @@ export function setupTime(ctx) {
     return Number.isFinite(n) ? ((n % 24) + 24) % 24 : null;
   }
   let timeSpec = parseTime(new URLSearchParams(location.search).get('time')) ?? parseTime(layout.time) ?? 'auto';
-  ctx.timeChoice = parseTime(layout.time) == null ? 'auto' : layout.time; // the room's own choice, as it was given; ?time= does not change it. heap:get reports it.
+  ctx.timeChoice = parseTime(layout.time) == null ? 'auto' : layout.time; // 방 자신의 선택을 준 그대로. ?time= 은 이것을 바꾸지 않는다. heap:get 이 이것을 알려 준다.
   const seoulFmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
   function seoulHour() {
     const part = Object.fromEntries(seoulFmt.formatToParts(new Date()).map(p => [p.type, Number(p.value)]));
@@ -57,12 +57,12 @@ export function setupTime(ctx) {
     scene.background.copy(bgBase).multiplyScalar(k.bg);
     setCol(hemi.color, k.hemiSky); setCol(hemi.groundColor, k.hemiGround); hemi.intensity = k.hemiI;
     fill.intensity = k.fillI;
-    ctx.readGlow = Math.min(0.4, Math.max(0, (1.6 - k.sunI) * 0.3)); // a card in hand lights itself when the room is dim; 0 from morning to golden hour
+    ctx.readGlow = Math.min(0.4, Math.max(0, (1.6 - k.sunI) * 0.3)); // 손에 든 카드는 방이 어두우면 스스로 빛난다. 아침부터 해 질 녘까지는 0
     setCol(sun.color, k.sun); sun.intensity = k.sunI;
     ctx.sunDir.copy(ctx.sunHeading).setY(-k.drop).normalize();
     if (WIN) sun.target.position.copy(WALLS[WIN.wall].point(WIN.at, WIN.y, 0)).addScaledVector(ctx.sunDir, WIN.y / -ctx.sunDir.y);
     sun.position.copy(sun.target.position).addScaledVector(ctx.sunDir, -11);
-    if (ctx.shaftGeo) { // the shaft's floor end and the motes follow the sun's new drop
+    if (ctx.shaftGeo) { // 빛줄기의 바닥 끝과 먼지가 해의 새 높이를 따른다
       const pos = ctx.shaftGeo.attributes.position;
       ctx.shaftCorners.forEach((p, i) => { tA.copy(p).addScaledVector(ctx.sunDir, p.y / -ctx.sunDir.y); pos.setXYZ(4 + i, tA.x, tA.y, tA.z); });
       pos.needsUpdate = true; ctx.shaftGeo.computeBoundingSphere(); ctx.moteGeo.boundingSphere = null;
@@ -74,17 +74,17 @@ export function setupTime(ctx) {
       gr.addColorStop(0, css(k.sky[0])); gr.addColorStop(0.55, css(k.sky[1])); gr.addColorStop(1, css(k.sky[2])); sg.fillStyle = gr; sg.fillRect(0, 0, 4, 128);
       ctx.skyTex.needsUpdate = true;
     }
-    ctx.lampBase = k.lampI; // frame() gives it to every lamp's light
+    ctx.lampBase = k.lampI; // frame() 이 이 값을 모든 램프의 불빛에 준다
     ctx.shadeNow = k.shadeI;
     for (const l of ctx.build.lamps) for (const s of l.shades) s.emissiveIntensity = l.off ? 0 : ctx.shadeNow;
   }
-  function tickClock() { // auto only: called from frame(), so it stops with the rAF loop on dispose (no timer of its own)
+  function tickClock() { // auto 만: frame() 이 부르므로 rAF 루프와 함께 dispose 에서 멈춘다 (자기 타이머는 없다)
     if (timeSpec !== 'auto' || Date.now() < nextClock) return;
     nextClock = Date.now() + 60000;
     applyTime(seoulHour());
   }
   if (timeSpec === 'auto') tickClock(); else applyTime(timeSpec);
-  // Live change without a reload: root.dispatchEvent(new CustomEvent('heap:time', { detail: 'dusk' | 6.5 | 'auto' }))
+  // 다시 불러오지 않고 바꾸기: root.dispatchEvent(new CustomEvent('heap:time', { detail: 'dusk' | 6.5 | 'auto' }))
   on(root, 'heap:time', e => {
     const spec = parseTime(e.detail);
     if (spec == null) return;

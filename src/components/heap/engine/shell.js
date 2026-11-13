@@ -33,10 +33,10 @@ export function setupShell(ctx) {
   }
   buildWall('back'); buildWall('left');
 
-  // window: frame, glass, a dusk backdrop and a tree outside; the sun comes through it
+  // 창: 틀, 유리, 해 질 녘 배경, 바깥의 나무. 햇빛이 창으로 들어온다
   const frameMat = flat(C.paper);
   ctx.sunDir = new THREE.Vector3(1.6, -2.55, 3.5).normalize(); ctx.shaftCorners = null;
-  ctx.sunHeading = new THREE.Vector3(1.6, 0, 3.5); ctx.skyTex = null; // SUN_H: the sun's horizontal heading (tied to the window); applyTime sets its drop
+  ctx.sunHeading = new THREE.Vector3(1.6, 0, 3.5); ctx.skyTex = null; // sunHeading: 해의 수평 방향(창에 묶인다). 높이는 applyTime 이 정한다
   if (WIN) {
     const W = WALLS[WIN.wall], ww = WIN.w, wh = WIN.h;
     const g = new THREE.Group();
@@ -69,7 +69,7 @@ export function setupShell(ctx) {
   if (WIN) sun.target.position.copy(WALLS[WIN.wall].point(WIN.at, WIN.y, 0)).addScaledVector(ctx.sunDir, WIN.y / -ctx.sunDir.y);
   sun.position.copy(sun.target.position).addScaledVector(ctx.sunDir, -11);
   sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
-  const SHADOW = Math.max(8, 2 * RX, 2 * RZ); // half-size of the sun's shadow frustum: 8 for the original room, wider for a longer one
+  const SHADOW = Math.max(8, 2 * RX, 2 * RZ); // 해 그림자 절두체의 반폭: 원래 방은 8, 더 긴 방은 더 넓게
   Object.assign(sun.shadow.camera, { left: -SHADOW, right: SHADOW, top: SHADOW, bottom: -SHADOW, near: 1, far: 30 });
   sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.012;
   scene.add(sun, sun.target);
@@ -98,7 +98,7 @@ export function setupShell(ctx) {
     pos.needsUpdate = true;
   }
 
-  // door to other rooms
+  // 다른 방으로 가는 문
   const doorParts = [];
   ctx.doorSpot = null;
   if (DOOR) {

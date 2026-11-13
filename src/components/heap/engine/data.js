@@ -9,14 +9,14 @@ export async function setupData(ctx) {
   const ROOMS = DATA.rooms;
   const roomId = opts.roomId;
   const BASE = `${dataBase}${roomId}/`;
-  // creator.json holds links and albums. A room without one (404) falls back to no links, no albums; the title is always the room's own name (heap_rooms.name).
+  // creator.json 에는 링크와 앨범이 있다. 없는 방(404)은 링크도 앨범도 없이 시작하고, 제목은 늘 방 자신의 이름(heap_rooms.name)이다.
   let creatorJson = {};
   {
     const r = await fetch(BASE + 'creator.json', { signal: ac.signal });
     if (r.ok) creatorJson = await r.json(); else if (r.status !== 404) throw new Error(`${BASE}creator.json: ${r.status}`);
   }
   const creator = { links: [], albums: [], linktree: null, ...creatorJson, name: DATA.name, phoneTitle: creatorJson.phoneTitle || DATA.name };
-  // creator.json is a static file. Only links that pass the server's checks reach the page: an absolute http(s) address with a host, or a mailto to one recipient, or an email address. The rest are dropped.
+  // creator.json 은 정적 파일이다. 서버 검사를 통과한 링크만 화면에 닿는다: 호스트가 있는 절대 http(s) 주소, 받는 사람 한 명의 mailto, 이메일 주소. 나머지는 버린다.
   creator.links = (Array.isArray(creator.links) ? creator.links : []).flatMap(L => {
     if (!L || typeof L.title !== 'string') return [];
     if (L.email != null) return L.url == null && opts.isEmail(L.email) ? [{ title: L.title, email: L.email }] : [];
@@ -34,7 +34,7 @@ export async function setupData(ctx) {
 
   const ALBUMS = creator.albums.map(a => ({ ...a, re: a.match ? new RegExp(a.match, 'i') : null }));
   const albumName = k => ALBUMS.find(a => a.key === k)?.name ?? k;
-  function goldOf(r) { // album is certain from the channel or exactly one title rule; anything else is open for votes
+  function goldOf(r) { // 앨범이 채널이나 제목 규칙 하나로 확실하면 그 앨범, 아니면 투표에 열어 둔다
     const byChannel = ALBUMS.find(a => a.channel && a.channel === r.channel);
     if (byChannel) return byChannel.key;
     const m = ALBUMS.filter(a => a.re && a.re.test(r.title || ''));
@@ -46,9 +46,9 @@ export async function setupData(ctx) {
   ctx.baseLayout = structuredClone(DATA.layout);
   ctx.original = { items: (layout.items || []).map(it => ({ ...it })), time: layout.time ?? 'auto' };
 
-  // ---------- reels ----------
-  // A reel carries its linked channel's title (heap_creator_channels); the card back shows it and album rules with `channel` match it.
-  // Reels with no linked channel fall back to the creator's name, so a `channel` album rule finds nothing for them (title rules still work).
+  // ---------- 카드 목록 ----------
+  // 영상은 연결된 채널의 제목(heap_creator_channels)을 가진다. 카드 뒷면에 보이고 `channel` 앨범 규칙이 이것으로 맞춘다.
+  // 채널이 연결되지 않은 영상은 크리에이터 이름으로 대신한다. 그래서 `channel` 앨범 규칙은 그런 영상을 찾지 못한다 (제목 규칙은 그대로 통한다).
   const raw = DATA.reels;
   const reels = raw.map(r => ({ ...r, channel: r.channel || creator.name }));
   reels.forEach((r, i) => { r.age = reels.length > 1 ? 1 - i / (reels.length - 1) : 0; r.seed = Math.floor(rand() * 1e9); r.gold = goldOf(r); });

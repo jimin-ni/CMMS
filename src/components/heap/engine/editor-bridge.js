@@ -6,25 +6,25 @@ export function setupEditorBridge(ctx) {
     getCatalogue, RX, RZ, TABLE, DOOR, WIN, creator,
   } = ctx;
 
-  // Live room contents, for a creator's editor. Dispatch on the element given to mountRoom once the room is up (#status hidden):
+  // 꾸미기 패널을 위한 방 내용의 라이브 훅. 방이 뜬 뒤(#status 가 사라진 뒤) mountRoom 에 넘긴 요소에 보낸다:
   //   root.dispatchEvent(new CustomEvent('heap:items', { detail: itemsArray }))
-  //     replaces everything built from layout.items. Same item shapes as layout.json.
+  //     layout.items 로 지은 것을 모두 바꾼다. 항목 모양은 layout.json 과 같다.
   //   root.dispatchEvent(new CustomEvent('heap:get', { detail: cb }))
-  //     calls cb({ room: { w, d }, layout, items, catalogue, table, door, window, time, original }) once the model catalogue has been read
-  //     (catalogue is null if it could not be). items is a copy of the list now in the room; catalogue is catalogue.json as it is.
-  //     table { x, z, w, d }, door { wall, at } and window { wall, at, w } are the fixed parts a floor plan shows (door and window may be null).
-  //     creatorLinks is the links list of creator.json (the PC's fallback) and linktree its linktree address or null: the editor offers them when an owner sets up a PC.
-  //     seats lists the seat points of the items built so far, { id, kind, x, y, z, yaw } each (see addSeats): the models that sit on loaded after the first build.
-  //     time is the room's time choice as it was given ('auto', a name or an hour); original { items, time } is the layout as last saved in the database;
-  //     layout is the whole stored layout (a copy): the editor merges its items, time and room into it before saving.
+  //     모델 카탈로그를 읽은 뒤 cb({ room: { w, d }, layout, items, catalogue, table, door, window, time, original }) 를 부른다
+  //     (카탈로그를 못 읽었으면 catalogue 는 null). items 는 지금 방에 있는 목록의 복사본이고 catalogue 는 catalogue.json 그대로다.
+  //     table { x, z, w, d }, door { wall, at }, window { wall, at, w } 는 평면도가 보여 주는 고정 부분이다 (door, window 는 null 일 수 있다).
+  //     creatorLinks 는 creator.json 의 링크 목록(PC 의 대체)이고 linktree 는 그 링크트리 주소 또는 null 이다: 주인이 PC 를 꾸밀 때 패널이 권한다.
+  //     seats 는 지금까지 지은 가구의 앉는 자리 { id, kind, x, y, z, yaw } 목록이다 (addSeats 참고): 앉는 모델은 첫 빌드 뒤에 읽힌다.
+  //     time 은 방의 시간 선택을 준 그대로('auto', 이름, 시각)이고 original { items, time } 은 DB 에 마지막으로 저장된 레이아웃이다.
+  //     layout 은 저장된 레이아웃 전체의 복사본이다: 패널은 저장하기 전에 자기 items, time, room 을 여기에 합친다.
   //   root.dispatchEvent(new CustomEvent('heap:saved', { detail: layout }))
   //     tells the engine the editor saved this whole layout: it becomes the new original / 처음으로 target.
-  // Walls, floor, table, heap, projector, phone and guestbook stay as they were built.
+  // 벽, 바닥, 탁자, 더미, 영사기, 휴대폰, 방명록 받침대는 지은 그대로 둔다.
   on(root, 'heap:items', e => {
     if (!Array.isArray(e.detail)) return;
-    if (ctx.perch) unperch(); // the seat is about to be rebuilt
+    if (ctx.perch) unperch(); // 앉은 자리가 곧 다시 지어진다
     buildItems(e.detail.filter(it => it && typeof it === 'object').map(it => ({ ...it })));
-    // music that no longer has its radio, speaker or TV (or whose link was changed) stops
+    // 라디오, 스피커, TV 가 없어졌거나 링크가 바뀐 음악은 멈춘다
     if (ctx.musicUrl && !ctx.build.items.some(it => it.fn?.kind === 'music' && it.fn.url === ctx.musicUrl)) ctx.closeMusic();
     linkShelf(); updateAlbums(); startSlots();
     if (ctx.mode === 'sort') { if (ctx.shelf) enterSort(); else exitSort(); }

@@ -15,7 +15,7 @@ export function setupCardArt(ctx) {
   };
   for (const d of Object.values(DIMS)) { d.CH = d.B + d.PH + d.STRIP; d.w = d.CW * S; d.h = d.CH * S; d.geo = new THREE.PlaneGeometry(d.w, d.h); }
 
-  // Passing a card's own canvas repaints it in place: the seed makes the frame and caption come out the same, only the photo changes.
+  // 카드 자신의 캔버스를 넘기면 그 자리에서 다시 그린다. 시드가 같아 틀과 글씨는 그대로이고 사진만 바뀐다.
   function drawCard(reel, img, c = document.createElement('canvas')) {
     const d = reel.wide ? DIMS.wide : DIMS.tall, r = mulberry32(reel.seed), age = reel.age;
     const W = Math.round(d.CW * PX), H = Math.round(d.CH * PX);

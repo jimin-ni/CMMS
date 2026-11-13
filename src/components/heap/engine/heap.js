@@ -15,7 +15,7 @@ export function setupHeap(ctx) {
   const EXCL = [{ x: PROJ.x, z: PROJ.z, r: 0.42 }, { x: MUG.x, z: MUG.z, r: 0.18 }, { x: PHONE.x, z: PHONE.z, r: 0.26 }];
   const GAP = 0.0035, MAX_SLOPE = 0.32;
   const _inv = new THREE.Quaternion(), _v = new THREE.Vector3(), _n = new THREE.Vector3();
-  // height of a resting card's surface above (x, z), or -Infinity if (x, z) is outside it
+  // 놓여 있는 카드의 (x, z) 위 면 높이. (x, z) 가 카드 밖이면 -Infinity
   function surfaceAt(c, x, z) {
     const { pos, quat } = c.userData.home, d = c.userData.d;
     _n.set(0, 0, 1).applyQuaternion(quat);
@@ -35,7 +35,7 @@ export function setupHeap(ctx) {
     const { x, z, yaw, faceUp } = card.userData.place, d = card.userData.d;
     const cs = Math.cos(yaw), sn = Math.sin(yaw);
     const pts = SAMPLES.map(([a, b]) => { const lx = a * d.w, lz = b * d.h; const dx = lx * cs + lz * sn, dz = -lx * sn + lz * cs; return { dx, dz, h: supportAt(x + dx, z + dz, below) }; });
-    // least-squares slope of the support, then lift the plane until nothing pokes through
+    // 받침의 최소제곱 기울기를 구한 뒤, 아무것도 뚫고 나오지 않을 때까지 면을 들어 올린다
     const mean = pts.reduce((s, p) => s + p.h, 0) / pts.length;
     let sxx = 0, szz = 0, sxz = 0, sxh = 0, szh = 0;
     for (const p of pts) { sxx += p.dx * p.dx; szz += p.dz * p.dz; sxz += p.dx * p.dz; sxh += p.dx * (p.h - mean); szh += p.dz * (p.h - mean); }
@@ -73,7 +73,7 @@ export function setupHeap(ctx) {
     }
   }
   function toTop(c) { cards.splice(cards.indexOf(c), 1); cards.push(c); }
-  // motion: 'drop' arcs down with a flutter and a small bounce; 'settle' falls under gravity
+  // 움직임: 'drop' 은 펄럭이며 호를 그려 내려와 조금 튕기고, 'settle' 은 중력으로 떨어진다
   function startAnim(c, kind) {
     c.userData.anim = { kind, t: 0, dur: kind === 'drop' ? 0.6 : 0.28, from: c.position.clone(), fromQ: c.quaternion.clone(), axis: new THREE.Vector3(rand() - 0.5, 0, rand() - 0.5).normalize(), arc: kind === 'drop' ? 0.08 : 0 };
   }
@@ -119,7 +119,7 @@ export function setupHeap(ctx) {
     for (const p of fanReels) { const c = makeCard(p); c.userData.place.faceUp = true; }
     settle(true);
     ctx.requestPile(ctx.FAR);
-    // posters: the three most-viewed shorts. Each paints from its card's picture, so it fills in and sharpens as that card's tiers land.
+    // 포스터: 가장 많이 본 쇼츠 셋. 각각 자기 카드의 그림으로 그려서, 그 카드의 단계가 오는 대로 채워지고 선명해진다.
     const top3 = made.filter(c => !c.userData.reel.wide).sort((a, b) => viewsNum(b.userData.reel.views) - viewsNum(a.userData.reel.views)).slice(0, 3);
     (layout.posters?.at || []).forEach((u, k) => {
       const card = top3[k];

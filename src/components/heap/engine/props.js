@@ -5,7 +5,7 @@ import { flat, drawFit, makeCanvas, canvasTexture } from './draw.js';
 export function setupProps(ctx) {
   const { layout, C, scene, box, OBST, DOOR, onWall, WALLS } = ctx;
 
-  // table, rug, cushion, mug, phone (positions relative to layout.table)
+  // 탁자, 러그, 방석, 머그, 휴대폰 (위치는 layout.table 기준)
   const TABLE = { x: layout.table.x, z: layout.table.z, w: 2.6, d: 1.8, top: 0.56 };
   const rugC = makeCanvas(256, 192);
   { const g = rugC.getContext('2d'); g.fillStyle = C.paper; g.fillRect(0, 0, 256, 192);
@@ -49,7 +49,7 @@ export function setupProps(ctx) {
     ctx.bookSpot = WALLS[GB.wall].point(GB.at, 0, 0.95);
   }
 
-  // projector and screen
+  // 영사기와 스크린
   const SCR = { wall: layout.screen.wall, at: layout.screen.at, y: 2.4, w: 1.6, h: 0.9 };
   const projC = makeCanvas(640, 360);
   const projTex = canvasTexture(projC);

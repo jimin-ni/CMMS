@@ -4,7 +4,7 @@ import * as THREE from 'three';
 export function setupPath(ctx) {
   const { TABLE, OBST, RX, RZ } = ctx;
 
-  // ---------- walking ----------
+  // ---------- 걷기 ----------
   const TBOX = { x0: TABLE.x - TABLE.w / 2 - 0.45, x1: TABLE.x + TABLE.w / 2 + 0.45, z0: TABLE.z - TABLE.d / 2 - 0.45, z1: TABLE.z + TABLE.d / 2 + 0.45 };
   function crossesTable(a, b) {
     for (let i = 1; i < 20; i++) {
@@ -13,24 +13,24 @@ export function setupPath(ctx) {
     }
     return false;
   }
-  // ---------- sitting on furniture (room mode) ----------
-  // A seat is entered from one of its stand points, reached by a walk planned around every walk obstacle, and the visitor sits only on arriving there.
-  // A seat whose centre lies inside the photo table, the guestbook stand or another item's own footprint is refused, so nobody ends up inside furniture.
-  // perchOn / unperch: the seat's pose is held every frame by stepCharacter; any walking key, a click on the floor or Esc stands the visitor up at the stand point they came from.
+  // ---------- 가구에 앉기 (방 모드) ----------
+  // 자리는 stand 점 한 곳에서 들어서고, 그곳까지는 모든 걷기 장애물을 돌아 계획한 길로 걷고, 방문자는 도착해야 앉는다.
+  // 가운데가 사진 탁자, 방명록 받침대, 다른 가구의 바닥 안에 있는 자리는 거절한다. 가구 속에 들어가 앉는 일이 없게 한다.
+  // perchOn / unperch: 자리의 자세는 stepCharacter 가 프레임마다 붙든다. 걷기 키, 바닥 클릭, Esc 는 앉은 사람을 들어선 stand 점에 세운다.
   // 걷기를 막는 상자: 탁자, 가구들, 방명록 받침대 순서 (충돌은 이 순서로 검사한다)
   const walkBoxes = () => [OBST[0], ...ctx.build.obst, ...OBST.slice(1)];
   const walkFree = (x, z, margin = 0.05) => x > -RX + 0.35 && x < RX - 0.3 && z > -RZ + 0.35 && z < RZ - 0.3 && !walkBoxes().some(o => Math.abs(x - o.x) < o.hw + margin && Math.abs(z - o.z) < o.hd + margin);
   const seatUsable = s => s.pos.x > -RX + 0.2 && s.pos.x < RX - 0.2 && s.pos.z > -RZ + 0.2 && s.pos.z < RZ - 0.2 &&
     !walkBoxes().some(o => o.owner !== s.item && Math.abs(s.pos.x - o.x) < (o.rhw ?? o.hw) + 0.1 && Math.abs(s.pos.z - o.z) < (o.rhd ?? o.hd) + 0.1);
-  // A* over a 0.25 grid of the floor (cells inside an obstacle's walk box plus 0.15 are closed), then the path is pulled straight wherever a line stays clear.
-  // Returns the points to walk through, the last being `to` itself, or null when `to` cannot be reached.
+  // 바닥을 0.25 격자로 나눈 A* (장애물의 걷기 상자에 0.15 를 더한 안의 칸은 막힘). 그다음 선이 비는 곳마다 길을 곧게 편다.
+  // 걸어갈 점들을 돌려준다. 마지막은 `to` 자신이고, `to` 에 닿을 수 없으면 null 이다.
   function planPath(from, to) {
     const S = 0.25, M = 0.15, x0 = -RX + 0.35, z0 = -RZ + 0.35, nx = Math.floor((2 * RX - 0.65) / S) + 1, nz = Math.floor((2 * RZ - 0.65) / S) + 1;
     const open = new Uint8Array(nx * nz);
     for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) open[j * nx + i] = walkFree(x0 + i * S, z0 + j * S, M) ? 1 : 0;
     const cellOf = (x, z) => [THREE.MathUtils.clamp(Math.round((x - x0) / S), 0, nx - 1), THREE.MathUtils.clamp(Math.round((z - z0) / S), 0, nz - 1)];
     let [si, sj] = cellOf(from.x, from.z);
-    if (!open[sj * nx + si]) { // the start may stand in an obstacle's margin: begin from the nearest open cell
+    if (!open[sj * nx + si]) { // 시작점이 장애물 여백 안일 수 있다: 가장 가까운 빈 칸에서 시작한다
       let best = null;
       for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) if (open[j * nx + i]) { const d = Math.hypot(i - si, j - sj); if (d <= 8 && (!best || d < best[0])) best = [d, i, j]; }
       if (!best) return null;
@@ -53,7 +53,7 @@ export function setupPath(ctx) {
         if (!di && !dj) continue;
         const ni = ci + di, nj = cj + dj;
         if (ni < 0 || nj < 0 || ni >= nx || nj >= nz || !open[nj * nx + ni]) continue;
-        if (di && dj && !(open[cj * nx + ni] && open[nj * nx + ci])) continue; // no cutting a corner
+        if (di && dj && !(open[cj * nx + ni] && open[nj * nx + ci])) continue; // 모서리를 가로지르지 않는다
         const n = nj * nx + ni, cost = g[cur] + (di && dj ? 1.414 : 1);
         if (cost < g[n]) { g[n] = cost; came[n] = cur; heap.push([cost + h(ni, nj), n]); }
       }

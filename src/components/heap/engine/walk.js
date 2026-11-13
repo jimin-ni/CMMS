@@ -5,7 +5,7 @@ import { flat } from './draw.js';
 export function setupWalk(ctx) {
   const { C, WALLS, DOOR, scene, toast, setHint, syncUI, SEAT, enterSort } = ctx;
 
-  // ---------- character ----------
+  // ---------- 걷는 사람 ----------
   const me = new THREE.Group();
   const body = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.25, 0.45, 7), flat(C.accent)); body.position.y = 0.5;
   const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.26, 1), flat('#f2cfb3')); head.position.y = 0.95;
@@ -21,7 +21,7 @@ export function setupWalk(ctx) {
   else me.position.set(2.2, 0, 2.4);
   scene.add(me);
 
-  function sitOn(seats, point) { // the seat of this item nearest to where the click landed
+  function sitOn(seats, point) { // 이 가구에서 클릭한 자리에 가장 가까운 자리
     const s = seats.reduce((a, b) => (Math.hypot(a.pos.x - point.x, a.pos.z - point.z) <= Math.hypot(b.pos.x - point.x, b.pos.z - point.z) ? a : b));
     if (!ctx.seatUsable(s)) { toast('여기에는 앉을 수 없어요'); return; }
     if (ctx.perch) unperch();
@@ -38,14 +38,14 @@ export function setupWalk(ctx) {
     ctx.waypoints = best.path.slice(); ctx.walkTo = ctx.waypoints.shift(); ctx.arrive = 'seat'; ctx.seatTarget = s; ctx.seatFrom = best.st;
   }
   function perchOn(s) {
-    if (!s || !ctx.seatFrom || Math.hypot(me.position.x - ctx.seatFrom.x, me.position.z - ctx.seatFrom.z) > 0.3) return; // only from the stand point the walk was planned to
+    if (!s || !ctx.seatFrom || Math.hypot(me.position.x - ctx.seatFrom.x, me.position.z - ctx.seatFrom.z) > 0.3) return; // 걸음이 계획된 stand 점에서만
     ctx.perch = s; ctx.perchFrom = ctx.seatFrom; ctx.walkTo = null; ctx.arrive = null; ctx.waypoints = [];
     setHint('perch'); syncUI();
   }
   function unperch() {
     if (!ctx.perch) return;
     ctx.perch = null;
-    me.position.copy(ctx.perchFrom).setY(0); ctx.collide(me.position); // back onto the floor where the seat was entered from
+    me.position.copy(ctx.perchFrom).setY(0); ctx.collide(me.position); // 자리에 들어선 바닥으로 되돌린다
     setHint('room'); syncUI();
   }
   function walkRoute(to, action) {
@@ -80,7 +80,7 @@ export function setupWalk(ctx) {
   const WALK_KEYS = ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
   function stepCharacter(dt) {
     if (ctx.perch) {
-      if (ctx.anyOverlay() || !WALK_KEYS.some(k => ctx.keys.has(k))) { // sitting: the pose stays until a walking key is pressed
+      if (ctx.anyOverlay() || !WALK_KEYS.some(k => ctx.keys.has(k))) { // 앉아 있다: 걷기 키를 누를 때까지 자세를 유지한다
         me.position.set(ctx.perch.pos.x, ctx.perch.pos.y - 0.28, ctx.perch.pos.z); me.rotation.y = ctx.perch.yaw; legL.rotation.x = legR.rotation.x = -1.2;
         return;
       }
@@ -97,7 +97,7 @@ export function setupWalk(ctx) {
     else if (ctx.walkTo) {
       mv.subVectors(ctx.walkTo, me.position).setY(0);
       const gap = mv.length();
-      // a seat is entered only from its stand point, so the last step onto it never overshoots: within one step the visitor lands on it
+      // 자리는 stand 점에서만 들어서므로 그 위로 마지막 걸음이 넘치지 않는다: 한 걸음 안이면 방문자가 자리에 앉는다
       if (ctx.arrive === 'seat' && !ctx.waypoints.length && gap <= 2.4 * dt) { me.position.x = ctx.walkTo.x; me.position.z = ctx.walkTo.z; mv.set(0, 0, 0); return arrived(); }
       if (gap < (ctx.waypoints.length ? 0.2 : 0.08)) { mv.set(0, 0, 0); return arrived(); }
       mv.normalize();

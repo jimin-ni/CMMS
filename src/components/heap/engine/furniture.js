@@ -9,19 +9,19 @@ export function setupFurniture(ctx) {
   // layout.items 로 가구를 짓는다 (각 builder 는 지역 좌표에서 일한다: 앞이 +z).
   // 항목에서 만든 것은 모두 한 그룹에 둔다. buildItems(items) 는 그 그룹을 치우고 새로 지으므로, 다시 마운트하지 않고도 가구가 바뀐다.
   // 벽, 바닥, 탁자, 더미는 여기 속하지 않는다.
-  // OBST: the fixed walk obstacles (the table first, then the guestbook stand). Each item's own obstacle is in ITEMS.obst.
+  // OBST: 고정된 걷기 장애물 (탁자가 먼저, 그다음 방명록 받침대). 가구마다 자기 장애물은 build.obst 에 있다.
   const OBST = [], shelfParts = [];
   ctx.shelf = null;
   // shadeNow: a lamp shade's glow at the current hour (section 4b sets it) · irand: where the builders draw their random numbers
   ctx.shadeNow = 0.9; ctx.irand = rand;
-  // Lamps: the hand-built lamp and any model whose catalogue category is "lamp". Each adds { light, shades } to its build's lamps:
-  // a PointLight inside the shade (or null) and the shade's materials. Section 4b sets every shade's glow and frame() every light's
-  // intensity, so all the lamps in a room follow the hour together.
-  // Only MAX_LAMP_LIGHTS lamps get a light: the hand-built ones first, then the lamp models, each in list order. A lamp past that glows and lights nothing.
+  // 램프: 손으로 만든 램프와 카탈로그 category 가 "lamp" 인 모델. 각각 자기 build 의 lamps 에 { light, shades } 를 더한다:
+  // 갓 안의 PointLight(없으면 null)와 갓의 재질들. time.js 가 갓의 빛남을, frame() 이 불빛의 세기를 정하므로 방의 램프는
+  // 모두 같은 시각을 따라간다.
+  // 불빛은 MAX_LAMP_LIGHTS 개의 램프만 갖는다: 손으로 만든 것이 먼저, 그다음 램프 모델, 각각 목록 순서대로. 그 뒤의 램프는 빛나기만 하고 비추지 않는다.
   const MAX_LAMP_LIGHTS = 3, LAMP_GLOW = '#ffb767';
-  ctx.catalogue = null; // catalogue.json once it has been read (getCatalogue below)
-  // item.lit: the creator's switch. Absent or true = on, and the lamp then follows the clock exactly as before (glows and lights from evening to morning).
-  // false = switched off for good: no light, no glow, and no share of the MAX_LAMP_LIGHTS budget.
+  ctx.catalogue = null; // 읽은 뒤의 catalogue.json (models.js 의 getCatalogue)
+  // item.lit: 주인의 스위치. 없거나 true 면 켜짐이고, 램프는 전처럼 시계를 따른다 (저녁부터 아침까지 빛나고 비춘다).
+  // false 면 계속 꺼짐: 불빛도, 빛남도 없고 MAX_LAMP_LIGHTS 몫도 차지하지 않는다.
   const isLampModel = it => it.type === 'model' && ctx.catalogue?.models?.find(m => m.id === it.model)?.category === 'lamp';
   const isLit = o => o.lit !== false;
   function lampLight(build, it) {
@@ -59,7 +59,7 @@ export function setupFurniture(ctx) {
       }
       add(box(1.6, 0.05, 0.5, wood, 0, 2.2, 0, { parent: g }));
       pottedPlant(g, 0, 0, 2.22, 0.7);
-      if (it.fn?.kind === 'keepsake') ctx.keepsakeObject(g, it, build, 'standee', 0.52, 2.225, 0.06); // the shelf top's keepsake
+      if (it.fn?.kind === 'keepsake') ctx.keepsakeObject(g, it, build, 'standee', 0.52, 2.225, 0.06); // 선반 위의 기념품
       ctx.shelf = { group: g, albums: [] };
       ALBUMS.forEach((a, i) => {
         const lx = -0.57 + i * 0.38;
@@ -98,12 +98,12 @@ export function setupFurniture(ctx) {
 
   BUILD.model = (g, it, build) => {
     ctx.loadModel(it.model).then(m => {
-      if (!m || ctx.disposed || build !== ctx.build) return; // a failed load, or the items were replaced while it loaded
+      if (!m || ctx.disposed || build !== ctx.build) return; // 읽기에 실패했거나, 읽는 동안 가구가 바뀌었다
       const inst = m.root.clone(), rug = m.entry.category === 'rug', lamp = m.entry.category === 'lamp', own = new Map(), shades = [];
       inst.traverse(o => {
         if (!o.isMesh) return;
         const col = it.tint !== false && ctx.TINT[o.material.name], glow = lamp && o.material.name === 'lamp';
-        if (col || glow) { // a copy of the material for this instance, tinted and (a lamp's shade) glowing; the cached original stays as the file has it
+        if (col || glow) { // 이 가구만의 재질 복사본: 물들이고 (램프 갓은) 빛나게 한다. 캐시에 있는 원본은 파일 그대로 둔다
           if (!own.has(o.material)) {
             const c = o.material.clone();
             if (col) c.color.set(col);
@@ -116,10 +116,10 @@ export function setupFurniture(ctx) {
         o.castShadow = !rug && !o.material.transparent; o.receiveShadow = true;
       });
       const hold = new THREE.Group();
-      hold.scale.setScalar(ctx.MODEL_SCALE); hold.position.y = (it.y || 0) + (rug ? 0.012 : 0); // a rug lies just above the floor so the two do not flicker
+      hold.scale.setScalar(ctx.MODEL_SCALE); hold.position.y = (it.y || 0) + (rug ? 0.012 : 0); // 러그는 바닥 바로 위에 눕혀 둘이 깜박이지 않게 한다
       hold.add(inst); g.add(hold);
-      if (it.fn?.kind === 'keepsake') ctx.keepsakeObject(g, it, build, 'standee', 0, (it.y || 0) + m.size.y, 0); // on top of the shelf-like piece
-      else if (it.fn && ['pc', 'music', 'latest'].includes(it.fn.kind)) { // the whole model is the button; a TV with a function also gets a painted screen
+      if (it.fn?.kind === 'keepsake') ctx.keepsakeObject(g, it, build, 'standee', 0, (it.y || 0) + m.size.y, 0); // 선반 같은 가구 위에
+      else if (it.fn && ['pc', 'music', 'latest'].includes(it.fn.kind)) { // 모델 전체가 버튼이다. 기능이 달린 TV 는 그려 넣은 화면도 갖는다
         const slot = { it, fn: it.fn };
         inst.traverse(o => { if (o.isMesh) { o.userData.slot = slot; build.slotMeshes.push(o); } });
         build.slots.push(slot);
@@ -127,8 +127,8 @@ export function setupFurniture(ctx) {
       }
       const seatRule = ctx.catalogue?.seats?.[m.entry.category];
       if (seatRule) addSeats(build, g, it, m, seatRule, inst);
-      if (shades.length) { // the light sits at the centre of the shade: the box around the vertices the shade's own triangles use
-        const light = lampLight(build, it), bb = new THREE.Box3(), v = new THREE.Vector3(); // (a model's meshes share one vertex buffer)
+      if (shades.length) { // 빛은 갓의 가운데에 둔다: 갓의 삼각형이 쓰는 꼭짓점을 감싸는 상자의 가운데
+        const light = lampLight(build, it), bb = new THREE.Box3(), v = new THREE.Vector3(); // (한 모델의 메시들은 꼭짓점 버퍼 하나를 나눠 쓴다)
         if (light) {
           g.updateMatrixWorld(true);
           for (const o of shades) {
@@ -139,7 +139,7 @@ export function setupFurniture(ctx) {
         }
         build.lamps.push({ light, shades: [...new Set(shades.map(o => o.material))], off: !isLit(it) });
       }
-      if (rug || it.y) return; // a rug is walked over; a piece standing on other furniture adds no obstacle of its own
+      if (rug || it.y) return; // 러그는 밟고 지나간다. 다른 가구 위에 선 물건은 자기 장애물을 더하지 않는다
       const swap = Math.round((it.rot || 0) / 90) % 2 !== 0, hw = m.size.x / 2 + 0.2, hd = m.size.z / 2 + 0.2;
       // hw, hd: the walk box (the model's half size and 0.2 more) · rhw, rhd: the model's own half size · owner: the item, so its own seat can tell which box is its
       build.obst.push({ x: it.x, z: it.z, hw: swap ? hd : hw, hd: swap ? hw : hd, rhw: (swap ? m.size.z : m.size.x) / 2, rhd: (swap ? m.size.x : m.size.z) / 2, owner: it });
@@ -147,12 +147,12 @@ export function setupFurniture(ctx) {
     return {};
   };
 
-  // Seats: the points where a visitor (and later a fan's ghost) can sit, worked out from a model's footprint and the catalogue's `seats` rules (chair, sofa, rug).
-  // Nothing about them is stored in the layout. A model's own `seatY` (file units) replaces the rule's `top` share of its height when the share does not fit it.
-  // Each seat: { id, kind: 'chair' | 'sofa' | 'floor', item, pos (world: the sitting surface), yaw (the way the sitter faces, radians),
-  //   stands (floor points the seat can be entered from: front, back, left, right; a rug seat is entered at its own point) }.
-  // sitOn (below) picks the stand a walk can reach around the obstacles and refuses a seat whose centre is inside another item or the photo table.
-  // ITEMS.seats lists them all; each seat mesh carries userData.seats, the seats of its item.
+  // 앉는 자리: 방문자(나중에는 팬의 유령)가 앉을 수 있는 점. 모델의 바닥 크기와 카탈로그의 `seats` 규칙(의자, 소파, 러그)에서 계산한다.
+  // 레이아웃에는 저장하지 않는다. 모델의 `seatY`(파일 단위)는 규칙의 `top` 비율이 맞지 않을 때 그 비율을 대신한다.
+  // 자리마다 { id, kind: 'chair' | 'sofa' | 'floor', item, pos(월드: 앉는 면), yaw(앉은 사람이 보는 쪽, 라디안),
+  //   stands(자리에 들어설 수 있는 바닥의 점: 앞, 뒤, 왼쪽, 오른쪽. 러그 자리는 자기 점에서 들어선다) }.
+  // sitOn(walk.js)은 장애물을 돌아 걸어갈 수 있는 stand 를 고르고, 가운데가 다른 가구나 사진 탁자 안에 있는 자리는 거절한다.
+  // build.seats 가 모두를 담고, 자리의 메시마다 userData.seats 에 그 가구의 자리들이 달린다.
   function addSeats(build, g, it, m, rule, inst) {
     g.updateMatrixWorld(true);
     const w = m.size.x, d = m.size.z, floor = !!rule.floor;
@@ -171,10 +171,10 @@ export function setupFurniture(ctx) {
   }
 
   // ITEMS: what the last buildItems() made. group: every object built from the items · obst: their walk obstacles · items: the list itself
-  //   lamps: its lamps, { light, shades, off } each (see MAX_LAMP_LIGHTS above)
+  //   lamps: 이 build 의 램프들, 각각 { light, shades, off } (위의 MAX_LAMP_LIGHTS 참고)
   //   slots: its functions, { it, fn, start? } each · slotMeshes: the meshes a click can hit, each with userData.slot (see the slots section above)
-  //   seats / seatMeshes: see addSeats
-  //   loads: the keepsake thumbnails this build still waits for (cancelled when the next build replaces it)
+  //   seats / seatMeshes: addSeats 참고
+  //   loads: 이 build 가 아직 기다리는 기념품 썸네일 (다음 build 가 바꿀 때 취소한다)
   ctx.build = { group: null, obst: [], items: [], lamps: [], slots: [], slotMeshes: [], seats: [], seatMeshes: [], loads: new Set() };
   function buildItems(items, first = false) {
     if (ctx.build.group) { for (const l of ctx.build.lamps) l.light?.dispose(); scene.remove(ctx.build.group); disposeScene(ctx.build.group, ctx.KEPT); }
@@ -183,13 +183,13 @@ export function setupFurniture(ctx) {
     const build = ctx.build = { group: new THREE.Group(), obst: [], items, lamps: [], slots: [], slotMeshes: [], seats: [], seatMeshes: [], loads: new Set() };
     scene.add(build.group);
     items.forEach((it, i) => {
-      // The first build draws from the room's shared sequence, as the room always has. A rebuild seeds each item by its place in the list,
-      // so it leaves that sequence alone and an item keeps its look from one rebuild to the next.
+      // 첫 빌드는 방이 늘 써 온 공용 난수 수열을 쓴다. 다시 지을 때는 목록 순서로 가구마다 시드를 주므로
+      // 그 수열은 건드리지 않고, 가구는 다시 지어도 모습이 같다.
       ctx.irand = first ? rand : mulberry32(7919 * (i + 1));
       const g = new THREE.Group(), rot = THREE.MathUtils.degToRad(it.rot || 0);
       const fp = BUILD[it.type]?.(g, it, build); if (!fp) return;
       g.position.set(it.x, 0, it.z); g.rotation.y = rot; build.group.add(g); g.updateMatrixWorld(true);
-      if (!fp.hw) return; // a model adds its obstacle when it has loaded
+      if (!fp.hw) return; // 모델은 읽힌 뒤에 자기 장애물을 더한다
       const swap = Math.round((it.rot || 0) / 90) % 2 !== 0;
       const ohw = swap ? fp.hd : fp.hw, ohd = swap ? fp.hw : fp.hd;
       build.obst.push({ x: it.x, z: it.z, hw: ohw, hd: ohd, rhw: Math.max(0.1, ohw - 0.2), rhd: Math.max(0.1, ohd - 0.2), owner: it });

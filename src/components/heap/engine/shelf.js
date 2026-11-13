@@ -10,7 +10,7 @@ export function setupShelf(ctx) {
   const shelfLocal = v => ctx.shelf.group.localToWorld(v.clone());
 
   ctx.sortCam = null; ctx.shelfSpot = null; ctx.shelfStand = null; ctx.shelfFacing = 0;
-  function linkShelf() { // the album shelf's camera and standing spots; runs again after every buildItems()
+  function linkShelf() { // 앨범 책장의 카메라와 서는 자리. 가구를 다시 지을 때마다 다시 돈다
     ctx.sortCam = ctx.shelfSpot = ctx.shelfStand = null;
     if (!ctx.shelf) return;
     const albumsC = shelfLocal(new THREE.Vector3(0, 1.05, 0));
@@ -28,7 +28,7 @@ export function setupShelf(ctx) {
     $('albumrow').appendChild(b);
   });
 
-  // album shelf: browse albums (the sorting round lives in archive/album-sort/)
+  // 앨범 책장: 앨범 보기 (정리 라운드는 archive/album-sort/ 에 있다)
   function updateAlbums() {
     if (!ctx.shelf) return;
     for (const a of ctx.shelf.albums) {
@@ -45,7 +45,7 @@ export function setupShelf(ctx) {
       a.lt.needsUpdate = true;
     }
   }
-  function enterSort() { // "sort" mode = standing at the album shelf, browsing albums
+  function enterSort() { // "sort" 모드 = 앨범 책장 앞에 서서 앨범을 본다
     if (!ctx.shelf) return;
     ctx.mode = 'sort'; ctx.walkTo = null; ctx.arrive = null; ctx.waypoints = []; ctx.perch = null;
     ctx.me.position.copy(ctx.shelfStand); ctx.me.rotation.y = ctx.shelfFacing - 0.4;
@@ -60,7 +60,7 @@ export function setupShelf(ctx) {
     $('grid-title').textContent = `${albumName(key)} · ${items.length}장`;
     for (const r of items) {
       const it = el('div', 'gitem' + (r.wide ? ' wide' : ''));
-      // near tier; the grid's object-fit: cover crops YouTube's padded frame down to the picture
+      // 가까운 단계 썸네일. 격자의 object-fit: cover 가 유튜브의 여백 있는 틀을 그림만 남게 자른다
       const im = el('img'); im.crossOrigin = 'anonymous'; im.src = thumbUrl(r, 'hqdefault'); im.alt = ''; im.loading = 'lazy'; it.appendChild(im);
       it.appendChild(el('span', null, r.title)); it.appendChild(link('원본 ↗', ytUrl(r)));
       list.appendChild(it);

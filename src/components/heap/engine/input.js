@@ -39,7 +39,7 @@ export function setupInput(ctx) {
   on(window, 'keyup', ev => keys.delete(ev.key.toLowerCase()));
   on(window, 'blur', () => keys.clear());
 
-  // dragging a card across the desk (sit mode). Capture phase so orbit controls stand aside.
+  // 탁자 위에서 카드 끌기(앉은 모드). 궤도 컨트롤이 비켜서도록 capture 단계에 건다.
   const deskPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(TABLE.top + 0.12)), _hit = new THREE.Vector3();
   let down = null, dragOff = new THREE.Vector2();
   canvas.addEventListener('pointerdown', ev => {
@@ -49,7 +49,7 @@ export function setupInput(ctx) {
     const hit = ray.intersectObjects(pickables, false)[0];
     if (hit) {
       down.card = hit.object.userData.card; controls.enabled = false;
-      if (ray.ray.intersectPlane(deskPlane, _hit)) dragOff.set(down.card.userData.place.x - _hit.x, down.card.userData.place.z - _hit.z); // grab offset where it was pressed
+      if (ray.ray.intersectPlane(deskPlane, _hit)) dragOff.set(down.card.userData.place.x - _hit.x, down.card.userData.place.z - _hit.z); // 눌린 자리에서 잡은 오프셋
     }
   }, { capture: true });
   canvas.addEventListener('pointermove', ev => {
@@ -97,8 +97,8 @@ export function setupInput(ctx) {
     }
     const hit = ray.intersectObjects([tableTop, ...pickables, ...projParts, ...phoneParts, ...ctx.build.slotMeshes, ...ctx.build.seatMeshes, ...shelfParts, ...doorParts, ...bookParts, floor], false)[0];
     if (!hit) return;
-    if (hit.object.userData.slot) return openSlot(hit.object.userData.slot); // a PC, a frame, a TV, a radio or a calendar: it acts where the visitor stands
-    if (hit.object.userData.seats) return sitOn(hit.object.userData.seats, hit.point); // a chair, a sofa or a rug: walk there and sit
+    if (hit.object.userData.slot) return openSlot(hit.object.userData.slot); // PC, 액자, TV, 라디오, 달력: 방문자가 서 있는 곳에서 바로 동작한다
+    if (hit.object.userData.seats) return sitOn(hit.object.userData.seats, hit.point); // 의자, 소파, 러그: 그곳까지 걸어가 앉는다
     const p = hit.point, onTableFoot = p.x > ctx.TBOX.x0 && p.x < ctx.TBOX.x1 && p.z > ctx.TBOX.z0 && p.z < ctx.TBOX.z1;
     if (doorParts.includes(hit.object)) walkRoute(ctx.doorSpot.clone(), 'door');
     else if (bookParts.includes(hit.object)) walkRoute(ctx.bookSpot.clone(), 'book');

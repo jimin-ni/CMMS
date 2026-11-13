@@ -3,10 +3,10 @@
 export function setupPlayers(ctx) {
   const { $, root, on, canvas, opts } = ctx;
 
-  // official YouTube embed, flat and unobstructed; if this host forbids embeds, fall back to the link out
+  // 공식 유튜브 임베드: 평평하게, 가리는 것 없이. 이 호스트가 임베드를 막으면 링크로 바꾼다
   ctx.embedBlocked = false;
   const player = $('player'), frameBox = $('player-frame'), note = $('player-note');
-  // One official player at a time: the projector's and the music dock's share these two helpers, and opening either closes the other.
+  // 공식 플레이어는 한 번에 하나: 영사기와 음악 독이 이 두 함수를 나눠 쓰고, 하나가 열리면 다른 하나는 닫힌다.
   const embedSrc = ({ video, list }) => `https://www.youtube-nocookie.com/embed/${video ?? 'videoseries'}?${new URLSearchParams({ autoplay: '1', playsinline: '1', rel: '0', ...(list ? { list } : {}) })}`;
   function makeFrame(src, title) {
     const f = document.createElement('iframe');
@@ -16,7 +16,7 @@ export function setupPlayers(ctx) {
     return f;
   }
   function openPlayer(reel) {
-    closeMusic(); // the projector takes over: only one YouTube player plays at a time
+    closeMusic(); // 영사기가 넘겨받는다: 유튜브 플레이어는 한 번에 하나만 재생한다
     $('player-title').textContent = reel.title || '';
     frameBox.innerHTML = '';
     note.hidden = !ctx.embedBlocked;
@@ -34,24 +34,24 @@ export function setupPlayers(ctx) {
   function closePlayer() { frameBox.innerHTML = ''; player.hidden = true; }
   on($('player-close'), 'click', closePlayer);
 
-  // music: the docked player at the room's top right, opposite the room name (item.fn kind "music" on a radio, speaker or TV).
+  // 음악: 방 오른쪽 위에 붙는 독 플레이어, 방 이름의 반대편 (라디오, 스피커, TV 에 단 item.fn kind "music").
   // A visible official embed of 200 px or more with nothing laid over it: heap-room.css keeps the overlays and the 꾸미기 panel out of its corner (--music-w).
-  // It starts only from the visitor's click on the carrier, which is the gesture the browser wants before it lets a video play with sound.
+  // 방문자가 운반체를 누를 때만 시작한다. 브라우저가 소리 있는 영상을 틀게 해 주는 동작이 그 클릭이다.
   const dock = $('music'), dockFrame = $('music-frame'), dockNote = $('music-note'), dockLink = $('music-link');
   ctx.musicUrl = null; ctx.musicParsed = null;
   // The dock sits at the canvas's top right: 16 px from its edge, 8 px of padding, then the video. The canvas is what the 꾸미기 panel leaves of the room,
-  // so the width the video may take is measured from it (not from the room): 16 + 8 + 8 + 16 px of room around it, and the room's name (top left) keeps its own width.
+  // 그러니 영상이 쓸 수 있는 폭은 방이 아니라 캔버스에서 잰다: 둘레 16 + 8 + 8 + 16 px 가 남고, 방 이름(왼쪽 위)은 자기 폭을 지킨다.
   const musicFit = () => Math.min(380, Math.floor(canvas.clientWidth - 48 - $('cname').getBoundingClientRect().width - 16));
   function openMusic(fn) {
-    const p = opts.parseMusic(fn.url); // checked again here: the layout in the database is not trusted
+    const p = opts.parseMusic(fn.url); // 여기서 다시 검사한다: DB 의 레이아웃은 믿지 않는다
     if (!p || !player.hidden || (ctx.musicUrl === fn.url && !dock.hidden)) return;
     closeMusic(); ctx.musicUrl = fn.url; ctx.musicParsed = p;
     dock.hidden = false;
     if (!ctx.embedBlocked && musicFit() >= 200) dockFrame.appendChild(makeFrame(embedSrc(p), '음악 플레이어')); // only a click gets here, and only a video 200 px wide or more is embedded
     layoutMusic();
   }
-  // Sizes the dock to the room as it is now (also after a resize or the panel opening): a video that no longer fits 200 x 200 gives way to a link out,
-  // and --music-w tells the CSS how much of the corner the overlays and the room-name line must leave free.
+  // 독을 지금의 방 크기에 맞춘다 (창 크기 변경이나 패널이 열릴 때도): 200 x 200 이 안 되는 영상은 링크로 물러서고,
+  // --music-w 는 창들과 방 이름 줄이 모서리를 얼마나 비워 둬야 하는지 CSS 에 알린다.
   function layoutMusic() {
     if (dock.hidden || !ctx.musicParsed) return;
     const fit = musicFit();

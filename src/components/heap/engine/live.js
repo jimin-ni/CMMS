@@ -8,7 +8,7 @@ export function setupLive(ctx) {
     root, on, opts, ac, renderMeta, renderCreatorVisit, fanReels, fanReelOf, onDispose,
   } = ctx;
 
-  // fan pieces: one that lands while the visitor is in the room drops onto the top of the heap from above the table
+  // 팬 작품: 방문자가 방에 있는 동안 올라온 것은 탁자 위에서 더미 꼭대기로 떨어진다
   function landPiece(p) {
     const c = makeCard(p);
     c.position.set(TABLE.x, TABLE.top + 0.9, TABLE.z);
@@ -19,7 +19,7 @@ export function setupLive(ctx) {
     toast(`${p.by}님의 팬 작품이 더미 위에 올라왔어요`);
   }
 
-  // guestbook: names and dates only. Rows are database rows { id, name, createdAt (ISO) }, newest first, merged by id from the page, the poll and the visitor's own submit.
+  // 방명록: 이름과 날짜만. 줄은 DB 행 { id, name, createdAt(ISO) } 이고 최신이 먼저이며, 페이지, 폴링, 방문자 자신의 제출에서 id 로 합친다.
   const gbRows = new Map((DATA.guestbook || []).map(e => [e.id, { id: e.id, name: e.name, createdAt: e.createdAt }]));
   const gbSorted = () => [...gbRows.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt) || (a.id < b.id ? 1 : -1));
   function renderGuestbook() {
@@ -44,7 +44,7 @@ export function setupLive(ctx) {
     setTimeout(() => $('gb-name')?.focus(), 50);
   }
   let gbBusy = false;
-  const gbForm = root.querySelector('#gb-form'); // absent for a signed-out viewer: heap-room.tsx shows a sign-in line instead
+  const gbForm = root.querySelector('#gb-form'); // 로그아웃한 사람에게는 없다: heap-room.tsx 가 대신 로그인 안내를 보여 준다
   if (gbForm) on(gbForm, 'submit', async e => {
     e.preventDefault();
     if (gbBusy) return;
@@ -66,7 +66,7 @@ export function setupLive(ctx) {
   bindOverlay(ctx, 'guestbook', 'gb-close');
 
   // polling: what others changed (guestbook rows, visit counts, 다녀감, landed pieces) every opts.pollMs while the tab is visible.
-  // The first cursor is the snapshot's serverTime; each reply carries the next. Overlapping rows are merged by id.
+  // 첫 기준점은 스냅샷의 serverTime 이고, 답마다 다음 기준점이 온다. 겹치는 줄은 id 로 합친다.
   let cursor = DATA.serverTime, polling = false;
   async function poll() {
     if (ctx.disposed || polling) return;
@@ -81,7 +81,7 @@ export function setupLive(ctx) {
       if (typeof d.creatorVisitedAt === 'string') { const day = fmtDay(d.creatorVisitedAt); if (day && day !== ctx.creatorDay) { ctx.creatorDay = day; renderCreatorVisit(); } }
       for (const e of d.guestbook || []) gbRows.set(e.id, { id: e.id, name: e.name, createdAt: e.createdAt });
       if (!$('guestbook').hidden) renderGuestbook();
-      // pieces: a newly landed one drops onto the heap. A card already on the heap stays when its piece is taken off (until fan pieces get their own screens)
+      // 작품: 새로 올라온 것은 더미로 떨어진다. 더미에 있는 카드는 그 작품이 내려져도 남는다 (팬 작품 화면이 생기기 전까지)
       for (const p of d.pieces || []) {
         if (p.status !== 'landed' || fanReels.some(f => f.id === p.id)) continue;
         const fan = fanReelOf({ id: p.id, by: p.submitterName ?? '알 수 없음', date: fmtDay(p.landedAt ?? p.createdAt), caption: p.title || p.note || '팬 작품' }, fanReels.length);

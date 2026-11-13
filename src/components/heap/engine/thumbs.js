@@ -51,11 +51,11 @@ export function setupThumbs(ctx) {
   function pump() {
     while (loading < MAX_LOADS && loadQueue.length) {
       const { card, tier } = loadQueue.shift();
-      if (card.userData.tier >= tier) continue; // a sharper picture is already on the card
+      if (card.userData.tier >= tier) continue; // 더 선명한 그림이 이미 카드에 있다
       loading++; load(card, tier, thumbFiles(card.userData.reel, tier));
     }
   }
-  // now = true skips the queue: the one card the visitor has just picked up
+  // now = true 는 줄을 건너뛴다: 방문자가 방금 집어 든 카드 한 장
   function request(card, tier, now = false) {
     const u = card.userData;
     if (ctx.disposed || u.reel.kind === 'fan' || u.asked[tier] || u.tier >= tier) return;

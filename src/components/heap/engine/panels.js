@@ -6,9 +6,9 @@ import { ytUrl, ksDay, seoulDay } from './format.js';
 export function setupPanels(ctx) {
   const { opts, creator, $, keepsakeLook, newestReel, cards, toast, sit, pickUp, feed, openMusic, ROOMS, roomId } = ctx;
 
-  const safeHref = u => (opts.isSafeLink(u) ? u : null); // the server checks layout links before saving; this is the same check on what the DOM gets
+  const safeHref = u => (opts.isSafeLink(u) ? u : null); // 서버가 저장 전에 레이아웃 링크를 검사한다. 이것은 DOM 이 받는 값에 하는 같은 검사다
 
-  // one link as a bubble: a titled link, or (L.email) the address with a copy button. The phone's fallback list and the PC panel share it.
+  // 링크 하나를 말풍선으로: 제목 붙은 링크, 또는 (L.email) 주소와 복사 버튼. 휴대폰의 대체 목록과 PC 창이 함께 쓴다.
   function linkBubble(L) {
     const b = el('div', 'bubble');
     if (L.email) {
@@ -26,16 +26,16 @@ export function setupPanels(ctx) {
     } else b.appendChild(el('span', null, L.title));
     return b;
   }
-  // the creator.json links, as they were on the phone: the note, each link, the linktree's full list
+  // creator.json 링크, 휴대폰에 있던 그대로: 안내 글, 링크들, 링크트리 전체 목록
   function legacyLinks(into) {
     if (creator.linksNote) into.appendChild(el('span', 'chip', creator.linksNote));
     for (const L of creator.links) into.appendChild(linkBubble(L));
     if (creator.linktree) { const lt = el('div', 'bubble'); lt.appendChild(link(`${creator.linktree.replace(/^https:\/\//, '')} 전체 보기 ↗`, creator.linktree)); into.appendChild(lt); }
   }
   const hasPc = () => ctx.build.items.some(it => it.fn?.kind === 'pc');
-  ctx.phonePic = null; // { card, im }: the card whose picture the phone shows, so a sharper tier that lands later reaches it
+  ctx.phonePic = null; // { card, im }: 휴대폰이 그림을 보여 주는 카드. 나중에 더 선명한 단계가 오면 휴대폰에도 닿게 한다
   function showPhonePic() {
-    const pic = ctx.phonePic.card.userData.img; // a canvas (fan drawing, cropped tier) or the close tier's own Image
+    const pic = ctx.phonePic.card.userData.img; // 캔버스(팬 그림, 잘린 단계) 또는 가까운 단계의 Image 그대로
     if (pic) ctx.phonePic.im.src = pic.toDataURL ? pic.toDataURL('image/jpeg', 0.8) : pic.src;
   }
   function openPhone() {
@@ -62,7 +62,7 @@ export function setupPanels(ctx) {
   }
   bindOverlay(ctx, 'phone', 'phone-close', { backdrop: true });
 
-  // PC (a desk, monitor or laptop with fn.kind "pc"): the creator's links. fn.links is the owner's own list; without one the creator.json links stand in.
+  // PC (fn.kind "pc" 가 달린 책상, 모니터, 노트북): 크리에이터의 링크. fn.links 가 주인의 목록이고, 없으면 creator.json 링크가 대신한다.
   function openPc(fn) {
     const list = $('pc-list'); list.replaceChildren();
     if (Array.isArray(fn.links)) for (const L of fn.links) list.appendChild(linkBubble(L)); else legacyLinks(list);
@@ -71,7 +71,7 @@ export function setupPanels(ctx) {
   }
   bindOverlay(ctx, 'pc', 'pc-close', { backdrop: true });
 
-  // keepsake (a wall frame or a shelf-top standee): name, date, caption, and the link to the original
+  // 기념품(액자 또는 선반 위 스탠드): 이름, 날짜, 설명, 원본 링크
   function openKeepsake(fn) {
     $('ks-title').textContent = fn.name;
     const body = $('ks-body'); body.replaceChildren();
@@ -81,7 +81,7 @@ export function setupPanels(ctx) {
       const files = look.tall ? ['oardefault', 'hqdefault'] : ['hq720', 'mqdefault'];
       let n = 0;
       const next = () => { im.src = thumbUrl({ id: look.id }, files[n]); };
-      im.addEventListener('load', () => { if (im.naturalWidth <= 120 && ++n < files.length) next(); }); // a missing thumbnail is a 120px placeholder
+      im.addEventListener('load', () => { if (im.naturalWidth <= 120 && ++n < files.length) next(); }); // 없는 썸네일은 120px 자리 표시 그림이다
       im.addEventListener('error', () => { if (++n < files.length) next(); else im.remove(); });
       next(); body.appendChild(im);
     }
@@ -94,7 +94,7 @@ export function setupPanels(ctx) {
     $('keepsake').hidden = false;
   }
   bindOverlay(ctx, 'keepsake', 'ks-close', { backdrop: true });
-  // calendar (the desk calendar): the dates from today on, soonest first, each with how far off it is. Past dates are left out.
+  // 달력(책상 위): 오늘부터의 날짜를 가까운 순서로, 며칠 남았는지와 함께. 지난 날짜는 뺀다.
   function openCalendar(fn) {
     const body = $('cal-body'); body.replaceChildren();
     const today = seoulDay.format(new Date()), asDay = s => Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10));
@@ -111,7 +111,7 @@ export function setupPanels(ctx) {
   }
   bindOverlay(ctx, 'calendar', 'cal-close', { backdrop: true });
 
-  // TV (fn "latest"): sit down at the table, pick up the newest reel and feed it to the projector, the same steps as doing it by hand.
+  // TV(fn "latest"): 탁자에 앉아 가장 최근 영상을 집어 영사기에 넣는다. 손으로 하는 것과 같은 단계다.
   function watchLatest() {
     if (ctx.mode !== 'room') return;
     const reel = newestReel(), card = reel && cards.find(c => c.userData.reel === reel);
@@ -124,14 +124,14 @@ export function setupPanels(ctx) {
     else if (k === 'music') openMusic(slot.fn); else if (k === 'latest') watchLatest(); else if (k === 'calendar') openCalendar(slot.fn);
   };
 
-  // rooms: the door lists the other rooms; jumping fades out and hands the chosen id to opts.onNavigate
+  // 방 목록: 문 앞에서 다른 방을 보여 준다. 이동은 화면을 어둡게 한 뒤 고른 id 를 opts.onNavigate 에 넘긴다.
   function openRooms() {
     const list = $('roomlist'); list.innerHTML = '';
     let anyChanged = false;
     for (const r of ROOMS) {
       const b = el('button'); b.type = 'button'; b.disabled = r.id === roomId;
       const left = el('span'); left.appendChild(el('b', null, r.name));
-      if (r.changed === true && r.id !== roomId) { // changed since the viewer's last visit there (heap/repo.ts listChangedRoomSlugs); the page sends it for signed-in viewers only
+      if (r.changed === true && r.id !== roomId) { // 방문자가 마지막으로 다녀간 뒤 바뀐 방 (heap/repo.ts listChangedRoomSlugs). 로그인한 사람에게만 페이지가 보낸다
         const dot = el('span', 'dot'); dot.setAttribute('role', 'img'); dot.setAttribute('aria-label', '다녀간 뒤 바뀐 방'); left.appendChild(dot); anyChanged = true;
       }
       left.appendChild(el('br')); left.appendChild(el('small', null, r.blurb || ''));

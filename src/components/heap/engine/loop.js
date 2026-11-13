@@ -10,9 +10,9 @@ export function setupLoop(ctx) {
 
   // 카메라 구도: 방(room), 앉기(sit), 영사기 보기(watch)
   const ROOM_CAM = { pos: new THREE.Vector3(9.4, 8.6, 9.4), target: new THREE.Vector3(0, 0.9, 0) };
-  // A floor plan other than 8 x 8 moves the room camera along its own line of sight. needDist is how far back a plain frustum fit
-  // has to sit to hold the floor corners and the wall tops. roomFit is this room's distance over the 8 x 8 room's, so that room is
-  // framed exactly as before and any other room is framed as tightly as that one is.
+  // 8 x 8 이 아닌 평면도는 방 카메라를 자기 시선 위에서 뒤로 물린다. needDist 는 바닥 모서리와 벽 윗부분을 담으려면 평범한 절두체 맞춤이
+  // 얼마나 물러나야 하는지다. roomFit 은 이 방의 거리를 8 x 8 방의 거리로 나눈 값이라, 8 x 8 방은 전과 똑같이 잡히고
+  // 다른 방도 그 방만큼 빡빡하게 잡힌다.
   const tA = new THREE.Vector3(); // needDist 의 임시 벡터
   const camDir = ROOM_CAM.pos.clone().sub(ROOM_CAM.target).normalize(), camRight = new THREE.Vector3().crossVectors(Yv, camDir).normalize(), camTop = new THREE.Vector3().crossVectors(camDir, camRight);
   function needDist(hx, hz, aspect) {
@@ -38,7 +38,7 @@ export function setupLoop(ctx) {
     const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
     ctx.layoutMusic();
     renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
-    if (ctx.raf) renderer.render(scene, camera); // setSize clears the canvas; draw again so no blank frame shows
+    if (ctx.raf) renderer.render(scene, camera); // setSize 가 캔버스를 지우므로 다시 그려 빈 프레임이 보이지 않게 한다
   }
   on(window, 'resize', resize);
   const sizeWatch = new ResizeObserver(resize); sizeWatch.observe(canvas);
@@ -72,7 +72,7 @@ export function setupLoop(ctx) {
     const lampNow = Math.max(0, ctx.lampBase + Math.sin(t * 1.3) * 0.05);
     for (const l of ctx.build.lamps) if (l.light) l.light.intensity = lampNow;
     stepMotes(t);
-    // cards
+    // 카드
     const tn = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
     camera.getWorldDirection(dir);
     const animDt = reduced ? 1 : Math.min(rawDt, 0.1);

@@ -7,17 +7,17 @@ import { ksDay, seoulDay } from './format.js';
 export function setupSlots(ctx) {
   const { opts, C, box, BUILD, reels } = ctx;
 
-  // ---------- slots: item.fn (one function, many skins) ----------
-  // An item that carries a function in the layout (item.fn, checked by the server: src/lib/heap/slots.ts) can be clicked in room mode.
-  //   pc        opens the links panel: fn.links, or the room's creator.json links when the item has none of its own
-  //   keepsake  a picture with a name, date, caption and link. On a wall frame (type "frame"), or as a standee on the top of a shelf-like item.
-  //   music     a YouTube video or playlist. Opens the docked player at the top right (radio, speaker or TV).
-  //   latest    a TV whose screen shows the newest reel's thumbnail. Clicking it sends that reel into the projector.
-  //   calendar  a desk calendar (type "calendar", built by hand): the creator's dates for fans, listed in a panel.
-  // ITEMS.slots lists them ({ it, fn, start? }) and ITEMS.slotMeshes holds the meshes a click can hit (each has userData.slot).
-  ctx.slotsLive = false; // true once the fonts are ready: the keepsake textures paint with their own fonts and load their pictures from then on
-  const KS = { tall: { cw: 180, ch: 320, strip: 44 }, wide: { cw: 320, ch: 180, strip: 40 } }; // canvas pixels: the picture and the name strip under it
-  // What the link says about the picture: id is the YouTube video (its own thumbnail), tall is a Short, host is a plain card's source.
+  // ---------- 슬롯: item.fn (기능 하나, 껍데기 여럿) ----------
+  // 레이아웃에서 기능(item.fn, 서버가 검사한다: src/lib/heap/slots.ts)이 달린 가구는 방 모드에서 누를 수 있다.
+  //   pc        링크 창을 연다: fn.links, 없으면 방의 creator.json 링크
+  //   keepsake  이름, 날짜, 설명, 링크가 있는 그림. 벽 액자(type "frame") 또는 선반 같은 가구 위의 스탠드
+  //   music     유튜브 영상이나 재생목록. 오른쪽 위의 독 플레이어를 연다 (라디오, 스피커, TV)
+  //   latest    화면에 가장 최근 영상의 썸네일을 보여 주는 TV. 누르면 그 영상이 영사기로 간다
+  //   calendar  책상 위 달력(type "calendar", 손으로 만든다): 팬에게 알리는 날짜를 창에 보여 준다
+  // build.slots 가 이들을 나열하고({ it, fn, start? }) build.slotMeshes 가 클릭이 닿는 메시를 담는다 (각각 userData.slot 이 있다).
+  ctx.slotsLive = false; // 글꼴이 준비되면 true: 그때부터 기념품 텍스처가 자기 글꼴로 그려지고 그림을 받는다
+  const KS = { tall: { cw: 180, ch: 320, strip: 44 }, wide: { cw: 320, ch: 180, strip: 40 } }; // 캔버스 픽셀: 그림과 그 아래 이름 띠
+  // 링크가 그림에 대해 알려 주는 것: id 는 유튜브 영상(그 영상의 썸네일), tall 은 쇼츠, host 는 글자 카드의 출처다.
   function keepsakeLook(fn) {
     let host = '', hit = null;
     if (fn.link && opts.isWebLink(fn.link)) {
@@ -33,7 +33,7 @@ export function setupSlots(ctx) {
     g.clearRect(0, 0, W, H);
     paper(g, W, H, mulberry32(11), 0.3);
     const x0 = B, y0 = B, w = W - 2 * B, h = k.ch - B;
-    const plain = !look.id; // a post that is not YouTube, or no link at all: a titled card
+    const plain = !look.id; // 유튜브가 아닌 게시물이거나 링크가 없다: 제목이 적힌 카드
     if (plain) {
       g.fillStyle = '#e6d8bf'; g.fillRect(x0, y0, w, h);
       g.fillStyle = 'rgba(86, 83, 68, 0.95)'; g.textAlign = 'center'; g.textBaseline = 'middle';
@@ -47,7 +47,7 @@ export function setupSlots(ctx) {
       g.restore();
     }
     g.strokeStyle = 'rgba(0,0,0,0.18)'; g.lineWidth = 1; g.strokeRect(x0 + 0.5, y0 + 0.5, w - 1, h - 1);
-    // the strip: the name under a picture, or (plain card) the date or the source
+    // 띠: 그림 아래의 이름, 또는 (글자 카드) 날짜나 출처
     const sub = plain ? (ksDay(fn.date) || look.host) : fn.name;
     if (sub) {
       g.fillStyle = 'rgba(86, 83, 68, 0.95)'; g.textAlign = 'left'; g.textBaseline = 'middle';
@@ -58,7 +58,7 @@ export function setupSlots(ctx) {
   }
   // shape 'frame': flat on a wall, centred on (x, y, z) in the item's local space · 'standee': leaning back a little on a small base, bottom at y
   function keepsakeObject(g, it, build, shape, x, y, z) {
-    const fn = it.fn?.kind === 'keepsake' ? it.fn : { kind: 'keepsake', name: '' }; // a frame with no keepsake yet is an empty frame
+    const fn = it.fn?.kind === 'keepsake' ? it.fn : { kind: 'keepsake', name: '' }; // 기념품이 아직 없는 액자는 빈 액자다
     const look = keepsakeLook(fn), k = look.tall ? KS.tall : KS.wide, W = k.cw, H = k.ch + k.strip;
     const pw = shape === 'frame' ? (look.tall ? 0.55 : 0.95) : (look.tall ? 0.2 : 0.32), ph = pw * H / W, rim = shape === 'frame' ? 0.045 : 0.03;
     const grp = new THREE.Group(), wood = flat(C.woodDark);
@@ -92,9 +92,9 @@ export function setupSlots(ctx) {
     };
     if (ctx.slotsLive) slot.start();
   }
-  // a keepsake's own picture: the video's thumbnail, cropped to its shape. A thumbnail that is missing leaves the placeholder.
-  // ksPics keeps the finished pictures (by video and shape) for the life of the room, so a rebuild asks the network for nothing it already has.
-  // An Image still downloading belongs to its build (build.loads): the next build cancels it instead of letting requests pile up.
+  // 기념품 자신의 그림: 영상의 썸네일을 그 모양으로 잘랐다. 없는 썸네일은 자리 표시 그림이 남는다.
+  // ksPics 는 끝난 그림(영상과 모양별)을 방이 있는 동안 지니므로, 다시 지어도 이미 가진 것은 네트워크에 묻지 않는다.
+  // 아직 받는 Image 는 그 build 에 속한다(build.loads): 다음 build 가 요청을 쌓지 않고 취소한다.
   const ksPics = new Map();
   function ksLoad(build, look, files, done) {
     const key = `${look.id}:${look.tall ? 't' : 'w'}`;
@@ -108,11 +108,11 @@ export function setupSlots(ctx) {
   }
   BUILD.frame = (g, it, build) => { keepsakeObject(g, it, build, 'frame', 0, it.y ?? 1.9, 0); return {}; };
 
-  // The newest reel: the latest publish day, and the list's own order (newest first from the server) when two share a day or none has a date.
+  // 가장 최근 영상: 가장 늦은 게시일, 같은 날이거나 날짜가 없으면 목록 자체의 순서(서버가 최신순으로 준다)
   const newestReel = () => { let best = null; for (const r of reels) if (r.published && (!best || r.published > best.published)) best = r; return best ?? reels[0] ?? null; };
 
-  // A TV's screen (a catalogue model with `screen`, in file units): a plane just in front of the model's own screen, painted by the slot.
-  //   latest  the newest reel's thumbnail, a Short pillar-boxed        music  the video's thumbnail, or a note for a playlist link
+  // TV 화면(`screen` 이 있는 카탈로그 모델, 파일 단위): 모델 자신의 화면 바로 앞의 평면, 슬롯이 그린다.
+  //   latest  가장 최근 영상의 썸네일, 쇼츠는 양옆을 비워 맞춘다        music  영상의 썸네일, 재생목록 링크는 음표
   function tvContent(fn) {
     if (fn.kind === 'latest') { const r = newestReel(); return { id: r ? r.id : null, tall: !!r && !r.wide, label: '최신 영상', note: '▶' }; }
     const p = opts.parseMusic(fn.url);
@@ -142,8 +142,8 @@ export function setupSlots(ctx) {
     });
   }
 
-  // Desk calendar (type "calendar", fn.kind "calendar"): a small stand with one paper page. The page shows the month of the next upcoming date
-  // (this month when there is none) with a ring on the days that carry an entry. Hand-built: the kit has no calendar.
+  // 책상 위 달력(type "calendar", fn.kind "calendar"): 종이 한 장이 달린 작은 스탠드. 쪽은 다음 날짜가 있는 달(없으면 이번 달)을 보여 주고
+  // 항목이 있는 날에 동그라미를 친다. 손으로 만든다: 키트에 달력이 없다.
   function paintCalendar(canvas, fn) {
     const g = canvas.getContext('2d'), W = canvas.width, H = canvas.height;
     const entries = (fn.entries ?? []).filter(e => typeof e?.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(e.date));
@@ -165,7 +165,7 @@ export function setupSlots(ctx) {
     }
   }
   BUILD.calendar = (g, it, build) => {
-    const fn = it.fn?.kind === 'calendar' ? it.fn : { kind: 'calendar', entries: [] }; // a calendar with no function yet is an empty one
+    const fn = it.fn?.kind === 'calendar' ? it.fn : { kind: 'calendar', entries: [] }; // 기능이 아직 없는 달력은 빈 달력이다
     const canvas = makeCanvas(192, 192);
     const tex = canvasTexture(canvas, 4);
     const wood = flat(C.woodDark), grp = new THREE.Group(), W = 0.4, H = 0.4;

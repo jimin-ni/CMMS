@@ -29,7 +29,7 @@ export function setupModes(ctx) {
     me.position.copy(SEAT).add(new THREE.Vector3(0.6, 0, 0.5));
     setHint('room'); syncUI();
   }
-  function glowCard(c, v) { // both faces glow by their own picture, so the card reads in a dim room
+  function glowCard(c, v) { // 두 면이 자기 그림으로 빛나, 어두운 방에서도 카드가 읽힌다
     for (const m of c.children) {
       const mat = m.material;
       if (!mat || !mat.map) continue;
@@ -37,7 +37,7 @@ export function setupModes(ctx) {
     }
   }
   function pickUp(c) { ctx.held = c; ctx.heldFlipped = false; ctx.hovered = null; controls.enabled = false; settle(); setHint('held'); syncUI(); request(c, CLOSE, true); glowCard(c, ctx.readGlow); }
-  function dropOnTop(c) { // gently toward the middle of the pile, then fall into place
+  function dropOnTop(c) { // 더미 가운데 쪽으로 살짝, 그리고 제자리로 떨어진다
     const p = c.userData.place;
     c.userData.place = clampPlace({ x: TABLE.x + (p.x - TABLE.x) * 0.5 + gauss() * 0.15, z: TABLE.z + (p.z - TABLE.z) * 0.5 + gauss() * 0.1, yaw: p.yaw + gauss() * 0.6, faceUp: true });
     toTop(c);
@@ -57,7 +57,7 @@ export function setupModes(ctx) {
     drawProjection(reel, img); screen.material = screenOn;
     if (reel.kind !== 'fan') $('ytlink').href = ytUrl(reel);
     setHint('watch'); goTo(WATCH_CAM); syncUI();
-    if (reel.kind !== 'fan') ctx.openPlayer(reel); // a fan piece is just projected
+    if (reel.kind !== 'fan') ctx.openPlayer(reel); // 팬 작품은 비출 뿐이다
   }
   function eject() {
     ctx.closePlayer();
