@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, gte, inArray, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   bubbleRooms,
@@ -112,7 +112,17 @@ export type HeapRoomChanges = {
   // since 뒤에 바뀌어 더는 보이지 않는 조각(lifted, rejected, pending)
   removedPieceIds: string[];
   visits: HeapVisitCounts;
+  // 다음 요청의 기준점. 방명록과 조각이 각자 자리를 가진다.
+  nextCursor: HeapChangesCursor;
+  // 한쪽 목록이 한 번의 상한(changesPageSize)에 닿았다. 받은 기준점으로 이어서 읽어야 한다.
+  more: boolean;
 };
+
+// (시각, id) 한 지점. 시각은 DB의 마이크로초까지 담은 UTC ISO 문자열이라 페이지 경계에서 줄이 겹치거나 빠지지 않는다.
+export type HeapChangesPosition = { ts: string; id: string };
+export type HeapChangesCursor = { guestbook: HeapChangesPosition; pieces: HeapChangesPosition };
+
+export const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
 
 export type Fail<R extends string> = { ok: false; reason: R };
 
@@ -231,7 +241,7 @@ export async function listChangedRoomSlugs(viewerId: string): Promise<string[]> 
 }
 
 // 최근에 올라온 영상부터. 게시 시각을 모르는 영상은 등록 순서를 따른다.
-export async function listReels(roomId: string): Promise<HeapReel[]> {
+export async function listReels(roomId: string, limit: number = HEAP_POLICY.snapshotReelsMax): Promise<HeapReel[]> {
   if (!isUuid(roomId)) return [];
   return db
     .select({
@@ -253,12 +263,18 @@ export async function listReels(roomId: string): Promise<HeapReel[]> {
       sql`${heapReels.publishedAt} desc nulls last`,
       desc(heapReels.createdAt),
       asc(heapReels.id),
-    );
+    )
+    .limit(limit);
 }
 
-function pieceSelect(executor: Executor, viewerId: string | null) {
+function pieceSelect<E extends Record<string, SQL.Aliased | SQL>>(
+  executor: Executor,
+  viewerId: string | null,
+  extra?: E,
+) {
   return executor
     .select({
+      ...(extra ?? ({} as E)),
       id: heapPieces.id,
       platform: heapPieces.platform,
       externalId: heapPieces.externalId,
@@ -291,14 +307,16 @@ export async function listLandedPieces(roomId: string): Promise<HeapPiece[]> {
   if (!isUuid(roomId)) return [];
   return pieceSelect(db, null)
     .where(and(eq(heapPieces.roomId, roomId), eq(heapPieces.status, "landed")))
-    .orderBy(desc(heapPieces.landedAt), asc(heapPieces.id));
+    .orderBy(desc(heapPieces.landedAt), asc(heapPieces.id))
+    .limit(HEAP_POLICY.snapshotPiecesMax);
 }
 
 export async function listVotingPieces(roomId: string, viewerId: string | null): Promise<HeapPiece[]> {
   if (!isUuid(roomId)) return [];
   return pieceSelect(db, viewerId)
     .where(and(eq(heapPieces.roomId, roomId), eq(heapPieces.status, "voting")))
-    .orderBy(desc(heapPieces.createdAt), asc(heapPieces.id));
+    .orderBy(desc(heapPieces.createdAt), asc(heapPieces.id))
+    .limit(HEAP_POLICY.snapshotPiecesMax);
 }
 
 function guestbookSelect(roomId: string, extra?: SQL) {
@@ -362,11 +380,17 @@ export async function getRoomSnapshot(
   if (!found) return null;
   const { room, serverTime } = found;
 
-  const [reels, pieces, guestbook, visits, channels] = await Promise.all([
-    listReels(room.id),
+  // 영상과 조각은 상한만큼만 읽는다 (최근 것이 남는다). 조각은 안착한 것과 투표 중인 것을 따로 센다.
+  const [reels, landed, voting, guestbook, visits, channels] = await Promise.all([
+    listReels(room.id, HEAP_POLICY.snapshotReelsMax),
     pieceSelect(db, viewerId)
-      .where(and(eq(heapPieces.roomId, room.id), inArray(heapPieces.status, ["voting", "landed"])))
-      .orderBy(desc(heapPieces.createdAt), asc(heapPieces.id)),
+      .where(and(eq(heapPieces.roomId, room.id), eq(heapPieces.status, "landed")))
+      .orderBy(desc(heapPieces.landedAt), asc(heapPieces.id))
+      .limit(HEAP_POLICY.snapshotPiecesMax),
+    pieceSelect(db, viewerId)
+      .where(and(eq(heapPieces.roomId, room.id), eq(heapPieces.status, "voting")))
+      .orderBy(desc(heapPieces.createdAt), asc(heapPieces.id))
+      .limit(HEAP_POLICY.snapshotPiecesMax),
     listGuestbook(room.id, HEAP_POLICY.guestbookPageSize),
     getVisitCounts(room.id),
     listCreatorChannels(room.creatorId),
@@ -376,8 +400,8 @@ export async function getRoomSnapshot(
     room,
     serverTime,
     reels,
-    landed: pieces.filter((piece) => piece.status === "landed").sort(byLandedDesc),
-    voting: pieces.filter((piece) => piece.status === "voting"),
+    landed: landed.sort(byLandedDesc),
+    voting,
     guestbook,
     visits,
     channels,
@@ -387,9 +411,15 @@ export async function getRoomSnapshot(
 // 실시간 읽기(?since=)용. since 뒤에 생긴 방명록, 바뀐 조각, 지금의 방문 수를 돌려준다.
 // 늦게 커밋된 변경을 놓치지 않도록 부르는 쪽이 다음 기준점을 serverTime보다 조금 앞당기고,
 // 겹쳐서 온 줄은 클라이언트가 id로 합친다 (버블의 메시지 읽기와 같은 방식).
+// 목록은 (시각, id) 오름차순으로 changesPageSize개씩 끊어 읽는다. since는 방명록과 조각 각각의 기준 지점이다.
+// 한도에 닿은 목록은 마지막 줄에서 이어 가고, 다 읽은 목록은 서버 시각 - 겹침으로 옮긴다.
+// 너무 오래된 기준점은 changesMaxLookbackMs 안으로 당긴다.
+const isoMicros = (column: SQL | typeof heapGuestbook.createdAt | typeof heapPieces.updatedAt) =>
+  sql<string>`to_char(${column} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
+
 export async function getRoomChangesSince(
   roomId: string,
-  since: Date,
+  since: HeapChangesCursor,
   viewerId: string | null = null,
 ): Promise<HeapRoomChanges | null> {
   if (!isUuid(roomId)) return null;
@@ -404,21 +434,73 @@ export async function getRoomChangesSince(
     .where(eq(heapRooms.id, roomId));
   if (!rooms[0]) return null;
 
-  const [guestbook, changed, visits] = await Promise.all([
-    guestbookSelect(roomId, gt(heapGuestbook.createdAt, since)),
-    pieceSelect(db, viewerId)
-      .where(and(eq(heapPieces.roomId, roomId), gt(heapPieces.updatedAt, since)))
-      .orderBy(asc(heapPieces.updatedAt), asc(heapPieces.id)),
+  const { serverTime, ...roomInfo } = rooms[0];
+  const floorMs = serverTime.getTime() - HEAP_POLICY.changesMaxLookbackMs;
+  const clamp = (pos: HeapChangesPosition): HeapChangesPosition =>
+    new Date(pos.ts).getTime() < floorMs ? { ts: new Date(floorMs).toISOString(), id: ZERO_UUID } : pos;
+  const from = { guestbook: clamp(since.guestbook), pieces: clamp(since.pieces) };
+  const pageSize = HEAP_POLICY.changesPageSize;
+
+  const [guestbookRows, changedRows, visits] = await Promise.all([
+    db
+      .select({
+        id: heapGuestbook.id,
+        name: heapGuestbook.name,
+        createdAt: heapGuestbook.createdAt,
+        ts: isoMicros(heapGuestbook.createdAt),
+      })
+      .from(heapGuestbook)
+      .where(
+        and(
+          eq(heapGuestbook.roomId, roomId),
+          sql`(${heapGuestbook.createdAt}, ${heapGuestbook.id}) > (${from.guestbook.ts}::timestamptz, ${from.guestbook.id}::uuid)`,
+        ),
+      )
+      .orderBy(asc(heapGuestbook.createdAt), asc(heapGuestbook.id))
+      .limit(pageSize),
+    pieceSelect(db, viewerId, { ts: isoMicros(heapPieces.updatedAt) })
+      .where(
+        and(
+          eq(heapPieces.roomId, roomId),
+          sql`(${heapPieces.updatedAt}, ${heapPieces.id}) > (${from.pieces.ts}::timestamptz, ${from.pieces.id}::uuid)`,
+        ),
+      )
+      .orderBy(asc(heapPieces.updatedAt), asc(heapPieces.id))
+      .limit(pageSize),
     getVisitCounts(roomId),
   ]);
 
+  // 늦게 커밋된 변경을 놓치지 않도록 다 읽은 목록의 기준점은 서버 시각보다 조금 앞당긴다. 받는 쪽은 id로 합친다.
+  const caughtUpMs = serverTime.getTime() - HEAP_POLICY.changesCursorOverlapMs;
+  const advance = (
+    rows: { ts: string; id: string }[],
+    previous: HeapChangesPosition,
+  ): HeapChangesPosition => {
+    if (rows.length >= pageSize) return { ts: rows[rows.length - 1].ts, id: rows[rows.length - 1].id };
+    return caughtUpMs > new Date(previous.ts).getTime() ? { ts: new Date(caughtUpMs).toISOString(), id: ZERO_UUID } : previous;
+  };
+
+  // 기준점용 ts 열은 응답에 싣지 않는다.
+  const guestbook: HeapGuestbookEntry[] = guestbookRows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    createdAt: row.createdAt,
+  }));
+  const changed: HeapPiece[] = changedRows.map((row) => {
+    const piece: Partial<typeof row> = { ...row };
+    delete piece.ts;
+    return piece as HeapPiece;
+  });
   const visible = (piece: HeapPiece) => piece.status === "voting" || piece.status === "landed";
   return {
-    ...rooms[0],
+    ...roomInfo,
+    serverTime,
     guestbook,
     pieces: changed.filter(visible),
     removedPieceIds: changed.filter((piece) => !visible(piece)).map((piece) => piece.id),
     visits,
+    nextCursor: { guestbook: advance(guestbookRows, from.guestbook), pieces: advance(changedRows, from.pieces) },
+    more: guestbookRows.length >= pageSize || changedRows.length >= pageSize,
   };
 }
 

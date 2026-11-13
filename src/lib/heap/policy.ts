@@ -55,4 +55,13 @@ export const HEAP_POLICY = {
 
   // 실시간 읽기(?since=)에서 다음 기준점을 serverTime보다 앞당기는 시간. 버블과 같은 값.
   changesCursorOverlapMs: 10_000,
+  // 실시간 읽기 한 번에 돌려주는 줄 수 상한. 방명록과 조각 목록에 각각 적용된다.
+  // 한도에 닿으면 응답의 more가 true가 되고, 받은 cursor로 이어서 읽는다.
+  changesPageSize: 100,
+  // since가 거슬러 올라갈 수 있는 한계. 더 오래된 값은 오류 없이 이 한계로 당겨진다.
+  changesMaxLookbackMs: 7 * 24 * 60 * 60 * 1000,
+
+  // 방 화면이 처음 그릴 때 읽는 상한. 넘치면 오래된 것부터 빠진다.
+  snapshotReelsMax: 300,
+  snapshotPiecesMax: 200,
 } as const;
