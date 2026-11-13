@@ -2,11 +2,13 @@
 // The body of run() keeps the source's order and indentation so the two can be diffed.
 // Browser only: load it with a dynamic import from a client component.
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createContext } from './context.js';
 import { setupData } from './data.js';
 import { setupHud } from './hud.js';
 import { setupCardArt } from './card-art.js';
+import { setupScene } from './scene.js';
+import { setupShell } from './shell.js';
+import { setupTime } from './time.js';
 import { flat, paper, wrap, drawFit, NO_PHOTO, cropToShape } from './draw.js';
 import { ksDay, seoulDay, viewsNum, ytUrl, fmtDay } from './format.js';
 import { el, link, shortUrl } from './dom.js';
@@ -39,160 +41,16 @@ const { ac, cleanups, dataBase, prevTitle, $, on } = ctx;
 async function run() {
 const { rand, gauss } = ctx;
 await setupData(ctx);
-const { C, layout, ALBUMS, reels, getJSON, fanReels, creator, DATA, fanReelOf, ROOMS, roomId, filed, albumName } = ctx;
+const { C, ALBUMS, reels, getJSON, layout, fanReels, creator, DATA, fanReelOf, ROOMS, roomId, filed, albumName } = ctx;
 if (ctx.disposed) return;
 setupHud(ctx);
 const { setHint, syncUI, toast, creatorVisit, renderMeta, renderCreatorVisit } = ctx;
 setupCardArt(ctx);
 const { DIMS, drawFanFront, drawCard, drawFanBack, drawBack } = ctx;
-// ====================================================================================
-// 3. Renderer, lights, walls (built from layout)
-// ====================================================================================
-const canvas = document.createElement('canvas'); canvas.id = 'scene';
-canvas.setAttribute('aria-label', '크리에이터의 미니룸. 탁자 위에 지난 영상들이 사진처럼 쌓여 있고, 영사기와 휴대폰, 앨범 책장, 다른 방으로 가는 문이 있다');
-$('scene-host').appendChild(canvas);
-cleanups.push(() => canvas.remove());
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.12;
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(C.olive);
-const camera = new THREE.PerspectiveCamera(30, 1, 0.05, 80);
-const controls = new OrbitControls(camera, canvas);
-cleanups.push(() => { controls.dispose(); disposeScene(scene); renderer.dispose(); renderer.forceContextLoss(); });
-controls.enabled = false; controls.enableDamping = true; controls.enablePan = false;
-controls.minDistance = 0.6; controls.maxDistance = 4; controls.maxPolarAngle = 1.25;
-const hemi = new THREE.HemisphereLight(0xffe6c4, 0x5a4a38, 0.7); scene.add(hemi);
-const fill = new THREE.DirectionalLight(0xffe2bd, 0.35); fill.position.set(8, 6, 8); scene.add(fill);
-// floor plan: layout.room = { w, d } in units, each clamped to 6..12. A missing field is the original 8 x 8.
-// RX, RZ are the half-extents: the floor runs -RX..RX along x and -RZ..RZ along z.
-const roomDim = v => THREE.MathUtils.clamp(Number(v) || 8, 6, 12);
-const RX = roomDim(layout.room?.w) / 2, RZ = roomDim(layout.room?.d) / 2;
-const WALL_H = 4, Yv = new THREE.Vector3(0, 1, 0), Xv = new THREE.Vector3(1, 0, 0);
-function box(w, h, d, mat, x, y, z, { cast = true, receive = true, parent = scene } = {}) {
-  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
-  m.position.set(x, y, z); m.castShadow = cast; m.receiveShadow = receive; parent.add(m); return m;
-}
-// walls: "back" runs along x at z = -RZ (faces +z); "left" runs along z at x = -RX (faces +x)
-// half: the wall's half-length. A position along a wall ("at", u) is measured from the wall's centre.
-const WALLS = {
-  back: { point: (u, y, off = 0) => new THREE.Vector3(u, y, -RZ + off), half: RX, rotY: 0, n: new THREE.Vector3(0, 0, 1), axis: new THREE.Vector3(1, 0, 0) },
-  left: { point: (u, y, off = 0) => new THREE.Vector3(-RX + off, y, u), half: RZ, rotY: Math.PI / 2, n: new THREE.Vector3(1, 0, 0), axis: new THREE.Vector3(0, 0, 1) },
-};
-const onWall = (wall, u, y, off, obj) => { obj.position.copy(WALLS[wall].point(u, y, off)); obj.rotation.y = WALLS[wall].rotY; scene.add(obj); return obj; };
-// floor boards, 1 unit wide along x; the last one is narrower when w is not a whole number
-for (let i = 0; i < 2 * RX; i++) { const bw = Math.min(1, 2 * RX - i); box(bw, 0.1, 2 * RZ, flat(C.floor[i % C.floor.length]), -RX + i + bw / 2, -0.05, 0, { cast: false }); }
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(2 * RX, 2 * RZ), new THREE.MeshBasicMaterial({ visible: false }));
-floor.rotation.x = -Math.PI / 2; scene.add(floor);
-const WIN = layout.window && { ...layout.window, u0: layout.window.at - layout.window.w / 2, u1: layout.window.at + layout.window.w / 2, y0: layout.window.y - layout.window.h / 2, y1: layout.window.y + layout.window.h / 2 };
-const DOOR = layout.door && { ...layout.door, u0: layout.door.at - 0.5, u1: layout.door.at + 0.5, y0: 0, y1: 2.15 };
-const wallMat = flat(C.wall), trimMat = flat(C.trim);
-function buildWall(wall) {
-  const openings = [WIN, DOOR].filter(o => o && o.wall === wall).sort((a, b) => a.u0 - b.u0);
-  const slab = (u0, u1, y0, y1) => {
-    if (u1 - u0 < 0.01 || y1 - y0 < 0.01) return;
-    const p = WALLS[wall].point((u0 + u1) / 2, (y0 + y1) / 2, -0.1);
-    if (wall === 'back') box(u1 - u0, y1 - y0, 0.2, wallMat, p.x, p.y, p.z);
-    else box(0.2, y1 - y0, u1 - u0, wallMat, p.x, p.y, p.z);
-  };
-  const trim = (u0, u1) => {
-    if (u1 - u0 < 0.01) return;
-    const p = WALLS[wall].point((u0 + u1) / 2, 0.45, 0.03);
-    if (wall === 'back') box(u1 - u0, 0.9, 0.06, trimMat, p.x, p.y, p.z, { cast: false });
-    else box(0.06, 0.9, u1 - u0, trimMat, p.x, p.y, p.z, { cast: false });
-  };
-  const H = WALLS[wall].half;
-  let cur = -H - 0.2, tcur = wall === 'back' ? -H + 0.06 : -H;
-  for (const o of openings) {
-    slab(cur, o.u0, 0, WALL_H); slab(o.u0, o.u1, 0, o.y0); slab(o.u0, o.u1, o.y1, WALL_H);
-    cur = o.u1;
-    if (o.y0 < 0.9) { trim(tcur, o.u0); tcur = o.u1; }
-  }
-  slab(cur, H, 0, WALL_H); trim(tcur, H);
-}
-buildWall('back'); buildWall('left');
-// window: frame, glass, a dusk backdrop and a tree outside; the sun comes through it
-const frameMat = flat(C.paper);
-ctx.sunDir = new THREE.Vector3(1.6, -2.55, 3.5).normalize(); ctx.shaftCorners = null;
-ctx.sunHeading = new THREE.Vector3(1.6, 0, 3.5); ctx.skyTex = null; // SUN_H: the sun's horizontal heading (tied to the window); applyTime sets its drop
-if (WIN) {
-  const W = WALLS[WIN.wall], ww = WIN.w, wh = WIN.h;
-  const g = new THREE.Group();
-  box(ww + 0.16, 0.08, 0.3, frameMat, 0, -wh / 2 - 0.02, 0.08, { parent: g });
-  box(ww + 0.16, 0.08, 0.22, frameMat, 0, wh / 2 + 0.02, 0.02, { parent: g });
-  for (const sx of [-ww / 2 - 0.04, 0, ww / 2 + 0.04]) box(0.07, wh, 0.12, frameMat, sx, 0, -0.1, { parent: g });
-  box(ww, 0.05, 0.1, frameMat, 0, 0, -0.1, { parent: g });
-  const glass = new THREE.Mesh(new THREE.PlaneGeometry(ww, wh), new THREE.MeshStandardMaterial({ color: '#ffd9a8', transparent: true, opacity: 0.12, roughness: 0.1 }));
-  glass.position.z = -0.1; g.add(glass);
-  onWall(WIN.wall, WIN.at, WIN.y, 0, g);
-  const skyC = document.createElement('canvas'); skyC.width = 4; skyC.height = 128;
-  { const sg = skyC.getContext('2d'), gr = sg.createLinearGradient(0, 0, 0, 128);
-    gr.addColorStop(0, '#f2c48f'); gr.addColorStop(0.55, '#e9a46b'); gr.addColorStop(1, '#8a7a55'); sg.fillStyle = gr; sg.fillRect(0, 0, 4, 128); }
-  ctx.skyTex = new THREE.CanvasTexture(skyC); ctx.skyTex.colorSpace = THREE.SRGBColorSpace;
-  onWall(WIN.wall, WIN.at, 0.9, -3.5, new THREE.Mesh(new THREE.PlaneGeometry(2 * W.half, 3.6), new THREE.MeshBasicMaterial({ map: ctx.skyTex })));
-  const out = new THREE.Mesh(new THREE.PlaneGeometry(2 * W.half, 3.4), flat('#6b6a4a')); out.rotation.x = -Math.PI / 2;
-  const og = new THREE.Group(); og.add(out); out.position.set(0, -0.12, 0); onWall(WIN.wall, WIN.at, 0, -1.9, og);
-  const tree = new THREE.Group();
-  box(0.18, 1.6, 0.18, flat(C.woodDark), 0, 0.7, 0, { parent: tree });
-  for (const [x, y, z, s] of [[0, 1.9, 0, 0.75], [-0.5, 1.6, 0.2, 0.55], [0.5, 1.7, -0.1, 0.6]]) {
-    const c = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 0), flat(C.leaf)); c.position.set(x, y, z); c.castShadow = true; tree.add(c);
-  }
-  onWall(WIN.wall, WIN.at + 0.5, 0, -2.2, tree);
-  const toCentre = Math.sign(-WIN.at) || 1;
-  ctx.sunHeading = W.n.clone().multiplyScalar(3.5).addScaledVector(W.axis, 1.6 * toCentre);
-  ctx.sunDir = ctx.sunHeading.clone().add(new THREE.Vector3(0, -2.55, 0)).normalize();
-  ctx.shaftCorners = [[WIN.u0, WIN.y0], [WIN.u1, WIN.y0], [WIN.u1, WIN.y1], [WIN.u0, WIN.y1]].map(([u, y]) => W.point(u, y, 0));
-}
-const sun = new THREE.DirectionalLight(0xffb066, 3.0);
-if (WIN) sun.target.position.copy(WALLS[WIN.wall].point(WIN.at, WIN.y, 0)).addScaledVector(ctx.sunDir, WIN.y / -ctx.sunDir.y);
-sun.position.copy(sun.target.position).addScaledVector(ctx.sunDir, -11);
-sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
-const SHADOW = Math.max(8, 2 * RX, 2 * RZ); // half-size of the sun's shadow frustum: 8 for the original room, wider for a longer one
-Object.assign(sun.shadow.camera, { left: -SHADOW, right: SHADOW, top: SHADOW, bottom: -SHADOW, near: 1, far: 30 });
-sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.012;
-scene.add(sun, sun.target);
-ctx.moteGeo = null; ctx.shaftGeo = null; ctx.shaftMat = null; ctx.moteMat = null; const moteSeeds = [];
-if (ctx.shaftCorners) {
-  const shaftFloor = ctx.shaftCorners.map(p => p.clone().addScaledVector(ctx.sunDir, p.y / -ctx.sunDir.y));
-  const v = [...ctx.shaftCorners, ...shaftFloor].flatMap(p => [p.x, p.y, p.z]);
-  const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
-  sg.setIndex([0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4, 7]);
-  ctx.shaftGeo = sg; ctx.shaftMat = new THREE.MeshBasicMaterial({ color: '#ffc98a', transparent: true, opacity: 0.07, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
-  scene.add(new THREE.Mesh(sg, ctx.shaftMat));
-  ctx.moteGeo = new THREE.BufferGeometry(); ctx.moteGeo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(90 * 3), 3));
-  for (let i = 0; i < 90; i++) moteSeeds.push([rand(), rand(), rand(), rand() * 6.28]);
-  ctx.moteMat = new THREE.PointsMaterial({ color: '#ffe0b0', size: 0.03, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false });
-  scene.add(new THREE.Points(ctx.moteGeo, ctx.moteMat));
-}
-const tA = new THREE.Vector3(), tB = new THREE.Vector3();
-function stepMotes(t) {
-  if (!ctx.moteGeo) return;
-  const pos = ctx.moteGeo.attributes.position;
-  moteSeeds.forEach(([u, v, w, ph], i) => {
-    tA.lerpVectors(ctx.shaftCorners[0], ctx.shaftCorners[1], u).lerp(tB.lerpVectors(ctx.shaftCorners[3], ctx.shaftCorners[2], u), v);
-    tA.addScaledVector(ctx.sunDir, (tA.y / -ctx.sunDir.y) * ((w + t * 0.01) % 1) * 0.9);
-    pos.setXYZ(i, tA.x + Math.sin(t * 0.3 + ph) * 0.05, tA.y + Math.sin(t * 0.21 + ph * 2) * 0.05, tA.z);
-  });
-  pos.needsUpdate = true;
-}
-// door to other rooms
-const doorParts = [];
-ctx.doorSpot = null;
-if (DOOR) {
-  const g = new THREE.Group();
-  const panel = box(0.92, 2.1, 0.06, flat(C.accent), 0, 1.05, -0.1, { parent: g });
-  for (const sx of [-0.52, 0.52]) box(0.08, 2.2, 0.24, frameMat, sx, 1.1, -0.06, { parent: g });
-  box(1.12, 0.1, 0.24, frameMat, 0, 2.2, -0.06, { parent: g });
-  const knob = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), flat('#d8b27a', { metalness: 0.4, roughness: 0.4 })); knob.position.set(0.34, 1.0, -0.04); g.add(knob);
-  const sign = document.createElement('canvas'); sign.width = 256; sign.height = 96;
-  { const sgc = sign.getContext('2d'); sgc.fillStyle = C.paper; sgc.fillRect(0, 0, 256, 96); sgc.fillStyle = C.ink; sgc.font = '44px "Nanum Pen Script", cursive'; sgc.textAlign = 'center'; sgc.textBaseline = 'middle'; sgc.fillText('다른 방', 128, 50); }
-  const st = new THREE.CanvasTexture(sign); st.colorSpace = THREE.SRGBColorSpace;
-  const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.16), new THREE.MeshStandardMaterial({ map: st })); plate.position.set(0, 1.62, -0.065); g.add(plate);
-  onWall(DOOR.wall, DOOR.at, 0, 0, g);
-  doorParts.push(panel, knob, plate);
-  ctx.doorSpot = WALLS[DOOR.wall].point(DOOR.at, 0, 0.85);
-}
+setupScene(ctx);
+const { box, scene, onWall, WALLS, Yv, Xv, renderer, camera, WALL_H, RX, RZ, controls, canvas, floor } = ctx;
+setupShell(ctx);
+const { DOOR, tA, WIN, doorParts, stepMotes } = ctx;
 // ====================================================================================
 // 4. Furniture from layout.items (each builder works in local space: front = +z)
 //   Everything built from the items sits in one group. buildItems(items) disposes that group and builds a new one,
@@ -592,94 +450,8 @@ function buildItems(items, first = false) {
 }
 buildItems(layout.items || [], true);
 const shelfLocal = v => ctx.shelf.group.localToWorld(v.clone());
-// ====================================================================================
-// 4b. Time of day: the room's light follows the hour.
-//   ?time=       on the page URL wins (demos, testing): a decimal hour 0-24 (?time=6.5), a name, or auto.
-//   layout.time  in layout.json: "auto", a name, or a number (decimal hour). A missing field means "auto".
-//   Names: night | dawn | morning | noon | golden | dusk.
-//   auto = the current hour in Asia/Seoul wherever the viewer is, re-read about once a minute from frame().
-//   The golden row holds the room's original fixed look: applyTime(17.5) sets exactly the values the scene is built with.
-// ====================================================================================
-const NIGHT = { sun: '#aebfe0', sunI: 0.35, drop: 3.2, sky: ['#2e3350', '#4a4358', '#2e2b24'], hemiSky: '#d6c0aa', hemiGround: '#453a30', hemiI: 0.52, fillI: 0.2, lampI: 4.4, shadeI: 1.3, shaft: '#b9c8e6', shaftO: 0.012, mote: '#d5def0', moteO: 0.06, exposure: 1.26, bg: 0.4 };
-// h: hour · sun, sunI, drop: sun colour, intensity, and how steeply it falls (higher = higher sun) · sky: backdrop gradient top, middle, bottom
-// hemi*, fillI: ambient · lampI, shadeI: lamp light and its shade's glow · shaft*, mote*: light shaft and dust · bg: scale on the backdrop colour
-const TIMES = [
-  { h: 4.5, ...NIGHT },
-  { h: 6, sun: '#ffb38a', sunI: 1.4, drop: 1.9, sky: ['#e9c3b4', '#f4c9a0', '#7d7458'], hemiSky: '#f3d6c2', hemiGround: '#54463a', hemiI: 0.55, fillI: 0.26, lampI: 1.2, shadeI: 0.5, shaft: '#ffc9a8', shaftO: 0.05, mote: '#ffe0c8', moteO: 0.4, exposure: 1.14, bg: 0.75 },
-  { h: 9, sun: '#ffe2b8', sunI: 2.6, drop: 3.4, sky: ['#cfe0dc', '#f3e3c4', '#8c8558'], hemiSky: '#fff0d8', hemiGround: '#62523e', hemiI: 0.9, fillI: 0.45, lampI: 0, shadeI: 0.12, shaft: '#ffe6bf', shaftO: 0.045, mote: '#fff0d4', moteO: 0.45, exposure: 1.08, bg: 1 },
-  { h: 13, sun: '#fff1d6', sunI: 2.6, drop: 6, sky: ['#bcd6dc', '#e6e6d2', '#8f8c62'], hemiSky: '#fff3e0', hemiGround: '#6a5a46', hemiI: 1.0, fillI: 0.5, lampI: 0, shadeI: 0.12, shaft: '#fff0d0', shaftO: 0.025, mote: '#fff4dc', moteO: 0.25, exposure: 1.05, bg: 1 },
-  { h: 17.5, sun: '#ffb066', sunI: 3.0, drop: 2.55, sky: ['#f2c48f', '#e9a46b', '#8a7a55'], hemiSky: '#ffe6c4', hemiGround: '#5a4a38', hemiI: 0.7, fillI: 0.35, lampI: 3.2, shadeI: 0.9, shaft: '#ffc98a', shaftO: 0.07, mote: '#ffe0b0', moteO: 0.7, exposure: 1.12, bg: 1 },
-  { h: 19.5, sun: '#e8875a', sunI: 0.9, drop: 1.7, sky: ['#a98a9a', '#e08f62', '#5f5744'], hemiSky: '#e8c4a8', hemiGround: '#4e4034', hemiI: 0.48, fillI: 0.22, lampI: 4.0, shadeI: 1.15, shaft: '#f0a57c', shaftO: 0.035, mote: '#f6c9a4', moteO: 0.3, exposure: 1.15, bg: 0.75 },
-  { h: 21.5, ...NIGHT },
-].map(k => Object.fromEntries(Object.entries(k).map(([key, v]) => [key, toRGB(v)])));
-const TIME_NAMES = { night: 1, dawn: 6, morning: 9, noon: 13, golden: 17.5, dusk: 19.5 };
-function toRGB(v) { return typeof v === 'string' ? [1, 3, 5].map(i => parseInt(v.slice(i, i + 2), 16)) : Array.isArray(v) ? v.map(toRGB) : v; }
-const mix = (a, b, t) => Array.isArray(a) ? a.map((x, i) => mix(x, b[i], t)) : a + (b - a) * t;
-function timeAt(hour) { // the two neighbouring rows, eased; on a row's own hour the result is that row exactly
-  let i = TIMES.length - 1;
-  TIMES.forEach((k, n) => { if (k.h <= hour) i = n; });
-  const a = TIMES[i], b = TIMES[(i + 1) % TIMES.length];
-  const t = ((hour - a.h + 24) % 24) / ((b.h - a.h + 24) % 24 || 24), s = t * t * (3 - 2 * t);
-  return Object.fromEntries(Object.keys(a).map(key => [key, mix(a[key], b[key], s)]));
-}
-function parseTime(v) { // → an hour in [0, 24), 'auto', or null when it says nothing usable
-  const s = typeof v === 'string' ? v.trim().toLowerCase() : v;
-  if (s === 'auto') return 'auto';
-  if (typeof s === 'string' && s in TIME_NAMES) return TIME_NAMES[s];
-  const n = typeof s === 'number' ? s : typeof s === 'string' && s ? Number(s) : NaN;
-  return Number.isFinite(n) ? ((n % 24) + 24) % 24 : null;
-}
-let timeSpec = parseTime(new URLSearchParams(location.search).get('time')) ?? parseTime(layout.time) ?? 'auto';
-ctx.timeChoice = parseTime(layout.time) == null ? 'auto' : layout.time; // the room's own choice, as it was given; ?time= does not change it. heap:get reports it.
-const seoulFmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
-function seoulHour() {
-  const part = Object.fromEntries(seoulFmt.formatToParts(new Date()).map(p => [p.type, Number(p.value)]));
-  return (part.hour % 24) + part.minute / 60;
-}
-const bgBase = scene.background.clone();
-const setCol = (c, [r, g, b]) => c.setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace);
-const css = c => `rgb(${c.map(Math.round).join(',')})`;
-ctx.lampBase = 3.2; ctx.readGlow = 0; let nextClock = 0;
-function applyTime(hour) {
-  const k = timeAt(hour);
-  renderer.toneMappingExposure = k.exposure;
-  scene.background.copy(bgBase).multiplyScalar(k.bg);
-  setCol(hemi.color, k.hemiSky); setCol(hemi.groundColor, k.hemiGround); hemi.intensity = k.hemiI;
-  fill.intensity = k.fillI;
-  ctx.readGlow = Math.min(0.4, Math.max(0, (1.6 - k.sunI) * 0.3)); // a card in hand lights itself when the room is dim; 0 from morning to golden hour
-  setCol(sun.color, k.sun); sun.intensity = k.sunI;
-  ctx.sunDir.copy(ctx.sunHeading).setY(-k.drop).normalize();
-  if (WIN) sun.target.position.copy(WALLS[WIN.wall].point(WIN.at, WIN.y, 0)).addScaledVector(ctx.sunDir, WIN.y / -ctx.sunDir.y);
-  sun.position.copy(sun.target.position).addScaledVector(ctx.sunDir, -11);
-  if (ctx.shaftGeo) { // the shaft's floor end and the motes follow the sun's new drop
-    const pos = ctx.shaftGeo.attributes.position;
-    ctx.shaftCorners.forEach((p, i) => { tA.copy(p).addScaledVector(ctx.sunDir, p.y / -ctx.sunDir.y); pos.setXYZ(4 + i, tA.x, tA.y, tA.z); });
-    pos.needsUpdate = true; ctx.shaftGeo.computeBoundingSphere(); ctx.moteGeo.boundingSphere = null;
-    setCol(ctx.shaftMat.color, k.shaft); ctx.shaftMat.opacity = k.shaftO;
-    setCol(ctx.moteMat.color, k.mote); ctx.moteMat.opacity = k.moteO;
-  }
-  if (ctx.skyTex) {
-    const sg = ctx.skyTex.image.getContext('2d'), gr = sg.createLinearGradient(0, 0, 0, 128);
-    gr.addColorStop(0, css(k.sky[0])); gr.addColorStop(0.55, css(k.sky[1])); gr.addColorStop(1, css(k.sky[2])); sg.fillStyle = gr; sg.fillRect(0, 0, 4, 128);
-    ctx.skyTex.needsUpdate = true;
-  }
-  ctx.lampBase = k.lampI; // frame() gives it to every lamp's light
-  ctx.shadeNow = k.shadeI;
-  for (const l of ctx.build.lamps) for (const s of l.shades) s.emissiveIntensity = l.off ? 0 : ctx.shadeNow;
-}
-function tickClock() { // auto only: called from frame(), so it stops with the rAF loop on dispose (no timer of its own)
-  if (timeSpec !== 'auto' || Date.now() < nextClock) return;
-  nextClock = Date.now() + 60000;
-  applyTime(seoulHour());
-}
-if (timeSpec === 'auto') tickClock(); else applyTime(timeSpec);
-// Live change without a reload: root.dispatchEvent(new CustomEvent('heap:time', { detail: 'dusk' | 6.5 | 'auto' }))
-on(root, 'heap:time', e => {
-  const spec = parseTime(e.detail);
-  if (spec == null) return;
-  timeSpec = spec; ctx.timeChoice = e.detail; nextClock = 0;
-  if (timeSpec === 'auto') tickClock(); else applyTime(timeSpec);
-});
+setupTime(ctx);
+const { tickClock } = ctx;
 // table, rug, cushion, mug, phone (positions relative to layout.table)
 const TABLE = { x: layout.table.x, z: layout.table.z, w: 2.6, d: 1.8, top: 0.56 };
 const rugC = document.createElement('canvas'); rugC.width = 256; rugC.height = 192;
