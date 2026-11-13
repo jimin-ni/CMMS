@@ -175,12 +175,13 @@ export function setupFurniture(ctx) {
   //   slots: its functions, { it, fn, start? } each · slotMeshes: the meshes a click can hit, each with userData.slot (see the slots section above)
   //   seats / seatMeshes: addSeats 참고
   //   loads: 이 build 가 아직 기다리는 기념품 썸네일 (다음 build 가 바꿀 때 취소한다)
-  ctx.build = { group: null, obst: [], items: [], lamps: [], slots: [], slotMeshes: [], seats: [], seatMeshes: [], loads: new Set() };
+  ctx.build = { group: null, groups: [], obst: [], items: [], lamps: [], slots: [], slotMeshes: [], seats: [], seatMeshes: [], loads: new Set() };
   function buildItems(items, first = false) {
     if (ctx.build.group) { for (const l of ctx.build.lamps) l.light?.dispose(); scene.remove(ctx.build.group); disposeScene(ctx.build.group, ctx.KEPT); }
     shelfParts.length = 0; ctx.shelf = null;
     if (ctx.build.loads.size) ctx.cancelThumbs(ctx.build.loads); // 바뀐 가구가 아직 받던 썸네일은 여기서 멈춘다
-    const build = ctx.build = { group: new THREE.Group(), obst: [], items, lamps: [], slots: [], slotMeshes: [], seats: [], seatMeshes: [], loads: new Set() };
+    // groups[i]: items[i] 로 지은 그룹 (userData.itemIndex = i). 꾸미기(edit.js)가 메시에서 가구를 찾고, 끄는 동안 이 그룹만 옮긴다.
+    const build = ctx.build = { group: new THREE.Group(), groups: [], obst: [], items, lamps: [], slots: [], slotMeshes: [], seats: [], seatMeshes: [], loads: new Set() };
     scene.add(build.group);
     items.forEach((it, i) => {
       // 첫 빌드는 방이 늘 써 온 공용 난수 수열을 쓴다. 다시 지을 때는 목록 순서로 가구마다 시드를 주므로
@@ -188,7 +189,7 @@ export function setupFurniture(ctx) {
       ctx.irand = first ? rand : mulberry32(7919 * (i + 1));
       const g = new THREE.Group(), rot = THREE.MathUtils.degToRad(it.rot || 0);
       const fp = BUILD[it.type]?.(g, it, build); if (!fp) return;
-      g.position.set(it.x, 0, it.z); g.rotation.y = rot; build.group.add(g); g.updateMatrixWorld(true);
+      g.position.set(it.x, 0, it.z); g.rotation.y = rot; g.userData.itemIndex = i; build.groups[i] = g; build.group.add(g); g.updateMatrixWorld(true);
       if (!fp.hw) return; // 모델은 읽힌 뒤에 자기 장애물을 더한다
       const swap = Math.round((it.rot || 0) / 90) % 2 !== 0;
       const ohw = swap ? fp.hd : fp.hw, ohd = swap ? fp.hw : fp.hd;

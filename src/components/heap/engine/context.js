@@ -30,7 +30,8 @@ export function createContext(root, opts) {
     cleanups, prevTitle: document.title, dataBase: opts.dataBase.replace(/\/?$/, '/'),
     disposed: false, raf: 0, pollTimer: 0, roomTitle: null, // pollTimer 는 run() 이 중간에 멈춰도 dispose 가 지울 수 있게 여기 둔다
     gauss: () => { let u = 0, v = 0; while (!u) u = rand(); while (!v) v = rand(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); },
-    on: (target, type, fn) => target.addEventListener(type, fn, { signal: ac.signal }),
+    // 세 번째 인자(capture, passive 등)는 abort signal 과 합친다
+    on: (target, type, fn, opts) => target.addEventListener(type, fn, { ...(opts || {}), signal: ac.signal }),
     // dispose 가 거꾸로 돌리는 정리 함수. 메시, 텍스처, 타이머, iframe, Image 를 만든 모듈이 등록한다
     onDispose: fn => { cleanups.push(fn); },
   };

@@ -30,6 +30,7 @@ import { setupPanels } from './panels.js';
 import { setupLive } from './live.js';
 import { setupInput } from './input.js';
 import { setupPath } from './path.js';
+import { setupEdit } from './edit.js';
 
 // heap-room.tsx 가 그리고 엔진이 채우거나 보이게 하는 노드의 id. dispose 가 첫 렌더 상태로 되돌린다.
 const LISTS = ['albumrow', 'player-frame', 'music-frame', 'phone-feed', 'pc-list', 'ks-body', 'cal-body', 'grid-list', 'gb-list', 'roomlist'];
@@ -47,8 +48,10 @@ const HIDDEN = ['visit', 'albumrow', 'stand', 'flip', 'srclink', 'eject', 'ytlin
  * opts.bubbleHref 는 휴대폰이 여는 곳(주인의 버블 방 또는 목록), opts.navigate(href) 가 연다. opts.parseLink(url) 는 기념품 링크가 유튜브 게시물인지 알려 준다 (platform.ts).
  * opts.isSafeLink / isWebLink / isEmail 은 서버의 링크 검사다 (slots.ts). 링크는 이 중 하나를 통과해야 href 에 닿는다.
  * opts.parseMusic(url) 은 slots.ts 의 parseMusicUrl 이다: { video, list } (정규식을 통과한 임베드 ID) 또는 null. data.rooms[].changed 는 문 앞 방 목록의 그 방에 점을 찍는다.
+ * 꾸미기(edit.js)는 서버와 같은 규칙을 쓴다: opts.itemHalfExtents, opts.placementError 는 layout.ts 의 itemHalfExtents, itemPlacementError 이고
+ * opts.policy 는 policy.ts 의 HEAP_POLICY 다 (frameY, frameWallMargin).
  * @param {HTMLElement} root
- * @param {{ roomId: string, roomUuid: string, dataBase: string, modelBase?: string, data: any, viewerName: string | null, signedIn: boolean, pollMs: number, bubbleHref: string, navigate: (href: string) => void, parseLink: (url: string) => ({ platform: string, externalId: string, wide: boolean | null } | null), parseMusic: (url: string) => ({ video: string | null, list: string | null } | null), isSafeLink: (v: unknown) => boolean, isWebLink: (v: unknown) => boolean, isEmail: (v: unknown) => boolean, recordVisit: () => Promise<any>, addGuestbook: (name: string) => Promise<any>, onNavigate: (roomId: string) => void }} opts
+ * @param {{ roomId: string, roomUuid: string, dataBase: string, modelBase?: string, data: any, viewerName: string | null, signedIn: boolean, pollMs: number, bubbleHref: string, navigate: (href: string) => void, parseLink: (url: string) => ({ platform: string, externalId: string, wide: boolean | null } | null), parseMusic: (url: string) => ({ video: string | null, list: string | null } | null), isSafeLink: (v: unknown) => boolean, isWebLink: (v: unknown) => boolean, isEmail: (v: unknown) => boolean, recordVisit: () => Promise<any>, addGuestbook: (name: string) => Promise<any>, onNavigate: (roomId: string) => void, itemHalfExtents: (item: any) => ({ hx: number, hz: number } | null), placementError: (item: any, room: { w: number, d: number }, table: { x: number, z: number }) => (string | null), policy: { frameY: number, frameWallMargin: number } }} opts
  * @returns {() => void}
  */
 export function mountRoom(root, opts) {
@@ -93,6 +96,7 @@ async function run(ctx) {
   setupLive(ctx);
   setupInput(ctx);
   setupPath(ctx);
+  setupEdit(ctx); // 꾸미기. 포인터를 방 루트의 capture 단계에서 먼저 받으므로 input.js 뒤에 세워도 된다
 
   await fontsReady(); // 썸네일은 기다리지 않는다: buildHeap() 이 줄을 세우고 카드는 그림이 오는 대로 채워진다
   if (ctx.disposed) return;

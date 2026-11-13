@@ -23,7 +23,7 @@ export function setupInput(ctx) {
   const anyOverlay = () => OVERLAYS.some(id => !$(id).hidden);
   on(window, 'keydown', ev => {
     if (ev.target.closest?.('input, textarea')) { if (ev.key === 'Escape') $('guestbook').hidden = true; return; }
-    if (ev.target.closest?.('.room-editor')) return; // a key pressed inside the 꾸미기 panel belongs to the panel (it closes itself on Esc)
+    if (ctx.mode === 'edit') return; // 꾸미기 중의 키는 edit.js 가 받는다
     const k = ev.key.toLowerCase(); keys.add(k);
     if (ctx.mode === 'room' && !anyOverlay() && (k === 'e' || k === 'enter')) { if (nearTable()) sit(); else if (nearShelf()) enterSort(); else if (nearDoor()) openRooms(); else if (nearBook()) openGuestbook(); }
     if (ctx.mode === 'sit' && ctx.held && k === 'f') flip();
@@ -80,6 +80,7 @@ export function setupInput(ctx) {
     }
     if (ctx.mode === 'sit' && !ctx.held && !ctx.camGoal) controls.enabled = true;
     const d = down; down = null;
+    if (ctx.mode === 'edit') return; // 꾸미기 중의 누르기는 edit.js 몫이다 (capture 가 먼저 받지만 한 번 더 막는다)
     if (wasDrag || !d || Math.hypot(ev.clientX - d.x, ev.clientY - d.y) > 6) return;
     rayFrom(ev);
     if (ctx.mode === 'watch') { if (player.hidden && ray.intersectObject(screen, false).length) openPlayer(ctx.loaded.userData.reel); return; }

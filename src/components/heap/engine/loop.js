@@ -48,8 +48,8 @@ export function setupLoop(ctx) {
   function frame() {
     if (ctx.disposed) return;
     const rawDt = clock.getDelta(), dt = Math.min(rawDt, 0.05), t = clock.elapsedTime, a = reduced ? 1 : 1 - Math.exp(-dt * 7);
-    if (ctx.mode === 'room') {
-      stepCharacter(Math.min(rawDt, 0.2));
+    if (ctx.mode === 'room' || ctx.mode === 'edit') { // 꾸미기(edit.js)는 방 카메라를 그대로 쓰고, 걷는 사람은 문 앞에 세워 둔다
+      if (ctx.mode === 'room') stepCharacter(Math.min(rawDt, 0.2)); else ctx.editFrame();
       const fit = Math.max(1, 1.25 / camera.aspect) * roomFit(camera.aspect);
       roomGoal.copy(ROOM_CAM.target).addScaledVector(ROOM_CAM.pos.clone().sub(ROOM_CAM.target), fit);
       camera.position.lerp(roomGoal, a); controls.target.lerp(ROOM_CAM.target, a); camera.lookAt(controls.target);

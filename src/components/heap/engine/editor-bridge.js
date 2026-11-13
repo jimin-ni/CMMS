@@ -20,15 +20,16 @@ export function setupEditorBridge(ctx) {
   //   root.dispatchEvent(new CustomEvent('heap:saved', { detail: layout }))
   //     패널이 이 레이아웃 전체를 저장했다고 엔진에 알린다: 이것이 새 original 이자 처음으로 의 목표가 된다.
   // 벽, 바닥, 탁자, 더미, 영사기, 휴대폰, 방명록 받침대는 지은 그대로 둔다.
-  on(root, 'heap:items', e => {
-    if (!Array.isArray(e.detail)) return;
+  // 가구 목록을 바꾸고 그에 딸린 것(앉은 자리, 음악, 앨범 책장, 기능)을 맞춘다. 꾸미기(edit.js)도 놓을 때마다 이것을 부른다.
+  function applyItems(list) {
     if (ctx.perch) unperch(); // 앉은 자리가 곧 다시 지어진다
-    buildItems(e.detail.filter(it => it && typeof it === 'object').map(it => ({ ...it })));
+    buildItems(list.filter(it => it && typeof it === 'object').map(it => ({ ...it })));
     // 라디오, 스피커, TV 가 없어졌거나 링크가 바뀐 음악은 멈춘다
     if (ctx.musicUrl && !ctx.build.items.some(it => it.fn?.kind === 'music' && it.fn.url === ctx.musicUrl)) ctx.closeMusic();
     linkShelf(); updateAlbums(); startSlots();
     if (ctx.mode === 'sort') { if (ctx.shelf) enterSort(); else exitSort(); }
-  });
+  }
+  on(root, 'heap:items', e => { if (Array.isArray(e.detail)) applyItems(e.detail); });
   on(root, 'heap:edit', e => { if (e.detail) ctx.closeMusic(); }); // heap-room.tsx: the 꾸미기 panel opened (true) or closed (false); the panel takes the dock's corner, so the music stops
   on(root, 'heap:saved', e => {
     const l = e.detail;
@@ -50,4 +51,6 @@ export function setupEditorBridge(ctx) {
       });
     });
   });
+
+  Object.assign(ctx, { applyItems });
 }
