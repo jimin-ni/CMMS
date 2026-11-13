@@ -18,7 +18,11 @@
 // 기능에 닿지 못하게 하는 자리(사진 탁자와 그 앞자리, 문 앞, 방명록 앞, 창문·스크린·문 위의 액자와 벽 가구)뿐이다. 방 밖은 막지 않고 안으로 당긴다.
 // 벽 가구(catalogue.json 의 mount "wall")는 액자처럼 벽을 따라 움직이고 PageUp/PageDown 으로 높이를 바꾼다. 천장 가구(mount "ceiling")는
 // 천장에 매달려 방 안을 움직인다. 아래 "벽·천장 가구" 참고.
+// 작은 가구(라디오, 노트북, 탁상 조명, 책, 작은 화분, 달력 …)는 커서 아래 가구의 윗면에 올라선다 (B7). 높이는 받침의 y + 받침의 윗면 높이(카탈로그의 tops, surfaces.ts)다.
+// 받침을 옮기거나 돌리거나 넣으면 그 위에 선 것이 함께 간다. 아래 "가구 위에 얹기" 참고.
+// 바닥 가구를 들고 있는 동안 비워 둘 바닥(사진 탁자와 앞자리, 문 앞, 방명록 앞)이 옅은 빗금과 이름으로 보인다.
 import * as THREE from 'three';
+import { makeCanvas, canvasTexture } from './draw.js';
 
 const GRID = 0.25, WALL_SNAP = 0.3, EDGE_SNAP = 0.2, UNDO_MAX = 50, FN_DELAY = 300;
 // 벽·천장 가구 (catalogue.json 의 mount). 높이는 모델의 경계 상자(models.js 의 modelSize)에서 읽는다.
@@ -118,14 +122,61 @@ export function setupEdit(ctx) {
     return best;
   }
 
-  // 가구 위에 선 것들: 바닥에 선 (러그나 액자가 아닌) 가구의 바닥 안에 가운데가 있고 y 가 있는 가구. 끌고 돌리고 넣을 때 함께 간다.
-  // 벽·천장 가구는 바닥 가구 위에 떠 있어도 그 가구의 것이 아니다 (하부장을 옮겨도 상부장은 벽에 남는다).
-  function kidsOf(i, items = ed.items) {
-    const h = items[i];
-    if (!h || h.y || h.type === 'frame' || isRug(h) || mountOf(h)) return [];
-    const e = ext(h);
-    return items.flatMap((o, j) => (j !== i && o.y > 0 && o.type !== 'frame' && !mountOf(o) && Math.abs(o.x - h.x) <= e.hx && Math.abs(o.z - h.z) <= e.hz ? [j] : []));
+  // ---------- 가구 위에 얹기 ----------
+  // 규칙은 opts.surfaces (src/lib/heap/surfaces.ts) 가 갖는다. 받침은 윗면 높이(tops: 카탈로그에 잰 값)를 가진 가구이고,
+  // 작은 가구의 y 는 받침의 y + 그 받침의 윗면 하나다. 메시에 빛을 쏘지 않는다: 받침은 바닥 크기 × 키의 상자로만 본다.
+  // 위에 선 것(kidsOf)은 저장하지 않고 끌기를 시작할 때마다 다시 찾는다: 가운데가 받침의 바닥 크기 안에 있고 밑면이 받침의 윗면에서 SURFACE_REST(0.08) 안인 가구.
+  const SURF = opts.surfaces;
+  const isHost = it => !!it && !!SURF.surfaceTops(it);
+  const isSmall = it => SURF.isSmallItem(it);
+  const inRect = (x, z, h, e = ext(h)) => Math.abs(x - h.x) <= e.hx && Math.abs(z - h.z) <= e.hz;
+  const hostBox = new THREE.Box3(), hitP = new THREE.Vector3();
+  // 커서(rayFrom 을 마친 ray) 아래의 받침 윗면 { j, y, x, z }. 없으면 null. skip 의 번호는 받침으로 보지 않는다 (들고 있는 것과 그 위의 것).
+  // 받침마다: 커서가 상자를 지나지 않으면 건너뛴다. 지나면 높은 윗면부터, 커서가 그 높이의 평면을 받침의 바닥 크기 안에서 지나는 첫 면을 고른다
+  // (위에서 보면 꼭대기, 책장의 칸을 가리키면 그 칸). 어느 면도 안에서 지나지 않으면(책상 앞판을 가리킨다) 커서가 상자에 들어간 높이 아래의 가장 높은 면
+  // (없으면 가장 낮은 면)에, 들어간 자리를 바닥 크기 안으로 당겨 둔다. 여러 받침이 걸리면 카메라에 가장 가까운 것.
+  function surfaceUnder(skip) {
+    const o = ray.ray.origin, d = ray.ray.direction;
+    let best = null;
+    ed.items.forEach((h, j) => {
+      const tops = !skip.has(j) && SURF.surfaceTops(h);
+      if (!tops) return;
+      const e = ext(h), y0 = h.y || 0, top = y0 + (SURF.itemHeight(h) ?? Math.max(...tops));
+      hostBox.min.set(h.x - e.hx, y0, h.z - e.hz); hostBox.max.set(h.x + e.hx, top, h.z + e.hz);
+      if (!ray.ray.intersectBox(hostBox, hitP)) return;
+      let pick = null;
+      if (d.y < -1e-6) for (let n = tops.length - 1; n >= 0; n--) {
+        const y = r2(y0 + tops[n]), t = (y - o.y) / d.y, x = o.x + d.x * t, z = o.z + d.z * t;
+        if (t > 0 && inRect(x, z, h, e)) { pick = { j, y, x, z, dist: t }; break; }
+      }
+      if (!pick) {
+        const below = tops.filter(t => y0 + t <= hitP.y + 0.02), t = below.length ? Math.max(...below) : tops[0];
+        pick = { j, y: r2(y0 + t), x: clamp(hitP.x, h.x - e.hx * 0.9, h.x + e.hx * 0.9), z: clamp(hitP.z, h.z - e.hz * 0.9, h.z + e.hz * 0.9), dist: hitP.distanceTo(o) };
+      }
+      if (!best || pick.dist < best.dist) best = pick;
+    });
+    return best;
   }
+  // 받침 i 위에 선 가구들 { list, parent }. 그 위에 선 것도 (책 더미 위의 화분) 함께, 받침보다 뒤에 온다. parent[j] 는 j 가 선 받침의 번호.
+  // 벽·천장 가구는 바닥 가구 위에 떠 있어도 그 가구의 것이 아니다 (하부장을 옮겨도 상부장은 벽에 남는다).
+  function kidsTree(i) {
+    const list = [], parent = new Map();
+    if (!isHost(ed.items[i])) return { list, parent };
+    const todo = [i];
+    while (todo.length) {
+      const k = todo.shift(), h = ed.items[k];
+      ed.items.forEach((o, j) => {
+        // 작은 가구만 딸려 간다 (하부장 높이에 놓인 스피커처럼 큰 것은 제자리에 남는다, codex)
+        if (j === i || parent.has(j) || !(o.y > 0) || o.type === 'frame' || mountOf(o) || !isSmall(o)) return;
+        if (SURF.restingTop(o, h) == null) return;
+        list.push(j); parent.set(j, k);
+        if (isHost(o)) todo.push(j);
+      });
+    }
+    return { list, parent };
+  }
+  const kidsOf = i => kidsTree(i).list;
+  const withY = (it, y) => { const o = { ...it }; if (y > 0) o.y = y; else delete o.y; return o; };
   // 벽의 열린 곳: 액자를 걸 수 없는 자리 (벽을 따라 at 에서 half 안)
   const OPENINGS = [
     WIN && { wall: WIN.wall, at: WIN.at, half: WIN.w / 2 + 0.08, name: '창문' },
@@ -133,20 +184,22 @@ export function setupEdit(ctx) {
     DOOR && { wall: DOOR.wall, at: DOOR.at, half: 0.56, name: '문' },
   ].filter(Boolean);
   // 비워 둘 바닥: 사진 탁자, 그 앞의 방석, 문 앞, 방명록 앞. 바닥에 선 가구만 본다 (러그와 가구 위의 물건은 길을 막지 않는다).
-  const zoneAt = (wall, at, along, off, why) => {
+  // name 은 꾸미는 동안 바닥에 그리는 짧은 이름, labelY 는 그 이름의 높이 (아래 "비워 둘 바닥 그리기")
+  const zoneAt = (wall, at, along, off, why, name) => {
     const p = WALLS[wall].point(at, 0, off);
-    return wall === 'back' ? { x: p.x, z: p.z, hx: along, hz: off, why } : { x: p.x, z: p.z, hx: off, hz: along, why };
+    return wall === 'back' ? { x: p.x, z: p.z, hx: along, hz: off, why, name } : { x: p.x, z: p.z, hx: off, hz: along, why, name };
   };
   const ZONES = [
-    { x: TABLE.x, z: TABLE.z, hx: TABLE.w / 2, hz: TABLE.d / 2, why: '사진 탁자 자리예요' },
-    { x: SEAT.x, z: SEAT.z, hx: 0.4, hz: 0.4, why: '사진 탁자 앞자리는 비워 둬요' },
-    DOOR && zoneAt(DOOR.wall, DOOR.at, 0.6, 0.6, '문 앞은 비워 둬요'),
-    GB && zoneAt(GB.wall, GB.at, 0.4, 0.6, '방명록 자리예요'),
+    { x: TABLE.x, z: TABLE.z, hx: TABLE.w / 2, hz: TABLE.d / 2, why: '사진 탁자 자리예요', name: '사진 탁자', labelY: TABLE.top + 0.35 },
+    { x: SEAT.x, z: SEAT.z, hx: 0.4, hz: 0.4, why: '사진 탁자 앞자리는 비워 둬요', name: '앞자리' },
+    DOOR && zoneAt(DOOR.wall, DOOR.at, 0.6, 0.6, '문 앞은 비워 둬요', '문 앞'),
+    GB && zoneAt(GB.wall, GB.at, 0.4, 0.6, '방명록 자리예요', '방명록 앞'),
   ].filter(Boolean);
   // 이 자리가 왜 안 되는지, 되면 null. 서버의 문구가 먼저다.
   function why(it) {
     const server = opts.placementError(it, room, tableAt);
     if (server) return server;
+    if (!isHung(it) && (it.y || 0) > Y_MAX) return '너무 높아요'; // 높이 띄운 받침 위: 서버의 높이 범위(0..layoutItemYMax)를 넘는다
     if (onWallType(it)) { // 액자와 벽 가구: 창문, 스크린, 문 위에는 걸 수 없다 (높이는 보지 않는다). 서로, 그리고 액자와는 겹쳐도 된다
       const wall = wallOf(it), u = wall === 'back' ? it.x : it.z, e = ext(it);
       const al = it.type === 'frame' ? FRAME_M : wall === 'back' ? e.hx : e.hz;
@@ -158,14 +211,20 @@ export function setupEdit(ctx) {
     const z = ZONES.find(q => Math.abs(it.x - q.x) < e.hx + q.hx - 0.02 && Math.abs(it.z - q.z) < e.hz + q.hz - 0.02);
     return z ? z.why : null;
   }
-  // 주인 가구가 base 에서 cand 로 갈 때 그 위의 물건이 가는 자리 (돌린 만큼 주인의 가운데를 돌아간다)
+  // 주인 가구가 base 에서 cand 로 갈 때 그 위의 물건이 가는 자리 (돌린 만큼 주인의 가운데를 돌아가고, 주인이 오르내린 만큼 함께 오르내린다)
   function kidAt(kid, base, cand) {
     const d = (cand.rot || 0) - (base.rot || 0), a = THREE.MathUtils.degToRad(d), dx = kid.x - base.x, dz = kid.z - base.z;
     const c = Math.cos(a), s = Math.sin(a);
-    return { ...kid, x: r2(cand.x + dx * c + dz * s), z: r2(cand.z - dx * s + dz * c), rot: normRot((kid.rot || 0) + d) };
+    const moved = { ...kid, x: r2(cand.x + dx * c + dz * s), z: r2(cand.z - dx * s + dz * c), rot: normRot((kid.rot || 0) + d) };
+    return withY(moved, r2((kid.y || 0) + (cand.y || 0) - (base.y || 0)));
   }
+  // 위에 선 것이 갈 자리가 서버에서 안 되면 그 까닭. 받침이 오르내린 만큼 함께 가므로 높이도 서버의 범위(0..layoutItemYMax)를 본다
   const kidsWhy = (m, cand) => {
-    for (const k of m.kidsBase) { const w = opts.placementError(kidAt(k, m.base, cand), room, tableAt); if (w) return `위에 올린 ${labelOf(k)}: ${w}`; }
+    for (const k of m.kidsBase) {
+      const c = kidAt(k, m.base, cand);
+      if ((c.y || 0) > Y_MAX) return `위에 올린 ${labelOf(k)}이(가) 너무 높아져요`;
+      const w = opts.placementError(c, room, tableAt); if (w) return `위에 올린 ${labelOf(k)}: ${w}`;
+    }
     return null;
   };
 
@@ -182,12 +241,46 @@ export function setupEdit(ctx) {
   const grid = new THREE.LineSegments(gridGeo, new THREE.LineBasicMaterial({ color: '#F3EADB', transparent: true, opacity: 0.35, depthWrite: false }));
   grid.visible = false;
   scene.add(tile, wallTile, grid); // dispose 는 scene.js 가 장면째 한다
+
   // 발판의 점선 테두리: 깊이를 보지 않고 늘 맨 위에 그린다 (가구 뒤로 들어간 발판도 자리가 보인다). 끄는 동안만 보인다.
   const corner = [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]].map(([x, y]) => new THREE.Vector3(x, y, 0.002));
   const edgeGeo = new THREE.BufferGeometry().setFromPoints(corner.flatMap((p, n) => [p, corner[(n + 1) % 4]]));
   const edgeMat = new THREE.LineDashedMaterial({ color: '#F3EADB', dashSize: 0.06, gapSize: 0.05, transparent: true, opacity: 0.9, depthTest: false, depthWrite: false });
   const edges = [tile, wallTile].map(t => { const l = new THREE.LineSegments(edgeGeo, edgeMat); l.computeLineDistances(); l.renderOrder = 12; l.visible = false; t.add(l); return l; });
-
+  // ---------- 비워 둘 바닥 그리기 ----------
+  // 바닥 가구를 들거나 끄는 동안 ZONES 를 바닥에 옅은 빗금과 짧은 이름으로 그린다 (위에서 보기에서도 같다). 받침 위에 얹히는 작은 가구,
+  // 러그, 벽·천장 가구를 들 때는 그리지 않는다 (그것들은 이 자리와 상관없다: why). 들고 있는 가구가 그 자리 때문에 빨간 동안은 그 자리만 짙게 그린다.
+  // 이름은 가구에 가려도 보이도록 깊이를 보지 않는다 (renderOrder 로 맨 위).
+  const hatch = makeCanvas(64, 64), hg = hatch.getContext('2d');
+  hg.strokeStyle = '#F3EADB'; hg.lineWidth = 9;
+  for (const o of [-64, 0, 64]) { hg.beginPath(); hg.moveTo(o, 64); hg.lineTo(o + 64, 0); hg.stroke(); }
+  const hatchTex = canvasTexture(hatch);
+  const zoneEdge = new THREE.LineDashedMaterial({ color: '#F3EADB', dashSize: 0.08, gapSize: 0.06, transparent: true, opacity: 0.8, depthWrite: false });
+  ctx.onDispose(() => { hatchTex.dispose(); zoneEdge.dispose(); });
+  const zoneViews = ZONES.map(q => {
+    const map = hatchTex.clone(); map.wrapS = map.wrapT = THREE.RepeatWrapping; map.repeat.set(2 * q.hx / 0.3, 2 * q.hz / 0.3); map.needsUpdate = true;
+    const mat = new THREE.MeshBasicMaterial({ color: '#ffffff', map, transparent: true, opacity: 0.4, depthWrite: false });
+    const area = new THREE.Mesh(new THREE.PlaneGeometry(2 * q.hx, 2 * q.hz), mat);
+    area.rotation.x = -Math.PI / 2; area.position.set(q.x, 0.018, q.z); area.renderOrder = 1; area.visible = false;
+    // 테두리: 발판과 같은 점선 (깊이는 본다: 가구 밑으로 들어간 곳은 가린다)
+    const rim = new THREE.LineSegments(edgeGeo, zoneEdge); rim.computeLineDistances(); rim.scale.set(2 * q.hx, 2 * q.hz, 1); area.add(rim);
+    const lc = makeCanvas(256, 64), lg = lc.getContext('2d');
+    lg.font = '600 30px "IBM Plex Sans KR", system-ui, sans-serif'; lg.textAlign = 'center'; lg.textBaseline = 'middle';
+    const w = Math.min(248, lg.measureText(q.name).width + 36);
+    lg.fillStyle = 'rgba(47, 44, 36, 0.62)'; lg.beginPath(); lg.roundRect(128 - w / 2, 8, w, 48, 24); lg.fill();
+    lg.fillStyle = '#F3EADB'; lg.fillText(q.name, 128, 33);
+    const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: canvasTexture(lc), transparent: true, depthTest: false, depthWrite: false }));
+    label.scale.set(1.12, 0.28, 1); label.position.set(q.x, q.labelY ?? 0.12, q.z); label.renderOrder = 13; label.visible = false;
+    scene.add(area, label);
+    return { q, area, label, mat };
+  });
+  function showZones(m) {
+    const c = m?.cand, on = !!c && !onWallType(c) && !isHung(c) && !isRug(c) && !(c.y > 0);
+    for (const v of zoneViews) {
+      v.area.visible = v.label.visible = on;
+      if (on) { const hit = m.why === v.q.why; v.mat.opacity = hit ? 0.75 : 0.4; v.mat.color.set(hit ? BAD : '#ffffff'); }
+    }
+  }
   // ---------- 그림자: 가려진 가구를 비쳐 그리기 ----------
   // 들고 있는 가구(와 그 위의 물건)를 두 번 더 그린다. 다른 재질은 건드리지 않는다: 복제한 메시에 이 두 재질만 입힌다.
   //   1) mask: 색은 쓰지 않고, 가구 자신이 맨 앞인 픽셀(깊이가 같거나 앞)에 스텐실 1 을 쓴다.
@@ -332,6 +425,7 @@ export function setupEdit(ctx) {
     clearTimeout(ed.fnTimer); ed.fnTimer = 0;
     const list = ed.move?.isNew ? [...ed.items, ed.move.cand ?? ed.move.base] : ed.items;
     ctx.applyItems(list);
+    if (ed.move) ed.move.builtY = list[ed.move.i]?.y || 0; // 들고 있는 그룹이 지어진 높이 (끄는 동안 오르내린 만큼만 그룹을 옮긴다: showMove)
     if (ed.move) showMove();
   }
   function flushFn() { if (ed.fnTimer) rebuild(); }
@@ -415,13 +509,21 @@ export function setupEdit(ctx) {
       u = r2(clamp(u, -half + FRAME_M, half - FRAME_M));
       return wall === 'back' ? { ...it, x: u, z: r2(-RZ), rot: 0, y: FRAME_Y } : { ...it, x: r2(-RX), z: u, rot: 90, y: FRAME_Y };
     }
-    floorPlane.constant = -(it.y || 0); // 가구 위의 물건은 자기 높이의 평면에서 커서를 따른다
-    if (!ray.ray.intersectPlane(floorPlane, hitV)) return m.cand;
-    let x = hitV.x + m.grab.x, z = hitV.z + m.grab.z;
+    // 작은 가구는 커서 아래의 받침 윗면을 먼저 본다 (surfaceUnder). 있으면 그 면 위의 점을 따르고, 없으면 바닥을 따른다.
+    // 큰 가구는 전처럼 자기 높이의 평면에서 커서를 따른다 (저장된 높이가 있으면 그대로 둔다).
+    const small = isSmall(it), on = small ? surfaceUnder(new Set([m.i, ...m.kids])) : null;
+    let x, z;
+    if (on) { x = on.x + m.grab.x; z = on.z + m.grab.z; }
+    else {
+      floorPlane.constant = small ? 0 : -(it.y || 0);
+      if (!ray.ray.intersectPlane(floorPlane, hitV)) return m.cand;
+      x = hitV.x + m.grab.x; z = hitV.z + m.grab.z;
+    }
+    const x0 = x, z0 = z;
     const e = ext(it), skip = new Set([m.isNew ? -1 : m.i, ...m.kids]);
     if (!ed.alt) {
       x = snapGrid(x); z = snapGrid(z);
-      if (!it.y && !isRug(it)) ed.items.forEach((o, j) => { // 이웃의 가장자리에 붙는다
+      if (!it.y && !on && !isRug(it)) ed.items.forEach((o, j) => { // 이웃의 가장자리에 붙는다 (가구 위에서는 붙지 않는다)
         if (skip.has(j) || o.y || o.type === 'frame' || isRug(o)) return;
         const oe = ext(o);
         if (Math.abs(z - o.z) < e.hz + oe.hz + 0.1) { const r = o.x + oe.hx + e.hx, l = o.x - oe.hx - e.hx; if (Math.abs(x - r) < EDGE_SNAP) x = r; else if (Math.abs(x - l) < EDGE_SNAP) x = l; }
@@ -431,16 +533,25 @@ export function setupEdit(ctx) {
       if (z - e.hz < -RZ + WALL_SNAP) z = -RZ + e.hz; if (z + e.hz > RZ - WALL_SNAP) z = RZ - e.hz;
     }
     it.x = r2(clamp(x, -RX + e.hx, RX - e.hx)); it.z = r2(clamp(z, -RZ + e.hz, RZ - e.hz)); // 방 밖으로는 나가지 않는다
-    return it;
+    if (!small) return it;
+    // 받침 위의 높이: 가운데가 그 받침의 바닥 크기 안이면 그 윗면, 격자에 맞춘 자리가 좁은 받침(바 테이블)에서 벗어나면 맞추기 전의 자리, 아니면 바닥
+    let y = 0;
+    if (on) {
+      const h = ed.items[on.j];
+      if (inRect(it.x, it.z, h)) y = on.y;
+      else { const x1 = r2(clamp(x0, -RX + e.hx, RX - e.hx)), z1 = r2(clamp(z0, -RZ + e.hz, RZ - e.hz)); if (inRect(x1, z1, h)) { it.x = x1; it.z = z1; y = on.y; } }
+    }
+    return withY(it, y);
   }
   // m.cand 대로 그룹(그리고 위의 물건)을 옮긴다. 다시 짓지 않는다.
   function showMove() {
     const m = ed.move, groups = ctx.build.groups, c = m.cand;
-    const g = groups[m.i];
-    if (g) { g.visible = !!c; if (c) { g.position.set(c.x, 0, c.z); g.rotation.y = THREE.MathUtils.degToRad(c.rot || 0); } }
+    const g = groups[m.i], built = m.builtY ?? (m.base.y || 0);
+    // 그룹은 지어진 높이(built)를 이미 안에 지닌다: 끄는 동안 받침에 오르내린 만큼만 그룹을 올리고 내린다
+    if (g) { g.visible = !!c; if (c) { g.position.set(c.x, (c.y || 0) - built, c.z); g.rotation.y = THREE.MathUtils.degToRad(c.rot || 0); } }
     if (c) m.kids.forEach((j, n) => {
       const k = kidAt(m.kidsBase[n], m.base, c), kg = groups[j];
-      if (kg) { kg.position.set(k.x, 0, k.z); kg.rotation.y = THREE.MathUtils.degToRad(k.rot || 0); }
+      if (kg) { kg.position.set(k.x, (k.y || 0) - (m.kidsBase[n].y || 0), k.z); kg.rotation.y = THREE.MathUtils.degToRad(k.rot || 0); }
     });
   }
   function update(ev) {
@@ -518,11 +629,11 @@ export function setupEdit(ctx) {
   }
   function dropDrag(ev) {
     const m = ed.move;
-    if (overDock(ev)) { ed.move = null; grid.visible = false; remove(m.i); return; }
+    if (overDock(ev)) { ed.move = null; grid.visible = false; remove(m.i, m.kids); return; }
     ed.move = null; grid.visible = false;
     const c = m.cand;
     if (m.why || !c) { notice(`제자리로 돌아갔어요 · ${m.why}`); rebuild(); return; }
-    if (c.x === m.base.x && c.z === m.base.z && c.rot === normRot(m.base.rot || 0)) { rebuild(); return; }
+    if (c.x === m.base.x && c.z === m.base.z && (c.y || 0) === (m.base.y || 0) && c.rot === normRot(m.base.rot || 0)) { rebuild(); return; }
     pushUndo();
     const next = ed.items.slice();
     next[m.i] = c; m.kids.forEach((j, n) => { next[j] = kidAt(m.kidsBase[n], m.base, c); });
@@ -552,10 +663,11 @@ export function setupEdit(ctx) {
     rebuild();
   }
   // 가구를 넣는다. 그 위에 선 물건도 함께 간다. 알림의 되돌리기로 돌아온다
-  function remove(i) {
+  // kids: 끌던 받침을 목록에 떨어뜨릴 때는 끌기를 시작할 때 찾은 것을 준다 (그때는 ed.items 의 자리가 아직 옛 자리라 다시 찾으면 어긋난다)
+  function remove(i, kidList = null) {
     if (ed.move?.isNew) { endMove(); return; }
     const it = ed.items[i]; if (!it) return;
-    const kids = new Set(kidsOf(i));
+    const kids = new Set(kidList ?? kidsOf(i));
     pushUndo();
     ed.items = ed.items.filter((_, j) => j !== i && !kids.has(j)); ed.sel = null;
     notice(`넣어 뒀어요 · ${labelOf(it)}${kids.size ? ` 외 ${kids.size}개` : ''}`, true);
@@ -607,7 +719,10 @@ export function setupEdit(ctx) {
     rebuild();
   }
   // 모양 바꾸기: 같은 자리, 같은 방향, 같은 기능으로 모델만 바꾼다 (F5). 고를 수 있는 모델은 room-editor.tsx 가 같은 기능을 달 수 있는 것으로 거른다.
-  // 높이는 받침 높이(lift)의 차이만큼 옮긴다: 책상 위의 노트북을 모니터로 바꾸면 책상 위에 그대로 있다. 새 크기가 자리에 맞지 않으면 바꾸지 않는다.
+  // 바닥 가구의 높이: 작은 가구는 서 있던 받침의 윗면에 그대로 서고(책상 위의 노트북을 모니터로 바꾸면 책상 위에 남는다), 작은 것이 큰 것으로 바뀌면 바닥에 선다.
+  // 받침의 모양이 바뀌면 위의 것은 새 윗면 중 예전 높이(받침 밑면에서)에 가장 가까운 면에 앉고, 새 바닥 크기 밖이면 바닥으로 내려간다.
+  // 그 위의 것은 자기 받침이 움직인 만큼 간다. 모두 카탈로그의 윗면 높이로 바꾸기 전에 셈해 한 걸음으로 넣는다 (모델을 기다리지 않는다).
+  // 새 크기가 자리에 맞지 않거나 위의 것이 서버의 높이 범위를 넘으면 바꾸지 않는다.
   function swap(i, to) {
     const it = ed.items[i];
     if (!it || !to || (to.type !== 'model' && to.type !== 'shelf') || (to.type === 'model' && typeof to.model !== 'string')) return;
@@ -622,9 +737,10 @@ export function setupEdit(ctx) {
       const [lo, hi] = yRange(next);
       next.y = kind === 'ceiling' ? hi : r2(clamp(it.y || 0, lo, hi));
       if (kind === 'wall') Object.assign(next, hangAt(next, wallOf(it), wallOf(it) === 'back' ? it.x : it.z));
-    } else {
-      const lift = o => (o.type === 'model' ? entryOf(o)?.lift ?? 0 : 0);
-      const y = r2((it.y || 0) - lift(it) + lift(next));
+    }
+    const { list: kids, parent } = kind ? { list: [], parent: new Map() } : kidsTree(i);
+    if (!kind) { // 바닥 가구 (위에 얹는 것 포함)
+      const y = isSmall(it) && !isSmall(next) ? 0 : it.y || 0;
       if (y > 0) next.y = y; else delete next.y;
     }
     if (!(next.type === 'lamp' || entryOf(next)?.category === 'lamp')) delete next.lit;
@@ -632,11 +748,24 @@ export function setupEdit(ctx) {
     if (!next.y || kind === 'ceiling') { next.x = r2(clamp(next.x, -RX + e.hx, RX - e.hx)); next.z = r2(clamp(next.z, -RZ + e.hz, RZ - e.hz)); }
     const w = why(next);
     if (w) { notice(`그 모양은 이 자리에 맞지 않아요 · ${w}`); return; }
+    const placed = new Map([[i, next]]), tops = SURF.surfaceTops(next);
+    for (const j of kids) { // kidsTree 는 받침을 그 위의 것보다 먼저 준다
+      const k = ed.items[j], p = parent.get(j);
+      let y;
+      if (p === i) {
+        const rel = (k.y || 0) - (it.y || 0);
+        y = tops && inRect(k.x, k.z, next) ? r2((next.y || 0) + tops.reduce((a, t) => (Math.abs(t - rel) < Math.abs(a - rel) ? t : a))) : 0;
+      } else y = r2((k.y || 0) + (placed.get(p).y || 0) - (ed.items[p].y || 0));
+      placed.set(j, withY(k, y));
+    }
+    const high = kids.find(j => (placed.get(j).y || 0) > Y_MAX);
+    if (high != null) { notice(`그 모양은 이 자리에 맞지 않아요 · 위에 올린 ${labelOf(ed.items[high])}이(가) 너무 높아져요`); return; }
     endMove(); pushUndo();
-    ed.items = ed.items.map((o, j) => (j === i ? next : o)); ed.sel = i;
+    ed.items = ed.items.map((o, j) => placed.get(j) ?? o); ed.sel = i;
     notice(`모양을 바꿨어요 · ${labelOf(it)} → ${labelOf(next)}`, true);
     rebuild();
   }
+
   // 처음으로: 마지막으로 저장한 모습. 되돌리기로 돌아올 수 있다
   function reset() {
     endMove(); pushUndo();
@@ -693,7 +822,7 @@ export function setupEdit(ctx) {
     if (!ed.on) return;
     const had = !!ed.move || !!ed.fnTimer;
     ed.move = null; ed.press = null; ed.sel = null; ed.on = false; ed.rdown = null;
-    grid.visible = tile.visible = wallTile.visible = false; clearGhosts();
+    grid.visible = tile.visible = wallTile.visible = false; clearGhosts(); showZones(null);
     ctx.editCam.reset(); // 방 카메라로는 loop.js 가 데려간다
     canvas.style.cursor = '';
     if (had) rebuild();
@@ -840,6 +969,7 @@ export function setupEdit(ctx) {
     const m = ed.move, bar = root.querySelector('#ed-bar'), chip = root.querySelector('#ed-why');
     if (m) syncGhosts([ctx.build.groups[m.i], ...m.kids.map(j => ctx.build.groups[j])].filter(Boolean)); else if (ghosts.length) clearGhosts();
     for (const l of edges) l.visible = !!m?.cand;
+    showZones(m);
     if (m?.cand) { showTile(m.cand, m.why ? BAD : OK); silMat.color.set(m.why ? BAD : OK); }
     else if (!m && ed.sel != null && ed.items[ed.sel]) showTile(ed.items[ed.sel], PICKED);
     else tile.visible = wallTile.visible = false;

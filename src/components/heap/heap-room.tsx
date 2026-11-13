@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { addGuestbookAction, recordVisitAction } from "@/lib/heap/actions";
 import { itemHalfExtents, itemPlacementError } from "@/lib/heap/layout";
+import { surfaces } from "@/lib/heap/surfaces";
 import { HEAP_POLICY } from "@/lib/heap/policy";
 import { parsePieceUrl } from "@/lib/heap/platform";
 import { isEmailAddress, isSafeLink, isWebLink, parseMusicUrl } from "@/lib/heap/slots";
@@ -131,6 +132,8 @@ export function HeapRoom({
         // 꾸미기(engine/edit.js)가 옮기는 동안 쓰는 서버의 자리 규칙: 바닥 크기, 자리 검사(서버와 같은 문구), 액자 높이와 벽 여백
         itemHalfExtents,
         placementError: itemPlacementError,
+        // 가구 위에 얹기: 받침의 윗면 높이, 작은 가구, 위에 선 것 찾기, 저장된 물건을 윗면에 맞추기 (surfaces.ts)
+        surfaces,
         policy: HEAP_POLICY,
         recordVisit: () => recordVisitAction(data.roomUuid),
         addGuestbook: (name: string) => addGuestbookAction(data.roomUuid, name),

@@ -47,8 +47,6 @@ type EditState = {
   view: { plan: boolean; fitted: boolean };
 };
 
-// 책상 위에 얹는 달력의 높이 (노트북, 모니터와 같은 책상 높이)
-const CALENDAR_Y = 0.77;
 const HAND_PREFIX = "hand:";
 const RECENT_KEY = "heap-editor-recent";
 const RECENT_MAX = 12;
@@ -411,6 +409,7 @@ export function RoomEditor({
   };
 
   // 카탈로그 항목(또는 손으로 만드는 가구)을 커서에 올린다. fn 이 있으면 그 기능을 단 채로 놓인다.
+  // 높이(y)는 주지 않는다: 작은 가구는 엔진(edit.js)이 커서 아래 가구의 윗면을 재어 올리고, 벽·천장 가구는 모델의 키로 정한다.
   const arm = (m: Model, fn?: SlotFn) => {
     if (armedId === m.id && !fn) {
       cmd({ op: "cancel" });
@@ -420,9 +419,9 @@ export function RoomEditor({
     const hand = m.id.startsWith(HAND_PREFIX) ? m.id.slice(HAND_PREFIX.length) : null;
     const template: Item = hand
       ? hand === "calendar"
-        ? { type: hand, x: 0, z: 0, rot: 0, y: CALENDAR_Y, fn: { kind: "calendar", entries: [] } }
+        ? { type: hand, x: 0, z: 0, rot: 0, fn: { kind: "calendar", entries: [] } }
         : { type: hand, x: 0, z: 0, rot: 0, y: HEAP_POLICY.frameY }
-      : { type: "model", model: m.id, x: 0, z: 0, rot: 0, ...(m.lift ? { y: m.lift } : {}), ...(fn ? { fn } : {}) };
+      : { type: "model", model: m.id, x: 0, z: 0, rot: 0, ...(fn ? { fn } : {}) };
     setArmedId(m.id);
     setBubbleFor(null);
     setDraft(null);
