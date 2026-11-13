@@ -14,9 +14,23 @@ type Obj = Record<string, unknown>;
 type Fail = { error: string };
 
 // 엔진 BUILD가 직접 만드는 가구. 나머지는 type "model" + 카탈로그 id.
-// frame은 벽에 거는 액자다 (기념품 기능을 달 수 있다).
-const HAND_TYPES = new Set(["bed", "shelf", "plant", "snake", "lamp", "books", "frame"]);
+// frame은 벽에 거는 액자다 (기념품 기능을 달 수 있다). calendar는 책상 위 달력이다 (달력 기능을 단다).
+const HAND_TYPES = new Set(["bed", "shelf", "plant", "snake", "lamp", "books", "frame", "calendar"]);
 const MODEL_IDS = new Set(catalogue.models.map((model) => model.id));
+// 손으로 만드는 가구의 바닥 크기(엔진 단위, 회전 전). room-engine.js BUILD의 치수에서 읽은 값이고 room-editor.tsx도 이 표를 쓴다.
+// frame은 벽에 걸려서 바닥을 차지하지 않으니 없다. plant는 item.size를 곱한다.
+export const HAND_FOOTPRINT: Record<string, { w: number; d: number }> = {
+  bed: { w: 2.8, d: 1.4 },
+  shelf: { w: 1.6, d: 0.5 },
+  plant: { w: 0.7, d: 0.7 },
+  snake: { w: 0.4, d: 0.4 },
+  lamp: { w: 0.5, d: 0.5 },
+  books: { w: 0.45, d: 0.35 },
+  calendar: { w: 0.46, d: 0.2 },
+};
+const MODEL_BY_ID = new Map(catalogue.models.map((model) => [model.id, model]));
+// 불을 켜고 끌 수 있는 가구: 손으로 만드는 lamp, 그리고 카탈로그 category가 lamp인 모델
+const LAMP_MODEL_IDS = new Set(catalogue.models.filter((model) => model.category === "lamp").map((model) => model.id));
 const WALLS = new Set(["back", "left"]);
 const TIME_NAMES = new Set(["auto", "night", "dawn", "morning", "noon", "golden", "dusk"]);
 const PALETTE_KEYS = new Set([
@@ -43,10 +57,10 @@ function unknownKey(obj: Obj, allowed: readonly string[]): string | null {
 function checkItem(raw: unknown, index: number): Fail | { item: Obj } {
   const at = `items[${index}]`;
   if (!isObj(raw)) return { error: `${at}: 객체가 아니에요.` };
-  const bad = unknownKey(raw, ["type", "x", "z", "rot", "size", "model", "tint", "y", "fn"]);
+  const bad = unknownKey(raw, ["type", "x", "z", "rot", "size", "model", "tint", "y", "fn", "lit"]);
   if (bad) return { error: `${at}: 알 수 없는 필드 ${bad}` };
 
-  const { type, x, z, rot, size, model, tint, y, fn } = raw;
+  const { type, x, z, rot, size, model, tint, y, fn, lit } = raw;
   if (typeof type !== "string" || !(type === "model" || HAND_TYPES.has(type))) {
     return { error: `${at}: 알 수 없는 가구 종류` };
   }
@@ -78,6 +92,14 @@ function checkItem(raw: unknown, index: number): Fail | { item: Obj } {
     if (typeof tint !== "boolean") return { error: `${at}: tint는 true/false여야 해요.` };
     item.tint = tint;
   }
+  if (lit !== undefined) {
+    // 조명 스위치. 없으면 켜진 것으로 본다 (밤에 불이 들어온다). false면 늘 꺼져 있다.
+    if (typeof lit !== "boolean") return { error: `${at}: lit는 true/false여야 해요.` };
+    if (!(type === "lamp" || (type === "model" && LAMP_MODEL_IDS.has(item.model as string)))) {
+      return { error: `${at}: lit는 조명에만 쓸 수 있어요.` };
+    }
+    item.lit = lit;
+  }
   if (fn !== undefined) {
     // 가구에 붙는 기능. 그 가구가 달 수 있는 종류인지는 catalogue.json의 slots로 본다.
     const r = checkFn(fn, type, item.model as string | undefined, `${at}.fn`);
@@ -106,6 +128,69 @@ function checkWallPart(
     part[key] = raw[key];
   }
   return { part };
+}
+
+// 가구 하나가 바닥에서 차지하는 직사각형의 반쪽 크기(회전한 뒤, 축에 맞춘 경계). 바닥 크기를 모르는 가구는 null이다.
+export function itemHalfExtents(item: Obj): { hx: number; hz: number } | null {
+  let w: number;
+  let d: number;
+  if (item.type === "model") {
+    const model = MODEL_BY_ID.get(item.model as string);
+    if (!model) return null;
+    ({ w, d } = model);
+  } else {
+    const hand = HAND_FOOTPRINT[item.type as string];
+    if (!hand) return null;
+    const k = item.type === "plant" ? ((item.size as number | undefined) ?? 1) : 1;
+    w = hand.w * k;
+    d = hand.d * k;
+  }
+  const angle = (((item.rot as number | undefined) ?? 0) * Math.PI) / 180;
+  const c = Math.abs(Math.cos(angle));
+  const s = Math.abs(Math.sin(angle));
+  return { hx: (w * c + d * s) / 2, hz: (w * s + d * c) / 2 };
+}
+
+// 가구는 바닥 크기째로 방 안에 있어야 한다. 좌표 범위(layoutCoordMax)만 보면 6 x 6 방에서도 방 밖에 놓을 수 있다.
+// 방 크기가 없으면 엔진 기본(8 x 8)으로 본다. 벽 액자는 벽 자리 검사(checkFrames)가 따로 본다.
+function checkBounds(items: Obj[] | undefined, room: { w: number; d: number } | undefined): string | null {
+  const w = room?.w ?? 8, d = room?.d ?? 8, eps = 0.05;
+  for (let i = 0; i < (items?.length ?? 0); i++) {
+    const it = items![i];
+    if (it.type === "frame") continue;
+    const e = itemHalfExtents(it);
+    if (!e) continue;
+    if (Math.abs(it.x as number) + e.hx > w / 2 + eps || Math.abs(it.z as number) + e.hz > d / 2 + eps) {
+      return `items[${i}]: 가구가 방 밖으로 나가요.`;
+    }
+  }
+  return null;
+}
+
+// 앉는 가구(의자, 소파)는 사진 탁자와 겹치면 그 자리에 앉을 길이 막힌다. 탁자는 고정이라 서버가 거른다.
+// 러그는 바닥에 앉는 자리라서 여기서는 보지 않는다 (탁자 밑에 깔 수 있다. 앉을 자리가 탁자 밑이면 엔진이 앉히지 않는다).
+const SEAT_CATEGORIES = new Set(
+  Object.entries(catalogue.seats as Record<string, { floor?: boolean }>)
+    .filter(([, rule]) => !rule.floor)
+    .map(([category]) => category),
+);
+function checkSeatsClear(items: Obj[] | undefined, table: { x: number; z: number }): string | null {
+  const eps = 0.01;
+  for (let i = 0; i < (items?.length ?? 0); i++) {
+    const it = items![i];
+    if (it.type !== "model") continue;
+    const model = MODEL_BY_ID.get(it.model as string);
+    if (!model || !SEAT_CATEGORIES.has(model.category)) continue;
+    const e = itemHalfExtents(it);
+    if (!e) continue;
+    if (
+      Math.abs((it.x as number) - table.x) < e.hx + HEAP_POLICY.tableW / 2 - eps &&
+      Math.abs((it.z as number) - table.z) < e.hz + HEAP_POLICY.tableD / 2 - eps
+    ) {
+      return `items[${i}]: 의자와 소파는 사진 탁자와 겹치게 둘 수 없어요.`;
+    }
+  }
+  return null;
 }
 
 // 벽 액자는 꾸미기가 놓는 자리에만 둘 수 있다: 뒷벽(z = -d/2, 0도) 또는 왼쪽 벽(x = -w/2, 90도), 벽을 따라 모서리에서 margin 이상,
@@ -233,8 +318,12 @@ export function validateLayout(input: unknown): LayoutCheck {
   // 벽 액자는 방 크기를 알아야 위치를 볼 수 있어서 모든 필드를 읽은 뒤에 본다.
   const frameError = checkFrames(out.items as Obj[] | undefined, out.room as { w: number; d: number } | undefined);
   if (frameError) return fail(frameError);
+  const boundsError = checkBounds(out.items as Obj[] | undefined, out.room as { w: number; d: number } | undefined);
+  if (boundsError) return fail(boundsError);
   // 엔진이 가드 없이 읽는 필드: table.x/z, screen.wall/at. 빠진 layout은 방을 그리다 멈춘다.
   if (!out.table) return fail("table이 필요해요.");
   if (!out.screen) return fail("screen이 필요해요.");
+  const seatError = checkSeatsClear(out.items as Obj[] | undefined, out.table as { x: number; z: number });
+  if (seatError) return fail(seatError);
   return { ok: true, layout: out };
 }

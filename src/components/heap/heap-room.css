@@ -65,9 +65,23 @@
 .heap-room .player-bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 13px; color: var(--paper); }
 .heap-room .player-bar span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .heap-room #player-frame { background: #000; }
-.heap-room #player-frame iframe { display: block; width: 100%; height: 100%; border: 0; }
+.heap-room #player-frame iframe, .heap-room #music-frame iframe { display: block; width: 100%; height: 100%; border: 0; }
 .heap-room #player-note { margin: 0; max-width: 300px; padding: 10px 12px; border-radius: 10px; background: rgba(47, 44, 36, 0.85); font-size: 13px; line-height: 1.5; }
 .heap-room #player-note[hidden] { display: none; }
+
+/* 음악 플레이어: 방 오른쪽 위, 방 이름의 반대편. 안에 영상 말고는 아무것도 겹치지 않는다.
+   --music-w(엔진이 정한 영상 폭)가 있는 동안 오버레이와 방 이름 줄과 토스트는 이 자리를 비켜 간다. 꾸미기 패널이 열려 있으면 그 왼쪽에 붙는다. */
+.heap-room { --music-right: 16px; }
+.heap-room.editing { --music-right: calc(var(--editor-w) + 16px); }
+.heap-room #music { position: absolute; top: 16px; right: var(--music-right); z-index: 2; display: flex; flex-direction: column; gap: 8px; padding: 8px; border-radius: 12px; background: rgba(47, 44, 36, 0.78); }
+.heap-room #music[hidden] { display: none; }
+.heap-room #music-frame { background: #000; }
+.heap-room #music-note { margin: 0; max-width: 300px; font-size: 13px; line-height: 1.5; color: var(--paper); }
+.heap-room #music-note[hidden], .heap-room #music-link[hidden] { display: none; }
+.heap-room #music-link { align-self: flex-start; }
+.heap-room:has(#music:not([hidden])) .overlay { right: calc(var(--music-right) + var(--music-w, 0px) + 32px); }
+.heap-room:has(#music:not([hidden])) .who { max-width: calc(100% - var(--music-w, 0px) - 28px); }
+.heap-room:has(#music:not([hidden])) #toast { left: calc((100% - var(--music-right) - var(--music-w, 0px) - 28px) / 2); max-width: calc(100% - var(--music-right) - var(--music-w, 0px) - 60px); }
 
 .heap-room .phone { width: min(330px, 100%); height: min(640px, calc(100cqh - 48px)); border-radius: 34px; padding: 10px; background: #2f2c24; box-shadow: 0 20px 60px rgba(0,0,0,0.4); display: flex; }
 .heap-room .phone-screen { flex: 1; min-width: 0; border-radius: 26px; background: #efe6d6; color: var(--ink); display: flex; flex-direction: column; overflow: hidden; }
@@ -90,6 +104,11 @@
 .heap-room .ks-meta { font-size: 13px; color: rgba(47, 44, 36, 0.62); font-variant-numeric: tabular-nums; }
 .heap-room .ks-caption { margin: 0; font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; }
 .heap-room #ks-body .btn { align-self: flex-start; }
+/* 달력 패널: 날짜, 설명, 며칠 남았는지 */
+.heap-room .cal-row { display: flex; align-items: baseline; gap: 10px; padding: 8px 0; border-bottom: 1px dashed rgba(86, 83, 68, 0.25); font-size: 14px; }
+.heap-room .cal-row b { font-variant-numeric: tabular-nums; color: var(--clay); flex: none; }
+.heap-room .cal-row span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.heap-room .cal-row small { color: rgba(47, 44, 36, 0.62); flex: none; }
 
 .heap-room .grid-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
 .heap-room .gitem { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 12px; }
@@ -107,6 +126,9 @@
 .heap-room .roomlist button:disabled { opacity: 0.6; cursor: default; }
 .heap-room .roomlist b { font-family: var(--hand); font-size: 26px; font-weight: 400; color: var(--clay); }
 .heap-room .roomlist small { color: rgba(47, 44, 36, 0.62); }
+/* 다녀간 뒤 바뀐 방의 점 */
+.heap-room .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--clay); margin-left: 8px; vertical-align: middle; }
+.heap-room .note .dot { margin: 0 6px 0 0; }
 
 .heap-room #fade { position: absolute; inset: 0; background: var(--olive); opacity: 0; pointer-events: none; transition: opacity 0.35s; }
 .heap-room #fade.on { opacity: 1; pointer-events: auto; }
@@ -160,3 +182,8 @@
 .heap-room .ed-linkrow { display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 10px; background: rgba(86, 83, 68, 0.07); }
 .heap-room .ed-linkrow input { font: 13px var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 8px; padding: 6px 8px; }
 .heap-room .ed-bad { color: #a23a2a; }
+/* 오류 줄은 늘 한 줄 자리를 차지한다: 나타나고 사라져도 아래 칸이 밀리지 않는다 */
+.heap-room .ed-slot { display: block; min-height: 1.5em; }
+.heap-room .ed-fn-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.heap-room .ed-calrow { display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 10px; background: rgba(86, 83, 68, 0.07); }
+.heap-room .ed-calrow input { font: 13px var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 8px; padding: 6px 8px; }

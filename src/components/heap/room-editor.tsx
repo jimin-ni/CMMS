@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type RefObject } from "react";
 import { saveLayoutAction } from "@/lib/heap/actions";
 import { HEAP_POLICY } from "@/lib/heap/policy";
-import { slotKindsFor, slotLabel, type PcLink, type SlotFn, type SlotKind } from "@/lib/heap/slots";
+import { HAND_FOOTPRINT, itemHalfExtents } from "@/lib/heap/layout";
+import { parseMusicUrl, slotKindsFor, slotLabel, type CalendarEntry, type PcLink, type SlotFn, type SlotKind } from "@/lib/heap/slots";
 
 // 꾸미기 패널. 방 주인이 가구를 옮기고 시간대를 고른 뒤 서버에 저장한다.
 // 엔진(room-engine.js)과는 방 루트 요소의 이벤트로만 이야기한다: heap:get 으로 읽고, heap:items / heap:time 으로 바꾼다.
@@ -20,6 +21,8 @@ type Item = {
   tint?: boolean;
   y?: number;
   fn?: SlotFn;
+  // 조명 스위치. 없으면 켜진 것(밤에 불이 들어온다), false면 늘 꺼져 있다.
+  lit?: boolean;
 };
 type Model = { id: string; label: string; category: string; w?: number; d?: number; lift?: number };
 type Wall = "back" | "left";
@@ -44,15 +47,19 @@ type RoomState = {
 
 // 엔진이 직접 만드는 가구의 이름과 바닥 크기(엔진 단위, 회전 전). room-engine.js 의 BUILD 치수에서 읽은 값이다.
 // 화분(plant)은 item.size 를 곱한다. 모델(type: model)의 크기는 catalogue.json 의 w, d 를 쓴다.
+// 바닥 크기는 서버 검사와 같은 표(layout.ts의 HAND_FOOTPRINT)에서 가져온다. 액자는 벽에 걸려서 표에 없고 여기서만 그린다.
 const HAND: Record<string, { label: string; w: number; d: number }> = {
-  bed: { label: "침대", w: 2.8, d: 1.4 },
-  shelf: { label: "앨범 책장", w: 1.6, d: 0.5 },
-  plant: { label: "화분", w: 0.7, d: 0.7 },
-  snake: { label: "산세베리아", w: 0.4, d: 0.4 },
-  lamp: { label: "조명", w: 0.5, d: 0.5 },
-  books: { label: "책 더미", w: 0.45, d: 0.35 },
+  bed: { label: "침대", ...HAND_FOOTPRINT.bed },
+  shelf: { label: "앨범 책장", ...HAND_FOOTPRINT.shelf },
+  plant: { label: "화분", ...HAND_FOOTPRINT.plant },
+  snake: { label: "산세베리아", ...HAND_FOOTPRINT.snake },
+  lamp: { label: "조명", ...HAND_FOOTPRINT.lamp },
+  books: { label: "책 더미", ...HAND_FOOTPRINT.books },
   frame: { label: "액자", w: 0.8, d: 0.12 },
+  calendar: { label: "탁상 달력", ...HAND_FOOTPRINT.calendar },
 };
+// 책상 위에 얹는 달력의 높이 (노트북, 모니터와 같은 책상 높이)
+const CALENDAR_Y = 0.77;
 // 벽 액자는 벽에 붙는다. 놓는 곳에서 가까운 벽으로 당기고, 높이 y는 액자의 가운데 값이다.
 // 값은 policy.ts에 있다 (서버가 같은 자리만 받는다).
 const FRAME_Y = HEAP_POLICY.frameY;
@@ -78,6 +85,7 @@ const GROUPS = [
   { label: "책장", cats: ["shelf"] },
   { label: "주방", cats: ["kitchen"] },
   { label: "조명", cats: ["lamp"] },
+  { label: "음향", cats: ["audio"] },
   { label: "화분", cats: ["plant"] },
   { label: "러그", cats: ["rug"] },
   { label: "화면", cats: ["screen"] },
@@ -233,7 +241,9 @@ export function RoomEditor({
       const hand = armed.startsWith(HAND_PREFIX) ? armed.slice(HAND_PREFIX.length) : null;
       const lift = models.find((m) => m.id === armed)?.lift;
       const made: Item = hand
-        ? { type: hand, x, z, rot: 0, y: FRAME_Y }
+        ? hand === "calendar"
+          ? { type: hand, x, z, rot: 0, y: CALENDAR_Y, fn: { kind: "calendar", entries: [] } }
+          : { type: hand, x, z, rot: 0, y: FRAME_Y }
         : { type: "model", model: armed, x, z, rot: 0, ...(lift ? { y: lift } : {}) };
       change([...items, placed(made)], items.length);
       setArmed(null);
@@ -307,10 +317,50 @@ export function RoomEditor({
       (m) => g.cats.includes(m.category) || (g.cats.includes("decor") && !KNOWN.includes(m.category)),
     ),
   })).filter((g) => g.models.length > 0);
-  // 엔진이 직접 만드는 벽 액자는 카탈로그에 없어서 한 묶음으로 따로 낸다.
-  groups.push({ label: "액자", models: [{ id: `${HAND_PREFIX}frame`, label: "벽 액자", category: "frame" }] });
+  // 엔진이 직접 만드는 벽 액자와 책상 달력은 카탈로그에 없어서 한 묶음으로 따로 낸다.
+  groups.push({
+    label: "액자·달력",
+    models: [
+      { id: `${HAND_PREFIX}frame`, label: "벽 액자", category: "frame" },
+      { id: `${HAND_PREFIX}calendar`, label: "탁상 달력", category: "calendar" },
+    ],
+  });
   const shown = groups[Math.min(group, groups.length - 1)];
   const selItem = sel != null ? items[sel] : undefined;
+  // 앉는 가구(의자, 소파)를 놓을 때의 경고. 사진 탁자와 겹치면 서버가 저장을 거절하고, 다른 가구와 겹치면 저장은 되지만 그 자리에는 앉을 수 없다.
+  const seatWarning = (): string | null => {
+    if (sel == null || !selItem || selItem.type !== "model") return null;
+    const category = (it: Item) => models.find((m) => m.id === it.model)?.category;
+    if (category(selItem) !== "chair" && category(selItem) !== "sofa") return null;
+    const e = itemHalfExtents(selItem);
+    if (!e) return null;
+    const t = room.table;
+    if (Math.abs(selItem.x - t.x) < e.hx + t.w / 2 - 0.01 && Math.abs(selItem.z - t.z) < e.hz + t.d / 2 - 0.01) {
+      return "사진 탁자와 겹쳐요. 의자와 소파는 탁자와 겹치게 둘 수 없어서 저장할 때 거절돼요.";
+    }
+    const clash = items.some((o, i) => {
+      if (i === sel || o.y || o.type === "frame" || category(o) === "rug") return false;
+      const f = itemHalfExtents(o);
+      return !!f && Math.abs(selItem.x - o.x) < e.hx + f.hx - 0.01 && Math.abs(selItem.z - o.z) < e.hz + f.hz - 0.01;
+    });
+    return clash ? "다른 가구와 겹쳐요. 저장은 되지만 이 자리에는 앉을 수 없어요." : null;
+  };
+  const seatNote = seatWarning();
+  // 조명 스위치: 끄면 lit: false를 적고, 다시 켜면 필드를 뺀다 (없으면 켜진 것). 바로 방에 보낸다.
+  const isLamp = (it: Item) => it.type === "lamp" || (it.type === "model" && models.find((m) => m.id === it.model)?.category === "lamp");
+  const toggleLamp = () => {
+    if (sel == null) return;
+    change(
+      items.map((it, i) => {
+        if (i !== sel) return it;
+        const rest = { ...it };
+        if (it.lit === false) delete rest.lit;
+        else rest.lit = false;
+        return rest;
+      }),
+      sel,
+    );
+  };
   const setFn = (fn: SlotFn | undefined) => {
     if (sel == null) return;
     changeLater(
@@ -417,7 +467,19 @@ export function RoomEditor({
             시간 · {timeLabel}
           </button>
         </div>
-        {selItem && <FnForm item={selItem} models={models} prefill={prefill} onChange={setFn} />}
+        {seatNote && <p className="note ed-bad">{seatNote}</p>}
+        {selItem && isLamp(selItem) && (
+          <div className="ed-fn">
+            <b>{footprint(selItem, models).label} · 스위치</b>
+            <div className="row">
+              <button type="button" className="btn small" aria-pressed={selItem.lit !== false} onClick={toggleLamp}>
+                {selItem.lit === false ? "꺼짐 · 눌러서 켜기" : "켜짐 · 눌러서 끄기"}
+              </button>
+            </div>
+            <p className="note">켜 둔 조명은 저녁부터 아침까지 불이 들어와요. 꺼 둔 조명은 밤에도 꺼져 있어요.</p>
+          </div>
+        )}
+        {selItem && <FnForm key={sel} item={selItem} models={models} prefill={prefill} onChange={setFn} />}
 
         {shown ? (
           <>
@@ -499,7 +561,7 @@ function FnForm({
               key={kind}
               type="button"
               className="btn small"
-              onClick={() => onChange(kind === "pc" ? { kind: "pc", links: prefill() } : { kind: "keepsake", name: "" })}
+              onClick={() => onChange(newFn(kind, prefill))}
             >
               {slotLabel(kind)}
             </button>
@@ -509,18 +571,123 @@ function FnForm({
     );
   }
 
+  // 기능 빼기는 칸들 위, 제목 줄에 둔다: 아래 칸의 오류 줄이 나타나고 사라져도 이 버튼은 움직이지 않는다. 한 번 더 눌러야 빠진다.
   return (
     <div className="ed-fn">
-      <b>
-        {name} · {slotLabel(fn.kind)}
-      </b>
-      {fn.kind === "pc" ? <PcFields fn={fn} prefill={prefill} onChange={onChange} /> : <KeepsakeFields fn={fn} onChange={onChange} />}
+      <div className="ed-fn-head">
+        <b>
+          {name} · {slotLabel(fn.kind)}
+        </b>
+        <RemoveFn onConfirm={() => onChange(undefined)} />
+      </div>
+      {fn.kind === "pc" && <PcFields fn={fn} prefill={prefill} onChange={onChange} />}
+      {fn.kind === "keepsake" && <KeepsakeFields fn={fn} onChange={onChange} />}
+      {fn.kind === "music" && <MusicFields fn={fn} onChange={onChange} />}
+      {fn.kind === "latest" && <p className="note">TV 화면에 가장 최근 영상이 나와요. TV를 누르면 그 영상이 영사기로 가요.</p>}
+      {fn.kind === "calendar" && <CalendarFields fn={fn} onChange={onChange} />}
+    </div>
+  );
+}
+
+// 새로 다는 기능의 처음 값. 비워 둔 칸은 저장할 때 서버가 알려 준다.
+function newFn(kind: SlotKind, prefill: () => PcLink[]): SlotFn {
+  if (kind === "pc") return { kind: "pc", links: prefill() };
+  if (kind === "music") return { kind: "music", url: "" };
+  if (kind === "latest") return { kind: "latest" };
+  if (kind === "calendar") return { kind: "calendar", entries: [] };
+  return { kind: "keepsake", name: "" };
+}
+
+// 두 번 눌러야 하는 버튼: 처음 누르면 확인 문구로 바뀌고, 4초 안에 다시 누르면 실행한다.
+function RemoveFn({ onConfirm }: { onConfirm: () => void }) {
+  const [armed, setArmed] = useState(false);
+  const timer = useRef(0);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  return (
+    <button
+      type="button"
+      className="btn ghost small"
+      onClick={() => {
+        window.clearTimeout(timer.current);
+        if (armed) return onConfirm();
+        setArmed(true);
+        timer.current = window.setTimeout(() => setArmed(false), 4000);
+      }}
+    >
+      {armed ? "정말 뺄까요?" : "기능 빼기"}
+    </button>
+  );
+}
+
+// 오류 줄: 자리는 늘 잡아 두고 글만 바뀐다 (칸이 밀리지 않게).
+function ErrorLine({ text }: { text: string | null }) {
+  return (
+    <span className="note ed-bad ed-slot" aria-live="polite">
+      {text ?? " "}
+    </span>
+  );
+}
+
+function MusicFields({ fn, onChange }: { fn: Extract<SlotFn, { kind: "music" }>; onChange: (fn: SlotFn | undefined) => void }) {
+  const bad = fn.url.trim() !== "" && !parseMusicUrl(fn.url);
+  return (
+    <>
+      <label className="ed-field">
+        <span>유튜브 영상 또는 재생목록 주소</span>
+        <input
+          value={fn.url}
+          maxLength={HEAP_POLICY.linkUrlMaxChars}
+          placeholder="https://www.youtube.com/watch?v=…"
+          onChange={(e) => onChange({ kind: "music", url: e.target.value.trim() })}
+        />
+      </label>
+      <ErrorLine text={fn.url === "" ? "주소를 적어야 저장할 수 있어요." : bad ? "유튜브 영상(watch?v=, youtu.be) 또는 재생목록(playlist?list=) 주소여야 해요." : null} />
+      <p className="note">누르면 방 오른쪽 위에 플레이어가 열려요. 소리는 누른 뒤에만 나요.</p>
+    </>
+  );
+}
+
+function CalendarFields({ fn, onChange }: { fn: Extract<SlotFn, { kind: "calendar" }>; onChange: (fn: SlotFn | undefined) => void }) {
+  const entries = fn.entries ?? [];
+  const set = (next: CalendarEntry[]) => onChange({ kind: "calendar", entries: next });
+  const incomplete = entries.some((e) => e.date === "" || e.label.trim() === "");
+  return (
+    <>
+      {entries.map((e, i) => (
+        <div className="ed-calrow" key={i}>
+          <input
+            type="date"
+            aria-label={`날짜 ${i + 1}`}
+            value={e.date}
+            onChange={(ev) => set(entries.map((o, j) => (j === i ? { ...o, date: ev.target.value } : o)))}
+          />
+          <input
+            aria-label={`날짜 ${i + 1} 설명`}
+            placeholder={`설명 (${HEAP_POLICY.calendarLabelMaxChars}자까지)`}
+            value={e.label}
+            maxLength={HEAP_POLICY.calendarLabelMaxChars}
+            onChange={(ev) => set(entries.map((o, j) => (j === i ? { ...o, label: ev.target.value } : o)))}
+          />
+          <div className="row">
+            <button type="button" className="btn ghost small" onClick={() => set(entries.filter((_, j) => j !== i))}>
+              줄 지우기
+            </button>
+          </div>
+        </div>
+      ))}
+      <ErrorLine text={incomplete ? "날짜와 설명을 모두 채워야 저장할 수 있어요." : null} />
       <div className="row">
-        <button type="button" className="btn ghost small" onClick={() => onChange(undefined)}>
-          기능 빼기
+        <button
+          type="button"
+          className="btn small"
+          disabled={entries.length >= HEAP_POLICY.calendarEntriesMax}
+          onClick={() => set([...entries, { date: "", label: "" }])}
+        >
+          날짜 추가 ({entries.length}/{HEAP_POLICY.calendarEntriesMax})
         </button>
       </div>
-    </div>
+      <p className="note">오늘부터 앞으로의 날짜만 팬에게 보여요.</p>
+    </>
   );
 }
 
@@ -572,7 +739,7 @@ function PcFields({
             maxLength={HEAP_POLICY.linkUrlMaxChars}
             onChange={(e) => set(links.map((o, j) => (j === i ? linkFrom(o.title, e.target.value.trim()) : o)))}
           />
-          {addressBad(addressOf(L)) && <span className="note ed-bad">http(s) 주소나 이메일 주소여야 해요.</span>}
+          <ErrorLine text={addressBad(addressOf(L)) ? "http(s) 주소나 이메일 주소여야 해요." : null} />
           <div className="row">
             <button type="button" className="btn ghost small" onClick={() => set(links.filter((_, j) => j !== i))}>
               줄 지우기
@@ -616,7 +783,7 @@ function KeepsakeFields({
         <span>이름 (꼭 필요해요, {HEAP_POLICY.keepsakeNameMaxChars}자까지)</span>
         <input value={fn.name} maxLength={HEAP_POLICY.keepsakeNameMaxChars} onChange={(e) => set("name", e.target.value)} />
       </label>
-      {chars(fn.name) === 0 && <span className="note ed-bad">이름을 적어야 저장할 수 있어요.</span>}
+      <ErrorLine text={chars(fn.name) === 0 ? "이름을 적어야 저장할 수 있어요." : null} />
       <label className="ed-field">
         <span>날짜</span>
         <input type="date" value={fn.date ?? ""} onChange={(e) => set("date", e.target.value)} />
@@ -634,7 +801,7 @@ function KeepsakeFields({
           onChange={(e) => set("link", e.target.value.trim())}
         />
       </label>
-      {fn.link && !/^https?:\/\/\S+$/i.test(fn.link) && <span className="note ed-bad">http(s) 주소여야 해요.</span>}
+      <ErrorLine text={fn.link && !/^https?:\/\/\S+$/i.test(fn.link) ? "http(s) 주소여야 해요." : null} />
     </>
   );
 }

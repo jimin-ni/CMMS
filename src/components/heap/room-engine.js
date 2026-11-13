@@ -19,8 +19,8 @@ function disposeScene(scene, keep) {
 }
 
 // ids of the nodes heap-room.tsx renders and the engine fills or shows
-const LISTS = ['albumrow', 'player-frame', 'phone-feed', 'pc-list', 'ks-body', 'grid-list', 'gb-list', 'roomlist'];
-const HIDDEN = ['visit', 'albumrow', 'stand', 'flip', 'srclink', 'eject', 'ytlink', 'sortexit', 'player', 'player-note', 'phone', 'pc', 'keepsake', 'grid', 'guestbook', 'rooms'];
+const LISTS = ['albumrow', 'player-frame', 'music-frame', 'phone-feed', 'pc-list', 'ks-body', 'cal-body', 'grid-list', 'gb-list', 'roomlist'];
+const HIDDEN = ['visit', 'albumrow', 'stand', 'flip', 'srclink', 'eject', 'ytlink', 'sortexit', 'player', 'player-note', 'music', 'music-note', 'music-link', 'phone', 'pc', 'keepsake', 'calendar', 'grid', 'guestbook', 'rooms', 'rooms-legend'];
 
 /**
  * Mounts the room into `root` (the element heap-room.tsx renders) and returns a dispose function.
@@ -34,14 +34,23 @@ const HIDDEN = ['visit', 'albumrow', 'stand', 'flip', 'srclink', 'eject', 'ytlin
  * Writes go through opts.recordVisit() and opts.addGuestbook(name) (server actions, wired in heap-room.tsx). Reads of what others changed: a poll every opts.pollMs.
  * opts.bubbleHref is where the phone leads (the owner's 버블 room or the list), opts.navigate(href) opens it, opts.parseLink(url) says whether a keepsake link is a YouTube post (platform.ts).
  * opts.isSafeLink / isWebLink / isEmail are the server's link checks (slots.ts): a link reaches an href only after one of them says yes.
- * @param {{ roomId: string, roomUuid: string, dataBase: string, modelBase?: string, data: any, viewerName: string | null, signedIn: boolean, pollMs: number, bubbleHref: string, navigate: (href: string) => void, parseLink: (url: string) => ({ platform: string, externalId: string, wide: boolean | null } | null), isSafeLink: (v: unknown) => boolean, isWebLink: (v: unknown) => boolean, isEmail: (v: unknown) => boolean, recordVisit: () => Promise<any>, addGuestbook: (name: string) => Promise<any>, onNavigate: (roomId: string) => void }} opts
+ * opts.parseMusic(url) is slots.ts's parseMusicUrl: { video, list } (embed ids that passed a regex) or null. data.rooms[].changed puts a dot on that room in the door's list.
+ * @param {{ roomId: string, roomUuid: string, dataBase: string, modelBase?: string, data: any, viewerName: string | null, signedIn: boolean, pollMs: number, bubbleHref: string, navigate: (href: string) => void, parseLink: (url: string) => ({ platform: string, externalId: string, wide: boolean | null } | null), parseMusic: (url: string) => ({ video: string | null, list: string | null } | null), isSafeLink: (v: unknown) => boolean, isWebLink: (v: unknown) => boolean, isEmail: (v: unknown) => boolean, recordVisit: () => Promise<any>, addGuestbook: (name: string) => Promise<any>, onNavigate: (roomId: string) => void }} opts
  * @returns {() => void}
  */
 export function mountRoom(root, opts) {
-let disposed = false, raf = 0, roomTitle = null;
+let disposed = false, raf = 0, roomTitle = null, pollTimer = 0; // pollTimer lives out here so dispose can clear it even when run() stopped part-way
 const ac = new AbortController(), cleanups = [], prevTitle = document.title;
 const dataBase = opts.dataBase.replace(/\/?$/, '/');
-const $ = id => root.querySelector('#' + id);
+// A node the markup should have but does not (stale markup after a hot reload, an edited heap-room.tsx) must not stop the mount or the dispose:
+// it is replaced by a loose element that takes every call and shows nothing. The guestbook form nodes are absent for a signed-out viewer on purpose.
+const loose = new Map(), ABSENT_OK = new Set(['gb-form', 'gb-name', 'gb-submit']);
+const $ = id => {
+  const found = root.querySelector('#' + id);
+  if (found) return found;
+  if (!loose.has(id)) { if (!disposed && !ABSENT_OK.has(id)) console.warn(`[heap-room] #${id} is missing from the markup`); loose.set(id, document.createElement('div')); }
+  return loose.get(id);
+};
 const on = (target, type, fn) => target.addEventListener(type, fn, { signal: ac.signal });
 
 async function run() {
@@ -470,10 +479,14 @@ let shadeNow = 0.9, irand = rand;
 // Only MAX_LAMP_LIGHTS lamps get a light: the hand-built ones first, then the lamp models, each in list order. A lamp past that glows and lights nothing.
 const MAX_LAMP_LIGHTS = 3, LAMP_GLOW = '#ffb767';
 let CATALOGUE = null; // catalogue.json once it has been read (getCatalogue below)
+// item.lit: the creator's switch. Absent or true = on, and the lamp then follows the clock exactly as before (glows and lights from evening to morning).
+// false = switched off for good: no light, no glow, and no share of the MAX_LAMP_LIGHTS budget.
 const isLampModel = it => it.type === 'model' && CATALOGUE?.models?.find(m => m.id === it.model)?.category === 'lamp';
+const isLit = o => o.lit !== false;
 function lampLight(build, it) {
-  const hand = build.items.filter(o => o.type === 'lamp');
-  const rank = it.type === 'lamp' ? hand.indexOf(it) : hand.length + build.items.filter(isLampModel).indexOf(it);
+  if (!isLit(it)) return null;
+  const hand = build.items.filter(o => o.type === 'lamp' && isLit(o));
+  const rank = it.type === 'lamp' ? hand.indexOf(it) : hand.length + build.items.filter(o => isLampModel(o) && isLit(o)).indexOf(it);
   return rank < MAX_LAMP_LIGHTS ? new THREE.PointLight(0xffb86b, 3.2, 9, 1.2) : null;
 }
 const bookCols = [C.accent, C.olive, '#c9a46a', '#7d8a5a', '#d8c7a8', '#8a4f33'];
@@ -529,11 +542,11 @@ const BUILD = {
   lamp(g, it, build) {
     box(0.3, 0.04, 0.3, flat(C.olive), 0, 0.02, 0, { parent: g });
     box(0.04, 1.7, 0.04, flat(C.olive), 0, 0.87, 0, { parent: g });
-    const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.26, 0.3, 8, 1, true), new THREE.MeshStandardMaterial({ color: '#f6dcb2', emissive: LAMP_GLOW, emissiveIntensity: shadeNow, side: THREE.DoubleSide, flatShading: true }));
+    const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.26, 0.3, 8, 1, true), new THREE.MeshStandardMaterial({ color: '#f6dcb2', emissive: LAMP_GLOW, emissiveIntensity: isLit(it) ? shadeNow : 0, side: THREE.DoubleSide, flatShading: true }));
     shade.position.y = 1.8; g.add(shade);
     const light = lampLight(build, it);
     if (light) { light.position.y = 1.72; g.add(light); }
-    build.lamps.push({ light, shades: [shade.material] });
+    build.lamps.push({ light, shades: [shade.material], off: !isLit(it) });
     return { hw: 0.35, hd: 0.35 };
   },
   books(g) {
@@ -546,6 +559,9 @@ const BUILD = {
 // An item that carries a function in the layout (item.fn, checked by the server: src/lib/heap/slots.ts) can be clicked in room mode.
 //   pc        opens the links panel: fn.links, or the room's creator.json links when the item has none of its own
 //   keepsake  a picture with a name, date, caption and link. On a wall frame (type "frame"), or as a standee on the top of a shelf-like item.
+//   music     a YouTube video or playlist. Opens the docked player at the top right (radio, speaker or TV).
+//   latest    a TV whose screen shows the newest reel's thumbnail. Clicking it sends that reel into the projector.
+//   calendar  a desk calendar (type "calendar", built by hand): the creator's dates for fans, listed in a panel.
 // ITEMS.slots lists them ({ it, fn, start? }) and ITEMS.slotMeshes holds the meshes a click can hit (each has userData.slot).
 let slotsLive = false; // true once the fonts are ready: the keepsake textures paint with their own fonts and load their pictures from then on
 const KS = { tall: { cw: 180, ch: 320, strip: 44 }, wide: { cw: 320, ch: 180, strip: 40 } }; // canvas pixels: the picture and the name strip under it
@@ -634,6 +650,84 @@ function ksLoad(build, look, files, done) {
   inFlight.add(im); build.loads.add(im); im.src = thumbUrl({ id: look.id }, files[0]);
 }
 BUILD.frame = (g, it, build) => { keepsakeObject(g, it, build, 'frame', 0, it.y ?? 1.9, 0); return {}; };
+
+// The newest reel: the latest publish day, and the list's own order (newest first from the server) when two share a day or none has a date.
+const newestReel = () => { let best = null; for (const r of reels) if (r.published && (!best || r.published > best.published)) best = r; return best ?? reels[0] ?? null; };
+
+// A TV's screen (a catalogue model with `screen`, in file units): a plane just in front of the model's own screen, painted by the slot.
+//   latest  the newest reel's thumbnail, a Short pillar-boxed        music  the video's thumbnail, or a note for a playlist link
+function tvContent(fn) {
+  if (fn.kind === 'latest') { const r = newestReel(); return { id: r ? r.id : null, tall: !!r && !r.wide, label: '최신 영상', note: '▶' }; }
+  const p = opts.parseMusic(fn.url);
+  return { id: p?.video ?? null, tall: false, label: '음악', note: '♪' };
+}
+function paintTv(canvas, pic, what) {
+  const g = canvas.getContext('2d'), W = canvas.width, H = canvas.height;
+  g.fillStyle = '#16130f'; g.fillRect(0, 0, W, H);
+  if (pic) drawFit(g, pic, 0, 0, W, H, false);
+  else { g.fillStyle = 'rgba(243, 234, 219, 0.35)'; g.font = `${Math.round(H * 0.4)}px "IBM Plex Sans KR", system-ui, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(what.note, W / 2, H / 2); }
+  g.fillStyle = 'rgba(0, 0, 0, 0.1)'; for (let y = 0; y < H; y += 3) g.fillRect(0, y, W, 1);
+  const sh = g.createLinearGradient(0, H * 0.72, 0, H); sh.addColorStop(0, 'rgba(0,0,0,0)'); sh.addColorStop(1, 'rgba(0,0,0,0.6)');
+  g.fillStyle = sh; g.fillRect(0, H * 0.72, W, H * 0.28);
+  g.fillStyle = 'rgba(243, 234, 219, 0.95)'; g.font = `${Math.round(H * 0.15)}px "Nanum Pen Script", cursive`; g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+  g.fillText(what.label, W * 0.04, H * 0.95);
+}
+function tvScreen(inst, build, slot, s) {
+  const canvas = document.createElement('canvas'); canvas.width = 320; canvas.height = 180;
+  const tex = new THREE.CanvasTexture(canvas); tex.colorSpace = THREE.SRGBColorSpace;
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(s.w, s.h), new THREE.MeshBasicMaterial({ map: tex, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
+  plane.position.set(s.x, s.y, s.z); plane.userData.slot = slot; inst.add(plane); build.slotMeshes.push(plane);
+  const what = tvContent(slot.fn);
+  paintTv(canvas, null, what);
+  slot.started = false;
+  slot.start = () => { // once the fonts are ready (or at once after that)
+    if (slot.started || build !== ITEMS) return;
+    slot.started = true; paintTv(canvas, null, what); tex.needsUpdate = true;
+    if (what.id) ksLoad(build, { id: what.id, tall: what.tall }, what.tall ? ['hqdefault'] : ['mqdefault'], pic => { if (build === ITEMS) { paintTv(canvas, pic, what); tex.needsUpdate = true; } });
+  };
+  if (slotsLive) slot.start();
+}
+
+// Desk calendar (type "calendar", fn.kind "calendar"): a small stand with one paper page. The page shows the month of the next upcoming date
+// (this month when there is none) with a ring on the days that carry an entry. Hand-built: the kit has no calendar.
+function paintCalendar(canvas, fn) {
+  const g = canvas.getContext('2d'), W = canvas.width, H = canvas.height;
+  const entries = (fn.entries ?? []).filter(e => typeof e?.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(e.date));
+  const today = seoulDay.format(new Date()), next = entries.filter(e => e.date >= today).map(e => e.date).sort()[0];
+  const [y, m] = (next ?? today).split('-').map(Number);
+  paper(g, W, H, mulberry32(5), 0.2);
+  g.fillStyle = C.accent; g.fillRect(0, 0, W, 40);
+  g.fillStyle = C.paper; g.textBaseline = 'middle'; g.textAlign = 'left'; g.font = `32px "Nanum Pen Script", cursive`; g.fillText(`${m}월`, 14, 21);
+  g.textAlign = 'right'; g.font = `600 14px "IBM Plex Sans KR", system-ui, sans-serif`; g.fillText(String(y), W - 14, 21);
+  const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(), days = new Date(Date.UTC(y, m, 0)).getUTCDate(), cw = (W - 16) / 7;
+  g.textAlign = 'center'; g.font = `600 11px "IBM Plex Sans KR", system-ui, sans-serif`; g.fillStyle = 'rgba(86, 83, 68, 0.6)';
+  [...'일월화수목금토'].forEach((c, i) => g.fillText(c, 8 + cw * (i + 0.5), 54));
+  const marked = new Set(entries.filter(e => e.date.startsWith(`${y}-${String(m).padStart(2, '0')}-`)).map(e => Number(e.date.slice(8))));
+  g.font = `13px "IBM Plex Sans KR", system-ui, sans-serif`;
+  for (let d = 1; d <= days; d++) {
+    const cell = first + d - 1, cx = 8 + cw * (cell % 7 + 0.5), cy = 72 + Math.floor(cell / 7) * 22;
+    if (marked.has(d)) { g.strokeStyle = C.accent; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy, 10, 0, Math.PI * 2); g.stroke(); }
+    g.fillStyle = marked.has(d) ? C.accent : 'rgba(47, 44, 36, 0.85)'; g.fillText(String(d), cx, cy + 1);
+  }
+}
+BUILD.calendar = (g, it, build) => {
+  const fn = it.fn?.kind === 'calendar' ? it.fn : { kind: 'calendar', entries: [] }; // a calendar with no function yet is an empty one
+  const canvas = document.createElement('canvas'); canvas.width = 192; canvas.height = 192;
+  const tex = new THREE.CanvasTexture(canvas); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  const wood = flat(C.woodDark), grp = new THREE.Group(), W = 0.4, H = 0.4;
+  box(W + 0.06, 0.03, 0.16, wood, 0, 0.015, 0, { parent: grp });
+  const lean = new THREE.Group(); lean.position.set(0, 0.03, -0.03); lean.rotation.x = -0.3; grp.add(lean);
+  const back = box(W + 0.04, H + 0.04, 0.02, wood, 0, H / 2, 0, { parent: lean });
+  const page = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 })); page.position.set(0, H / 2, 0.012); page.castShadow = true; lean.add(page);
+  grp.position.y = it.y || 0; g.add(grp);
+  paintCalendar(canvas, fn);
+  if (it.fn?.kind !== 'calendar') return {};
+  const slot = { it, fn, started: false, start() { if (slot.started || build !== ITEMS) return; slot.started = true; paintCalendar(canvas, fn); tex.needsUpdate = true; } };
+  for (const m of [back, page]) { m.userData.slot = slot; build.slotMeshes.push(m); }
+  build.slots.push(slot);
+  if (slotsLive) slot.start();
+  return {};
+};
 function startSlots() { slotsLive = true; for (const s of ITEMS.slots) s.start?.(); }
 
 // ---------- models: { type: 'model', model: <catalogue id>, x, z, rot, y, tint } ----------
@@ -685,7 +779,7 @@ BUILD.model = (g, it, build) => {
         if (!own.has(o.material)) {
           const c = o.material.clone();
           if (col) c.color.set(col);
-          if (glow) { c.emissive.set(LAMP_GLOW); c.emissiveIntensity = shadeNow; }
+          if (glow) { c.emissive.set(LAMP_GLOW); c.emissiveIntensity = isLit(it) ? shadeNow : 0; }
           own.set(o.material, c);
         }
         o.material = own.get(o.material);
@@ -697,7 +791,14 @@ BUILD.model = (g, it, build) => {
     hold.scale.setScalar(MODEL_SCALE); hold.position.y = (it.y || 0) + (rug ? 0.012 : 0); // a rug lies just above the floor so the two do not flicker
     hold.add(inst); g.add(hold);
     if (it.fn?.kind === 'keepsake') keepsakeObject(g, it, build, 'standee', 0, (it.y || 0) + m.size.y, 0); // on top of the shelf-like piece
-    else if (it.fn?.kind === 'pc') { const slot = { it, fn: it.fn }; inst.traverse(o => { if (o.isMesh) { o.userData.slot = slot; build.slotMeshes.push(o); } }); build.slots.push(slot); }
+    else if (it.fn && ['pc', 'music', 'latest'].includes(it.fn.kind)) { // the whole model is the button; a TV with a function also gets a painted screen
+      const slot = { it, fn: it.fn };
+      inst.traverse(o => { if (o.isMesh) { o.userData.slot = slot; build.slotMeshes.push(o); } });
+      build.slots.push(slot);
+      if (m.entry.screen && it.fn.kind !== 'pc') tvScreen(inst, build, slot, m.entry.screen);
+    }
+    const seatRule = CATALOGUE?.seats?.[m.entry.category];
+    if (seatRule) addSeats(build, g, it, m, seatRule, inst);
     if (shades.length) { // the light sits at the centre of the shade: the box around the vertices the shade's own triangles use
       const light = lampLight(build, it), bb = new THREE.Box3(), v = new THREE.Vector3(); // (a model's meshes share one vertex buffer)
       if (light) {
@@ -708,26 +809,51 @@ BUILD.model = (g, it, build) => {
         }
         g.add(light); g.worldToLocal(bb.getCenter(light.position));
       }
-      build.lamps.push({ light, shades: [...new Set(shades.map(o => o.material))] });
+      build.lamps.push({ light, shades: [...new Set(shades.map(o => o.material))], off: !isLit(it) });
     }
     if (rug || it.y) return; // a rug is walked over; a piece standing on other furniture adds no obstacle of its own
     const swap = Math.round((it.rot || 0) / 90) % 2 !== 0, hw = m.size.x / 2 + 0.2, hd = m.size.z / 2 + 0.2;
-    build.obst.push({ x: it.x, z: it.z, hw: swap ? hd : hw, hd: swap ? hw : hd });
+    // hw, hd: the walk box (the model's half size and 0.2 more) · rhw, rhd: the model's own half size · owner: the item, so its own seat can tell which box is its
+    build.obst.push({ x: it.x, z: it.z, hw: swap ? hd : hw, hd: swap ? hw : hd, rhw: (swap ? m.size.z : m.size.x) / 2, rhd: (swap ? m.size.x : m.size.z) / 2, owner: it });
   });
   return {};
 };
 
+// Seats: the points where a visitor (and later a fan's ghost) can sit, worked out from a model's footprint and the catalogue's `seats` rules (chair, sofa, rug).
+// Nothing about them is stored in the layout. A model's own `seatY` (file units) replaces the rule's `top` share of its height when the share does not fit it.
+// Each seat: { id, kind: 'chair' | 'sofa' | 'floor', item, pos (world: the sitting surface), yaw (the way the sitter faces, radians),
+//   stands (floor points the seat can be entered from: front, back, left, right; a rug seat is entered at its own point) }.
+// sitOn (below) picks the stand a walk can reach around the obstacles and refuses a seat whose centre is inside another item or the photo table.
+// ITEMS.seats lists them all; each seat mesh carries userData.seats, the seats of its item.
+function addSeats(build, g, it, m, rule, inst) {
+  g.updateMatrixWorld(true);
+  const w = m.size.x, d = m.size.z, floor = !!rule.floor;
+  const top = (it.y || 0) + (floor ? 0.012 : 0) + (m.entry.seatY != null ? m.entry.seatY * MODEL_SCALE : m.size.y * rule.top);
+  const kx = floor ? Math.max(1, Math.floor(w)) : rule.per ? Math.max(1, Math.round(w / rule.per)) : 1, kz = floor ? Math.max(1, Math.floor(d)) : 1;
+  const kind = floor ? 'floor' : rule.per ? 'sofa' : 'chair', yaw = THREE.MathUtils.degToRad(it.rot || 0), index = build.items.indexOf(it), seats = [];
+  for (let i = 0; i < kx; i++) for (let j = 0; j < kz; j++) {
+    const lx = (i + 0.5) / kx * w - w / 2, lz = (j + 0.5) / kz * d - d / 2;
+    const pos = g.localToWorld(new THREE.Vector3(lx, 0, lz)).setY(top);
+    const at = (x, z) => g.localToWorld(new THREE.Vector3(x, 0, z)).setY(0), gap = 0.55;
+    const stands = floor ? [pos.clone().setY(0)] : [at(lx, d / 2 + gap), at(lx, -d / 2 - gap), at(-w / 2 - gap, lz), at(w / 2 + gap, lz)];
+    seats.push({ id: `${index}:${i}${j}`, kind, item: it, pos, yaw, stands });
+  }
+  build.seats.push(...seats);
+  inst.traverse(o => { if (o.isMesh) { o.userData.seats = seats; build.seatMeshes.push(o); } });
+}
+
 // ITEMS: what the last buildItems() made. group: every object built from the items · obst: their walk obstacles · items: the list itself
-//   lamps: its lamps, { light, shades } each (see MAX_LAMP_LIGHTS above)
+//   lamps: its lamps, { light, shades, off } each (see MAX_LAMP_LIGHTS above)
 //   slots: its functions, { it, fn, start? } each · slotMeshes: the meshes a click can hit, each with userData.slot (see the slots section above)
+//   seats / seatMeshes: see addSeats
 //   loads: the keepsake thumbnails this build still waits for (cancelled when the next build replaces it)
-let ITEMS = { group: null, obst: [], items: [], lamps: [], slots: [], slotMeshes: [], loads: new Set() };
+let ITEMS = { group: null, obst: [], items: [], lamps: [], slots: [], slotMeshes: [], seats: [], seatMeshes: [], loads: new Set() };
 function buildItems(items, first = false) {
   if (ITEMS.group) { for (const l of ITEMS.lamps) l.light?.dispose(); scene.remove(ITEMS.group); disposeScene(ITEMS.group, KEPT); }
   shelfParts.length = 0; SHELF = null;
   for (const im of ITEMS.loads) { im.onload = im.onerror = null; im.src = ''; inFlight.delete(im); } // the replaced build's thumbnails stop here
   ITEMS.loads.clear();
-  const build = ITEMS = { group: new THREE.Group(), obst: [], items, lamps: [], slots: [], slotMeshes: [], loads: new Set() };
+  const build = ITEMS = { group: new THREE.Group(), obst: [], items, lamps: [], slots: [], slotMeshes: [], seats: [], seatMeshes: [], loads: new Set() };
   scene.add(build.group);
   items.forEach((it, i) => {
     // The first build draws from the room's shared sequence, as the room always has. A rebuild seeds each item by its place in the list,
@@ -738,7 +864,8 @@ function buildItems(items, first = false) {
     g.position.set(it.x, 0, it.z); g.rotation.y = rot; build.group.add(g); g.updateMatrixWorld(true);
     if (!fp.hw) return; // a model adds its obstacle when it has loaded
     const swap = Math.round((it.rot || 0) / 90) % 2 !== 0;
-    build.obst.push({ x: it.x, z: it.z, hw: swap ? fp.hd : fp.hw, hd: swap ? fp.hw : fp.hd });
+    const ohw = swap ? fp.hd : fp.hw, ohd = swap ? fp.hw : fp.hd;
+    build.obst.push({ x: it.x, z: it.z, hw: ohw, hd: ohd, rhw: Math.max(0.1, ohw - 0.2), rhd: Math.max(0.1, ohd - 0.2), owner: it });
   });
 }
 buildItems(layout.items || [], true);
@@ -817,7 +944,7 @@ function applyTime(hour) {
   }
   lampBase = k.lampI; // frame() gives it to every lamp's light
   shadeNow = k.shadeI;
-  for (const l of ITEMS.lamps) for (const s of l.shades) s.emissiveIntensity = shadeNow;
+  for (const l of ITEMS.lamps) for (const s of l.shades) s.emissiveIntensity = l.off ? 0 : shadeNow;
 }
 function tickClock() { // auto only: called from frame(), so it stops with the rAF loop on dispose (no timer of its own)
   if (timeSpec !== 'auto' || Date.now() < nextClock) return;
@@ -844,7 +971,7 @@ const rug = new THREE.Mesh(new THREE.PlaneGeometry(3.8, 2.9), new THREE.MeshStan
 rug.rotation.x = -Math.PI / 2; rug.position.set(TABLE.x, 0.006, TABLE.z + 0.15); rug.receiveShadow = true; scene.add(rug);
 const tableTop = box(TABLE.w, 0.08, TABLE.d, flat(C.woodB), TABLE.x, TABLE.top - 0.04, TABLE.z);
 for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(0.12, TABLE.top - 0.08, 0.12, flat(C.woodDark), TABLE.x + sx * (TABLE.w / 2 - 0.15), (TABLE.top - 0.08) / 2, TABLE.z + sz * (TABLE.d / 2 - 0.15));
-OBST.unshift({ x: TABLE.x, z: TABLE.z, hw: TABLE.w / 2 + 0.25, hd: TABLE.d / 2 + 0.25 });
+OBST.unshift({ x: TABLE.x, z: TABLE.z, hw: TABLE.w / 2 + 0.25, hd: TABLE.d / 2 + 0.25, rhw: TABLE.w / 2, rhd: TABLE.d / 2 });
 const SEAT = new THREE.Vector3(TABLE.x, 0, TABLE.z + TABLE.d / 2 + 0.5);
 box(0.75, 0.1, 0.75, flat(C.accent), SEAT.x, 0.05, SEAT.z, { cast: false });
 const MUG = { x: TABLE.x + 1.05, z: TABLE.z + 0.6 };
@@ -873,7 +1000,7 @@ if (GB) {
   bookParts.push(pageL, pageR, pen);
   onWall(GB.wall, GB.at, 0, 0.32, g);
   const p = WALLS[GB.wall].point(GB.at, 0, 0.32);
-  OBST.push({ x: p.x, z: p.z, hw: 0.32, hd: 0.32 });
+  OBST.push({ x: p.x, z: p.z, hw: 0.32, hd: 0.32, rhw: 0.25, rhd: 0.25 });
   BOOK_SPOT = WALLS[GB.wall].point(GB.at, 0, 0.95);
 }
 
@@ -1169,6 +1296,8 @@ function linkShelf() { // the album shelf's camera and standing spots; runs agai
 linkShelf();
 let mode = 'room', camGoal = null, held = null, heldFlipped = false, loaded = null, hovered = null, presenting = null, dragging = null;
 let walkTo = null, arrive = null, waypoints = [];
+let perch = null, seatTarget = null; // perch: the seat the visitor sits on in room mode · seatTarget: the seat being walked to
+let seatFrom = null, perchFrom = null; // the stand point the walk to seatTarget ends at · the stand point the visitor came to the perch from (they get up there)
 const hint = $('hint');
 const HINTS = {
   room: '방향키·WASD 또는 바닥을 눌러 걷기 · 탁자, 책장, 문을 눌러 보세요',
@@ -1182,6 +1311,7 @@ const HINTS = {
   watch: '상영 중 · 스크린을 눌러 다시 재생 · Esc로 사진 꺼내기',
   shelf: '앨범을 눌러 안을 보기 · Esc로 물러나기',
   nearBook: 'E 또는 방명록을 눌러 이름 남기기',
+  perch: '방향키·WASD 또는 바닥을 눌러 일어나기 · Esc로도 일어나요',
 };
 const setHint = k => { if (hint.dataset.k !== k) { hint.dataset.k = k; hint.textContent = HINTS[k]; } };
 const goTo = cam => { camGoal = cam; controls.enabled = false; };
@@ -1194,6 +1324,7 @@ const goTo = cam => { camGoal = cam; controls.enabled = false; };
 //     (catalogue is null if it could not be). items is a copy of the list now in the room; catalogue is catalogue.json as it is.
 //     table { x, z, w, d }, door { wall, at } and window { wall, at, w } are the fixed parts a floor plan shows (door and window may be null).
 //     creatorLinks is the links list of creator.json (the PC's fallback) and linktree its linktree address or null: the editor offers them when an owner sets up a PC.
+//     seats lists the seat points of the items built so far, { id, kind, x, y, z, yaw } each (see addSeats): the models that sit on loaded after the first build.
 //     time is the room's time choice as it was given ('auto', a name or an hour); original { items, time } is the layout as last saved in the database;
 //     layout is the whole stored layout (a copy): the editor merges its items, time and room into it before saving.
 //   root.dispatchEvent(new CustomEvent('heap:saved', { detail: layout }))
@@ -1201,10 +1332,14 @@ const goTo = cam => { camGoal = cam; controls.enabled = false; };
 // Walls, floor, table, heap, projector, phone and guestbook stay as they were built.
 on(root, 'heap:items', e => {
   if (!Array.isArray(e.detail)) return;
+  if (perch) unperch(); // the seat is about to be rebuilt
   buildItems(e.detail.filter(it => it && typeof it === 'object').map(it => ({ ...it })));
+  // music that no longer has its radio, speaker or TV (or whose link was changed) stops
+  if (musicUrl && !ITEMS.items.some(it => it.fn?.kind === 'music' && it.fn.url === musicUrl)) closeMusic();
   linkShelf(); updateAlbums(); startSlots();
   if (mode === 'sort') { if (SHELF) enterSort(); else exitSort(); }
 });
+on(root, 'heap:edit', e => { if (e.detail) closeMusic(); }); // heap-room.tsx: the 꾸미기 panel opened (true) or closed (false); the panel takes the dock's corner, so the music stops
 on(root, 'heap:saved', e => {
   const l = e.detail;
   if (!l || typeof l !== 'object' || !Array.isArray(l.items)) return;
@@ -1221,6 +1356,7 @@ on(root, 'heap:get', e => {
       door: DOOR ? { wall: DOOR.wall, at: DOOR.at } : null, window: WIN ? { wall: WIN.wall, at: WIN.at, w: WIN.w } : null,
       time: timeChoice, original: { items: ORIGINAL.items.map(it => ({ ...it })), time: ORIGINAL.time },
       creatorLinks: creator.links.map(L => ({ ...L })), linktree: creator.linktree ?? null,
+      seats: ITEMS.seats.map(s => ({ id: s.id, kind: s.kind, x: s.pos.x, y: s.pos.y, z: s.pos.z, yaw: s.yaw })),
     });
   });
 });
@@ -1233,7 +1369,7 @@ ALBUMS.forEach((a, i) => {
 });
 function syncUI() {
   const seated = mode === 'sit' || mode === 'watch';
-  $('stand').hidden = !seated;
+  $('stand').hidden = !(seated || perch);
   $('flip').hidden = !(mode === 'sit' && held);
   const isFan = c => c?.userData.reel.kind === 'fan';
   $('srclink').hidden = !(mode === 'sit' && held) || isFan(held);
@@ -1246,7 +1382,7 @@ function syncUI() {
 }
 
 function sit() {
-  mode = 'sit'; walkTo = null; arrive = null; waypoints = [];
+  mode = 'sit'; walkTo = null; arrive = null; waypoints = []; perch = null;
   me.position.copy(SEAT); me.rotation.y = Math.PI;
   setHint('sit'); goTo(SIT_CAM); syncUI();
   requestPile(NEAR);
@@ -1294,13 +1430,23 @@ function eject() {
   screen.material = screenIdle;
   mode = 'sit'; setHint('sit'); goTo(SIT_CAM); syncUI();
 }
-on($('stand'), 'click', stand);
+on($('stand'), 'click', () => (perch ? unperch() : stand()));
 on($('eject'), 'click', eject);
 
 // official YouTube embed, flat and unobstructed; if this host forbids embeds, fall back to the link out
 let embedBlocked = false;
 const player = $('player'), frameBox = $('player-frame'), note = $('player-note');
+// One official player at a time: the projector's and the music dock's share these two helpers, and opening either closes the other.
+const embedSrc = ({ video, list }) => `https://www.youtube-nocookie.com/embed/${video ?? 'videoseries'}?${new URLSearchParams({ autoplay: '1', playsinline: '1', rel: '0', ...(list ? { list } : {}) })}`;
+function makeFrame(src, title) {
+  const f = document.createElement('iframe');
+  f.src = src; f.title = title;
+  f.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+  f.referrerPolicy = 'strict-origin-when-cross-origin';
+  return f;
+}
 function openPlayer(reel) {
+  closeMusic(); // the projector takes over: only one YouTube player plays at a time
   $('player-title').textContent = reel.title || '';
   frameBox.innerHTML = '';
   note.hidden = !embedBlocked;
@@ -1311,21 +1457,52 @@ function openPlayer(reel) {
     else { h = Math.min(avail, 640); w = h * 9 / 16; }
     w = Math.max(200, Math.round(w)); h = Math.max(200, Math.round(h));
     frameBox.style.width = w + 'px'; frameBox.style.height = h + 'px';
-    const f = document.createElement('iframe');
-    f.src = `https://www.youtube-nocookie.com/embed/${reel.id}?autoplay=1&playsinline=1&rel=0`;
-    f.title = reel.title || 'YouTube video';
-    f.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
-    f.referrerPolicy = 'strict-origin-when-cross-origin';
-    frameBox.appendChild(f);
+    frameBox.appendChild(makeFrame(embedSrc({ video: reel.id, list: null }), reel.title || 'YouTube video'));
   } else { frameBox.style.width = frameBox.style.height = '0px'; }
   player.hidden = false;
 }
 function closePlayer() { frameBox.innerHTML = ''; player.hidden = true; }
 on($('player-close'), 'click', closePlayer);
+
+// music: the docked player at the room's top right, opposite the room name (item.fn kind "music" on a radio, speaker or TV).
+// A visible official embed of 200 px or more with nothing laid over it: heap-room.css keeps the overlays and the 꾸미기 panel out of its corner (--music-w).
+// It starts only from the visitor's click on the carrier, which is the gesture the browser wants before it lets a video play with sound.
+const dock = $('music'), dockFrame = $('music-frame'), dockNote = $('music-note'), dockLink = $('music-link');
+let musicUrl = null, musicParsed = null;
+// The dock sits at the canvas's top right: 16 px from its edge, 8 px of padding, then the video. The canvas is what the 꾸미기 panel leaves of the room,
+// so the width the video may take is measured from it (not from the room): 16 + 8 + 8 + 16 px of room around it, and the room's name (top left) keeps its own width.
+const musicFit = () => Math.min(380, Math.floor(canvas.clientWidth - 48 - $('cname').getBoundingClientRect().width - 16));
+function openMusic(fn) {
+  const p = opts.parseMusic(fn.url); // checked again here: the layout in the database is not trusted
+  if (!p || !player.hidden || (musicUrl === fn.url && !dock.hidden)) return;
+  closeMusic(); musicUrl = fn.url; musicParsed = p;
+  dock.hidden = false;
+  if (!embedBlocked && musicFit() >= 200) dockFrame.appendChild(makeFrame(embedSrc(p), '음악 플레이어')); // only a click gets here, and only a video 200 px wide or more is embedded
+  layoutMusic();
+}
+// Sizes the dock to the room as it is now (also after a resize or the panel opening): a video that no longer fits 200 x 200 gives way to a link out,
+// and --music-w tells the CSS how much of the corner the overlays and the room-name line must leave free.
+function layoutMusic() {
+  if (dock.hidden || !musicParsed) return;
+  const fit = musicFit();
+  if (dockFrame.firstChild && fit >= 200) {
+    dockFrame.style.width = fit + 'px'; dockFrame.style.height = Math.max(200, Math.round(fit * 9 / 16)) + 'px';
+    dockNote.hidden = dockLink.hidden = true;
+    root.style.setProperty('--music-w', fit + 'px');
+  } else {
+    dockFrame.replaceChildren(); dockFrame.style.width = dockFrame.style.height = '0px';
+    dockNote.hidden = dockLink.hidden = false; dockLink.href = musicUrl;
+    const w = Math.max(120, Math.min(300, fit));
+    dockNote.style.maxWidth = w + 'px'; root.style.setProperty('--music-w', w + 'px');
+  }
+}
+function closeMusic() { dockFrame.replaceChildren(); dock.hidden = true; musicUrl = null; musicParsed = null; root.style.removeProperty('--music-w'); }
+on($('music-close'), 'click', closeMusic);
 on(document, 'securitypolicyviolation', e => {
   if (!/youtube/.test(e.blockedURI || '')) return;
   embedBlocked = true;
   if (!player.hidden) { frameBox.innerHTML = ''; frameBox.style.width = frameBox.style.height = '0px'; note.hidden = false; }
+  if (!dock.hidden) { dockFrame.replaceChildren(); layoutMusic(); }
 });
 
 // phone: the way into 버블. A room with no PC still lists the creator's links here, so nothing disappears until the owner puts a PC in.
@@ -1422,7 +1599,36 @@ function openKeepsake(fn) {
 }
 on($('ks-close'), 'click', () => { $('keepsake').hidden = true; });
 on($('keepsake'), 'click', e => { if (e.target.id === 'keepsake') $('keepsake').hidden = true; });
-const openSlot = slot => { if (slot.fn.kind === 'pc') openPc(slot.fn); else if (slot.fn.kind === 'keepsake') openKeepsake(slot.fn); };
+// calendar (the desk calendar): the dates from today on, soonest first, each with how far off it is. Past dates are left out.
+function openCalendar(fn) {
+  const body = $('cal-body'); body.replaceChildren();
+  const today = seoulDay.format(new Date()), asDay = s => Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10));
+  const up = (fn.entries ?? []).filter(e => typeof e?.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(e.date) && typeof e.label === 'string' && e.date >= today).sort((a, b) => a.date.localeCompare(b.date));
+  for (const e of up) {
+    const n = Math.round((asDay(e.date) - asDay(today)) / 864e5), row = el('div', 'cal-row');
+    row.appendChild(el('b', null, ksDay(e.date)));
+    row.appendChild(el('span', null, e.label));
+    row.appendChild(el('small', null, n === 0 ? '오늘' : n === 1 ? '내일' : `${n}일 뒤`));
+    body.appendChild(row);
+  }
+  if (!up.length) body.appendChild(el('p', 'note', '예정된 날짜가 없어요.'));
+  $('calendar').hidden = false;
+}
+on($('cal-close'), 'click', () => { $('calendar').hidden = true; });
+on($('calendar'), 'click', e => { if (e.target.id === 'calendar') $('calendar').hidden = true; });
+
+// TV (fn "latest"): sit down at the table, pick up the newest reel and feed it to the projector, the same steps as doing it by hand.
+function watchLatest() {
+  if (mode !== 'room') return;
+  const reel = newestReel(), card = reel && cards.find(c => c.userData.reel === reel);
+  if (!card) { toast('아직 올라온 영상이 없어요'); return; }
+  sit(); pickUp(card); feed();
+}
+const openSlot = slot => {
+  const k = slot.fn.kind;
+  if (k === 'pc') openPc(slot.fn); else if (k === 'keepsake') openKeepsake(slot.fn);
+  else if (k === 'music') openMusic(slot.fn); else if (k === 'latest') watchLatest(); else if (k === 'calendar') openCalendar(slot.fn);
+};
 
 // fan pieces: one that lands while the visitor is in the room drops onto the top of the heap from above the table
 function landPiece(p) {
@@ -1460,7 +1666,7 @@ function openGuestbook() {
   setTimeout(() => $('gb-name')?.focus(), 50);
 }
 let gbBusy = false;
-const gbForm = $('gb-form'); // absent for a signed-out viewer: heap-room.tsx shows a sign-in line instead
+const gbForm = root.querySelector('#gb-form'); // absent for a signed-out viewer: heap-room.tsx shows a sign-in line instead
 if (gbForm) on(gbForm, 'submit', async e => {
   e.preventDefault();
   if (gbBusy) return;
@@ -1483,7 +1689,7 @@ on($('gb-close'), 'click', () => { $('guestbook').hidden = true; });
 
 // polling: what others changed (guestbook rows, visit counts, 다녀감, landed pieces) every opts.pollMs while the tab is visible.
 // The first cursor is the snapshot's serverTime; each reply carries the next. Overlapping rows are merged by id.
-let cursor = DATA.serverTime, polling = false, pollTimer = 0;
+let cursor = DATA.serverTime, polling = false;
 async function poll() {
   if (disposed || polling) return;
   polling = true;
@@ -1519,13 +1725,19 @@ cleanups.push(() => clearTimeout(pollTimer));
 // rooms: the door lists the other rooms; jumping fades out and hands the chosen id to opts.onNavigate
 function openRooms() {
   const list = $('roomlist'); list.innerHTML = '';
+  let anyChanged = false;
   for (const r of ROOMS) {
     const b = el('button'); b.type = 'button'; b.disabled = r.id === roomId;
-    const left = el('span'); left.appendChild(el('b', null, r.name)); left.appendChild(el('br')); left.appendChild(el('small', null, r.blurb || ''));
+    const left = el('span'); left.appendChild(el('b', null, r.name));
+    if (r.changed === true && r.id !== roomId) { // changed since the viewer's last visit there (heap/repo.ts listChangedRoomSlugs); the page sends it for signed-in viewers only
+      const dot = el('span', 'dot'); dot.setAttribute('role', 'img'); dot.setAttribute('aria-label', '다녀간 뒤 바뀐 방'); left.appendChild(dot); anyChanged = true;
+    }
+    left.appendChild(el('br')); left.appendChild(el('small', null, r.blurb || ''));
     b.appendChild(left); b.appendChild(el('small', null, r.id === roomId ? '지금 있는 방' : '들어가기 →'));
     b.addEventListener('click', () => jump(r.id));
     list.appendChild(b);
   }
+  $('rooms-legend').hidden = !anyChanged;
   $('rooms').hidden = false;
 }
 function jump(id) {
@@ -1553,7 +1765,7 @@ function updateAlbums() {
 }
 function enterSort() { // "sort" mode = standing at the album shelf, browsing albums
   if (!SHELF) return;
-  mode = 'sort'; walkTo = null; arrive = null; waypoints = [];
+  mode = 'sort'; walkTo = null; arrive = null; waypoints = []; perch = null;
   me.position.copy(SHELF_STAND); me.rotation.y = shelfFacing - 0.4;
   setHint('shelf'); goTo(SORT_CAM); syncUI();
 }
@@ -1590,7 +1802,7 @@ function rayFrom(ev) {
 }
 const isProj = o => projParts.includes(o), isPhone = o => phoneParts.includes(o);
 const keys = new Set();
-const OVERLAYS = ['phone', 'pc', 'keepsake', 'grid', 'rooms', 'guestbook'];
+const OVERLAYS = ['phone', 'pc', 'keepsake', 'calendar', 'grid', 'rooms', 'guestbook'];
 const anyOverlay = () => OVERLAYS.some(id => !$(id).hidden);
 on(window, 'keydown', ev => {
   if (ev.target.closest?.('input, textarea')) { if (ev.key === 'Escape') $('guestbook').hidden = true; return; }
@@ -1604,6 +1816,7 @@ on(window, 'keydown', ev => {
     else if (mode === 'sort') exitSort();
     else if (held) putBack();
     else if (mode === 'sit') stand();
+    else if (perch) unperch();
   }
 });
 on(window, 'keyup', ev => keys.delete(ev.key.toLowerCase()));
@@ -1636,7 +1849,7 @@ canvas.addEventListener('pointermove', ev => {
   if (ev.buttons) return;
   rayFrom(ev);
   if (mode === 'sort') { canvas.style.cursor = SHELF && ray.intersectObjects(SHELF.albums.flatMap(a => [a.mesh, a.label]), false).length ? 'pointer' : 'default'; return; }
-  if (mode === 'room') { canvas.style.cursor = ray.intersectObjects(ITEMS.slotMeshes, false).length ? 'pointer' : ''; return; }
+  if (mode === 'room') { canvas.style.cursor = ray.intersectObjects([...ITEMS.slotMeshes, ...ITEMS.seatMeshes], false).length ? 'pointer' : ''; return; }
   if (mode !== 'sit' || camGoal) return;
   const hit = ray.intersectObjects([...pickables, ...projParts, ...phoneParts], false)[0];
   hovered = hit && !held && hit.object.userData.card ? hit.object.userData.card : null;
@@ -1665,9 +1878,10 @@ canvas.addEventListener('pointerup', ev => {
     if (hit) pickUp(hit.object.userData.card);
     return;
   }
-  const hit = ray.intersectObjects([tableTop, ...pickables, ...projParts, ...phoneParts, ...ITEMS.slotMeshes, ...shelfParts, ...doorParts, ...bookParts, floor], false)[0];
+  const hit = ray.intersectObjects([tableTop, ...pickables, ...projParts, ...phoneParts, ...ITEMS.slotMeshes, ...ITEMS.seatMeshes, ...shelfParts, ...doorParts, ...bookParts, floor], false)[0];
   if (!hit) return;
-  if (hit.object.userData.slot) return openSlot(hit.object.userData.slot); // a PC, a frame or a standee: its panel opens where the visitor stands
+  if (hit.object.userData.slot) return openSlot(hit.object.userData.slot); // a PC, a frame, a TV, a radio or a calendar: it acts where the visitor stands
+  if (hit.object.userData.seats) return sitOn(hit.object.userData.seats, hit.point); // a chair, a sofa or a rug: walk there and sit
   const p = hit.point, onTableFoot = p.x > TBOX.x0 && p.x < TBOX.x1 && p.z > TBOX.z0 && p.z < TBOX.z1;
   if (doorParts.includes(hit.object)) walkRoute(DOOR_SPOT.clone(), 'door');
   else if (bookParts.includes(hit.object)) walkRoute(BOOK_SPOT.clone(), 'book');
@@ -1685,7 +1899,91 @@ function crossesTable(a, b) {
   }
   return false;
 }
+// ---------- sitting on furniture (room mode) ----------
+// A seat is entered from one of its stand points, reached by a walk planned around every walk obstacle, and the visitor sits only on arriving there.
+// A seat whose centre lies inside the photo table, the guestbook stand or another item's own footprint is refused, so nobody ends up inside furniture.
+// perchOn / unperch: the seat's pose is held every frame by stepCharacter; any walking key, a click on the floor or Esc stands the visitor up at the stand point they came from.
+const walkBoxes = () => [OBST[0], ...ITEMS.obst, ...OBST.slice(1)];
+const walkFree = (x, z, margin = 0.05) => x > -RX + 0.35 && x < RX - 0.3 && z > -RZ + 0.35 && z < RZ - 0.3 && !walkBoxes().some(o => Math.abs(x - o.x) < o.hw + margin && Math.abs(z - o.z) < o.hd + margin);
+const seatUsable = s => s.pos.x > -RX + 0.2 && s.pos.x < RX - 0.2 && s.pos.z > -RZ + 0.2 && s.pos.z < RZ - 0.2 &&
+  !walkBoxes().some(o => o.owner !== s.item && Math.abs(s.pos.x - o.x) < (o.rhw ?? o.hw) + 0.1 && Math.abs(s.pos.z - o.z) < (o.rhd ?? o.hd) + 0.1);
+// A* over a 0.25 grid of the floor (cells inside an obstacle's walk box plus 0.15 are closed), then the path is pulled straight wherever a line stays clear.
+// Returns the points to walk through, the last being `to` itself, or null when `to` cannot be reached.
+function planPath(from, to) {
+  const S = 0.25, M = 0.15, x0 = -RX + 0.35, z0 = -RZ + 0.35, nx = Math.floor((2 * RX - 0.65) / S) + 1, nz = Math.floor((2 * RZ - 0.65) / S) + 1;
+  const open = new Uint8Array(nx * nz);
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) open[j * nx + i] = walkFree(x0 + i * S, z0 + j * S, M) ? 1 : 0;
+  const cellOf = (x, z) => [THREE.MathUtils.clamp(Math.round((x - x0) / S), 0, nx - 1), THREE.MathUtils.clamp(Math.round((z - z0) / S), 0, nz - 1)];
+  let [si, sj] = cellOf(from.x, from.z);
+  if (!open[sj * nx + si]) { // the start may stand in an obstacle's margin: begin from the nearest open cell
+    let best = null;
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) if (open[j * nx + i]) { const d = Math.hypot(i - si, j - sj); if (d <= 8 && (!best || d < best[0])) best = [d, i, j]; }
+    if (!best) return null;
+    [, si, sj] = best;
+  }
+  const [gi, gj] = cellOf(to.x, to.z);
+  if (!open[gj * nx + gi]) return null;
+  const g = new Float32Array(nx * nz).fill(Infinity), came = new Int32Array(nx * nz).fill(-1), done = new Uint8Array(nx * nz), heap = [[0, sj * nx + si]];
+  g[sj * nx + si] = 0;
+  const h = (i, j) => { const dx = Math.abs(i - gi), dz = Math.abs(j - gj); return Math.max(dx, dz) + 0.414 * Math.min(dx, dz); };
+  let reached = false;
+  while (heap.length) {
+    let k = 0; for (let n = 1; n < heap.length; n++) if (heap[n][0] < heap[k][0]) k = n;
+    const [, cur] = heap.splice(k, 1)[0];
+    if (done[cur]) continue;
+    done[cur] = 1;
+    const ci = cur % nx, cj = (cur - ci) / nx;
+    if (ci === gi && cj === gj) { reached = true; break; }
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+      if (!di && !dj) continue;
+      const ni = ci + di, nj = cj + dj;
+      if (ni < 0 || nj < 0 || ni >= nx || nj >= nz || !open[nj * nx + ni]) continue;
+      if (di && dj && !(open[cj * nx + ni] && open[nj * nx + ci])) continue; // no cutting a corner
+      const n = nj * nx + ni, cost = g[cur] + (di && dj ? 1.414 : 1);
+      if (cost < g[n]) { g[n] = cost; came[n] = cur; heap.push([cost + h(ni, nj), n]); }
+    }
+  }
+  if (!reached) return null;
+  const cells = [];
+  for (let c = gj * nx + gi; c !== -1; c = came[c]) { const ci = c % nx; cells.unshift({ x: x0 + ci * S, z: z0 + (c - ci) / nx * S }); }
+  cells[cells.length - 1] = { x: to.x, z: to.z };
+  const clear = (a, b) => { const n = Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 0.1); for (let t = 1; t <= n; t++) if (!walkFree(a.x + (b.x - a.x) * t / n, a.z + (b.z - a.z) * t / n, 0.1)) return false; return true; };
+  const out = []; let cur = { x: from.x, z: from.z }, k = 0;
+  while (k < cells.length) {
+    let m = k; for (let n = cells.length - 1; n > k; n--) if (clear(cur, cells[n])) { m = n; break; }
+    out.push(new THREE.Vector3(cells[m].x, 0, cells[m].z)); cur = cells[m]; k = m + 1;
+  }
+  return out;
+}
+function sitOn(seats, point) { // the seat of this item nearest to where the click landed
+  const s = seats.reduce((a, b) => (Math.hypot(a.pos.x - point.x, a.pos.z - point.z) <= Math.hypot(b.pos.x - point.x, b.pos.z - point.z) ? a : b));
+  if (!seatUsable(s)) { toast('여기에는 앉을 수 없어요'); return; }
+  if (perch) unperch();
+  const from = me.position.clone().setY(0);
+  let best = null;
+  for (const st of s.stands) {
+    if (!walkFree(st.x, st.z)) continue;
+    const path = planPath(from, st);
+    if (!path) continue;
+    let len = 0, prev = from; for (const p of path) { len += prev.distanceTo(p); prev = p; }
+    if (!best || len < best.len) best = { st, path, len };
+  }
+  if (!best) { toast('거기까지 갈 길이 없어요'); return; }
+  waypoints = best.path.slice(); walkTo = waypoints.shift(); arrive = 'seat'; seatTarget = s; seatFrom = best.st;
+}
+function perchOn(s) {
+  if (!s || !seatFrom || Math.hypot(me.position.x - seatFrom.x, me.position.z - seatFrom.z) > 0.3) return; // only from the stand point the walk was planned to
+  perch = s; perchFrom = seatFrom; walkTo = null; arrive = null; waypoints = [];
+  setHint('perch'); syncUI();
+}
+function unperch() {
+  if (!perch) return;
+  perch = null;
+  me.position.copy(perchFrom).setY(0); collide(me.position); // back onto the floor where the seat was entered from
+  setHint('room'); syncUI();
+}
 function walkRoute(to, action) {
+  if (perch) unperch();
   const from = me.position.clone().setY(0);
   waypoints = [to]; arrive = action;
   if (crossesTable(from, to)) {
@@ -1722,9 +2020,17 @@ let walkPhase = 0;
 function arrived() {
   if (waypoints.length) { walkTo = waypoints.shift(); return; }
   const a = arrive; walkTo = null; arrive = null;
-  if (a === 'sit') sit(); else if (a === 'sort') enterSort(); else if (a === 'door') openRooms(); else if (a === 'book') openGuestbook();
+  if (a === 'sit') sit(); else if (a === 'sort') enterSort(); else if (a === 'door') openRooms(); else if (a === 'book') openGuestbook(); else if (a === 'seat') perchOn(seatTarget);
 }
+const WALK_KEYS = ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
 function stepCharacter(dt) {
+  if (perch) {
+    if (anyOverlay() || !WALK_KEYS.some(k => keys.has(k))) { // sitting: the pose stays until a walking key is pressed
+      me.position.set(perch.pos.x, perch.pos.y - 0.28, perch.pos.z); me.rotation.y = perch.yaw; legL.rotation.x = legR.rotation.x = -1.2;
+      return;
+    }
+    unperch();
+  }
   mv.set(0, 0, 0);
   if (!anyOverlay()) {
     if (keys.has('w') || keys.has('arrowup')) mv.add(UP);
@@ -1735,7 +2041,10 @@ function stepCharacter(dt) {
   if (mv.lengthSq()) { walkTo = null; arrive = null; waypoints = []; mv.normalize(); }
   else if (walkTo) {
     mv.subVectors(walkTo, me.position).setY(0);
-    if (mv.length() < (waypoints.length ? 0.2 : 0.08)) { mv.set(0, 0, 0); return arrived(); }
+    const gap = mv.length();
+    // a seat is entered only from its stand point, so the last step onto it never overshoots: within one step the visitor lands on it
+    if (arrive === 'seat' && !waypoints.length && gap <= 2.4 * dt) { me.position.x = walkTo.x; me.position.z = walkTo.z; mv.set(0, 0, 0); return arrived(); }
+    if (gap < (waypoints.length ? 0.2 : 0.08)) { mv.set(0, 0, 0); return arrived(); }
     mv.normalize();
   }
   const moving = mv.lengthSq() > 0;
@@ -1767,6 +2076,7 @@ const roomGoal = new THREE.Vector3(), flyQ = new THREE.Quaternion(), FLIP = new 
 // The canvas is sized by CSS: the whole room area, or what the 꾸미기 panel leaves of it. The observer catches both that and a window resize.
 function resize() {
   const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
+  layoutMusic();
   renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
   if (raf) renderer.render(scene, camera); // setSize clears the canvas; draw again so no blank frame shows
 }
@@ -1864,15 +2174,18 @@ run().catch(e => { if (!disposed) console.error('[heap-room]', e); });
 return function dispose() {
   if (disposed) return;
   disposed = true;
-  cancelAnimationFrame(raf);
-  ac.abort();
-  while (cleanups.length) cleanups.pop()();
+  // every step runs even when another one throws: a half-finished dispose would leave the poll timer, the frame loop or the listeners of a dead engine running
+  const safe = (step, what) => { try { step(); } catch (e) { console.error('[heap-room] dispose:', what, e); } };
+  safe(() => clearTimeout(pollTimer), 'poll timer');
+  safe(() => cancelAnimationFrame(raf), 'frame loop');
+  safe(() => ac.abort(), 'listeners and requests');
+  while (cleanups.length) safe(cleanups.pop(), 'cleanup');
   // put the React-rendered nodes back to their first-render state so a later mount starts clean
-  for (const id of LISTS) $(id).innerHTML = '';
-  for (const id of HIDDEN) $(id).hidden = true;
-  $('status').hidden = false; $('fade').classList.remove('on');
-  $('toast').textContent = ''; $('gb-msg').textContent = ''; $('visit').textContent = ''; $('hint').textContent = ''; delete $('hint').dataset.k;
-  root.style.removeProperty('--clay');
-  if (roomTitle && document.title === roomTitle) document.title = prevTitle;
+  for (const id of LISTS) safe(() => { $(id).innerHTML = ''; }, id);
+  for (const id of HIDDEN) safe(() => { $(id).hidden = true; }, id);
+  safe(() => { $('status').hidden = false; $('fade').classList.remove('on'); }, 'status');
+  safe(() => { $('toast').textContent = ''; $('gb-msg').textContent = ''; $('visit').textContent = ''; $('hint').textContent = ''; delete $('hint').dataset.k; }, 'texts');
+  safe(() => { root.style.removeProperty('--clay'); root.style.removeProperty('--music-w'); }, 'root style');
+  safe(() => { if (roomTitle && document.title === roomTitle) document.title = prevTitle; }, 'title');
 };
 }

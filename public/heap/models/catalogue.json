@@ -5,8 +5,18 @@
   "_slots": "item.fn 기능 종류와 그걸 달 수 있는 가구. models는 카탈로그 id, hand는 엔진이 직접 만드는 종류(type). 새 기능은 여기에 줄을 더하고 layout.ts의 검사(src/lib/heap/slots.ts)를 함께 늘린다.",
   "slots": {
     "pc": { "label": "PC (링크 모음)", "models": ["desk", "computerScreen", "laptop"], "hand": [] },
-    "keepsake": { "label": "기념품", "models": ["bookcaseOpen", "bookcaseClosedWide", "cabinetTelevision"], "hand": ["frame", "shelf"] }
+    "keepsake": { "label": "기념품", "models": ["bookcaseOpen", "bookcaseClosedWide", "cabinetTelevision"], "hand": ["frame", "shelf"] },
+    "music": { "label": "음악 (유튜브)", "models": ["radio", "speaker", "televisionModern"], "hand": [] },
+    "latest": { "label": "최신 영상", "models": ["televisionModern"], "hand": [] },
+    "calendar": { "label": "달력", "models": [], "hand": ["calendar"] }
   },
+  "_seats": "앉을 수 있는 가구: category별 규칙. top은 가구 높이 중 앉는 면의 비율(1이면 윗면), per는 앉는 자리 하나가 차지하는 폭(소파가 넓으면 자리가 여럿), floor는 바닥에 앉는 자세. 자리 좌표는 모델의 바닥 크기에서 엔진이 계산한다 (데이터를 따로 저장하지 않는다).",
+  "seats": {
+    "chair": { "top": 0.51 },
+    "sofa": { "top": 0.8, "per": 0.98 },
+    "rug": { "top": 1, "floor": true }
+  },
+  "_screen": "screen: TV 화면 위치(파일 좌표, 크기 조정 전). 엔진이 최신 영상이나 음악 썸네일을 이 사각형에 그린다.",
   "_lift": "lift: 꾸미기에서 새로 놓을 때 기본으로 띄우는 높이(y). 책상 위에 얹는 물건용이에요.",
   "models": [
     { "id": "bedDouble", "file": "kenney-furniture/bedDouble.glb", "label": "더블 침대", "category": "bed", "w": 1.91, "d": 2.25 },
@@ -42,7 +52,9 @@
     { "id": "plantSmall1", "file": "kenney-furniture/plantSmall1.glb", "label": "작은 화분", "category": "plant", "w": 0.19, "d": 0.19 },
     { "id": "rugRound", "file": "kenney-furniture/rugRound.glb", "label": "둥근 러그", "category": "rug", "w": 1.84, "d": 1.84 },
     { "id": "rugRectangle", "file": "kenney-furniture/rugRectangle.glb", "label": "네모 러그", "category": "rug", "w": 3.14, "d": 1.84 },
-    { "id": "televisionModern", "file": "kenney-furniture/televisionModern.glb", "label": "TV", "category": "screen", "w": 1.37, "d": 0.26 },
+    { "id": "televisionModern", "file": "kenney-furniture/televisionModern.glb", "label": "TV", "category": "screen", "w": 1.37, "d": 0.26, "screen": { "x": 0, "y": 0.262, "z": 0.0225, "w": 0.668, "h": 0.368 } },
+    { "id": "radio", "file": "kenney-furniture/radio.glb", "label": "라디오", "category": "audio", "lift": 0.77, "w": 0.63, "d": 0.2 },
+    { "id": "speaker", "file": "kenney-furniture/speaker.glb", "label": "스피커", "category": "audio", "w": 0.3, "d": 0.3 },
     { "id": "laptop", "file": "kenney-furniture/laptop.glb", "label": "노트북", "category": "screen", "lift": 0.77, "w": 0.53, "d": 0.48 },
     { "id": "computerScreen", "file": "kenney-furniture/computerScreen.glb", "label": "모니터", "category": "screen", "lift": 0.77, "w": 0.79, "d": 0.21 },
     { "id": "pillow", "file": "kenney-furniture/pillow.glb", "label": "쿠션", "category": "decor", "w": 0.46, "d": 0.18 },

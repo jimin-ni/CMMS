@@ -9,12 +9,22 @@ import { HEAP_POLICY } from "@/lib/heap/policy";
 //     PcLink = { title, url } 또는 { title, email }. links가 없으면 방의 creator.json 링크로 대신한다 (엔진).
 //   { kind: "keepsake", name, date?: "YYYY-MM-DD", caption?, link? }
 //     link는 http(s) 주소. 유튜브 게시물이면 엔진이 썸네일을 보여 준다.
+//   { kind: "music", url }
+//     유튜브 영상 또는 재생목록 주소 하나 (parseMusicUrl이 받는 꼴만). 라디오, 스피커, TV가 달 수 있다. 누르면 방 오른쪽 위에 공식 플레이어가 열린다.
+//   { kind: "latest" }
+//     TV 화면에 가장 최근 영상의 썸네일을 보여 주고, 누르면 그 영상이 영사기로 간다. 값은 따로 없다.
+//   { kind: "calendar", entries?: { date: "YYYY-MM-DD", label }[] }
+//     책상 위 달력(손으로 만드는 가구 calendar). 크리에이터가 팬에게 알리는 날짜 목록.
 
-export type SlotKind = "pc" | "keepsake";
+export type SlotKind = "pc" | "keepsake" | "music" | "latest" | "calendar";
 export type PcLink = { title: string; url: string } | { title: string; email: string };
+export type CalendarEntry = { date: string; label: string };
 export type SlotFn =
   | { kind: "pc"; links?: PcLink[] }
-  | { kind: "keepsake"; name: string; date?: string; caption?: string; link?: string };
+  | { kind: "keepsake"; name: string; date?: string; caption?: string; link?: string }
+  | { kind: "music"; url: string }
+  | { kind: "latest" }
+  | { kind: "calendar"; entries?: CalendarEntry[] };
 
 type SlotEntry = { label: string; models: string[]; hand: string[] };
 const SLOTS = catalogue.slots as Record<SlotKind, SlotEntry>;
@@ -57,6 +67,32 @@ function webUrl(value: unknown): value is string {
   } catch {
     return false;
   }
+}
+
+// 음악 링크: 유튜브 영상(watch?v=, youtu.be/) 또는 재생목록(playlist?list=) 주소만 받는다. 영상 주소의 list=는 같이 담긴다.
+// 반환은 임베드에 쓸 ID들이다. 두 값은 정규식을 통과한 글자뿐이라 엔진이 그대로 주소에 붙여도 된다. 받지 못하는 주소는 null.
+const YT_ID = /^[A-Za-z0-9_-]{11}$/;
+const YT_LIST = /^[A-Za-z0-9_-]{13,64}$/;
+const MUSIC_HOSTS = ["youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com"];
+export function parseMusicUrl(value: unknown): { video: string | null; list: string | null } | null {
+  if (!webUrl(value)) return null;
+  const url = new URL(value);
+  if (url.port !== "") return null;
+  const path = url.pathname.length > 1 ? url.pathname.replace(/\/$/, "") : url.pathname;
+  const query = url.searchParams;
+  const rawList = query.get("list");
+  if (rawList !== null && !YT_LIST.test(rawList)) return null;
+  if (url.hostname === "youtu.be") {
+    const m = /^\/([A-Za-z0-9_-]{11})$/.exec(path);
+    return m ? { video: m[1], list: rawList } : null;
+  }
+  if (!MUSIC_HOSTS.includes(url.hostname)) return null;
+  if (path === "/watch") {
+    const v = query.get("v");
+    return v !== null && YT_ID.test(v) ? { video: v, list: rawList } : null;
+  }
+  if (path === "/playlist") return rawList !== null ? { video: null, list: rawList } : null;
+  return null;
 }
 
 // mailto 주소: 받는 사람 하나만. ? # 뒤의 제목·본문·헤더는 받지 않는다.
@@ -127,6 +163,42 @@ export function checkFn(raw: unknown, type: string, model: string | undefined, a
       links.push(r.link);
     }
     return { fn: { kind: "pc", links } };
+  }
+
+  if (kind === "music") {
+    const bad = Object.keys(raw).find((key) => key !== "kind" && key !== "url");
+    if (bad) return { error: `${at}: 알 수 없는 필드 ${bad}` };
+    if (!parseMusicUrl(raw.url)) return { error: `${at}: 유튜브 영상이나 재생목록 주소여야 해요.` };
+    return { fn: { kind: "music", url: raw.url as string } };
+  }
+
+  if (kind === "latest") {
+    const bad = Object.keys(raw).find((key) => key !== "kind");
+    if (bad) return { error: `${at}: 알 수 없는 필드 ${bad}` };
+    return { fn: { kind: "latest" } };
+  }
+
+  if (kind === "calendar") {
+    const bad = Object.keys(raw).find((key) => key !== "kind" && key !== "entries");
+    if (bad) return { error: `${at}: 알 수 없는 필드 ${bad}` };
+    if (raw.entries === undefined) return { fn: { kind: "calendar" } };
+    if (!Array.isArray(raw.entries) || raw.entries.length > HEAP_POLICY.calendarEntriesMax) {
+      return { error: `${at}: 날짜는 ${HEAP_POLICY.calendarEntriesMax}개까지예요.` };
+    }
+    const entries: CalendarEntry[] = [];
+    for (let i = 0; i < raw.entries.length; i++) {
+      const e: unknown = raw.entries[i];
+      const here = `${at}.entries[${i}]`;
+      if (!isObj(e)) return { error: `${here}: 객체가 아니에요.` };
+      const extra = Object.keys(e).find((key) => key !== "date" && key !== "label");
+      if (extra) return { error: `${here}: 알 수 없는 필드 ${extra}` };
+      if (typeof e.date !== "string" || !realDate(e.date)) return { error: `${here}: 날짜는 YYYY-MM-DD 형식의 실제 날짜여야 해요.` };
+      if (!text(e.label, 1, HEAP_POLICY.calendarLabelMaxChars)) {
+        return { error: `${here}: 설명은 1~${HEAP_POLICY.calendarLabelMaxChars}자여야 해요.` };
+      }
+      entries.push({ date: e.date, label: e.label });
+    }
+    return { fn: { kind: "calendar", entries } };
   }
 
   // keepsake

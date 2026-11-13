@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { addGuestbookAction, recordVisitAction } from "@/lib/heap/actions";
 import { HEAP_POLICY } from "@/lib/heap/policy";
 import { parsePieceUrl } from "@/lib/heap/platform";
-import { isEmailAddress, isSafeLink, isWebLink } from "@/lib/heap/slots";
+import { isEmailAddress, isSafeLink, isWebLink, parseMusicUrl } from "@/lib/heap/slots";
 import { RoomEditor } from "./room-editor";
 import "./heap-room.css";
 
@@ -26,7 +26,8 @@ export type HeapRoomData = {
   bubbleHref: string;
   // 이 스냅샷을 읽은 DB 시각(ISO). 실시간 읽기의 첫 기준점이다.
   serverTime: string;
-  rooms: { id: string; name: string; blurb: string }[];
+  // changed: 로그인한 사람이 마지막으로 다녀간 뒤 바뀐 방이면 true (문에 붙은 방 목록에 점이 찍힌다). 로그인하지 않았으면 모두 false.
+  rooms: { id: string; name: string; blurb: string; changed: boolean }[];
   layout: Record<string, unknown>;
   reels: { id: string; title: string; channel: string | null; wide: boolean; views: string; published: string | null }[];
   pieces: { id: string; by: string; date: string; caption: string }[];
@@ -59,6 +60,11 @@ export function HeapRoom({
   const [editing, setEditing] = useState(false);
   const closeEditor = useCallback(() => setEditing(false), []);
 
+  // 꾸미기 패널이 열리고 닫힐 때 엔진에 알린다. 패널이 음악 플레이어 자리를 차지하므로 열리면 음악이 멈춘다.
+  useEffect(() => {
+    rootRef.current?.dispatchEvent(new CustomEvent("heap:edit", { detail: editing }));
+  }, [editing]);
+
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
@@ -83,6 +89,8 @@ export function HeapRoom({
         navigate: (href: string) => router.push(href),
         // 기념품 링크가 유튜브 게시물인지 알아보는 데 쓴다 (엔진이 썸네일 주소를 만든다)
         parseLink: parsePieceUrl,
+        // 음악 링크(유튜브 영상·재생목록)에서 임베드 ID를 뽑는다. 서버가 저장 전에 하는 검사와 같은 함수다.
+        parseMusic: parseMusicUrl,
         // 링크를 화면에 걸기 전의 검사. 서버가 저장 전에 하는 검사와 같은 함수다.
         isSafeLink,
         isWebLink,
@@ -161,6 +169,23 @@ export function HeapRoom({
         </p>
       </div>
 
+      {/* 음악: 방 오른쪽 위에 붙는 공식 유튜브 플레이어. 방 이름의 반대편이다. 엔진이 채운다. */}
+      <div id="music" hidden>
+        <div className="player-bar">
+          <span id="music-title">음악</span>
+          <button id="music-close" className="btn ghost" type="button">
+            닫기
+          </button>
+        </div>
+        <div id="music-frame" />
+        <p id="music-note" hidden>
+          이 미리보기 화면에는 YouTube 플레이어를 넣을 수 없어요.
+        </p>
+        <a id="music-link" className="btn ghost" href="https://www.youtube.com/" target="_blank" rel="noopener" hidden>
+          YouTube에서 열기
+        </a>
+      </div>
+
       <div id="phone" className="overlay" hidden>
         <div className="phone">
           <div className="phone-screen">
@@ -202,6 +227,19 @@ export function HeapRoom({
             </button>
           </div>
           <div className="panel-body" id="ks-body" />
+        </div>
+      </div>
+
+      {/* 책상 위 달력: 크리에이터가 팬에게 알리는 날짜. 오늘부터 앞으로의 것만 보인다. 엔진이 cal-body를 채운다. */}
+      <div id="calendar" className="overlay" hidden>
+        <div className="panel">
+          <div className="panel-head">
+            <b>달력</b>
+            <button id="cal-close" className="btn ghost" type="button">
+              닫기
+            </button>
+          </div>
+          <div className="panel-body" id="cal-body" />
         </div>
       </div>
 
@@ -265,6 +303,10 @@ export function HeapRoom({
           </div>
           <div className="panel-body">
             <div className="roomlist" id="roomlist" />
+            <p className="note" id="rooms-legend" hidden>
+              <span className="dot" aria-hidden="true" />
+              다녀간 뒤 바뀐 방이에요.
+            </p>
           </div>
         </div>
       </div>

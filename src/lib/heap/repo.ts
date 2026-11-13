@@ -207,6 +207,29 @@ export async function listRooms(): Promise<HeapRoomLink[]> {
     .orderBy(asc(heapRooms.createdAt), asc(heapRooms.slug));
 }
 
+// 문에 붙은 방 목록에 찍는 점: 이 사람의 마지막 방문(heap_visits의 가장 늦은 visit_day) 뒤에 바뀐 방의 slug.
+// 바뀐 것 = 방 꾸미기 저장(heap_rooms.updated_at), 새로 들어온 영상(heap_reels.created_at), 안착한 팬 조각(heap_pieces.landed_at).
+// 방문 기록이 하루 단위(한국 시간)라서 방문한 날 안에 생긴 변화는 점이 되지 않고, 그 다음 날 한국 시간 0시부터의 변화가 점이 된다.
+// 방문한 적 없는 방은 기준이 없어서 점을 찍지 않는다. 읽기만 하고 아무것도 쓰지 않는다.
+// 이 사람의 방문만 방별로 묶어 시작하고(seen), 방마다 "다음 날 0시"의 시각(after)을 만들어 timestamptz 열과 직접 비교한다 (열에 함수를 씌우지 않는다).
+export async function listChangedRoomSlugs(viewerId: string): Promise<string[]> {
+  const result = await db.execute<{ slug: string }>(sql`
+    with seen as (
+      select v.room_id, ((max(v.visit_day) + 1)::timestamp at time zone 'Asia/Seoul') as after
+      from heap_visits v
+      where v.user_id = ${viewerId}
+      group by v.room_id
+    )
+    select r.slug
+    from seen s
+    join heap_rooms r on r.id = s.room_id
+    where r.updated_at >= s.after
+      or exists (select 1 from heap_reels x where x.room_id = s.room_id and x.created_at >= s.after)
+      or exists (select 1 from heap_pieces p where p.room_id = s.room_id and p.status = 'landed' and p.landed_at >= s.after)
+  `);
+  return result.rows.map((row) => row.slug);
+}
+
 // 최근에 올라온 영상부터. 게시 시각을 모르는 영상은 등록 순서를 따른다.
 export async function listReels(roomId: string): Promise<HeapReel[]> {
   if (!isUuid(roomId)) return [];
