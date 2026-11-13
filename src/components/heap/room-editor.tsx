@@ -7,9 +7,9 @@ import { checkFn, slotKindsFor, type PcLink, type SlotFn, type SlotKind } from "
 import { FnForm, canCarryFn, isLamp, itemLabel, newFn, type Item, type Model } from "./fn-form";
 import { PRESETS, WELLS, effectivePalette, samePalette, swatches, wellValue, withWell, type Palette, type Well } from "./palettes";
 
-// 꾸미기 화면. 방 주인이 방 안에서 가구를 놓고 옮긴 뒤 저장한다 (design/editor.md, B1~B5).
+// 꾸미기 화면. 방 주인이 방 안에서 가구를 놓고 옮긴 뒤 저장한다 (design/editor.md, B1~B6).
 // 가구를 집고 끌고 돌리는 일, 팔레트, 모양 바꾸기, 되돌리기 기록은 엔진(engine/edit.js)이 한다. 이 컴포넌트는 그 위의 단추들이다:
-// 위 막대(되돌리기, 시간, 저장, 나가기), 아래 독(가구 · 기능 · 색·무늬 탭), 고른 가구 위의 막대, 가구 아래의 기능 말풍선, 기능 표, 알림.
+// 위 막대(되돌리기, 시간, 위에서 보기, 맞추기, 저장, 나가기), 아래 독(가구 · 기능 · 색·무늬 탭), 고른 가구 위의 막대, 가구 아래의 기능 말풍선, 기능 표, 알림.
 // 엔진과는 방 루트 요소의 이벤트로만 이야기한다: heap:get 으로 한 번 읽고, heap:editcmd 로 시키고, heap:editstate 로 듣고,
 // heap:thumb 으로 가구 그림을 받는다 (engine/dock-thumbs.js). 말풍선과 기능 표의 자리는 엔진이 프레임마다 정한다.
 
@@ -43,6 +43,8 @@ type EditState = {
   placed: { index: number; seq: number } | null;
   // 팔레트를 칠하느라 방을 다시 띄우는 중
   busy: boolean;
+  // 카메라 (engine/edit-camera.js): plan 은 위에서 보기, fitted 는 확대나 이동 없이 맞춘 구도인지
+  view: { plan: boolean; fitted: boolean };
 };
 
 // 책상 위에 얹는 달력의 높이 (노트북, 모니터와 같은 책상 높이)
@@ -494,7 +496,7 @@ export function RoomEditor({
       : "놓을 곳에서 떼기 · R 돌리기 · Alt 스냅 끄기 · 아래 목록에 놓으면 넣기"
     : selItem
       ? "끌어서 옮기기 · R 돌리기 · Del 넣기 · Ctrl+D 복제 · Esc 고르기 취소"
-      : "가구를 눌러 고르고 끌어서 옮겨요 · 아래 목록에서 새 가구를 꺼내요";
+      : "가구를 눌러 고르고 끌어서 옮겨요 · 휠 확대 · 오른쪽 끌기 이동 · T 위에서 보기 · 0 맞추기";
 
   // 말풍선에 보이는 기능: 들고 있는 값(올바르지 않은 것)이 있으면 그것, 아니면 가구에 달린 것
   const liveDraft = draft && bubbleOpen && draft.index === sel && selItem && draft.base === fnKey(selItem.fn) ? draft : null;
@@ -522,6 +524,15 @@ export function RoomEditor({
         <button className="btn ghost small" type="button" disabled={!st?.dirty || busy} onClick={() => cmd({ op: "reset" })} title="마지막으로 저장한 모습으로">
           처음으로
         </button>
+        <button className="btn ghost small" type="button" aria-pressed={!!st?.view?.plan} disabled={busy} onClick={() => cmd({ op: "plan" })} title="위에서 보기 (T)">
+          위에서
+        </button>
+        {/* 확대하거나 옮긴 뒤에만 보인다: 좁은 창에서 위 막대가 넘치지 않게 */}
+        {st?.view?.fitted === false && (
+          <button className="btn ghost small" type="button" disabled={busy} onClick={() => cmd({ op: "fit" })} title="방 전체 보기 (Home 또는 0)">
+            맞추기
+          </button>
+        )}
         <span className="ed-sp" />
         <span className={st?.dirty && !saveNote ? "ed-save dirty" : "ed-save"} role="status">
           {saveState}

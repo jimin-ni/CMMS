@@ -3,10 +3,13 @@
 // room-editor.tsx 가 그리고, 이 모듈과는 방 루트의 이벤트로만 이야기한다.
 //   받는 것  heap:edit (true 면 들어오고 false 면 나간다, heap-room.tsx)
 //            heap:editcmd { op, ... }  op: arm(template), rotate(dir), copy, remove, undo, redo, time(value), fn(index, fn), lit, select(index | null), cancel, reset(처음으로), discard(나가며 버리기),
-//                                     palette(palette | null), swap(index, to { type, model? })
+//                                     palette(palette | null), swap(index, to { type, model? }), plan(value?: 위에서 보기를 켜고 끈다), fit(구도 맞추기)
 //            heap:saved { roomUuid, layout } (editor-bridge.js 와 함께): 저장된 레이아웃이 새 기준이 된다. 다른 방의 것은 버린다
-//   보내는 것 heap:editstate { items, sel, moving, canUndo, canRedo, dirty, time, notice, palette, look, mount, placed, busy }  바뀔 때마다
-//            heap:remount { edit, items, time, palette, hist, future, saved, original, baseLayout }  팔레트가 바뀔 때 (아래 remount)
+//   보내는 것 heap:editstate { items, sel, moving, canUndo, canRedo, dirty, time, notice, palette, look, mount, placed, busy, view { plan, fitted } }  바뀔 때마다
+//            heap:remount { edit, items, time, palette, hist, future, saved, original, baseLayout, plan }  팔레트가 바뀔 때 (아래 remount)
+// 카메라(B6)는 edit-camera.js 의 ctx.editCam 이다: 휠 확대, 오른쪽 끌기 이동(움직이지 않은 오른쪽 클릭은 취소), T 평면도, Home 또는 0 맞추기.
+// 집고 놓는 일은 지금 화면의 카메라로 하므로 두 카메라에서 같다. 평면도에서 벽 액자는 가까운 벽을 따르고, 맞은 메시가 없으면 바닥의 발판으로 고른다.
+// 들고 있는 가구가 다른 가구에 가리면 옅은 그림자(실루엣)로 비쳐 보이고, 발판의 점선 테두리는 늘 보인다 (아래 그림자).
 // 팔레트는 벽, 바닥과 여러 곳의 색이 마운트 때 한 번 읽는 값(data.js 의 C)이라, 바꾸면 방을 다시 마운트한다 (1초쯤). 편집 상태와 되돌리기 기록은
 // heap:remount 로 heap-room.tsx 에 넘기고, 새 마운트가 opts.resume 으로 받아 이어 간다. 그 사이 방 안의 상태(앉은 자리, 음악)는 처음으로 돌아간다.
 // 끄는 동안에는 그 가구의 그룹만 프레임마다 옮기고, 놓을 때 한 번 buildItems 로 다시 짓는다 (applyItems, editor-bridge.js).
@@ -114,8 +117,63 @@ export function setupEdit(ctx) {
   const grid = new THREE.LineSegments(gridGeo, new THREE.LineBasicMaterial({ color: '#F3EADB', transparent: true, opacity: 0.35, depthWrite: false }));
   grid.visible = false;
   scene.add(tile, wallTile, grid); // dispose 는 scene.js 가 장면째 한다
+  // 발판의 점선 테두리: 깊이를 보지 않고 늘 맨 위에 그린다 (가구 뒤로 들어간 발판도 자리가 보인다). 끄는 동안만 보인다.
+  const corner = [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]].map(([x, y]) => new THREE.Vector3(x, y, 0.002));
+  const edgeGeo = new THREE.BufferGeometry().setFromPoints(corner.flatMap((p, n) => [p, corner[(n + 1) % 4]]));
+  const edgeMat = new THREE.LineDashedMaterial({ color: '#F3EADB', dashSize: 0.06, gapSize: 0.05, transparent: true, opacity: 0.9, depthTest: false, depthWrite: false });
+  const edges = [tile, wallTile].map(t => { const l = new THREE.LineSegments(edgeGeo, edgeMat); l.computeLineDistances(); l.renderOrder = 12; l.visible = false; t.add(l); return l; });
+
+  // ---------- 그림자: 가려진 가구를 비쳐 그리기 ----------
+  // 들고 있는 가구(와 그 위의 물건)를 두 번 더 그린다. 다른 재질은 건드리지 않는다: 복제한 메시에 이 두 재질만 입힌다.
+  //   1) mask: 색은 쓰지 않고, 가구 자신이 맨 앞인 픽셀(깊이가 같거나 앞)에 스텐실 1 을 쓴다.
+  //   2) sil : 깊이가 더 먼(GreaterDepth) 픽셀, 곧 다른 것에 가린 부분만, 스텐실이 1 이 아닌 곳에 한 겹 그린다 (그리며 1 을 써서 겹쳐 짙어지지 않는다).
+  // 그래서 가구가 조금이라도 보이는 픽셀에는 그림자가 덮이지 않고, 가구가 자기 뒷면을 가리는 곳에도 생기지 않는다.
+  // 렌더러는 스텐실 버퍼가 있고(three r160 의 기본값) 매 프레임 지운다(autoClear).
+  const maskMat = new THREE.MeshBasicMaterial({
+    colorWrite: false, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4,
+    stencilWrite: true, stencilRef: 1, stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp,
+  });
+  const silMat = new THREE.MeshBasicMaterial({
+    color: OK, transparent: true, opacity: 0.55, depthWrite: false, depthFunc: THREE.GreaterDepth, // 색은 발판처럼 놓을 수 있는지를 따른다
+    stencilWrite: true, stencilRef: 1, stencilFunc: THREE.NotEqualStencilFunc, stencilZPass: THREE.ReplaceStencilOp,
+  });
+  ctx.onDispose(() => { maskMat.dispose(); silMat.dispose(); }); // 복제는 장면에 없을 때도 있어 재질은 따로 버린다
+  // 원본 그룹마다 { src, mask, sil } 복제 한 쌍. 기하는 원본(모델 캐시)과 같이 쓴다
+  let ghosts = [];
+  function ghostOf(src, mat, order) {
+    const c = src.clone(true), drop = [];
+    c.traverse(o => {
+      if (o.isLight || o.isSprite || o.isPoints || o.isLine) { drop.push(o); return; }
+      if (!o.isMesh) return;
+      const hidden = [].concat(o.material).every(m => m && m.visible === false);
+      o.material = mat; o.castShadow = o.receiveShadow = false; o.renderOrder = order;
+      if (hidden) o.visible = false;
+    });
+    for (const o of drop) o.removeFromParent();
+    c.matrixAutoUpdate = false;
+    return c;
+  }
+  function clearGhosts() { for (const g of ghosts) { g.mask.removeFromParent(); g.sil.removeFromParent(); } ghosts = []; }
+  // 들고 있는 것의 그룹 목록에 맞춰 복제를 만들고, 원본의 자리를 따라가게 한다 (그룹은 다시 지을 때마다 새것이다)
+  function syncGhosts(srcs) {
+    if (srcs.length !== ghosts.length || srcs.some((g, n) => g !== ghosts[n].src)) {
+      clearGhosts();
+      ghosts = srcs.map(src => ({ src, mask: ghostOf(src, maskMat, 10), sil: ghostOf(src, silMat, 11) }));
+      for (const g of ghosts) scene.add(g.mask, g.sil);
+    }
+    for (const g of ghosts) {
+      g.src.updateWorldMatrix(true, false);
+      for (const c of [g.mask, g.sil]) { c.matrix.copy(g.src.matrixWorld); c.matrixWorldNeedsUpdate = true; c.visible = g.src.visible; }
+    }
+  }
   function showTile(it, color) {
     tileMat.color.set(color);
+    if (it.type === 'frame' && ctx.editCam.plan) { // 위에서는 벽이 보이지 않으니 벽 앞 바닥에 띠로 그린다
+      const back = it.rot !== 90, w = 2 * FRAME_M + 0.1;
+      tile.position.set(back ? it.x : -RX + 0.25, 0.02, back ? -RZ + 0.25 : it.z); tile.scale.set(back ? w : 0.5, back ? 0.5 : w, 1);
+      tile.visible = true; wallTile.visible = false;
+      return;
+    }
     if (it.type === 'frame') {
       const wall = it.rot === 90 ? 'left' : 'back';
       wallTile.position.copy(WALLS[wall].point(wall === 'back' ? it.x : it.z, it.y ?? FRAME_Y, 0.04)); wallTile.rotation.y = WALLS[wall].rotY;
@@ -137,8 +195,14 @@ export function setupEdit(ctx) {
       moving: ed.move ? { isNew: ed.move.isNew, label: labelOf(ed.move.base) } : null,
       canUndo: ed.hist.length > 0, canRedo: ed.future.length > 0, dirty: snap() !== ed.saved, notice: ed.notice,
       palette: ed.palette, look: LOOK, mount: MOUNT, placed: ed.placed, busy: ed.busy,
+      view: { plan: ctx.editCam.plan, fitted: ctx.editCam.fitted() },
     } }));
   }
+  // 휠과 끌기는 자주 온다: 구도의 상태(평면도, 맞춘 구도인지)가 바뀔 때만 알린다
+  let viewKey = '';
+  function emitView() { const k = `${ctx.editCam.plan}|${ctx.editCam.fitted()}`; if (k !== viewKey) { viewKey = k; emit(); } }
+  function setPlan(v) { ctx.editCam.setPlan(v); viewKey = ''; }
+  function fitView() { ctx.editCam.fit(); viewKey = ''; }
   function notice(text, undo = false) { ed.notice = { text, undo, seq: ++ed.seq }; }
   // 지금 상태를 되돌리기 기록에 넣는다. tag 가 바로 앞과 같으면 넣지 않는다 (글자 하나마다 한 걸음이 되지 않게).
   function pushUndo(tag = null) {
@@ -165,7 +229,7 @@ export function setupEdit(ctx) {
       edit, items: ed.items.map(it => ({ ...it })), time: ed.time, palette: ed.palette,
       hist: ed.hist.slice(), future: ed.future.slice(), saved: ed.saved, seq: ed.seq,
       original: { items: ctx.original.items.map(it => ({ ...it })), time: ctx.original.time, palette: ctx.original.palette ?? null },
-      baseLayout: structuredClone(ctx.baseLayout),
+      baseLayout: structuredClone(ctx.baseLayout), plan: ctx.editCam.plan,
     } }));
   }
   // 팔레트 하나를 통째로 칠한다 (프리셋 또는 직접 고른 색). 한 걸음이고, 저장하기 전까지는 팔로워에게 보이지 않는다.
@@ -195,7 +259,7 @@ export function setupEdit(ctx) {
 
   // ---------- 커서 아래 ----------
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), hitV = new THREE.Vector3();
-  const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), framePlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   const backPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), RZ), leftPlane = new THREE.Plane(new THREE.Vector3(1, 0, 0), RX);
   function rayFrom(ev) {
     const b = canvas.getBoundingClientRect();
@@ -217,18 +281,44 @@ export function setupEdit(ctx) {
         if (i != null) { if (i < ed.items.length) return { item: i, point: h.point }; break; }
       }
     }
-    return null;
+    return ctx.editCam.plan ? pickPlan() : null;
+  }
+  // 평면도에서 맞은 메시가 없을 때: 커서 아래 바닥이 어느 가구의 발판 안인지. 벽 액자는 벽 앞 0.5 의 띠, 그다음 높이 놓인 것, 러그는 마지막이다
+  function pickPlan() {
+    floorPlane.constant = 0;
+    if (!ray.ray.intersectPlane(floorPlane, hitV)) return null;
+    const { x, z } = hitV;
+    let best = null, rank = -Infinity;
+    ed.items.forEach((it, i) => {
+      let inside, r;
+      if (it.type === 'frame') {
+        inside = it.rot === 90 ? Math.abs(z - it.z) <= FRAME_M && x <= -RX + 0.5 : Math.abs(x - it.x) <= FRAME_M && z <= -RZ + 0.5;
+        r = 100;
+      } else {
+        const e = ext(it);
+        inside = Math.abs(x - it.x) <= e.hx && Math.abs(z - it.z) <= e.hz;
+        r = isRug(it) ? -1 : it.y || 0;
+      }
+      if (inside && r > rank) { best = i; rank = r; }
+    });
+    return best == null ? null : { item: best, point: hitV.clone() };
   }
   // 커서가 가리키는 자리에 m 의 가구를 놓으면 어디가 되는지 (스냅과 방 안으로 당기기를 마친 항목)
   function resolve(m, ev) {
     rayFrom(ev);
     const it = { ...m.base, rot: m.rot };
     if (it.type === 'frame') { // 벽 액자: 뒷벽이나 왼쪽 벽을 따라서만 움직인다
-      const pb = ray.ray.intersectPlane(backPlane, new THREE.Vector3()), pl = ray.ray.intersectPlane(leftPlane, new THREE.Vector3());
-      const wall = pb && pb.x >= -RX ? 'back' : pl ? 'left' : null;
+      let wall = null, u = 0;
+      if (ctx.editCam.plan) { // 위에서는 액자 높이의 수평면에서 커서가 더 가까운 벽을 따른다
+        framePlane.constant = -FRAME_Y;
+        if (ray.ray.intersectPlane(framePlane, hitV)) { wall = hitV.z + RZ <= hitV.x + RX ? 'back' : 'left'; u = wall === 'back' ? hitV.x : hitV.z; }
+      } else {
+        const pb = ray.ray.intersectPlane(backPlane, new THREE.Vector3()), pl = ray.ray.intersectPlane(leftPlane, new THREE.Vector3());
+        wall = pb && pb.x >= -RX ? 'back' : pl ? 'left' : null;
+        if (wall) u = wall === 'back' ? pb.x : pl.z;
+      }
       if (!wall) return m.cand;
       const half = WALLS[wall].half;
-      let u = wall === 'back' ? pb.x : pl.z;
       if (!ed.alt) u = snapGrid(u);
       u = r2(clamp(u, -half + FRAME_M, half - FRAME_M));
       return wall === 'back' ? { ...it, x: u, z: r2(-RZ), rot: 0, y: FRAME_Y } : { ...it, x: r2(-RX), z: u, rot: 90, y: FRAME_Y };
@@ -447,14 +537,17 @@ export function setupEdit(ctx) {
     ed.hist = resume?.hist ?? []; ed.seq = resume?.seq ?? ed.seq; // 알림과 내려놓기의 번호는 마운트를 건너 이어진다 (room-editor.tsx 가 번호로 새것을 가린다)
     ed.future = resume?.future ?? []; ed.tag = null; ed.notice = null; ed.move = null; ed.press = null;
     ed.saved = keyOf(ctx.original.items, ctx.original.time, ctx.original.palette);
+    ctx.editCam.reset(); if (resume?.plan) ctx.editCam.setPlan(true); // 색을 바꾸며 다시 마운트해도 평면도는 이어 간다
+    ed.rdown = null; viewKey = '';
     emit();
     getCatalogue().then(() => { if (ed.on) emit(); }); // 이름과 러그 여부는 카탈로그에서 온다
   }
   function exit() {
     if (!ed.on) return;
     const had = !!ed.move || !!ed.fnTimer;
-    ed.move = null; ed.press = null; ed.sel = null; ed.on = false;
-    grid.visible = tile.visible = wallTile.visible = false;
+    ed.move = null; ed.press = null; ed.sel = null; ed.on = false; ed.rdown = null;
+    grid.visible = tile.visible = wallTile.visible = false; clearGhosts();
+    ctx.editCam.reset(); // 방 카메라로는 loop.js 가 데려간다
     canvas.style.cursor = '';
     if (had) rebuild();
     ctx.mode = 'room'; ctx.setHint('room'); ctx.syncUI();
@@ -487,6 +580,8 @@ export function setupEdit(ctx) {
       case 'discard': discard(); break;
       case 'palette': setPalette(c.palette ?? null); break;
       case 'swap': if (Number.isInteger(c.index)) swap(c.index, c.to); break;
+      case 'plan': setPlan(typeof c.value === 'boolean' ? c.value : !ctx.editCam.plan); break;
+      case 'fit': fitView(); break;
       default: return;
     }
     emit();
@@ -498,7 +593,13 @@ export function setupEdit(ctx) {
   on(root, 'pointerdown', ev => {
     if (!ed.on || ev.target !== canvas) return;
     ev.stopPropagation(); remember(ev); flushFn(); ed.tag = null;
-    if (ev.button === 2) { cancel(); emit(); return; }
+    if (ev.button === 2) { // 오른쪽: 끌면 화면을 옮기고, 움직이지 않고 떼면 취소한다 (pointerup)
+      ed.rdown = { clientX: ev.clientX, clientY: ev.clientY, moved: false };
+      ed.eatMenu = true; // 캔버스에서 시작한 오른쪽 누르기 뒤의 contextmenu 는 어디서 떼든 먹는다 (끌다가 목록 위에서 떼도)
+      ctx.editCam.panStart(ev, canvas);
+      try { canvas.setPointerCapture?.(ev.pointerId); } catch { /* 붙잡지 못해도 root 에서 받는다 */ }
+      return;
+    }
     if (ev.button !== 0) return;
     if (ed.move?.isNew) { placeNew(ev, ev.shiftKey); emit(); return; }
     const hit = pick(ev);
@@ -509,6 +610,12 @@ export function setupEdit(ctx) {
   on(root, 'pointermove', ev => {
     if (!ed.on) return;
     remember(ev);
+    if (ed.rdown) {
+      if (!ed.rdown.moved && Math.hypot(ev.clientX - ed.rdown.clientX, ev.clientY - ed.rdown.clientY) > 5) ed.rdown.moved = true;
+      if (ed.rdown.moved) { ctx.editCam.panMove(ev, canvas); emitView(); }
+      if (ev.target === canvas) ev.stopPropagation();
+      if (!ed.move) { canvas.style.cursor = ed.rdown.moved ? 'move' : ''; return; } // 들고 있는 가구는 아래에서 계속 커서를 따른다
+    }
     if (ed.press && !ed.move && Math.hypot(ev.clientX - ed.press.clientX, ev.clientY - ed.press.clientY) > 5) { startDrag(ed.press, ev); emit(); }
     if (ed.move) {
       if (ev.target === canvas || !ed.move.isNew) update(ev);
@@ -524,11 +631,29 @@ export function setupEdit(ctx) {
   on(root, 'pointerup', ev => {
     if (!ed.on) return;
     if (ev.target === canvas) ev.stopPropagation();
+    if (ed.rdown && ev.button === 2) {
+      const moved = ed.rdown.moved;
+      ed.rdown = null; ctx.editCam.panEnd(); canvas.style.cursor = ed.move ? 'grabbing' : '';
+      if (!moved) cancel();
+      emit();
+      return;
+    }
     ed.press = null;
     root.querySelector('.ed-dock')?.classList.remove('drop');
     if (ed.move && !ed.move.isNew) { dropDrag(ev); canvas.style.cursor = ''; emit(); }
   }, { capture: true });
-  on(root, 'contextmenu', ev => { if (ed.on && ev.target === canvas) ev.preventDefault(); }, { capture: true });
+  on(window, 'contextmenu', ev => {
+    if (!ed.on) return;
+    if (ev.target === canvas || ed.eatMenu) { ev.preventDefault(); ed.eatMenu = false; }
+  }, { capture: true });
+  on(root, 'pointercancel', () => { ed.eatMenu = false; if (ed.rdown) { ed.rdown = null; ctx.editCam.panEnd(); } }, { capture: true });
+  // 휠: 커서 쪽으로 확대, 축소. 페이지는 굴리지 않는다
+  on(canvas, 'wheel', ev => {
+    if (!ed.on) return;
+    ev.preventDefault();
+    const dy = ev.deltaY * (ev.deltaMode === 1 ? 33 : ev.deltaMode === 2 ? 400 : 1);
+    ctx.editCam.zoomAt(ev, canvas, dy); emitView();
+  }, { passive: false });
   on(window, 'keydown', ev => {
     if (!ed.on) return;
     if (ev.key === 'Alt') { ed.alt = true; ev.preventDefault(); if (ed.move && ed.last) { update(ed.last); } return; }
@@ -542,19 +667,26 @@ export function setupEdit(ctx) {
     else if (k === 'r') rotate(ev.shiftKey ? -1 : 1);
     else if (k === 'delete' || k === 'backspace') { if (ed.move?.isNew) endMove(); else if (ed.sel != null && !ed.move) remove(ed.sel); }
     else if (k === 'escape') cancel();
+    else if (k === 't') setPlan(!ctx.editCam.plan);
+    else if (k === 'home' || k === '0') fitView();
     else done = false;
     if (!done) return;
     ev.preventDefault(); ev.stopPropagation(); ed.tag = null;
     emit();
   }, { capture: true });
   on(window, 'keyup', ev => { if (ev.key === 'Alt' && ed.on) { ed.alt = false; if (ed.move && ed.last) update(ed.last); } });
-  on(window, 'blur', () => { ed.alt = false; });
+  on(window, 'blur', () => { ed.alt = false; ed.eatMenu = false; if (ed.rdown) { ed.rdown = null; ctx.editCam.panEnd(); } });
 
   // ---------- 프레임마다: 발판, 가구 위 막대, 이유 칩 ----------
-  const bb = new THREE.Box3(), top = new THREE.Vector3();
+  const bb = new THREE.Box3(), top = new THREE.Vector3(), lastCam = new THREE.Matrix4();
   function editFrame() {
+    // 확대, 이동, 평면도로 카메라가 움직이면 커서는 그대로여도 커서 아래의 바닥이 바뀐다: 들고 있는 가구가 따라간다
+    camera.updateMatrixWorld();
+    if (!lastCam.equals(camera.matrixWorld)) { lastCam.copy(camera.matrixWorld); if (ed.move && ed.last?.overCanvas) update(ed.last); }
     const m = ed.move, bar = root.querySelector('#ed-bar'), chip = root.querySelector('#ed-why');
-    if (m?.cand) showTile(m.cand, m.why ? BAD : OK);
+    if (m) syncGhosts([ctx.build.groups[m.i], ...m.kids.map(j => ctx.build.groups[j])].filter(Boolean)); else if (ghosts.length) clearGhosts();
+    for (const l of edges) l.visible = !!m?.cand;
+    if (m?.cand) { showTile(m.cand, m.why ? BAD : OK); silMat.color.set(m.why ? BAD : OK); }
     else if (!m && ed.sel != null && ed.items[ed.sel]) showTile(ed.items[ed.sel], PICKED);
     else tile.visible = wallTile.visible = false;
     if (chip) {

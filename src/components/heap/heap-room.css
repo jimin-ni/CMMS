@@ -151,6 +151,7 @@
 .heap-room .ed-top b { font-size: 15px; }
 .heap-room .ed-room { font-family: var(--hand); font-size: 26px; line-height: 1; color: var(--clay); margin-right: 6px; }
 .heap-room .ed-top .ed-sp { flex: 1 1 0; }
+.heap-room .ed-top .btn.ghost[aria-pressed="true"] { background: var(--clay); } /* 켜진 위에서 보기 */
 .heap-room .ed-save { font-size: 13px; color: rgba(47, 44, 36, 0.62); }
 .heap-room .ed-save.dirty { color: var(--clay); font-weight: 600; }
 .heap-room .ed-leave { position: absolute; top: calc(var(--ed-top) + 8px); right: 12px; width: min(300px, calc(100% - 24px)); z-index: 7; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3); }

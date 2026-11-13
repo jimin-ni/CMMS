@@ -32,6 +32,7 @@ import { setupInput } from './input.js';
 import { setupPath } from './path.js';
 import { setupEdit } from './edit.js';
 import { setupDockThumbs } from './dock-thumbs.js';
+import { setupEditCamera } from './edit-camera.js';
 
 // heap-room.tsx 가 그리고 엔진이 채우거나 보이게 하는 노드의 id. dispose 가 첫 렌더 상태로 되돌린다.
 const LISTS = ['albumrow', 'player-frame', 'music-frame', 'phone-feed', 'pc-list', 'ks-body', 'cal-body', 'grid-list', 'gb-list', 'roomlist'];
@@ -101,6 +102,7 @@ async function run(ctx) {
   setupInput(ctx);
   setupPath(ctx);
   setupDockThumbs(ctx); // 꾸미기 가구 목록의 그림 (heap:thumb)
+  setupEditCamera(ctx); // 꾸미기의 카메라: 맞춤, 확대, 이동, 평면도 (loop.js 의 ROOM_CAM 을 쓴다)
   setupEdit(ctx); // 꾸미기. 포인터를 방 루트의 capture 단계에서 먼저 받으므로 input.js 뒤에 세워도 된다
 
   await fontsReady(); // 썸네일은 기다리지 않는다: buildHeap() 이 줄을 세우고 카드는 그림이 오는 대로 채워진다
