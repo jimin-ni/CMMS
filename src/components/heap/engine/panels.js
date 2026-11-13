@@ -1,7 +1,7 @@
 // 겹쳐 뜨는 창: 휴대폰, PC, 기념품, 달력, 문 앞 방 목록. 기능 가구를 눌렀을 때 하는 일.
 import { thumbUrl } from './util.js';
 import { el, link, shortUrl, bindOverlay } from './dom.js';
-import { ytUrl, ksDay, seoulDay } from './format.js';
+import { srcUrl, ksDay, seoulDay } from './format.js';
 
 export function setupPanels(ctx) {
   const { opts, creator, $, keepsakeLook, newestReel, cards, toast, sit, pickUp, feed, openMusic, ROOMS, roomId } = ctx;
@@ -54,7 +54,7 @@ export function setupPanels(ctx) {
       const im = el('img'); im.crossOrigin = 'anonymous'; im.alt = ''; b.appendChild(im);
       ctx.phonePic = { card: curCard, im }; showPhonePic();
       b.appendChild(el('span', null, cur.title));
-      if (cur.kind !== 'fan') b.appendChild(link('원본 보기 ↗', ytUrl(cur)));
+      if (cur.kind !== 'fan') b.appendChild(link('원본 보기 ↗', srcUrl(cur)));
       feedEl.appendChild(b);
     }
     if (!hasPc()) legacyLinks(feedEl);

@@ -12,7 +12,12 @@ import {
   user,
 } from "@/lib/schema";
 import { HEAP_FUNNEL_POLICY, HEAP_POLICY } from "@/lib/heap/policy";
-import type { HeapChannelPlatform, HeapPiecePlatform, ParsedPiece } from "@/lib/heap/platform";
+import type {
+  HeapChannelPlatform,
+  HeapPiecePlatform,
+  HeapStorableLinkPlatform,
+  ParsedPiece,
+} from "@/lib/heap/platform";
 import { allocateCaps, classifyReel, REEL_CLASSES, type ReelClass, type ReelCounts } from "@/lib/heap/caps";
 import { REEL_KEY } from "@/lib/heap/layout";
 import { likePattern } from "@/lib/heap/search";
@@ -1242,6 +1247,113 @@ export async function importReels(input: {
     visible.shorts += added.shorts;
     visible.long += added.long;
     return { added, refreshed: refresh.length, skippedByCap, skippedExcluded, visible };
+  });
+}
+
+// ---------- 붙여 넣은 게시물 링크 ----------
+
+export type PastedReelInput = {
+  platform: HeapStorableLinkPlatform;
+  externalId: string;
+  sourceUrl: string;
+  title: string;
+};
+
+// 링크 하나의 결과. added = 새로 넣음, duplicate = 이미 방에 있음, excluded = 힙에서 빼 둔 링크, cap = 상한이 차서 못 넣음.
+export type PastedReelStatus = "added" | "duplicate" | "excluded" | "cap";
+
+export type AddPastedReelsResult = {
+  // "<platform>:<externalId>" → 결과
+  outcome: Record<string, PastedReelStatus>;
+  added: number;
+  // 넣은 뒤 힙에 보이는 영상 수 (갈래별)
+  visible: ReelCounts;
+};
+
+// 크리에이터가 붙여 넣은 게시물 링크를 방에 넣는다. 한 트랜잭션에서 방 행을 잠그고 importReels와 같은 순서로 한다.
+// 1) 힙에서 뺀 링크는 건너뛴다 2) 이미 있는 링크는 그대로 둔다 (제목을 덮어쓰지 않는다: 창작자가 적은 제목을 지우지 않기 위해서다)
+// 3) 남은 것만 갈래별 상한(allocateCaps)이 허락하는 만큼 붙여 넣은 순서대로 넣는다.
+// 채널(channel_id)은 없다. 가져오기가 아니라 링크 하나하나라서 연결된 채널에 속하지 않는다.
+export async function addPastedReels(input: {
+  roomId: string;
+  creatorId: string;
+  links: PastedReelInput[];
+}): Promise<AddPastedReelsResult | Fail<"no-room">> {
+  return db.transaction(async (tx) => {
+    const roomRows = await tx
+      .select({ id: heapRooms.id, layout: heapRooms.layout })
+      .from(heapRooms)
+      .where(and(eq(heapRooms.id, input.roomId), eq(heapRooms.creatorId, input.creatorId)))
+      .for("update");
+    const room = roomRows[0];
+    if (!room) return fail("no-room");
+
+    const excluded = new Set(excludedReelKeys(room.layout));
+    const existing = await tx
+      .select({ platform: heapReels.platform, externalId: heapReels.externalId, wide: heapReels.wide })
+      .from(heapReels)
+      .where(eq(heapReels.roomId, room.id));
+    const existingKeys = new Set(existing.map((reel) => `${reel.platform}:${reel.externalId}`));
+
+    const have: ReelCounts = { shorts: 0, long: 0, instagram: 0 };
+    for (const reel of existing) {
+      if (!excluded.has(`${reel.platform}:${reel.externalId}`)) have[classifyReel(reel)] += 1;
+    }
+
+    const outcome: Record<string, PastedReelStatus> = {};
+    const fresh: Record<ReelClass, PastedReelInput[]> = { shorts: [], long: [], instagram: [] };
+    // 한 번의 붙여넣기 안에 같은 게시물이 두 줄로 와도 한 줄만 넣는다 (뒤의 줄은 결과를 받지 않는다: 부르는 쪽이 중복으로 센다).
+    const seen = new Set<string>();
+    for (const link of input.links) {
+      const key = `${link.platform}:${link.externalId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (excluded.has(key)) outcome[key] = "excluded";
+      else if (existingKeys.has(key)) outcome[key] = "duplicate";
+      else fresh[classifyReel({ platform: link.platform, wide: false })].push(link);
+    }
+
+    const available: ReelCounts = {
+      shorts: have.shorts + fresh.shorts.length,
+      long: have.long + fresh.long.length,
+      instagram: have.instagram + fresh.instagram.length,
+    };
+    const allocation = allocateCaps(available);
+    const chosen: PastedReelInput[] = [];
+    const visible: ReelCounts = { ...have };
+    // 갈래 몫과 별도로 합계 상한도 지킨다. 한 갈래가 이미 몫을 넘긴 방에서는 allocateCaps가 그 갈래를 줄이지 못해
+    // 남은 몫을 다른 갈래에 내주기 때문에, 방이 이미 300줄이어도 다른 갈래가 더 들어갈 수 있다.
+    let spare = Math.max(0, HEAP_FUNNEL_POLICY.importTotalMax - (have.shorts + have.long + have.instagram));
+    for (const cls of REEL_CLASSES) {
+      const slots = Math.min(Math.max(0, allocation[cls] - have[cls]), spare);
+      fresh[cls].forEach((link, i) => {
+        outcome[`${link.platform}:${link.externalId}`] = i < slots ? "added" : "cap";
+        if (i < slots) chosen.push(link);
+      });
+      const taken = Math.min(slots, fresh[cls].length);
+      visible[cls] += taken;
+      spare -= taken;
+    }
+
+    if (chosen.length > 0) {
+      await tx
+        .insert(heapReels)
+        .values(
+          chosen.map((link) => ({
+            roomId: room.id,
+            channelId: null,
+            platform: link.platform,
+            externalId: link.externalId,
+            sourceUrl: link.sourceUrl,
+            title: link.title,
+            // 게시물 카드는 세로로 그린다.
+            wide: false,
+          })),
+        )
+        // 같은 크리에이터가 두 곳에서 동시에 붙여 넣어도 한 줄만 남는다.
+        .onConflictDoNothing({ target: [heapReels.roomId, heapReels.platform, heapReels.externalId] });
+    }
+    return { outcome, added: chosen.length, visible };
   });
 }
 

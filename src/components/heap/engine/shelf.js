@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { thumbUrl } from './util.js';
 import { el, link, bindOverlay } from './dom.js';
-import { ytUrl } from './format.js';
+import { srcUrl, hasThumb, reelKey } from './format.js';
 
 export function setupShelf(ctx) {
   const { ALBUMS, $, filed, C, setHint, syncUI, on, reels, albumName } = ctx;
@@ -56,13 +56,14 @@ export function setupShelf(ctx) {
   const albumAction = key => { if (ctx.mode === 'sort') openAlbum(key); };
   function openAlbum(key) {
     const list = $('grid-list'); list.innerHTML = '';
-    const items = reels.filter(r => filed.get(r.id)?.album === key);
+    const items = reels.filter(r => filed.get(reelKey(r))?.album === key);
     $('grid-title').textContent = `${albumName(key)} · ${items.length}장`;
     for (const r of items) {
       const it = el('div', 'gitem' + (r.wide ? ' wide' : ''));
       // 가까운 단계 썸네일. 격자의 object-fit: cover 가 유튜브의 여백 있는 틀을 그림만 남게 자른다
-      const im = el('img'); im.crossOrigin = 'anonymous'; im.src = thumbUrl(r, 'hqdefault'); im.alt = ''; im.loading = 'lazy'; it.appendChild(im);
-      it.appendChild(el('span', null, r.title)); it.appendChild(link('원본 ↗', ytUrl(r)));
+      // 썸네일이 없는 플랫폼(붙여 넣은 게시물)은 그림 없이 제목만 보여 준다
+      if (hasThumb(r)) { const im = el('img'); im.crossOrigin = 'anonymous'; im.src = thumbUrl(r, 'hqdefault'); im.alt = ''; im.loading = 'lazy'; it.appendChild(im); }
+      it.appendChild(el('span', null, r.title)); it.appendChild(link('원본 ↗', srcUrl(r)));
       list.appendChild(it);
     }
     if (!items.length) list.appendChild(el('p', 'note', '아직 비어 있어요.'));

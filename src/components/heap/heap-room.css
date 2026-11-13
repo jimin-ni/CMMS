@@ -392,6 +392,17 @@
 .heap-room .ch-list b { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .heap-room .ch-list small { color: rgba(47, 44, 36, 0.66); white-space: nowrap; }
 .heap-room .ch-list .ed-chip { margin-left: auto; flex: none; }
+/* 게시물 링크 붙여넣기 (판정 J12): 여러 줄 입력과 줄마다의 결과 */
+.heap-room .ch-paste { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.heap-room .ch-paste textarea { width: 100%; box-sizing: border-box; min-height: 56px; max-height: 160px; resize: vertical; font: inherit; font-size: 12px; line-height: 1.45; padding: 5px 8px; border: 1px solid rgba(86, 83, 68, 0.35); border-radius: 6px; background: rgba(255, 255, 255, 0.6); color: inherit; }
+.heap-room .ch-paste .ch-paste-row { display: flex; gap: 6px; align-items: center; }
+.heap-room .ch-paste .ch-paste-row small { font-size: 11.5px; color: rgba(47, 44, 36, 0.62); }
+.heap-room .ch-rows { list-style: none; margin: 0; padding: 0; max-height: 150px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
+.heap-room .ch-rows li { display: flex; gap: 6px; align-items: baseline; font-size: 11.5px; min-width: 0; }
+.heap-room .ch-rows li b { flex: none; width: 6.2em; color: var(--clay); font-weight: 600; }
+.heap-room .ch-rows li.bad b { color: rgba(47, 44, 36, 0.55); }
+.heap-room .ch-rows li span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: rgba(47, 44, 36, 0.7); }
+
 .heap-room .ch-pane a { color: inherit; }
 .heap-room .ch-pane a:hover { color: var(--clay); }
 .heap-room .ch-main { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 4px; }

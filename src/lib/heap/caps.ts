@@ -1,5 +1,5 @@
 import { HEAP_FUNNEL_POLICY } from "@/lib/heap/policy";
-import type { HeapChannelPlatform } from "@/lib/heap/platform";
+import type { HeapChannelPlatform, HeapLinkPlatform } from "@/lib/heap/platform";
 
 // 방에 둘 수 있는 영상 수의 나눔 계산. 순수 함수만 둔다 (DB·네트워크 접근 없음).
 // 세 갈래(쇼츠, 롱폼, 인스타그램)에 각자 상한이 있고, 합계 상한이 따로 있다. 안 쓴 몫은 아직 더 넣고 싶은 갈래로 넘어간다 (DECISIONS E2).
@@ -10,9 +10,10 @@ export type ReelCounts = Record<ReelClass, number>;
 
 // 영상이 어느 갈래에 세어지는지. 쇼츠는 모든 채널(틱톡 포함), 인스타그램은 따로, 나머지는 롱폼이다.
 // 가로 여부를 모르는 유튜브 영상(wide = null)은 롱폼으로 센다.
-export function classifyReel(reel: { platform: HeapChannelPlatform; wide: boolean | null }): ReelClass {
+// X 게시물은 쇼츠 갈래에 넣는다 (E2는 "X may be included"까지만 정했다). 세로 카드이고 틱톡과 같은 짧은 게시물이라 같은 몫을 쓴다.
+export function classifyReel(reel: { platform: HeapChannelPlatform | HeapLinkPlatform; wide: boolean | null }): ReelClass {
   if (reel.platform === "instagram") return "instagram";
-  if (reel.platform === "tiktok") return "shorts";
+  if (reel.platform === "tiktok" || reel.platform === "x") return "shorts";
   if (reel.platform === "youtube" && reel.wide === false) return "shorts";
   return "long";
 }

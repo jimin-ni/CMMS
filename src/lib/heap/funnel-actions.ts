@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { getViewer, type Viewer } from "@/lib/session";
 import { HEAP_FUNNEL_POLICY } from "./policy";
-import { HEAP_MESSAGES, type HeapReason } from "./messages";
+import { HEAP_MESSAGES, HEAP_PLATFORM_NAME, type HeapReason } from "./messages";
 import { validateLayout } from "./layout";
 import { getTemplate } from "./templates";
 import { checkRoomName, checkSlug, SLUG_MESSAGES, type SlugFailure } from "./slug";
@@ -11,8 +11,19 @@ import { takeAttempt } from "./rate-limit";
 import { parseChannelInput } from "./youtube-api.mjs";
 import { fetchYoutubeUploads, getYoutubeClient, resolveYoutubeChannel } from "./import";
 import {
+  isStorableLinkPlatform,
+  parsePostUrl,
+  splitPostLine,
+  cleanPostTitle,
+  type HeapLinkPlatform,
+} from "./platform";
+import type { ReelCounts } from "./caps";
+import {
+  addPastedReels,
   claimRoom,
   claimCreatorChannel,
+  type PastedReelInput,
+  type PastedReelStatus,
   getLastImportAt,
   getRoomByCreator,
   importReels,
@@ -202,6 +213,98 @@ export async function connectYoutubeChannelAction(channel: string): Promise<Conn
     console.error("[heap import]", error instanceof Error ? error.message : "알 수 없는 오류");
     return fail("import-failed");
   }
+}
+
+// ---------- 게시물 링크 붙여넣기 (판정 J12) ----------
+
+// 링크 한 줄의 결과. unsupported = 알아봤지만 아직 저장할 수 없는 플랫폼(X), unknown = 받는 주소가 아님.
+export type PasteLinkStatus = PastedReelStatus | "unsupported" | "unknown";
+
+export type PasteLinkRow = {
+  // 화면에 보여 줄 원문 (앞 120자)
+  line: string;
+  platform: HeapLinkPlatform | null;
+  status: PasteLinkStatus;
+};
+
+export type AddPostLinksResult =
+  | { ok: true; rows: PasteLinkRow[]; added: number; visible: ReelCounts }
+  | Fail<"not-signed-in" | "not-creator" | "no-room" | "too-many-attempts" | "no-links" | "too-many-links">;
+
+// 크리에이터가 채널 탭에 붙여 넣은 게시물 주소(한 줄에 하나, "<주소> | <제목>"도 받는다)를 방의 카드로 만든다.
+// 네트워크를 쓰지 않는다: 제목도 썸네일도 주소와 창작자가 적은 글에서만 온다 (판정 F2/F3, 공식 임베드로만 재생).
+// 방은 세션의 사용자로 찾고, 상한과 중복은 repo가 한 트랜잭션에서 지킨다.
+export async function addPostLinksAction(text: unknown): Promise<AddPostLinksResult> {
+  const auth = await requireCreator();
+  if ("ok" in auth) return auth;
+  const { viewer } = auth;
+
+  if (typeof text !== "string" || text.length > HEAP_FUNNEL_POLICY.pasteTextMaxChars) return fail("no-links");
+  if (!takeAttempt(`paste:${viewer.id}`, HEAP_FUNNEL_POLICY.pasteAttemptsPer10Min, 10 * 60 * 1000)) {
+    return fail("too-many-attempts");
+  }
+
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  if (lines.length === 0) return fail("no-links");
+  if (lines.length > HEAP_FUNNEL_POLICY.pasteLinksMax) return fail("too-many-links");
+
+  const room = await getRoomByCreator(viewer.id);
+  if (!room) return fail("no-room");
+
+  // 줄 하나씩 해석한다. 받을 수 있는 것만 links로 모으고, 나머지는 그 줄의 결과로 바로 남긴다.
+  const rows: PasteLinkRow[] = [];
+  const links: PastedReelInput[] = [];
+  // 같은 게시물을 두 줄에 적으면 둘째 줄은 이번 붙여넣기 안의 중복이다.
+  const seen = new Set<string>();
+  for (const line of lines) {
+    const shown = line.slice(0, 120);
+    const { url, title } = splitPostLine(line);
+    const post = parsePostUrl(url);
+    if (!post) {
+      rows.push({ line: shown, platform: null, status: "unknown" });
+      continue;
+    }
+    if (!isStorableLinkPlatform(post.platform)) {
+      rows.push({ line: shown, platform: post.platform, status: "unsupported" });
+      continue;
+    }
+    const key = `${post.platform}:${post.externalId}`;
+    if (seen.has(key)) {
+      rows.push({ line: shown, platform: post.platform, status: "duplicate" });
+      continue;
+    }
+    seen.add(key);
+    rows.push({ line: shown, platform: post.platform, status: "unknown" });
+    links.push({
+      platform: post.platform,
+      externalId: post.externalId,
+      sourceUrl: post.sourceUrl,
+      // 제목을 적지 않으면 계정 이름, 그것도 없으면 플랫폼 이름으로 둔다.
+      title: cleanPostTitle(
+        title ?? (post.handle ? `@${post.handle}` : HEAP_PLATFORM_NAME[post.platform]),
+        HEAP_FUNNEL_POLICY.pasteTitleMaxChars,
+      ),
+    });
+  }
+  if (links.length === 0) {
+    return { ok: true, rows, added: 0, visible: { shorts: 0, long: 0, instagram: 0 } };
+  }
+
+  const result = await addPastedReels({ roomId: room.id, creatorId: viewer.id, links });
+  if ("ok" in result) return fail("no-room");
+  // DB가 정한 결과를 줄에 되돌려 붙인다. 줄과 링크는 같은 순서라 앞에서부터 짝이 맞는다.
+  let next = 0;
+  for (const row of rows) {
+    if (row.status !== "unknown" || row.platform === null) continue;
+    const link = links[next];
+    if (!link) break;
+    next += 1;
+    row.status = result.outcome[`${link.platform}:${link.externalId}`] ?? "added";
+  }
+  return { ok: true, rows, added: result.added, visible: result.visible };
 }
 
 // ---------- 영상 빼기·되돌리기 ----------

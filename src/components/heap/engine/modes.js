@@ -1,6 +1,6 @@
 // 방, 앉기, 상영, 책장 모드와 카드 집기.
 import * as THREE from 'three';
-import { ytUrl } from './format.js';
+import { srcUrl, PLATFORM_NAME, platformOf } from './format.js';
 
 export function setupModes(ctx) {
   const {
@@ -55,7 +55,8 @@ export function setupModes(ctx) {
     ctx.loaded = ctx.held; ctx.held = null; ctx.heldFlipped = false; ctx.mode = 'watch'; glowCard(ctx.loaded, 0);
     const { reel, img } = ctx.loaded.userData;
     drawProjection(reel, img); screen.material = screenOn;
-    if (reel.kind !== 'fan') $('ytlink').href = ytUrl(reel);
+    // 단추 글자도 플랫폼을 따른다 ("YouTube에서 보기", "Instagram에서 보기" …)
+    if (reel.kind !== 'fan') { $('ytlink').href = srcUrl(reel); $('ytlink').textContent = `${PLATFORM_NAME[platformOf(reel)]}에서 보기`; }
     setHint('watch'); goTo(WATCH_CAM); syncUI();
     if (reel.kind !== 'fan') ctx.openPlayer(reel); // 팬 작품은 비출 뿐이다
   }

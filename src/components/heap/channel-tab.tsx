@@ -3,11 +3,16 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  addPostLinksAction,
   connectYoutubeChannelAction,
   excludeReelAction,
   restoreReelAction,
+  type AddPostLinksResult,
   type ConnectChannelResult,
+  type PasteLinkRow,
+  type PasteLinkStatus,
 } from "@/lib/heap/funnel-actions";
+import { HEAP_PLATFORM_NAME } from "@/lib/heap/messages";
 import { HEAP_FUNNEL_POLICY } from "@/lib/heap/policy";
 import { REEL_CLASSES, type ReelClass } from "@/lib/heap/caps";
 import type { HeapOwnerData } from "./heap-room";
@@ -16,9 +21,19 @@ import type { HeapOwnerData } from "./heap-room";
 // 쓰기는 서버 액션(funnel-actions.ts)이 하고, 방은 서버가 세션으로 찾는다. 성공하면 router.refresh() 로 새 스냅샷을 받는다:
 // 이 탭의 목록은 page.tsx 가 다시 읽은 값이고, 방의 더미는 heap-room.tsx 가 heap:reels 로 엔진에 넘긴다 (엔진은 다시 뜨지 않는다).
 // 채널이 정말 이 크리에이터의 것인지는 확인하지 않는다 (판정 I1). 다른 크리에이터가 이미 연결한 채널만 거절한다.
+// 게시물 링크 붙여넣기(판정 J12): 인스타그램·틱톡 게시물 주소를 한 줄에 하나씩 받아 제목 카드로 만든다. 가져오기(API)는 없다.
 
 const KIND_NAME: Record<ReelClass, string> = { shorts: "쇼츠", long: "롱폼", instagram: "인스타그램" };
-const PLATFORM_NAME: Record<string, string> = { youtube: "YouTube", instagram: "Instagram", tiktok: "TikTok" };
+const PLATFORM_NAME = HEAP_PLATFORM_NAME;
+// 붙여 넣은 줄 하나의 결과를 보여 줄 글자. bad면 들어가지 않은 줄이다.
+const PASTE_STATUS: Record<PasteLinkStatus, { text: string; bad: boolean }> = {
+  added: { text: "넣었어요", bad: false },
+  duplicate: { text: "이미 있어요", bad: true },
+  excluded: { text: "뺀 링크예요", bad: true },
+  cap: { text: "상한이 찼어요", bad: true },
+  unsupported: { text: "아직 안 돼요", bad: true },
+  unknown: { text: "모르는 주소", bad: true },
+};
 // 목록에 한 번에 그리는 줄 수. 넘치면 검색으로 좁힌다.
 const LIST_MAX = 150;
 
@@ -55,6 +70,9 @@ export function ChannelTab({ owner }: { owner: HeapOwnerData | null }) {
   const [pending, startTransition] = useTransition();
   const [input, setInput] = useState("");
   const [note, setNote] = useState<Note | null>(null);
+  const [paste, setPaste] = useState("");
+  // 마지막 붙여넣기의 줄별 결과. null이면 아직 넣어 본 적이 없다.
+  const [rows, setRows] = useState<PasteLinkRow[] | null>(null);
   const [query, setQuery] = useState("");
   const [onlyExcluded, setOnlyExcluded] = useState(false);
   // 지금 빼거나 되돌리는 영상 (그동안 다른 단추도 잠근다)
@@ -91,6 +109,43 @@ export function ChannelTab({ owner }: { owner: HeapOwnerData | null }) {
       setNote({ text: connectText(r), bad: !r.ok });
       if (r.ok) {
         setInput("");
+        router.refresh();
+      }
+    });
+  };
+
+  // 게시물 링크 붙여넣기. 줄마다의 결과를 받아 그대로 보여 준다 (무엇이 들어갔고 무엇이 왜 안 들어갔는지).
+  const submitPaste = () => {
+    const v = paste.trim();
+    if (!v) {
+      setNote({ text: "인스타그램이나 틱톡 게시물 주소를 한 줄에 하나씩 붙여 넣어 주세요.", bad: true });
+      return;
+    }
+    setNote({ text: "링크를 넣는 중이에요…", bad: false });
+    setRows(null);
+    startTransition(async () => {
+      let r: AddPostLinksResult;
+      try {
+        r = await addPostLinksAction(v);
+      } catch {
+        setNote({ text: "넣지 못했어요. 잠시 뒤에 다시 해 주세요.", bad: true });
+        return;
+      }
+      if (!r.ok) {
+        setNote({ text: r.message, bad: true });
+        return;
+      }
+      setRows(r.rows);
+      const missed = r.rows.length - r.added;
+      setNote({
+        text:
+          r.added > 0
+            ? `링크 ${r.added}개를 힙에 넣었어요${missed > 0 ? ` · 넣지 못한 줄 ${missed}개` : ""}`
+            : "넣은 링크가 없어요. 줄마다의 이유를 확인해 주세요.",
+        bad: r.added === 0,
+      });
+      if (r.added > 0) {
+        setPaste("");
         router.refresh();
       }
     });
@@ -146,6 +201,44 @@ export function ChannelTab({ owner }: { owner: HeapOwnerData | null }) {
             {note.text}
           </p>
         )}
+        <form
+          className="ch-paste"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!busy) submitPaste();
+          }}
+        >
+          <textarea
+            value={paste}
+            maxLength={HEAP_FUNNEL_POLICY.pasteTextMaxChars}
+            placeholder={`인스타그램·틱톡 게시물 주소 (한 줄에 하나, ${HEAP_FUNNEL_POLICY.pasteLinksMax}줄까지)
+제목을 붙이려면 "주소 | 제목"`}
+            aria-label="힙에 넣을 게시물 주소"
+            onChange={(e) => setPaste(e.target.value)}
+          />
+          <div className="ch-paste-row">
+            <button className="btn small" type="submit" disabled={busy}>
+              링크 넣기
+            </button>
+            <small>링크 하나가 카드 하나가 돼요. 재생은 각 플랫폼의 공식 임베드로 열려요.</small>
+          </div>
+          {rows && rows.length > 0 && (
+            <ul className="ch-rows" aria-label="붙여 넣은 링크 결과">
+              {rows.map((row, i) => {
+                const st = PASTE_STATUS[row.status];
+                return (
+                  <li key={`${i}-${row.line}`} className={st.bad ? "bad" : undefined}>
+                    <b>{st.text}</b>
+                    <span title={row.line}>
+                      {row.platform ? `${PLATFORM_NAME[row.platform] ?? row.platform} · ` : ""}
+                      {row.line}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </form>
         <p className="ch-totals" title={`갈래마다 기본 몫이 있고 합계는 ${HEAP_FUNNEL_POLICY.importTotalMax}개예요. 안 쓴 몫은 다른 갈래로 넘어가요.`}>
           힙에 보이는 영상 {REEL_CLASSES.map((k) => `${KIND_NAME[k]} ${totals[k]}/${caps[k]}`).join(" · ")} · 합계 {visible.length}/
           {HEAP_FUNNEL_POLICY.importTotalMax}
@@ -210,7 +303,13 @@ export function ChannelTab({ owner }: { owner: HeapOwnerData | null }) {
                   )}
                 </span>
                 <small>
-                  {[r.channelId ? channelName.get(r.channelId) : null, r.published].filter(Boolean).join(" · ")}
+                  {[
+                    r.platform === "youtube" ? null : (PLATFORM_NAME[r.platform] ?? r.platform),
+                    r.channelId ? channelName.get(r.channelId) : null,
+                    r.published,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </small>
                 <button
                   type="button"

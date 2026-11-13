@@ -24,8 +24,22 @@ export const HEAP_MESSAGES = {
   "channel-limit": "연결할 수 있는 채널 수를 넘었어요.",
   "import-unavailable": "지금은 영상 가져오기를 쓸 수 없어요.",
   "import-failed": "영상을 가져오지 못했어요. 잠시 뒤에 다시 해 주세요.",
+  // 게시물 링크 붙여넣기
+  "no-links": "받을 수 있는 링크가 없어요. 인스타그램이나 틱톡 게시물 주소를 한 줄에 하나씩 붙여 넣어 주세요.",
+  "too-many-links": "한 번에 붙여 넣을 수 있는 링크 수를 넘었어요. 나눠서 넣어 주세요.",
   "reel-not-found": "영상을 찾을 수 없어요.",
   "excluded-full": "뺄 수 있는 영상 수를 넘었어요.",
 } as const;
 
 export type HeapReason = keyof typeof HEAP_MESSAGES;
+
+// 화면에 쓰는 플랫폼 이름. 카드와 채널 탭이 같은 글자를 쓴다.
+export const HEAP_PLATFORM_NAME: Record<string, string> = {
+  youtube: "YouTube",
+  instagram: "Instagram",
+  tiktok: "TikTok",
+  x: "X",
+  chzzk: "치지직",
+  twitch: "Twitch",
+  soop: "SOOP",
+};

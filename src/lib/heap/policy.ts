@@ -101,4 +101,11 @@ export const HEAP_FUNNEL_POLICY = {
   shortMaxSeconds: 180,
   // 방 layout의 excludedReels(힙에서 뺀 영상 목록) 상한
   excludedReelsMax: 600,
+
+  // 게시물 링크 붙여넣기 (채널 탭, 판정 J12). 가져오기와 달리 네트워크를 쓰지 않아 간격 제한은 없고 줄 수와 횟수만 막는다.
+  pasteLinksMax: 30,
+  pasteTextMaxChars: 8000,
+  pasteAttemptsPer10Min: 20,
+  // 붙여 넣은 제목("<주소> | <제목>")의 길이. 0007의 check(300자)보다 좁다.
+  pasteTitleMaxChars: 100,
 } as const;

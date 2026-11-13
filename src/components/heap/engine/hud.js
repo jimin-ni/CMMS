@@ -1,5 +1,5 @@
 // 화면 위 글자: 방 이름, TODAY/TOTAL, 다녀감, 안내 문구, 알림, 모드에 따른 버튼.
-import { ytUrl } from './format.js';
+import { srcUrl } from './format.js';
 
 export function setupHud(ctx) {
   const { root, C, creator, $, DATA, reels, opts } = ctx;
@@ -51,7 +51,7 @@ export function setupHud(ctx) {
     $('flip').hidden = !(ctx.mode === 'sit' && ctx.held);
     const isFan = c => c?.userData.reel.kind === 'fan';
     $('srclink').hidden = !(ctx.mode === 'sit' && ctx.held) || isFan(ctx.held);
-    if (ctx.held && !isFan(ctx.held)) $('srclink').href = ytUrl(ctx.held.userData.reel);
+    if (ctx.held && !isFan(ctx.held)) $('srclink').href = srcUrl(ctx.held.userData.reel);
     $('eject').hidden = ctx.mode !== 'watch';
     $('ytlink').hidden = ctx.mode !== 'watch' || isFan(ctx.loaded);
     $('sortexit').hidden = ctx.mode !== 'sort';

@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { mulberry32 } from './util.js';
 import { paper, wrap, drawFit, NO_PHOTO, cropToShape, makeCanvas, canvasTexture } from './draw.js';
 import { tone } from './palette.js';
-import { ksDay, seoulDay } from './format.js';
+import { ksDay, seoulDay, hasThumb } from './format.js';
 
 export function setupSlots(ctx) {
   const { opts, C, box, BUILD, reels } = ctx;
@@ -110,7 +110,8 @@ export function setupSlots(ctx) {
   BUILD.frame = (g, it, build) => { keepsakeObject(g, it, build, 'frame', 0, it.y ?? 1.9, 0); return {}; };
 
   // 가장 최근 영상: 가장 늦은 게시일, 같은 날이거나 날짜가 없으면 목록 자체의 순서(서버가 최신순으로 준다)
-  const newestReel = () => { let best = null; for (const r of reels) if (r.published && (!best || r.published > best.published)) best = r; return best ?? reels[0] ?? null; };
+  // TV 화면은 썸네일을 받아 그린다. 썸네일이 없는 카드(붙여 넣은 게시물)는 고르지 않는다.
+  const newestReel = () => { const pool = reels.filter(hasThumb); let best = null; for (const r of pool) if (r.published && (!best || r.published > best.published)) best = r; return best ?? pool[0] ?? null; };
 
   // TV 화면(`screen` 이 있는 카탈로그 모델, 파일 단위): 모델 자신의 화면 바로 앞의 평면, 슬롯이 그린다.
   //   latest  가장 최근 영상의 썸네일, 쇼츠는 양옆을 비워 맞춘다        music  영상의 썸네일, 재생목록 링크는 음표
