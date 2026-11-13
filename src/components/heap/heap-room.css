@@ -1,0 +1,189 @@
+/* Heap miniroom styles, ported from the <style> block of heap-poc/miniroom/room.html.
+   Every selector sits under .heap-room so nothing reaches the rest of the app.
+   Changes from the source: :root / html / body rules moved onto .heap-room; position: fixed became absolute
+   (the room fills the area below the app header); 100dvh became 100cqh (height of .heap-room);
+   env(safe-area-inset-top) is gone from .hud and #toast because the room's top edge is no longer the viewport's. */
+.heap-room {
+  color-scheme: dark;
+  --olive: #565344;
+  --clay: #A6613C;
+  --paper: #F3EADB;
+  --paper-dim: rgba(243, 234, 219, 0.74);
+  --ink: #2f2c24;
+  --ui: "IBM Plex Sans KR", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --hand: "Nanum Pen Script", "IBM Plex Sans KR", cursive;
+  /* fills what the header leaves of the viewport: body is a min-h-full flex column */
+  position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; container-type: size;
+  background: var(--olive); color: var(--paper); font-family: var(--ui);
+  /* the source had no CSS reset; undo the two Tailwind preflight defaults that change its layout */
+  line-height: normal;
+}
+.heap-room, .heap-room * { box-sizing: content-box; }
+.heap-room #scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.heap-room .hud {
+  position: absolute; inset: 0; pointer-events: none;
+  display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 16px calc(16px + env(safe-area-inset-bottom, 0px));
+}
+.heap-room .who { display: flex; flex-direction: column; gap: 2px; }
+.heap-room .who .name { font-family: var(--hand); font-size: 42px; line-height: 1; color: var(--paper); }
+.heap-room .who .meta { font-size: 13px; letter-spacing: 0.02em; color: var(--paper-dim); font-variant-numeric: tabular-nums; }
+.heap-room .bottom { align-self: center; display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 100%; }
+.heap-room .row { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.heap-room .row[hidden] { display: none; }
+.heap-room .hint { margin: 0; padding: 6px 12px; border-radius: 999px; background: rgba(243, 234, 219, 0.9); color: var(--ink); font-size: 13px; text-align: center; text-wrap: balance; }
+.heap-room .btn { pointer-events: auto; font: 600 14px var(--ui); color: var(--paper); background: var(--clay); border: 0; border-radius: 999px; padding: 9px 16px; cursor: pointer; text-decoration: none; }
+.heap-room .btn.ghost { background: rgba(47, 44, 36, 0.78); }
+.heap-room .btn.paper { background: var(--paper); color: var(--ink); }
+.heap-room .btn[hidden] { display: none; }
+.heap-room .btn:focus-visible { outline: 3px solid var(--paper); outline-offset: 2px; }
+.heap-room .btn .k { opacity: 0.6; margin-right: 6px; font-variant-numeric: tabular-nums; }
+
+.heap-room #toast { position: absolute; top: 70px; left: 50%; transform: translateX(-50%); margin: 0; font-family: var(--hand); font-size: 26px; color: var(--paper); pointer-events: none; text-align: center; }
+.heap-room .gb-list { display: flex; flex-direction: column; gap: 6px; }
+.heap-room .gb-row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px dashed rgba(86, 83, 68, 0.25); font-size: 14px; }
+.heap-room .gb-row span:first-child { font-family: var(--hand); font-size: 22px; line-height: 1; }
+.heap-room .gb-row small { color: rgba(47, 44, 36, 0.62); font-variant-numeric: tabular-nums; }
+.heap-room .gb-row.owner span:first-child { color: var(--clay); }
+.heap-room .gb-form { display: flex; gap: 8px; }
+.heap-room .gb-form input { flex: 1; min-width: 0; font: 15px var(--ui); padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(86, 83, 68, 0.3); background: #fff8ec; color: var(--ink); }
+.heap-room .gb-form input:focus-visible { outline: 2px solid var(--clay); }
+
+.heap-room .overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; background: rgba(30, 28, 22, 0.45); }
+.heap-room .overlay[hidden] { display: none; }
+.heap-room .panel { width: min(420px, 100%); max-height: calc(100cqh - 48px); display: flex; flex-direction: column; border-radius: 16px; background: var(--paper); color: var(--ink); overflow: hidden; }
+.heap-room .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; background: var(--olive); color: var(--paper); }
+.heap-room .panel-head b { font-size: 15px; }
+.heap-room .panel-body { padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+
+.heap-room #player { position: absolute; left: 50%; top: calc(50% - 40px); transform: translate(-50%, -50%); display: flex; flex-direction: column; gap: 8px; }
+.heap-room #player[hidden] { display: none; }
+/* the player's title bar reaches up to the HUD's meta line, so that line steps aside while the player is open */
+.heap-room:has(#player:not([hidden])) .who .meta { visibility: hidden; }
+.heap-room .player-bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 13px; color: var(--paper); }
+.heap-room .player-bar span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.heap-room #player-frame { background: #000; }
+.heap-room #player-frame iframe, .heap-room #music-frame iframe { display: block; width: 100%; height: 100%; border: 0; }
+.heap-room #player-note { margin: 0; max-width: 300px; padding: 10px 12px; border-radius: 10px; background: rgba(47, 44, 36, 0.85); font-size: 13px; line-height: 1.5; }
+.heap-room #player-note[hidden] { display: none; }
+
+/* 음악 플레이어: 방 오른쪽 위, 방 이름의 반대편. 안에 영상 말고는 아무것도 겹치지 않는다.
+   --music-w(엔진이 정한 영상 폭)가 있는 동안 오버레이와 방 이름 줄과 토스트는 이 자리를 비켜 간다. 꾸미기 패널이 열려 있으면 그 왼쪽에 붙는다. */
+.heap-room { --music-right: 16px; }
+.heap-room.editing { --music-right: calc(var(--editor-w) + 16px); }
+.heap-room #music { position: absolute; top: 16px; right: var(--music-right); z-index: 2; display: flex; flex-direction: column; gap: 8px; padding: 8px; border-radius: 12px; background: rgba(47, 44, 36, 0.78); }
+.heap-room #music[hidden] { display: none; }
+.heap-room #music-frame { background: #000; }
+.heap-room #music-note { margin: 0; max-width: 300px; font-size: 13px; line-height: 1.5; color: var(--paper); }
+.heap-room #music-note[hidden], .heap-room #music-link[hidden] { display: none; }
+.heap-room #music-link { align-self: flex-start; }
+.heap-room:has(#music:not([hidden])) .overlay { right: calc(var(--music-right) + var(--music-w, 0px) + 32px); }
+.heap-room:has(#music:not([hidden])) .who { max-width: calc(100% - var(--music-w, 0px) - 28px); }
+.heap-room:has(#music:not([hidden])) #toast { left: calc((100% - var(--music-right) - var(--music-w, 0px) - 28px) / 2); max-width: calc(100% - var(--music-right) - var(--music-w, 0px) - 60px); }
+
+.heap-room .phone { width: min(330px, 100%); height: min(640px, calc(100cqh - 48px)); border-radius: 34px; padding: 10px; background: #2f2c24; box-shadow: 0 20px 60px rgba(0,0,0,0.4); display: flex; }
+.heap-room .phone-screen { flex: 1; min-width: 0; border-radius: 26px; background: #efe6d6; color: var(--ink); display: flex; flex-direction: column; overflow: hidden; }
+.heap-room .phone-head { display: flex; align-items: center; gap: 10px; padding: 14px 14px 10px; background: var(--paper); border-bottom: 1px solid rgba(86, 83, 68, 0.15); }
+.heap-room .avatar { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: var(--clay); color: var(--paper); font-family: var(--hand); font-size: 24px; flex: none; }
+.heap-room .phone-head .who2 { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.heap-room .phone-head small { color: rgba(47, 44, 36, 0.62); font-size: 12px; overflow-wrap: anywhere; }
+.heap-room .phone-feed { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.heap-room .chip { align-self: center; font-size: 11px; color: rgba(47, 44, 36, 0.6); background: rgba(86, 83, 68, 0.1); padding: 3px 10px; border-radius: 999px; }
+.heap-room .bubble { align-self: flex-start; max-width: 85%; padding: 10px 12px; border-radius: 4px 16px 16px 16px; background: var(--paper); box-shadow: 0 1px 0 rgba(86,83,68,0.15); display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.heap-room .bubble a { color: var(--clay); font-weight: 600; text-decoration: none; overflow-wrap: anywhere; }
+.heap-room .bubble small { color: rgba(47, 44, 36, 0.62); font-size: 12px; overflow-wrap: anywhere; }
+.heap-room .bubble img { width: 120px; border-radius: 8px; }
+.heap-room .bubble .copy { align-self: flex-start; font: 600 12px var(--ui); border: 1px solid var(--clay); color: var(--clay); background: none; border-radius: 999px; padding: 4px 10px; cursor: pointer; }
+.heap-room .email { user-select: all; }
+/* PC 링크 목록과 기념품 패널: 말풍선 꼴의 줄을 패널 폭에 맞춘다 */
+.heap-room .pc-list .bubble { align-self: stretch; max-width: none; }
+.heap-room .ks-pic { width: 100%; max-height: 260px; object-fit: cover; border-radius: 8px; background: #ddd; }
+.heap-room .ks-pic.tall { width: auto; max-width: 100%; align-self: center; }
+.heap-room .ks-meta { font-size: 13px; color: rgba(47, 44, 36, 0.62); font-variant-numeric: tabular-nums; }
+.heap-room .ks-caption { margin: 0; font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; }
+.heap-room #ks-body .btn { align-self: flex-start; }
+/* 달력 패널: 날짜, 설명, 며칠 남았는지 */
+.heap-room .cal-row { display: flex; align-items: baseline; gap: 10px; padding: 8px 0; border-bottom: 1px dashed rgba(86, 83, 68, 0.25); font-size: 14px; }
+.heap-room .cal-row b { font-variant-numeric: tabular-nums; color: var(--clay); flex: none; }
+.heap-room .cal-row span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.heap-room .cal-row small { color: rgba(47, 44, 36, 0.62); flex: none; }
+
+.heap-room .grid-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
+.heap-room .gitem { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 12px; }
+.heap-room .gitem img { width: 100%; aspect-ratio: 9 / 16; object-fit: cover; border-radius: 6px; background: #ddd; }
+.heap-room .gitem.wide img { aspect-ratio: 16 / 9; }
+.heap-room .gitem span { overflow-wrap: anywhere; }
+.heap-room .gitem a { color: var(--clay); font-weight: 600; text-decoration: none; }
+.heap-room .tag { align-self: flex-start; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: rgba(86, 83, 68, 0.12); }
+.heap-room .tag.mine { background: rgba(166, 97, 60, 0.18); }
+.heap-room .stat { display: flex; justify-content: space-between; font-size: 15px; font-variant-numeric: tabular-nums; }
+.heap-room .big { font-family: var(--hand); font-size: 48px; text-align: center; color: var(--clay); line-height: 1; }
+.heap-room .note { margin: 0; font-size: 12px; color: rgba(47, 44, 36, 0.62); line-height: 1.5; }
+.heap-room .roomlist { display: flex; flex-direction: column; gap: 8px; }
+.heap-room .roomlist button { display: flex; justify-content: space-between; align-items: center; gap: 12px; text-align: left; font: 15px var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.2); border-radius: 12px; padding: 12px 14px; cursor: pointer; }
+.heap-room .roomlist button:disabled { opacity: 0.6; cursor: default; }
+.heap-room .roomlist b { font-family: var(--hand); font-size: 26px; font-weight: 400; color: var(--clay); }
+.heap-room .roomlist small { color: rgba(47, 44, 36, 0.62); }
+/* 다녀간 뒤 바뀐 방의 점 */
+.heap-room .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--clay); margin-left: 8px; vertical-align: middle; }
+.heap-room .note .dot { margin: 0 6px 0 0; }
+
+.heap-room #fade { position: absolute; inset: 0; background: var(--olive); opacity: 0; pointer-events: none; transition: opacity 0.35s; }
+.heap-room #fade.on { opacity: 1; pointer-events: auto; }
+.heap-room #status { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; font-family: var(--hand); font-size: 28px; color: var(--paper-dim); pointer-events: none; }
+.heap-room #status[hidden] { display: none; }
+
+/* 꾸미기 (room-editor.tsx): the panel docks to the right edge. While it is open (.editing) the scene and the HUD keep what is left
+   of the room area, so the whole room stays in view beside the panel. The engine follows the canvas's size. */
+.heap-room { --editor-w: 360px; }
+.heap-room.editing #scene { width: calc(100% - var(--editor-w)); }
+.heap-room.editing .hud { right: var(--editor-w); }
+.heap-room.editing #toast { left: calc(50% - var(--editor-w) / 2); }
+.heap-room .room-editor { position: absolute; top: 0; right: 0; bottom: 0; width: var(--editor-w); max-width: 100%; max-height: none; border-radius: 0; }
+.heap-room .room-editor .panel-body { flex: 1 1 0; min-height: 0; }
+.heap-room .room-editor .row { justify-content: flex-start; }
+.heap-room .room-editor .btn:disabled { opacity: 0.45; cursor: default; }
+.heap-room .btn.small { font-size: 12px; padding: 6px 11px; }
+.heap-room .ed-foot { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-top: 1px dashed rgba(86, 83, 68, 0.25); }
+/* the plan: back wall on top, left wall on the left (the two sides that have a wall); the open sides are dashed */
+.heap-room .ed-walls { border: 1px dashed rgba(86, 83, 68, 0.35); border-top: 4px solid var(--olive); border-left: 4px solid var(--olive); }
+.heap-room .ed-plan {
+  position: relative; background-color: #fff8ec;
+  /* hairlines every 0.5 unit; room-editor.tsx sets background-size to that step */
+  background-image: linear-gradient(to right, rgba(86, 83, 68, 0.14) 1px, transparent 1px), linear-gradient(to bottom, rgba(86, 83, 68, 0.14) 1px, transparent 1px);
+}
+.heap-room .ed-mark { position: absolute; font-size: 10px; line-height: 1; color: rgba(47, 44, 36, 0.62); pointer-events: none; }
+.heap-room .ed-mark.back { top: -4px; border-top: 4px solid; padding-top: 2px; text-align: center; }
+.heap-room .ed-mark.left { left: -4px; border-left: 4px solid; padding-left: 3px; display: flex; align-items: center; }
+.heap-room .ed-mark.door { border-color: var(--clay); }
+.heap-room .ed-mark.window { border-color: var(--paper); }
+.heap-room .ed-table { position: absolute; display: grid; place-items: center; background: #b9b4a8; color: var(--ink); font-size: 10px; pointer-events: none; }
+.heap-room .ed-item {
+  position: absolute; transform: translate(-50%, -50%); box-sizing: border-box; min-width: 12px; min-height: 12px; margin: 0; padding: 0;
+  display: grid; place-items: center; border: 1px solid var(--olive); border-radius: 0; background: rgba(243, 234, 219, 0.85);
+  color: var(--ink); font: 10px var(--ui); white-space: nowrap; cursor: pointer;
+}
+.heap-room .ed-item.rug { background: rgba(243, 234, 219, 0.4); }
+.heap-room .ed-item.sel { outline: 3px solid var(--clay); outline-offset: -1px; }
+.heap-room .ed-item:focus-visible { outline: 3px solid var(--ink); outline-offset: -1px; }
+.heap-room .ed-plan.arming { cursor: copy; }
+.heap-room .ed-plan.arming .ed-item { pointer-events: none; }
+.heap-room .ed-pick { font: 600 13px var(--ui); color: var(--ink); background: none; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 999px; padding: 5px 10px; cursor: pointer; }
+.heap-room .ed-pick[aria-pressed="true"] { border-color: var(--clay); color: var(--clay); }
+.heap-room .ed-pick:focus-visible { outline: 2px solid var(--clay); outline-offset: 1px; }
+/* 꾸미기: 고른 가구에 기능을 달아 내용을 적는 칸 */
+.heap-room .ed-fn { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px dashed rgba(86, 83, 68, 0.25); }
+.heap-room .ed-fn b { font-size: 13px; }
+.heap-room .ed-field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: rgba(47, 44, 36, 0.7); }
+.heap-room .ed-field input, .heap-room .ed-field textarea { font: 13px var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 8px; padding: 6px 8px; }
+.heap-room .ed-field textarea { resize: vertical; min-height: 54px; }
+.heap-room .ed-linkrow { display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 10px; background: rgba(86, 83, 68, 0.07); }
+.heap-room .ed-linkrow input { font: 13px var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 8px; padding: 6px 8px; }
+.heap-room .ed-bad { color: #a23a2a; }
+/* 오류 줄은 늘 한 줄 자리를 차지한다: 나타나고 사라져도 아래 칸이 밀리지 않는다 */
+.heap-room .ed-slot { display: block; min-height: 1.5em; }
+.heap-room .ed-fn-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.heap-room .ed-calrow { display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 10px; background: rgba(86, 83, 68, 0.07); }
+.heap-room .ed-calrow input { font: 13px var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 8px; padding: 6px 8px; }

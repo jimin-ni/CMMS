@@ -1,0 +1,18 @@
+{
+  "name": "Dname",
+  "phoneTitle": "디네임",
+  "linktree": null,
+  "linksNote": "유튜브 채널에 걸린 링크 · 2026.11.12",
+  "links": [
+    { "title": "YouTube @d_name0", "url": "https://www.youtube.com/@d_name0" },
+    { "title": "Discord", "url": "https://discord.gg/player" },
+    { "title": "TikTok", "url": "https://www.tiktok.com/@goddot2" }
+  ],
+  "albums": [
+    { "key": "prize", "name": "상금 챌린지", "color": "#A6613C", "match": "돈을|만원|상금|치킨" },
+    { "key": "quiz", "name": "맞추기 퀴즈", "color": "#565344", "match": "맞추|퀴즈" },
+    { "key": "battle", "name": "룰렛 배틀", "color": "#c9a46a", "match": "룰렛|배틀|빙고|밸런스|텔레파시" },
+    { "key": "talk", "name": "이야기", "color": "#6e4a30", "match": "해명|논란" }
+  ],
+  "_note": "앨범 이름과 분류 규칙은 PoC용 임시안이에요. 크리에이터가 정합니다."
+}

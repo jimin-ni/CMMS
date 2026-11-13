@@ -1,0 +1,19 @@
+{
+  "name": "Lovesoo",
+  "phoneTitle": "LOVE SOO",
+  "linktree": "https://linktr.ee/lovesoo",
+  "linksNote": "링크트리에서 가져온 링크 · 2026.11.12",
+  "links": [
+    { "title": "BUSINESS INQUIRIES", "email": "contact.lovesoo@gmail.com" },
+    { "title": "TikTok", "url": "https://www.tiktok.com/@mommytang" },
+    { "title": "@lovesoostrong", "url": "https://www.youtube.com/@lovesoostrong" },
+    { "title": "러브쑤의 작은 하루", "url": "https://www.youtube.com/@%EB%9F%AC%EB%B8%8C%EC%91%A4%EC%9D%98%EC%9E%91%EC%9D%80%ED%95%98%EB%A3%A8" },
+    { "title": "INSTAGRAM", "url": "https://www.instagram.com/_love_soo__" }
+  ],
+  "albums": [
+    { "key": "mukbang", "name": "먹방", "color": "#A6613C", "match": "mukbang|먹방|first time eating|first time trying|ex vegan" },
+    { "key": "cook", "name": "요리", "color": "#565344", "match": "recipe|laziest|braised" },
+    { "key": "vlog", "name": "일상 브이로그", "color": "#c9a46a", "channel": "러브쑤의 작은 하루" },
+    { "key": "ad", "name": "협찬", "color": "#6e4a30", "match": "partner|#ad\\b|sponsor|협찬" }
+  ]
+}
