@@ -4,10 +4,16 @@
 //   받는 것  heap:edit (true 면 들어오고 false 면 나간다, heap-room.tsx)
 //            heap:editcmd { op, ... }  op: arm(template), rotate(dir), copy, remove, undo, redo, time(value), fn(index, fn), lit, select(index | null), cancel, reset(처음으로), discard(나가며 버리기),
 //                                     palette(palette | null), swap(index, to { type, model? }), plan(value?: 위에서 보기를 켜고 끈다), fit(구도 맞추기),
-//                                     lift(dir: 1 | -1, 벽 가구의 높이. PageUp/PageDown 과 같다)
-//            heap:saved { roomUuid, layout } (editor-bridge.js 와 함께): 저장된 레이아웃이 새 기준이 된다. 다른 방의 것은 버린다
-//   보내는 것 heap:editstate { items, sel, moving, canUndo, canRedo, dirty, time, notice, palette, look, mount, placed, busy, view { plan, fitted } }  바뀔 때마다
-//            heap:remount { edit, items, time, palette, hist, future, saved, original, baseLayout, plan }  팔레트가 바뀔 때 (아래 remount)
+//                                     lift(dir: 1 | -1, 벽 가구의 높이. PageUp/PageDown 과 같다),
+//                                     name(value: 방 이름, 검사는 room-editor.tsx 와 서버가 한다), load(layout { items, palette, shell?, time? }, name?: 템플릿이나 저장 전 모습을 한 걸음으로 깐다),
+//                                     preview(value: 팔로워로 보기를 켜고 끈다)
+//            heap:saved { roomUuid, layout, name? } (editor-bridge.js 와 함께): 저장된 레이아웃과 이름이 새 기준이 된다. 다른 방의 것은 버린다
+//   보내는 것 heap:editstate { items, sel, moving, canUndo, canRedo, dirty, time, notice, palette, look, mount, placed, busy, view { plan, fitted },
+//                              shell, name, savedName, preview }  바뀔 때마다
+//            heap:remount { edit, items, time, palette, shell, name, savedName, hist, future, saved, original, baseLayout, plan }  팔레트나 방의 틀이 바뀔 때 (아래 remount)
+// 방의 틀(shell): 방 크기와 고정된 것(창문, 문, 스크린, 방명록, 포스터, 사진 탁자)의 자리. 템플릿을 깔면 바뀌고, 바뀌면 팔레트처럼 다시 마운트한다.
+// 방 이름도 되돌리기 기록에 든다: 이름 하나를 고치는 것이 한 걸음이고, 저장 안 된 변경으로 센다. 화면 왼쪽 위의 이름(hud.js 의 showName)도 바로 바뀐다.
+// 팔로워로 보기(preview): 편집 상태는 그대로 두고, 카메라는 방 카메라로, 발판·격자·막대는 숨기고, 포인터와 키는 받지 않는다 (room-editor.tsx 가 키를 받아 돌아간다).
 // 카메라(B6)는 edit-camera.js 의 ctx.editCam 이다: 휠 확대, 오른쪽 끌기 이동(움직이지 않은 오른쪽 클릭은 취소), T 평면도, Home 또는 0 맞추기.
 // 집고 놓는 일은 지금 화면의 카메라로 하므로 두 카메라에서 같다. 평면도에서 벽 액자는 가까운 벽을 따르고, 맞은 메시가 없으면 바닥의 발판으로 고른다.
 // 들고 있는 가구가 다른 가구에 가리면 옅은 그림자(실루엣)로 비쳐 보이고, 발판의 점선 테두리는 늘 보인다 (아래 그림자).
@@ -41,6 +47,9 @@ const OK = '#7d9a4a', BAD = '#c2452d', PICKED = '#A6613C';
 // 엔진이 직접 만드는 가구의 이름 (알림 문구용). 모델은 카탈로그의 label 을 쓴다.
 const HAND_LABEL = { bed: '침대', shelf: '앨범 책장', plant: '화분', snake: '산세베리아', lamp: '조명', books: '책 더미', frame: '벽 액자', calendar: '탁상 달력' };
 const OVERLAYS = ['phone', 'pc', 'keepsake', 'calendar', 'grid', 'rooms', 'guestbook'];
+// 방의 틀의 레이아웃 열쇠. 순서가 비교 문자열(snap)의 순서다.
+const SHELL_KEYS = ['room', 'window', 'door', 'screen', 'guestbook', 'posters', 'table'];
+const shellOf = l => Object.fromEntries(SHELL_KEYS.filter(k => l && l[k] !== undefined).map(k => [k, structuredClone(l[k])]));
 
 const r2 = v => Math.round(v * 100) / 100;
 const snapGrid = v => Math.round(v / GRID) * GRID;
@@ -63,6 +72,8 @@ export function setupEdit(ctx) {
     alt: false, last: null, notice: null, seq: 0, fnTimer: 0,
     // palette: layout.palette (없으면 null = 기본 올리브 오후) · placed: 방금 내려놓은 새 가구 { index, seq } (기능 말풍선을 연다) · busy: 다시 마운트를 기다린다
     palette: null, placed: null, busy: false,
+    // shell: 방의 틀 (위 SHELL_KEYS) · name: 방 이름 · preview: 팔로워로 보기 중
+    shell: {}, name: '', preview: false,
   };
   // 이 마운트의 번호와, 이 마운트가 실제로 칠한 색 (가구 목록의 그림은 이 색으로 그려진다: dock-thumbs.js)
   const MOUNT = Math.floor(Math.random() * 1e9), LOOK = JSON.stringify(ctx.C);
@@ -357,8 +368,10 @@ export function setupEdit(ctx) {
   }
 
   // ---------- 상태 알리기, 되돌리기 ----------
-  const snap = () => JSON.stringify({ items: ed.items, time: ed.time, palette: ed.palette });
-  const keyOf = (items, time, palette) => JSON.stringify({ items, time, palette: palette ?? null });
+  const snap = () => JSON.stringify({ items: ed.items, time: ed.time, palette: ed.palette, shell: ed.shell, name: ed.name });
+  const keyOf = (items, time, palette, shell, name) => JSON.stringify({ items, time, palette: palette ?? null, shell, name });
+  // 마지막으로 저장한 모습의 비교 문자열 (ctx.original, ctx.baseLayout, ctx.savedName 은 editor-bridge.js 가 저장 뒤에 고친다)
+  const savedKey = () => keyOf(ctx.original.items, ctx.original.time, ctx.original.palette, shellOf(ctx.baseLayout), ctx.savedName);
   const palKey = p => JSON.stringify(p ?? null);
   function emit() {
     if (ctx.disposed) return;
@@ -368,6 +381,7 @@ export function setupEdit(ctx) {
       canUndo: ed.hist.length > 0, canRedo: ed.future.length > 0, dirty: snap() !== ed.saved, notice: ed.notice,
       palette: ed.palette, look: LOOK, mount: MOUNT, placed: ed.placed, busy: ed.busy,
       view: { plan: ctx.editCam.plan, fitted: ctx.editCam.fitted() },
+      shell: structuredClone(ed.shell), name: ed.name, savedName: ctx.savedName, preview: ed.preview,
     } }));
   }
   // 휠과 끌기는 자주 온다: 구도의 상태(평면도, 맞춘 구도인지)가 바뀔 때만 알린다
@@ -383,12 +397,19 @@ export function setupEdit(ctx) {
     ed.future = []; ed.tag = tag;
   }
   function setTime(v) { ed.time = v; root.dispatchEvent(new CustomEvent('heap:time', { detail: v })); }
+  function setName(n) { if (typeof n !== 'string' || n === ed.name) return; ed.name = n; ctx.showName(n); }
+  // 팔레트와 방의 틀을 바꾼다. 어느 쪽이든 바뀌었으면 다시 마운트하고(again 이 false 면 꾸미기 밖으로), 아니면 가구만 다시 짓는다.
+  function setLook(pal, shell, again = true) {
+    const changed = palKey(pal) !== palKey(ed.palette) || palKey(shell) !== palKey(ed.shell);
+    ed.palette = pal; ed.shell = shell;
+    if (changed) remount(again); else rebuild();
+  }
   function restore(s) {
     const o = JSON.parse(s);
     ed.items = o.items; ed.sel = null; ed.tag = null;
     if (o.time !== ed.time) setTime(o.time);
-    const pal = o.palette ?? null;
-    if (palKey(pal) !== palKey(ed.palette)) { ed.palette = pal; remount(); } else rebuild();
+    setName(o.name ?? ed.name);
+    setLook(o.palette ?? null, o.shell ?? ed.shell);
   }
 
   // ---------- 팔레트: 다시 마운트 ----------
@@ -399,6 +420,7 @@ export function setupEdit(ctx) {
     ed.move = null; ed.press = null; ed.sel = null; grid.visible = false; ed.busy = edit;
     root.dispatchEvent(new CustomEvent('heap:remount', { detail: {
       edit, items: ed.items.map(it => ({ ...it })), time: ed.time, palette: ed.palette,
+      shell: structuredClone(ed.shell), name: ed.name, savedName: ctx.savedName,
       hist: ed.hist.slice(), future: ed.future.slice(), saved: ed.saved, seq: ed.seq,
       original: { items: ctx.original.items.map(it => ({ ...it })), time: ctx.original.time, palette: ctx.original.palette ?? null },
       baseLayout: structuredClone(ctx.baseLayout), plan: ctx.editCam.plan,
@@ -771,9 +793,19 @@ export function setupEdit(ctx) {
     endMove(); pushUndo();
     ed.items = ctx.original.items.map(it => ({ ...it })); ed.sel = null;
     if (ed.time !== ctx.original.time) setTime(ctx.original.time);
+    setName(ctx.savedName);
     notice('마지막으로 저장한 모습으로 돌아왔어요', true);
-    const pal = ctx.original.palette ?? null;
-    if (palKey(pal) !== palKey(ed.palette)) { ed.palette = pal; remount(); } else rebuild();
+    setLook(ctx.original.palette ?? null, shellOf(ctx.baseLayout));
+  }
+  // 템플릿이나 저장 전 모습을 깐다: 가구, 팔레트, (있으면) 방의 틀과 시간과 이름을 한 걸음으로 바꾼다. 기능을 옮기는 일은 room-editor.tsx 가 미리 한다.
+  // 알림은 room-editor.tsx 가 띄운다 (다시 마운트하면 엔진의 알림은 지워진다).
+  function load(l, name) {
+    if (!l || typeof l !== 'object' || !Array.isArray(l.items)) return;
+    endMove(); pushUndo();
+    ed.items = l.items.filter(it => it && typeof it === 'object').map(it => ({ ...it })); ed.sel = null; ed.notice = null;
+    if (l.time !== undefined && l.time !== ed.time) setTime(l.time);
+    setName(name);
+    setLook(l.palette ? structuredClone(l.palette) : null, l.shell && typeof l.shell === 'object' ? shellOf(l.shell) : ed.shell);
   }
   // 앉는 가구가 다른 가구와 겹치면 저장은 되지만 그 자리에는 앉을 수 없다 (예전 꾸미기 패널의 안내)
   function seatNote(i) {
@@ -791,8 +823,16 @@ export function setupEdit(ctx) {
     endMove();
     ed.items = ctx.original.items.map(it => ({ ...it })); ed.sel = null; ed.hist = []; ed.future = []; ed.tag = null; ed.notice = null;
     if (ed.time !== ctx.original.time) setTime(ctx.original.time);
-    const pal = ctx.original.palette ?? null;
-    if (palKey(pal) !== palKey(ed.palette)) { ed.palette = pal; remount(false); } else rebuild(); // 칠한 색은 다시 마운트해야 돌아간다
+    setName(ctx.savedName);
+    setLook(ctx.original.palette ?? null, shellOf(ctx.baseLayout), false); // 칠한 색과 방의 틀은 다시 마운트해야 돌아간다
+  }
+  // 팔로워로 보기를 켜고 끈다. 들고 있던 것은 내려놓지 않고 끝내고, 고른 것도 푼다. 되돌리기 기록과 저장 안 된 변경은 그대로다.
+  function setPreview(v) {
+    if (v === ed.preview) return;
+    flushFn(); endMove(); ed.sel = null; ed.press = null; ed.notice = null;
+    if (ed.rdown) { ed.rdown = null; ctx.editCam.panEnd(); }
+    ed.preview = ctx.editPreview = v;
+    canvas.style.cursor = '';
   }
   const overDock = ev => { const d = root.querySelector('.ed-dock')?.getBoundingClientRect(); return !!d && ev.clientX >= d.left && ev.clientX <= d.right && ev.clientY >= d.top && ev.clientY <= d.bottom; };
 
@@ -811,7 +851,10 @@ export function setupEdit(ctx) {
     ed.palette = ctx.layout.palette ?? null; ed.placed = null; ed.busy = false;
     ed.hist = resume?.hist ?? []; ed.seq = resume?.seq ?? ed.seq; // 알림과 내려놓기의 번호는 마운트를 건너 이어진다 (room-editor.tsx 가 번호로 새것을 가린다)
     ed.future = resume?.future ?? []; ed.tag = null; ed.notice = null; ed.move = null; ed.press = null;
-    ed.saved = keyOf(ctx.original.items, ctx.original.time, ctx.original.palette);
+    // 방의 틀은 지금 지은 방(ctx.layout)의 것이다. 이름은 다시 마운트했으면 그 전 마운트의 것, 아니면 저장된 이름이다.
+    ed.shell = shellOf(ctx.layout); ed.name = typeof resume?.name === 'string' ? resume.name : ctx.savedName; ctx.showName(ed.name);
+    ed.preview = ctx.editPreview = false;
+    ed.saved = savedKey();
     ctx.editCam.reset(); if (resume?.plan) ctx.editCam.setPlan(true); // 색을 바꾸며 다시 마운트해도 평면도는 이어 간다
     ed.rdown = null; viewKey = '';
     emit();
@@ -821,7 +864,7 @@ export function setupEdit(ctx) {
   function exit() {
     if (!ed.on) return;
     const had = !!ed.move || !!ed.fnTimer;
-    ed.move = null; ed.press = null; ed.sel = null; ed.on = false; ed.rdown = null;
+    ed.move = null; ed.press = null; ed.sel = null; ed.on = false; ed.rdown = null; ed.preview = ctx.editPreview = false;
     grid.visible = tile.visible = wallTile.visible = false; clearGhosts(); showZones(null);
     ctx.editCam.reset(); // 방 카메라로는 loop.js 가 데려간다
     canvas.style.cursor = '';
@@ -834,11 +877,14 @@ export function setupEdit(ctx) {
   on(root, 'heap:saved', e => {
     if (e.detail?.roomUuid !== opts.roomUuid) return; // 다른 방에서 늦게 끝난 저장
     const l = e.detail.layout;
-    if (l && Array.isArray(l.items)) { ed.saved = keyOf(l.items, l.time ?? 'auto', l.palette); if (ed.on) emit(); }
+    // editor-bridge.js 가 먼저 받아 ctx.original, ctx.baseLayout, ctx.savedName 을 고쳐 두었다
+    if (l && Array.isArray(l.items)) { ed.saved = savedKey(); if (ed.on) emit(); }
   });
   on(root, 'heap:editcmd', e => {
     const c = e.detail;
     if (!ed.on || !c || typeof c !== 'object') return;
+    if (c.op === 'preview') { setPreview(!!c.value); emit(); return; }
+    if (ed.preview) return; // 팔로워로 보는 동안에는 고치지 않는다
     if (c.op !== 'fn' && c.op !== 'lift') { ed.tag = null; flushFn(); }
     if (c.op === 'lift') flushFn();
     switch (c.op) {
@@ -860,6 +906,8 @@ export function setupEdit(ctx) {
       case 'plan': setPlan(typeof c.value === 'boolean' ? c.value : !ctx.editCam.plan); break;
       case 'fit': fitView(); break;
       case 'lift': lift(c.dir === -1 ? -1 : 1); break;
+      case 'name': if (typeof c.value === 'string' && c.value !== ed.name) { pushUndo(); setName(c.value); } break;
+      case 'load': load(c.layout, c.name); break;
       default: return;
     }
     emit();
@@ -870,7 +918,9 @@ export function setupEdit(ctx) {
   const remember = ev => { ed.last = { clientX: ev.clientX, clientY: ev.clientY, overCanvas: ev.target === canvas || !!ed.move }; ed.alt = ev.altKey; };
   on(root, 'pointerdown', ev => {
     if (!ed.on || ev.target !== canvas) return;
-    ev.stopPropagation(); remember(ev); flushFn(); ed.tag = null;
+    ev.stopPropagation();
+    if (ed.preview) return; // 팔로워로 보는 동안에는 방을 누르지 않는다 (걷기, 앉기도 꺼져 있다)
+    remember(ev); flushFn(); ed.tag = null;
     if (ev.button === 2) { // 오른쪽: 끌면 화면을 옮기고, 움직이지 않고 떼면 취소한다 (pointerup)
       ed.rdown = { clientX: ev.clientX, clientY: ev.clientY, moved: false };
       ed.eatMenu = true; // 캔버스에서 시작한 오른쪽 누르기 뒤의 contextmenu 는 어디서 떼든 먹는다 (끌다가 목록 위에서 떼도)
@@ -887,6 +937,7 @@ export function setupEdit(ctx) {
   }, { capture: true });
   on(root, 'pointermove', ev => {
     if (!ed.on) return;
+    if (ed.preview) { if (ev.target === canvas) ev.stopPropagation(); return; }
     remember(ev);
     if (ed.rdown) {
       if (!ed.rdown.moved && Math.hypot(ev.clientX - ed.rdown.clientX, ev.clientY - ed.rdown.clientY) > 5) ed.rdown.moved = true;
@@ -909,6 +960,7 @@ export function setupEdit(ctx) {
   on(root, 'pointerup', ev => {
     if (!ed.on) return;
     if (ev.target === canvas) ev.stopPropagation();
+    if (ed.preview) return;
     if (ed.rdown && ev.button === 2) {
       const moved = ed.rdown.moved;
       ed.rdown = null; ctx.editCam.panEnd(); canvas.style.cursor = ed.move ? 'grabbing' : '';
@@ -929,11 +981,12 @@ export function setupEdit(ctx) {
   on(canvas, 'wheel', ev => {
     if (!ed.on) return;
     ev.preventDefault();
+    if (ed.preview) return;
     const dy = ev.deltaY * (ev.deltaMode === 1 ? 33 : ev.deltaMode === 2 ? 400 : 1);
     ctx.editCam.zoomAt(ev, canvas, dy); emitView();
   }, { passive: false });
   on(window, 'keydown', ev => {
-    if (!ed.on) return;
+    if (!ed.on || ed.preview) return; // 팔로워로 보는 동안의 키는 room-editor.tsx 가 받는다 (아무 키나 누르면 돌아간다)
     if (ev.key === 'Alt') { ed.alt = true; ev.preventDefault(); if (ed.move && ed.last) { update(ed.last); } return; }
     if (ev.target.closest?.('input, textarea, select, .ed-bubble')) return; // 기능 말풍선의 글자는 말풍선의 것이다
     const k = ev.key.toLowerCase(), mod = ev.ctrlKey || ev.metaKey;
@@ -963,6 +1016,12 @@ export function setupEdit(ctx) {
   // ---------- 프레임마다: 발판, 가구 위 막대, 이유 칩 ----------
   const bb = new THREE.Box3(), top = new THREE.Vector3(), lastCam = new THREE.Matrix4();
   function editFrame() {
+    if (ed.preview) { // 팔로워로 보기: 꾸미기의 표시를 모두 숨긴다 (카메라는 loop.js 가 방 카메라로 옮긴다)
+      grid.visible = tile.visible = wallTile.visible = false; for (const l of edges) l.visible = false;
+      if (ghosts.length) clearGhosts(); showZones(null);
+      const chip = root.querySelector('#ed-why'); if (chip && !chip.hidden) chip.hidden = true;
+      return;
+    }
     // 확대, 이동, 평면도로 카메라가 움직이면 커서는 그대로여도 커서 아래의 바닥이 바뀐다: 들고 있는 가구가 따라간다
     camera.updateMatrixWorld();
     if (!lastCam.equals(camera.matrixWorld)) { lastCam.copy(camera.matrixWorld); if (ed.move && ed.last?.overCanvas) update(ed.last); }

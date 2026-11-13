@@ -45,19 +45,25 @@ export function setupLoop(ctx) {
   onDispose(() => sizeWatch.disconnect());
   onDispose(() => cancelAnimationFrame(ctx.raf));
 
+  // 방 카메라로 다가간다: 팔로워가 보는 구도
+  function roomCam(a) {
+    const fit = Math.max(1, 1.25 / camera.aspect) * roomFit(camera.aspect);
+    roomGoal.copy(ROOM_CAM.target).addScaledVector(ROOM_CAM.pos.clone().sub(ROOM_CAM.target), fit);
+    camera.position.lerp(roomGoal, a); controls.target.lerp(ROOM_CAM.target, a);
+    // 평면도에서 나오면 카메라의 위 방향이 아직 기울어 있다: 위치와 함께 Y 로 돌아오고, 다 오면 정확히 Y 가 된다
+    if (!camera.up.equals(Yv)) { camera.up.lerp(Yv, a).normalize(); if (camera.up.y > 0.99999) camera.up.copy(Yv); }
+    camera.lookAt(controls.target);
+  }
+
   function frame() {
     if (ctx.disposed) return;
     const rawDt = clock.getDelta(), dt = Math.min(rawDt, 0.05), t = clock.elapsedTime, a = reduced ? 1 : 1 - Math.exp(-dt * 7);
     if (ctx.mode === 'edit') { // 꾸미기는 자기 카메라(edit-camera.js)를 쓰고, 걷는 사람은 문 앞에 세워 둔다
-      ctx.editCam.step(a); ctx.editFrame(); // 가구 위 막대와 말풍선은 이 프레임의 카메라로 자리를 잡는다
+      if (ctx.editPreview) roomCam(a); else ctx.editCam.step(a); // 팔로워로 보기는 방 카메라다 (edit.js)
+      ctx.editFrame(); // 가구 위 막대와 말풍선은 이 프레임의 카메라로 자리를 잡는다
     } else if (ctx.mode === 'room') {
       stepCharacter(Math.min(rawDt, 0.2));
-      const fit = Math.max(1, 1.25 / camera.aspect) * roomFit(camera.aspect);
-      roomGoal.copy(ROOM_CAM.target).addScaledVector(ROOM_CAM.pos.clone().sub(ROOM_CAM.target), fit);
-      camera.position.lerp(roomGoal, a); controls.target.lerp(ROOM_CAM.target, a);
-      // 평면도에서 나오면 카메라의 위 방향이 아직 기울어 있다: 위치와 함께 Y 로 돌아오고, 다 오면 정확히 Y 가 된다
-      if (!camera.up.equals(Yv)) { camera.up.lerp(Yv, a).normalize(); if (camera.up.y > 0.99999) camera.up.copy(Yv); }
-      camera.lookAt(controls.target);
+      roomCam(a);
     } else {
       camera.up.copy(Yv); // 앉기와 궤도 컨트롤은 Y 가 위인 카메라를 전제한다
       const seated = ctx.mode === 'sit' || ctx.mode === 'watch';

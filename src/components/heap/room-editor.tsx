@@ -2,12 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { saveLayoutAction } from "@/lib/heap/actions";
-import { HEAP_POLICY } from "@/lib/heap/policy";
+import { HEAP_FUNNEL_POLICY, HEAP_POLICY } from "@/lib/heap/policy";
 import { checkFn, slotKindsFor, type PcLink, type SlotFn, type SlotKind } from "@/lib/heap/slots";
+import { charCount, checkRoomName } from "@/lib/heap/slug";
+import { HEAP_TEMPLATES, type HeapTemplate } from "@/lib/heap/templates";
+import { moveFunctions, shellOf, SHELL_KEYS, type MoveItem } from "@/lib/heap/template-move";
+import type { SavedRoom } from "./heap-room";
+import type { ChecklistAction } from "./setup-checklist";
 import { FnForm, canCarryFn, isLamp, itemLabel, newFn, type Item, type Model } from "./fn-form";
 import { PRESETS, WELLS, effectivePalette, samePalette, swatches, wellValue, withWell, type Palette, type Well } from "./palettes";
 
-// 꾸미기 화면. 방 주인이 방 안에서 가구를 놓고 옮긴 뒤 저장한다 (design/editor.md, B1~B6).
+// 꾸미기 화면. 방 주인이 방 안에서 가구를 놓고 옮긴 뒤 저장한다 (design/editor.md, B1~B9).
+// B8: 방 이름 고치기(위 막대의 이름을 누른다, 저장 한 번에 레이아웃과 함께 간다), 팔로워로 보기(V), 저장 안 된 채 창을 닫을 때의 브라우저 경고,
+//     저장 전으로(이번 방문에서 저장하기 바로 전의 모습을 다시 깐다, 되돌릴 수 있다). B9: 템플릿 탭, 체크리스트(setup-checklist.tsx)의 단추.
 // 가구를 집고 끌고 돌리는 일, 팔레트, 모양 바꾸기, 되돌리기 기록은 엔진(engine/edit.js)이 한다. 이 컴포넌트는 그 위의 단추들이다:
 // 위 막대(되돌리기, 시간, 위에서 보기, 맞추기, 저장, 나가기), 아래 독(가구 · 기능 · 색·무늬 탭), 고른 가구 위의 막대, 가구 아래의 기능 말풍선, 기능 표, 알림.
 // 엔진과는 방 루트 요소의 이벤트로만 이야기한다: heap:get 으로 한 번 읽고, heap:editcmd 로 시키고, heap:editstate 로 듣고,
@@ -45,6 +52,11 @@ type EditState = {
   busy: boolean;
   // 카메라 (engine/edit-camera.js): plan 은 위에서 보기, fitted 는 확대나 이동 없이 맞춘 구도인지
   view: { plan: boolean; fitted: boolean };
+  // 방의 틀(방 크기, 창문, 문 …) · 꾸미는 중인 방 이름 · 저장된 방 이름 · 팔로워로 보기 중
+  shell: Record<string, unknown>;
+  name: string;
+  savedName: string;
+  preview: boolean;
 };
 
 const HAND_PREFIX = "hand:";
@@ -200,15 +212,34 @@ export function RoomEditor({
   roomUuid,
   roomName,
   onClose,
+  preview,
+  setPreview,
+  action,
+  beforeSave,
+  onSaved,
 }: {
   rootRef: RefObject<HTMLDivElement | null>;
   roomUuid: string;
+  // 저장된 방 이름. 엔진의 상태가 오기 전에만 보인다.
   roomName: string;
   onClose: () => void;
+  preview: boolean;
+  setPreview: (v: boolean) => void;
+  // 체크리스트가 시킨 일 (heap-room.tsx). seq 가 바뀔 때마다 한 번 한다.
+  action: { kind: ChecklistAction; seq: number } | null;
+  // 이번 방문에서 마지막으로 저장하기 바로 전의 모습 (저장 전으로). 없으면 null.
+  beforeSave: SavedRoom | null;
+  onSaved: (prev: SavedRoom, next: SavedRoom) => void;
 }) {
   const [room, setRoom] = useState<RoomState | null>(null);
   const [st, setSt] = useState<EditState | null>(null);
-  const [tab, setTab] = useState<"furn" | "fn" | "pal">("furn");
+  const [tab, setTab] = useState<"furn" | "fn" | "pal" | "tpl">("furn");
+  // 위 막대에서 고치는 중인 방 이름 (null 이면 고치지 않는다)과 그 이름이 왜 안 되는지
+  const [nameDraft, setNameDraft] = useState<string | null>(null);
+  const [nameErr, setNameErr] = useState("");
+  // 이 화면이 띄우는 알림 (템플릿, 저장 전으로). 엔진의 알림은 방을 다시 띄우면 지워져서 따로 둔다. undo 면 되돌리기 단추가 붙는다.
+  const [note, setNote] = useState<{ text: string; undo: boolean; seq: number } | null>(null);
+  const noteSeq = useRef(0);
   const [recent, setRecent] = useState<string[]>(readRecent);
   const [cat, setCat] = useState<string>(() => (readRecent().length ? "recent" : GROUPS[0].label));
   const [query, setQuery] = useState("");
@@ -278,7 +309,16 @@ export function RoomEditor({
     const t = window.setTimeout(() => setGoneSeq(noticeSeq), NOTICE_MS);
     return () => window.clearTimeout(t);
   }, [noticeSeq]);
-  const shownNotice = st?.notice && st.notice.seq !== goneSeq ? st.notice : null;
+  const [goneNote, setGoneNote] = useState(0);
+  useEffect(() => {
+    if (!note) return;
+    const t = window.setTimeout(() => setGoneNote(note.seq), NOTICE_MS + 2000);
+    return () => window.clearTimeout(t);
+  }, [note]);
+  // 엔진의 알림이 이 화면의 알림보다 새것이면 그것을 보여 준다 (번호는 엔진과 이 화면이 따로 센다)
+  const engineNotice = st?.notice && st.notice.seq !== goneSeq ? st.notice : null;
+  const localNote = note && note.seq !== goneNote ? note : null;
+  const shownNotice = engineNotice ?? localNote;
 
   const models = room?.catalogue?.models ?? [];
   // 독에 내놓는 모델: 벽 조각(catalogue.json 의 mount "structure")은 뺀다. 벽에 거는 것("wall")과 천장에 다는 것("ceiling")은 엔진이 벽과 천장에 붙인다.
@@ -351,21 +391,28 @@ export function RoomEditor({
     };
   });
 
-  // 서버에는 layout 전체를 보낸다. DB의 기존 layout(창, 문 등)에 편집한 items, time, room, palette만 덮어 쓴다.
+  // 서버에는 layout 전체를 보낸다. DB의 기존 layout(excludedReels 등)에 편집한 items, time, palette 와 방의 틀(방 크기, 창문, 문 …)을 덮어 쓴다.
+  // 방 이름을 고쳤으면 같은 저장에 이름을 실어 보낸다: 서버는 레이아웃과 이름을 한 번에 저장하거나 둘 다 저장하지 않는다.
   const save = useCallback(async (): Promise<boolean> => {
     if (saving || !room || !st || st.busy) return false;
     setSaving(true);
     setSaveNote("");
-    const layout: Record<string, unknown> = { ...room.layout, room: { w: room.room.w, d: room.room.d }, items: st.items, time: st.time };
+    const layout: Record<string, unknown> = { ...room.layout, items: st.items, time: st.time };
+    for (const key of SHELL_KEYS) delete layout[key];
+    Object.assign(layout, st.shell);
+    if (!layout.room) layout.room = { w: room.room.w, d: room.room.d };
     if (st.palette) layout.palette = st.palette;
     else delete layout.palette;
+    const name = st.name !== st.savedName ? st.name : undefined;
+    const prev: SavedRoom = { layout: room.layout, name: st.savedName };
     try {
-      const result = await saveLayoutAction(roomUuid, layout);
+      const result = await saveLayoutAction(roomUuid, layout, name);
       if (!alive.current) return false;
       if (result.ok) {
         // 엔진의 기준(버리고 나가기의 목표)을 방금 저장한 상태로 옮긴다. 엔진은 다른 방의 roomUuid 면 버린다.
-        send("heap:saved", { roomUuid, layout });
+        send("heap:saved", { roomUuid, layout, name: st.name });
         setRoom({ ...room, layout });
+        onSaved(prev, { layout, name: st.name });
         setSaveNote("저장했어요");
         return true;
       }
@@ -378,7 +425,7 @@ export function RoomEditor({
       if (alive.current) setSaving(false);
     }
     return false;
-  }, [saving, room, st, roomUuid, send]);
+  }, [saving, room, st, roomUuid, send, onSaved]);
 
   // Ctrl+S 는 저장. 브라우저의 페이지 저장은 막는다.
   useEffect(() => {
@@ -394,6 +441,43 @@ export function RoomEditor({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [save, st?.dirty]);
+
+  // 저장 안 된 변경이 있는 동안 창을 닫거나 새로 고치면 브라우저가 묻는다 (판정 J9). 앱 안의 나가기는 아래 대화창이 묻는다.
+  const dirty = !!st?.dirty;
+  useEffect(() => {
+    if (!dirty) return;
+    const onUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onUnload);
+    return () => window.removeEventListener("beforeunload", onUnload);
+  }, [dirty]);
+
+  // 팔로워로 보기: 켜고 끄는 것을 엔진에 알린다. 보는 동안 아무 키나 누르면 돌아온다 (그 키는 다른 데로 가지 않는다).
+  // V 는 꾸미기에서 팔로워로 보기를 켠다 (글자를 쓰는 칸에서는 아니다).
+  useEffect(() => {
+    if (st) cmd({ op: "preview", value: preview });
+  }, [cmd, preview, st?.mount]); // eslint-disable-line react-hooks/exhaustive-deps -- 다시 마운트한 엔진에도 다시 알린다
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (preview) {
+        if (["Shift", "Control", "Alt", "Meta"].includes(e.key)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setPreview(false);
+        return;
+      }
+      if (e.ctrlKey || e.metaKey || e.altKey || e.key.toLowerCase() !== "v") return;
+      const t = e.target as HTMLElement | null;
+      if (t && t.closest("input, textarea, select, [contenteditable], .ed-bubble")) return;
+      if (st?.busy) return;
+      e.preventDefault();
+      setPreview(true);
+    };
+    window.addEventListener("keydown", onKey, { capture: preview });
+    return () => window.removeEventListener("keydown", onKey, { capture: preview });
+  }, [preview, setPreview, st?.busy]);
 
   const leave = () => {
     if (st?.dirty) setLeaving(true);
@@ -431,6 +515,25 @@ export function RoomEditor({
     cmd({ op: "arm", template });
   };
 
+  // ---------- 방 이름 ----------
+  // 방 만들기 화면과 같은 규칙(checkRoomName). 맞으면 한 걸음으로 엔진에 넣고, 틀리면 칸을 열어 둔 채 까닭을 보여 준다.
+  const shownName = st?.name ?? roomName;
+  const startName = () => {
+    setNameDraft(shownName);
+    setNameErr("");
+  };
+  const commitName = (value: string, keepOpen: boolean) => {
+    const r = checkRoomName(value);
+    if (!r.ok) {
+      if (keepOpen) setNameErr(`방 이름은 1자 이상 ${HEAP_FUNNEL_POLICY.roomNameMaxChars}자 이하로, 줄바꿈 없이 적어 주세요.`);
+      else setNameDraft(null); // 칸을 떠나면 틀린 값은 버리고 원래 이름으로 둔다
+      return;
+    }
+    if (r.name !== shownName) cmd({ op: "name", value: r.name });
+    setNameDraft(null);
+    setNameErr("");
+  };
+
   // ---------- 가구 목록: 칩, 찾기, 최근 ----------
   const groups = GROUPS.map((g) => ({
     label: g.label,
@@ -461,6 +564,78 @@ export function RoomEditor({
     if (selItem.type !== "shelf" && !selMount && fits(slotKindsFor("shelf"))) list.push({ id: `${HAND_PREFIX}shelf`, label: "앨범 책장", category: "shelf" });
     return list;
   })();
+
+  // 기능 하나를 시작한다 (기능 탭의 단추, 체크리스트의 링크 놓기·기념품 놓기): 붙어 있으면 그 가구를 고르고 말풍선을 연다.
+  // 없으면 달 수 있는 빈 가구에 달고, 그것도 없으면 기본 모양(dfltId)을 그 기능을 단 채 커서에 올린다.
+  const fnAct = (k: SlotKind, dfltId: string = FN_DEFAULT[k]) => {
+    const have = items.findIndex((it) => it.fn?.kind === k);
+    const can = items.findIndex((it) => !it.fn && slotKindsFor(it.type, it.model).includes(k));
+    const dflt = byId.get(dfltId);
+    if (have >= 0) openBubble(have, items[have]);
+    else if (can >= 0) openBubble(can, items[can], k);
+    else if (dflt) {
+      pendingKind.current = k === "latest" || k === "calendar" ? null : k;
+      arm(dflt, k === "latest" ? { kind: "latest" } : undefined);
+    }
+  };
+
+  // ---------- 템플릿 (판정 J8) ----------
+  // 가구, 팔레트, 방의 틀을 템플릿의 것으로 바꾸는 한 걸음. 지금 달린 기능은 템플릿의 맞는 가구로 옮기고, 갈 곳이 없으면 버린다 (되돌리기로 살아난다).
+  const applyTemplate = (t: HeapTemplate) => {
+    const target = Array.isArray(t.layout.items) ? (t.layout.items as MoveItem[]) : [];
+    const { items: next, moved, dropped } = moveFunctions(items as MoveItem[], target);
+    const nextItems = next as Item[];
+    const movedText = moved.map((m) => `${FN_NAME[m.kind]} → ${itemLabel(nextItems[m.to], models)}`).join(", ");
+    const droppedText = dropped.map((d) => FN_NAME[d.kind]).join(", ");
+    cmd({ op: "load", layout: { items: next, palette: t.layout.palette ?? null, shell: shellOf(t.layout) } });
+    setBubbleFor(null);
+    setDraft(null);
+    setNote({
+      text: [`「${t.label}」 템플릿을 깔았어요`, movedText && `옮긴 기능: ${movedText}`, droppedText && `놓을 곳이 없어 뺀 기능: ${droppedText}`]
+        .filter(Boolean)
+        .join(" · "),
+      undo: true,
+      seq: ++noteSeq.current,
+    });
+  };
+
+  // ---------- 저장 전으로 (판정 J10) ----------
+  const loadBeforeSave = () => {
+    if (!beforeSave) return;
+    const l = beforeSave.layout;
+    cmd({
+      op: "load",
+      layout: { items: Array.isArray(l.items) ? l.items : [], palette: l.palette ?? null, shell: shellOf(l), time: l.time ?? "auto" },
+      name: beforeSave.name,
+    });
+    setBubbleFor(null);
+    setDraft(null);
+    setNote({ text: "저장하기 전 모습을 불러왔어요 · 저장하면 팔로워에게 보여요", undo: true, seq: ++noteSeq.current });
+  };
+
+  // ---------- 체크리스트의 단추 (setup-checklist.tsx) ----------
+  // 꾸미기를 막 연 경우에는 엔진의 상태와 가구 목록이 온 뒤에 한다. 같은 일(seq)은 한 번만.
+  const doneAction = useRef(0);
+  const ready = !!st && !!room?.catalogue && !busy;
+  const runAction = useRef<(k: ChecklistAction) => void>(() => {});
+  useEffect(() => {
+    runAction.current = (k) => {
+      if (k === "name") startName();
+      else if (k === "palette") setTab("pal");
+      else if (k === "pc") {
+        setTab("fn");
+        fnAct("pc", "desk"); // 판정 J4: PC 기능을 단 책상
+      } else if (k === "keepsake") {
+        setTab("fn");
+        fnAct("keepsake");
+      }
+    };
+  });
+  useEffect(() => {
+    if (!action || !ready || action.seq === doneAction.current) return;
+    doneAction.current = action.seq;
+    runAction.current(action.kind);
+  }, [action, ready]);
 
   const look = st?.look ?? "";
   const thumbIds = [
@@ -512,11 +687,56 @@ export function RoomEditor({
     setDraft(null);
   };
 
+  // 팔로워로 보기: 꾸미기 화면을 모두 숨기고 돌아가기 단추 하나만 둔다 (heap-room.css 의 .previewing)
+  if (preview) {
+    return (
+      <div className="ed-preview" role="status">
+        <span>팔로워에게 보이는 모습이에요 · 저장하지 않은 변경도 보여요 · 아무 키나 누르면 돌아가요</span>
+        <button className="btn small" type="button" onClick={() => setPreview(false)}>
+          돌아가기
+        </button>
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="ed-top" role="toolbar" aria-label="꾸미기">
         <b>꾸미기</b>
-        <span className="ed-room">{roomName}</span>
+        {nameDraft === null ? (
+          <button className="ed-room" type="button" onClick={startName} disabled={busy} title="눌러서 방 이름 바꾸기 · 저장하면 팔로워에게 보여요">
+            {shownName}
+          </button>
+        ) : (
+          <span className="ed-name">
+            <input
+              autoFocus
+              value={nameDraft}
+              aria-label="방 이름"
+              aria-invalid={!!nameErr}
+              onChange={(e) => {
+                setNameDraft(e.target.value);
+                setNameErr("");
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitName(nameDraft, true);
+                else if (e.key === "Escape") {
+                  setNameDraft(null);
+                  setNameErr("");
+                }
+              }}
+              onBlur={() => commitName(nameDraft, false)}
+            />
+            <small className={charCount(nameDraft.trim()) > HEAP_FUNNEL_POLICY.roomNameMaxChars ? "ed-bad" : undefined}>
+              {charCount(nameDraft.trim())}/{HEAP_FUNNEL_POLICY.roomNameMaxChars}
+            </small>
+            {nameErr && (
+              <span className="ed-name-err" role="alert">
+                {nameErr}
+              </span>
+            )}
+          </span>
+        )}
         <button className="btn ghost small" type="button" disabled={!st?.canUndo || busy} onClick={() => cmd({ op: "undo" })} title="Ctrl+Z">
           되돌리기
         </button>
@@ -538,6 +758,14 @@ export function RoomEditor({
             맞추기
           </button>
         )}
+        {beforeSave && (
+          <button className="btn ghost small" type="button" disabled={busy} onClick={loadBeforeSave} title="이번에 저장하기 바로 전의 모습을 다시 깔아요 · 되돌릴 수 있어요">
+            저장 전으로
+          </button>
+        )}
+        <button className="btn ghost small" type="button" disabled={busy} onClick={() => setPreview(true)} title="팔로워에게 보이는 모습 (V)">
+          팔로워로 보기
+        </button>
         <span className="ed-sp" />
         <span className={st?.dirty && !saveNote ? "ed-save dirty" : "ed-save"} role="status">
           {saveState}
@@ -662,7 +890,8 @@ export function RoomEditor({
               type="button"
               onClick={() => {
                 cmd({ op: "undo" });
-                setGoneSeq(shownNotice.seq);
+                if (shownNotice === engineNotice) setGoneSeq(shownNotice.seq);
+                else setGoneNote(shownNotice.seq);
               }}
             >
               되돌리기
@@ -720,6 +949,7 @@ export function RoomEditor({
               ["furn", "가구"],
               ["fn", "기능"],
               ["pal", "색·무늬"],
+              ["tpl", "템플릿"],
             ] as const
           ).map(([k, label]) => (
             <button key={k} type="button" role="tab" className="ed-tab" aria-selected={tab === k} onClick={() => setTab(k)}>
@@ -783,14 +1013,7 @@ export function RoomEditor({
                   : can >= 0
                     ? `${itemLabel(items[can], models)}에 붙일 수 있어요`
                     : "붙일 가구가 아직 없어요";
-                const act = () => {
-                  if (have.length) openBubble(have[0], items[have[0]]);
-                  else if (can >= 0) openBubble(can, items[can], k);
-                  else if (dflt) {
-                    pendingKind.current = k === "latest" || k === "calendar" ? null : k;
-                    arm(dflt, k === "latest" ? { kind: "latest" } : undefined);
-                  }
-                };
+                const act = () => fnAct(k);
                 return (
                   <div key={k} className={have.length ? "ed-fncard set" : "ed-fncard"}>
                     <b>
@@ -804,6 +1027,25 @@ export function RoomEditor({
                   </div>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {tab === "tpl" && (
+          <div className="ed-pane">
+            <div className="ed-strip">
+              {HEAP_TEMPLATES.map((t) => (
+                <button key={t.id} type="button" className="ed-tplcard" disabled={busy || !room} onClick={() => applyTemplate(t)}>
+                  {/* 템플릿 그림은 public/heap/templates 의 정적 파일이다 (만들기 화면과 같은 그림) */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={t.image} alt="" draggable={false} />
+                  <b>{t.label}</b>
+                  <small>{t.blurb}</small>
+                </button>
+              ))}
+              <p className="note ed-tplnote">
+                템플릿을 고르면 가구, 색, 방 크기가 그 템플릿으로 바뀌어요. 붙여 둔 링크와 기념품은 맞는 가구로 옮겨요. 되돌리기로 바로 돌아올 수 있어요.
+              </p>
             </div>
           </div>
         )}

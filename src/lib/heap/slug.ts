@@ -46,9 +46,11 @@ export type NameCheck = { ok: true; name: string } | { ok: false };
 export function checkRoomName(input: unknown): NameCheck {
   if (typeof input !== "string") return { ok: false };
   if (/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(input)) return { ok: false };
-  const name = input.trim().replace(/\s+/g, " ");
+  const name = input.normalize("NFC").trim().replace(/\s+/g, " ");
   const length = charCount(name);
   if (length < 1 || length > HEAP_FUNNEL_POLICY.roomNameMaxChars) return { ok: false };
+  // 보이는 글자가 하나도 없으면 거절한다: 한글 채움 문자(U+3164, U+115F, U+1160, U+FFA0), 점자 빈칸(U+2800), 결합 자소 결합 방지(U+034F) 등 (codex)
+  if (!name.replace(/[\sㅤᅟᅠﾠ⠀͏]/gu, "").length) return { ok: false };
   return { ok: true, name };
 }
 

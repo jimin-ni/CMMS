@@ -590,11 +590,13 @@ export async function addGuestbookEntry(
   });
 }
 
-// 꾸미기 저장. 방 주인만 할 수 있다. layout의 형식은 부르는 쪽이 먼저 검사한다.
+// 꾸미기 저장. 방 주인만 할 수 있다. layout의 형식과 방 이름(name)의 규칙은 부르는 쪽이 먼저 검사한다 (layout.ts, slug.ts의 checkRoomName).
+// name을 주면 같은 update에서 방 이름도 바꾼다: 레이아웃과 이름은 함께 저장되거나 함께 실패한다.
 export async function saveRoomLayout(
   roomId: string,
   creatorId: string,
   layout: HeapLayout,
+  name?: string,
 ): Promise<{ ok: true } | Fail<"not-found" | "not-owner">> {
   const ownership = await roomOwnership(db, roomId, creatorId);
   if (ownership !== "ok") return fail(ownership);
@@ -606,6 +608,7 @@ export async function saveRoomLayout(
     .update(heapRooms)
     .set({
       layout: sql`${JSON.stringify(fromClient)}::jsonb || case when ${heapRooms.layout} -> 'excludedReels' is not null then jsonb_build_object('excludedReels', ${heapRooms.layout} -> 'excludedReels') else '{}'::jsonb end`,
+      ...(name === undefined ? {} : { name }),
       updatedAt: sql`now()`,
     })
     .where(and(eq(heapRooms.id, roomId), eq(heapRooms.creatorId, creatorId)));

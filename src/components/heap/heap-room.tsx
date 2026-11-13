@@ -9,7 +9,9 @@ import { surfaces } from "@/lib/heap/surfaces";
 import { HEAP_POLICY } from "@/lib/heap/policy";
 import { parsePieceUrl } from "@/lib/heap/platform";
 import { isEmailAddress, isSafeLink, isWebLink, parseMusicUrl } from "@/lib/heap/slots";
+import { SHELL_KEYS } from "@/lib/heap/template-move";
 import { RoomEditor } from "./room-editor";
+import { SetupChecklist, setupFlags, type ChecklistAction } from "./setup-checklist";
 import "./heap-room.css";
 
 // 크리에이터 정보(creator.json)는 public/heap/rooms/ 아래의 정적 파일이다. 나머지 방 데이터는 서버가 DB에서 읽어 data로 넘긴다.
@@ -38,16 +40,23 @@ export type HeapRoomData = {
   creatorVisit: string | null;
 };
 
-// 꾸미기가 팔레트를 바꿀 때 엔진이 보내는 편집 상태 (engine/edit.js 의 remount). 다음 마운트에 opts.resume 으로 그대로 넘긴다.
+// 꾸미기가 팔레트나 방의 틀을 바꿀 때 엔진이 보내는 편집 상태 (engine/edit.js 의 remount). 다음 마운트에 opts.resume 으로 그대로 넘긴다.
+// shell: 방 크기와 고정된 것의 자리 (템플릿을 깔면 바뀐다) · name: 꾸미는 중인 방 이름 · savedName: 저장된 방 이름
 type EditResume = {
   edit: boolean;
   items: unknown[];
   time: string | number;
   palette: Record<string, unknown> | null;
+  shell?: Record<string, unknown>;
+  name?: string;
+  savedName?: string;
   original: unknown;
   baseLayout: Record<string, unknown>;
   [key: string]: unknown;
 };
+
+// 저장된 모습 하나: 레이아웃 전체와 방 이름. 저장 전으로(판정 J10)가 이 방문 동안 한 벌을 기억한다.
+export type SavedRoom = { layout: Record<string, unknown>; name: string };
 
 // 미니룸 화면. 마크업은 room.html의 HUD/오버레이 그대로이고, 엔진(engine/)이 id로 찾아 채운다.
 // three는 브라우저에서만 돌아야 하므로 엔진은 effect 안에서 dynamic import로 불러온다.
@@ -58,12 +67,15 @@ export function HeapRoom({
   viewerName,
   signedIn,
   canEdit = false,
+  owner = null,
 }: {
   roomId: string;
   data: HeapRoomData;
   viewerName: string | null;
   signedIn: boolean;
   canEdit?: boolean;
+  // 방 주인에게만: 체크리스트가 읽는 닉네임과 연결한 채널 수
+  owner?: { nickname: string; channels: number } | null;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -71,7 +83,45 @@ export function HeapRoom({
   const [ready, setReady] = useState(false);
   const [mode, setMode] = useState("room");
   const [editing, setEditing] = useState(false);
-  const closeEditor = useCallback(() => setEditing(false), []);
+  // 팔로워로 보기 (판정 J7): 꾸미기 화면을 모두 숨기고 방을 팔로워의 구도로 보여 준다. 꾸미기 안에서만 켠다.
+  const [preview, setPreview] = useState(false);
+  const closeEditor = useCallback(() => {
+    setEditing(false);
+    setPreview(false);
+  }, []);
+  // 이 방문 동안의 저장: 마지막으로 저장한 모습, 그 저장 바로 전의 모습(저장 전으로), 이번에 저장했는지 (체크리스트)
+  const [saved, setSaved] = useState<SavedRoom>({ layout: data.layout, name: data.name });
+  const [beforeSave, setBeforeSave] = useState<SavedRoom | null>(null);
+  const [savedThisVisit, setSavedThisVisit] = useState(false);
+  const onSaved = useCallback((prev: SavedRoom, next: SavedRoom) => {
+    setBeforeSave(prev);
+    setSaved(next);
+    setSavedThisVisit(true);
+  }, []);
+  // 체크리스트의 단추가 꾸미기에 시키는 일. 꾸미기가 닫혀 있으면 열고 나서 한다. seq 로 같은 일을 두 번 눌러도 새 일이 된다.
+  const [action, setAction] = useState<{ kind: ChecklistAction; seq: number } | null>(null);
+  const runAction = (kind: ChecklistAction) => {
+    setAction({ kind, seq: (action?.seq ?? 0) + 1 });
+    setEditing(true);
+    setPreview(false);
+  };
+  // 꾸미는 동안의 체크리스트 상태 (저장 전의 기능과 이름). 꾸미기가 닫히면 저장된 것을 읽는다.
+  const [live, setLive] = useState<{ pc: boolean; keepsake: boolean; name: string } | null>(null);
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root || !editing || !owner) return;
+    const onState = (e: Event) => {
+      const d = (e as CustomEvent<{ items: unknown; name?: string }>).detail;
+      const f = setupFlags(d.items);
+      const name = typeof d.name === "string" ? d.name : "";
+      setLive((prev) => (prev && prev.pc === f.pc && prev.keepsake === f.keepsake && prev.name === name ? prev : { ...f, name }));
+    };
+    root.addEventListener("heap:editstate", onState);
+    return () => {
+      root.removeEventListener("heap:editstate", onState);
+      setLive(null);
+    };
+  }, [editing, owner]);
   // 팔레트를 바꾸며 다시 마운트할 때의 편집 상태. 이 data로 띄운 방에만 쓴다 (방을 옮기거나 data가 새로 오면 버려진다).
   const [resume, setResume] = useState<{ data: HeapRoomData; state: EditResume } | null>(null);
   // 방을 옮기면 꾸미기를 닫고 이어 붙일 편집 상태도 버린다 (렌더 중에 앞의 방과 견준다). 앞 방의 편집이 새 방으로 새지 않게.
@@ -101,11 +151,16 @@ export function HeapRoom({
     // 다시 마운트할 때는 편집 중인 가구, 시간, 팔레트를 저장된 레이아웃 위에 얹어 띄운다. palette가 null이면 기본 색이다.
     const r = resume && resume.data === data ? resume.state : null;
     let mountData = data;
+    // 방의 틀(shell)이 있으면 저장된 틀 대신 그것을 쓴다 (템플릿을 깔았거나 저장 전 모습을 불러왔다). 이름도 꾸미는 중인 이름으로 띄운다.
     if (r) {
       const layout: Record<string, unknown> = { ...r.baseLayout, items: r.items, time: r.time };
+      if (r.shell) {
+        for (const key of SHELL_KEYS) delete layout[key];
+        Object.assign(layout, r.shell);
+      }
       if (r.palette) layout.palette = r.palette;
       else delete layout.palette;
-      mountData = { ...data, layout };
+      mountData = { ...data, layout, name: typeof r.name === "string" ? r.name : data.name };
     }
     import("./engine").then(({ mountRoom }) => {
       // StrictMode의 첫 번째 mount는 여기서 걸러져 엔진이 한 번만 뜬다.
@@ -150,8 +205,11 @@ export function HeapRoom({
     };
   }, [roomId, data, viewerName, signedIn, router, resume]);
 
+  // 체크리스트: 방 주인에게, 방이 뜬 뒤, 걸어 다니는 방이나 꾸미기(팔로워로 보기 빼고)에서
+  const showChecklist = !!owner && ready && (editing ? !preview : mode === "room");
+
   return (
-    <div ref={rootRef} className={editing ? "heap-room editing" : "heap-room"}>
+    <div ref={rootRef} className={editing ? (preview ? "heap-room editing previewing" : "heap-room editing") : "heap-room"}>
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       <link rel="stylesheet" href={FONTS_HREF} precedence="default" />
@@ -195,7 +253,33 @@ export function HeapRoom({
         </div>
       </div>
       <p id="toast" />
-      {editing && <RoomEditor key={data.roomUuid} rootRef={rootRef} roomUuid={data.roomUuid} roomName={data.name} onClose={closeEditor} />}
+      {editing && (
+        <RoomEditor
+          key={data.roomUuid}
+          rootRef={rootRef}
+          roomUuid={data.roomUuid}
+          roomName={saved.name}
+          onClose={closeEditor}
+          preview={preview}
+          setPreview={setPreview}
+          action={action}
+          beforeSave={beforeSave}
+          onSaved={onSaved}
+        />
+      )}
+      {showChecklist && owner && (
+        <SetupChecklist
+          roomId={roomId}
+          roomUuid={data.roomUuid}
+          nickname={owner.nickname}
+          channels={owner.channels}
+          name={editing && live ? live.name : saved.name}
+          flags={editing && live ? live : setupFlags(saved.layout.items)}
+          savedLayout={saved.layout}
+          savedThisVisit={savedThisVisit}
+          onAction={runAction}
+        />
+      )}
 
       <div id="player" hidden>
         <div className="player-bar">
