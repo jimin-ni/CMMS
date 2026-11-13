@@ -4,6 +4,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createContext } from './context.js';
+import { paper, drawFit, NO_PHOTO, wrap, crayon, ring, flat, cropToShape } from './draw.js';
+import { ytShort, ksDay, seoulDay, viewsNum, ytUrl, fmtDay } from './format.js';
+import { el, link, shortUrl } from './dom.js';
 import { mulberry32, thumbUrl, disposeScene } from './util.js';
 
 // ids of the nodes heap-room.tsx renders and the engine fills or shows
@@ -57,7 +60,6 @@ creator.links = (Array.isArray(creator.links) ? creator.links : []).flatMap(L =>
 creator.linktree = opts.isWebLink(creator.linktree) ? creator.linktree : null;
 const layout = structuredClone(DATA.layout);
 if (ctx.disposed) return;
-
 const DEFAULT_PALETTE = {
   olive: '#565344', accent: '#A6613C', paper: '#F3EADB', ink: '#2f2c24',
   wall: '#EADCC4', trim: '#565344', floor: ['#9a6a43', '#8b5d3a', '#a7774d'], woodB: '#8b5d3a', woodDark: '#6e4a30',
@@ -70,7 +72,6 @@ $('cname').textContent = creator.name;
 $('avatar').textContent = Array.from(creator.name)[0] ?? '';
 $('phone-title').textContent = creator.phoneTitle || creator.name;
 $('phone-sub').textContent = '버블';
-
 const ALBUMS = creator.albums.map(a => ({ ...a, re: a.match ? new RegExp(a.match, 'i') : null }));
 const albumName = k => ALBUMS.find(a => a.key === k)?.name ?? k;
 function goldOf(r) { // album is certain from the channel or exactly one title rule; anything else is open for votes
@@ -79,18 +80,11 @@ function goldOf(r) { // album is certain from the channel or exactly one title r
   const m = ALBUMS.filter(a => a.re && a.re.test(r.title || ''));
   return m.length === 1 ? m[0].key : null;
 }
-
-// ---------- helpers ----------
-
-
-
-const flat =(color, extra = {}) => new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: 0.88, ...extra });
-
+/* draw: lib */
 // 꾸미기 (room-editor.tsx, through the hooks in section 6): ORIGINAL is the layout as last saved in the database (the page's, or the one the editor just saved via heap:saved).
 // It is the editor's 처음으로 target. BASE_LAYOUT is the whole stored layout; the editor merges its items, time and room into it when it saves.
 ctx.baseLayout = structuredClone(DATA.layout);
 ctx.original = { items: (layout.items || []).map(it => ({ ...it })), time: layout.time ?? 'auto' };
-
 // ---------- reels ----------
 // A reel carries its linked channel's title (heap_creator_channels); the card back shows it and album rules with `channel` match it.
 // Reels with no linked channel fall back to the creator's name, so a `channel` album rule finds nothing for them (title rules still work).
@@ -98,11 +92,7 @@ const raw = DATA.reels;
 const reels = raw.map(r => ({ ...r, channel: r.channel || creator.name }));
 reels.forEach((r, i) => { r.age = reels.length > 1 ? 1 - i / (reels.length - 1) : 0; r.seed = Math.floor(rand() * 1e9); r.gold = goldOf(r); });
 const nShorts = raw.filter(r => !r.wide).length, nWide = raw.length - nShorts;
-
-// Fan pieces (landed ones, from the database) lie on the heap from the start; one that lands while the visitor is here drops onto it (poll below). There is no reception box any more.
-// TODAY/TOTAL, 다녀감 and the guestbook list are database values too, refreshed by the poll below.
-const seoulDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' });
-const fmtDay = iso => { const d = new Date(iso); if (Number.isNaN(d.getTime())) return ''; const p = Object.fromEntries(seoulDay.formatToParts(d).map(x => [x.type, x.value])); return `${p.year}.${p.month}.${p.day}`; };
+/* format: lib */
 ctx.visits = { today: DATA.visits.today, total: DATA.visits.total };
 const metaBase = nWide ? `쇼츠 ${nShorts} · 영상 ${nWide}` : `쇼츠 ${nShorts}`;
 function renderMeta() { $('meta').textContent = `${metaBase} · TODAY ${ctx.visits.today} · TOTAL ${ctx.visits.total.toLocaleString('ko-KR')}` + (opts.viewerName ? ` · ${opts.viewerName}` : ''); }
@@ -114,12 +104,8 @@ function renderCreatorVisit() { if (ctx.creatorDay) { $('visit').textContent = `
 renderCreatorVisit();
 const fanReelOf = (p, i) => ({ ...p, kind: 'fan', wide: false, title: p.caption, channel: p.by, views: '', age: 0.05, seed: 7000 + i * 131 });
 const fanReels = (DATA.pieces || []).map(fanReelOf);
-const ytUrl = r => r.wide ? `https://www.youtube.com/watch?v=${r.id}` : `https://www.youtube.com/shorts/${r.id}`;
-const ytShort = r => r.wide ? `youtube.com/watch?v=${r.id}` : `youtube.com/shorts/${r.id}`;
-
 const filed = new Map(); // reel id → { album }: only cards whose album is certain from the title or channel
 for (const r of reels) if (r.gold) filed.set(r.id, { album: r.gold });
-
 // ====================================================================================
 // 2. Card textures
 // ====================================================================================
@@ -129,32 +115,6 @@ const DIMS = {
   wide: { CW: 1.5, B: 0.05, PW: 1.4, PH: 1.4 * 9 / 16, STRIP: 0.27 },
 };
 for (const d of Object.values(DIMS)) { d.CH = d.B + d.PH + d.STRIP; d.w = d.CW * S; d.h = d.CH * S; d.geo = new THREE.PlaneGeometry(d.w, d.h); }
-
-function drawFit(g, img, x, y, w, h, cover) {
-  const ia = img.width / img.height, da = w / h;
-  if (cover) {
-    let sw = img.width, sh = img.height, sx = 0, sy = 0;
-    if (ia > da) { sw = img.height * da; sx = (img.width - sw) / 2; } else { sh = img.width / da; sy = (img.height - sh) / 2; }
-    g.drawImage(img, sx, sy, sw, sh, x, y, w, h);
-  } else {
-    const dw = ia > da ? w : h * ia, dh = ia > da ? w / ia : h;
-    g.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
-  }
-}
-function wrap(g, text, maxW) {
-  const lines = []; let line = '';
-  for (const word of text.split(' ')) {
-    const test = line ? line + ' ' + word : word;
-    if (g.measureText(test).width <= maxW || !line) line = test; else { lines.push(line); line = word; }
-  }
-  if (line) lines.push(line);
-  return lines;
-}
-function paper(g, W, H, r, age) {
-  g.fillStyle = `hsl(40, ${30 + age * 22}%, ${93 - age * 8}%)`; g.fillRect(0, 0, W, H);
-  for (let i = 0; i < 260; i++) { g.fillStyle = `rgba(90,70,40,${r() * 0.05})`; g.fillRect(r() * W, r() * H, 1.5, 1.5); }
-}
-const NO_PHOTO = '#2b2530'; // the photo area of a card or poster whose picture has not arrived, or never will
 // Passing a card's own canvas repaints it in place: the seed makes the frame and caption come out the same, only the photo changes.
 function drawCard(reel, img, c = document.createElement('canvas')) {
   const d = reel.wide ? DIMS.wide : DIMS.tall, r = mulberry32(reel.seed), age = reel.age;
@@ -217,19 +177,6 @@ function drawBack(reel) {
   g.fillText('출처', 0, 0); g.restore();
   return c;
 }
-
-// fan pieces: placeholder art, a crayon drawing on paper (the motif is always the default until the fan piece screens are designed)
-function crayon(g, pts, color, width, r, closed = false) {
-  for (let pass = 0; pass < 3; pass++) {
-    g.strokeStyle = color; g.globalAlpha = 0.55 + r() * 0.3; g.lineWidth = width * (0.7 + r() * 0.5); g.lineCap = g.lineJoin = 'round';
-    g.beginPath();
-    pts.forEach(([x, y], i) => { const jx = x + (r() - 0.5) * width * 0.8, jy = y + (r() - 0.5) * width * 0.8; if (i) g.lineTo(jx, jy); else g.moveTo(jx, jy); });
-    if (closed) g.closePath();
-    g.stroke();
-  }
-  g.globalAlpha = 1;
-}
-const ring = (cx, cy, rx, ry, n = 24, f = () => 1) => Array.from({ length: n }, (_, i) => { const a = i / n * Math.PI * 2; return [cx + Math.cos(a) * rx * f(a), cy + Math.sin(a) * ry * f(a)]; });
 function drawFanFront(p) {
   const d = DIMS.tall, r = mulberry32(p.seed);
   const W = Math.round(d.CW * PX), H = Math.round(d.CH * PX);
@@ -286,7 +233,6 @@ function drawFanBack(p) {
   for (const l of [`보낸 사람 · ${p.by}`, p.date, ...wrap(g, p.caption, W - pad * 2)]) { g.fillText(l, pad, y); y += PXB * 0.1; }
   return c;
 }
-
 // ====================================================================================
 // 3. Renderer, lights, walls (built from layout)
 // ====================================================================================
@@ -307,7 +253,6 @@ controls.enabled = false; controls.enableDamping = true; controls.enablePan = fa
 controls.minDistance = 0.6; controls.maxDistance = 4; controls.maxPolarAngle = 1.25;
 const hemi = new THREE.HemisphereLight(0xffe6c4, 0x5a4a38, 0.7); scene.add(hemi);
 const fill = new THREE.DirectionalLight(0xffe2bd, 0.35); fill.position.set(8, 6, 8); scene.add(fill);
-
 // floor plan: layout.room = { w, d } in units, each clamped to 6..12. A missing field is the original 8 x 8.
 // RX, RZ are the half-extents: the floor runs -RX..RX along x and -RZ..RZ along z.
 const roomDim = v => THREE.MathUtils.clamp(Number(v) || 8, 6, 12);
@@ -324,12 +269,10 @@ const WALLS = {
   left: { point: (u, y, off = 0) => new THREE.Vector3(-RX + off, y, u), half: RZ, rotY: Math.PI / 2, n: new THREE.Vector3(1, 0, 0), axis: new THREE.Vector3(0, 0, 1) },
 };
 const onWall = (wall, u, y, off, obj) => { obj.position.copy(WALLS[wall].point(u, y, off)); obj.rotation.y = WALLS[wall].rotY; scene.add(obj); return obj; };
-
 // floor boards, 1 unit wide along x; the last one is narrower when w is not a whole number
 for (let i = 0; i < 2 * RX; i++) { const bw = Math.min(1, 2 * RX - i); box(bw, 0.1, 2 * RZ, flat(C.floor[i % C.floor.length]), -RX + i + bw / 2, -0.05, 0, { cast: false }); }
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(2 * RX, 2 * RZ), new THREE.MeshBasicMaterial({ visible: false }));
 floor.rotation.x = -Math.PI / 2; scene.add(floor);
-
 const WIN = layout.window && { ...layout.window, u0: layout.window.at - layout.window.w / 2, u1: layout.window.at + layout.window.w / 2, y0: layout.window.y - layout.window.h / 2, y1: layout.window.y + layout.window.h / 2 };
 const DOOR = layout.door && { ...layout.door, u0: layout.door.at - 0.5, u1: layout.door.at + 0.5, y0: 0, y1: 2.15 };
 const wallMat = flat(C.wall), trimMat = flat(C.trim);
@@ -357,7 +300,6 @@ function buildWall(wall) {
   slab(cur, H, 0, WALL_H); trim(tcur, H);
 }
 buildWall('back'); buildWall('left');
-
 // window: frame, glass, a dusk backdrop and a tree outside; the sun comes through it
 const frameMat = flat(C.paper);
 ctx.sunDir = new THREE.Vector3(1.6, -2.55, 3.5).normalize(); ctx.shaftCorners = null;
@@ -422,7 +364,6 @@ function stepMotes(t) {
   });
   pos.needsUpdate = true;
 }
-
 // door to other rooms
 const doorParts = [];
 ctx.doorSpot = null;
@@ -440,7 +381,6 @@ if (DOOR) {
   doorParts.push(panel, knob, plate);
   ctx.doorSpot = WALLS[DOOR.wall].point(DOOR.at, 0, 0.85);
 }
-
 // ====================================================================================
 // 4. Furniture from layout.items (each builder works in local space: front = +z)
 //   Everything built from the items sits in one group. buildItems(items) disposes that group and builds a new one,
@@ -532,7 +472,6 @@ const BUILD = {
     return { hw: 0.45, hd: 0.4 };
   },
 };
-
 // ---------- slots: item.fn (one function, many skins) ----------
 // An item that carries a function in the layout (item.fn, checked by the server: src/lib/heap/slots.ts) can be clicked in room mode.
 //   pc        opens the links panel: fn.links, or the room's creator.json links when the item has none of its own
@@ -553,7 +492,6 @@ function keepsakeLook(fn) {
   const yt = hit && hit.platform === 'youtube' ? hit : null;
   return { id: yt ? yt.externalId : null, tall: !!yt && yt.wide === false, host };
 }
-const ksDay = d => (typeof d === 'string' ? d.replace(/-/g, '.') : '');
 function paintKeepsake(canvas, fn, look, img) {
   const k = look.tall ? KS.tall : KS.wide, W = k.cw, H = k.ch + k.strip, g = canvas.getContext('2d'), B = 8;
   g.clearRect(0, 0, W, H);
@@ -628,10 +566,8 @@ function ksLoad(build, look, files, done) {
   inFlight.add(im); build.loads.add(im); im.src = thumbUrl({ id: look.id }, files[0]);
 }
 BUILD.frame = (g, it, build) => { keepsakeObject(g, it, build, 'frame', 0, it.y ?? 1.9, 0); return {}; };
-
 // The newest reel: the latest publish day, and the list's own order (newest first from the server) when two share a day or none has a date.
 const newestReel = () => { let best = null; for (const r of reels) if (r.published && (!best || r.published > best.published)) best = r; return best ?? reels[0] ?? null; };
-
 // A TV's screen (a catalogue model with `screen`, in file units): a plane just in front of the model's own screen, painted by the slot.
 //   latest  the newest reel's thumbnail, a Short pillar-boxed        music  the video's thumbnail, or a note for a playlist link
 function tvContent(fn) {
@@ -665,7 +601,6 @@ function tvScreen(inst, build, slot, s) {
   };
   if (ctx.slotsLive) slot.start();
 }
-
 // Desk calendar (type "calendar", fn.kind "calendar"): a small stand with one paper page. The page shows the month of the next upcoming date
 // (this month when there is none) with a ring on the days that carry an entry. Hand-built: the kit has no calendar.
 function paintCalendar(canvas, fn) {
@@ -707,7 +642,6 @@ BUILD.calendar = (g, it, build) => {
   return {};
 };
 function startSlots() { ctx.slotsLive = true; for (const s of ctx.build.slots) s.start?.(); }
-
 // ---------- models: { type: 'model', model: <catalogue id>, x, z, rot, y, tint } ----------
 // <modelBase>catalogue.json lists the GLB files (Kenney Furniture Kit, CC0). A model is fetched and parsed once per mount,
 // shifted so that the item's x, z is the centre of its footprint and its base rests on the floor, then cloned for each item that uses it.
@@ -796,7 +730,6 @@ BUILD.model = (g, it, build) => {
   });
   return {};
 };
-
 // Seats: the points where a visitor (and later a fan's ghost) can sit, worked out from a model's footprint and the catalogue's `seats` rules (chair, sofa, rug).
 // Nothing about them is stored in the layout. A model's own `seatY` (file units) replaces the rule's `top` share of its height when the share does not fit it.
 // Each seat: { id, kind: 'chair' | 'sofa' | 'floor', item, pos (world: the sitting surface), yaw (the way the sitter faces, radians),
@@ -819,7 +752,6 @@ function addSeats(build, g, it, m, rule, inst) {
   build.seats.push(...seats);
   inst.traverse(o => { if (o.isMesh) { o.userData.seats = seats; build.seatMeshes.push(o); } });
 }
-
 // ITEMS: what the last buildItems() made. group: every object built from the items · obst: their walk obstacles · items: the list itself
 //   lamps: its lamps, { light, shades, off } each (see MAX_LAMP_LIGHTS above)
 //   slots: its functions, { it, fn, start? } each · slotMeshes: the meshes a click can hit, each with userData.slot (see the slots section above)
@@ -848,7 +780,6 @@ function buildItems(items, first = false) {
 }
 buildItems(layout.items || [], true);
 const shelfLocal = v => ctx.shelf.group.localToWorld(v.clone());
-
 // ====================================================================================
 // 4b. Time of day: the room's light follows the hour.
 //   ?time=       on the page URL wins (demos, testing): a decimal hour 0-24 (?time=6.5), a name, or auto.
@@ -937,7 +868,6 @@ on(root, 'heap:time', e => {
   timeSpec = spec; ctx.timeChoice = e.detail; nextClock = 0;
   if (timeSpec === 'auto') tickClock(); else applyTime(timeSpec);
 });
-
 // table, rug, cushion, mug, phone (positions relative to layout.table)
 const TABLE = { x: layout.table.x, z: layout.table.z, w: 2.6, d: 1.8, top: 0.56 };
 const rugC = document.createElement('canvas'); rugC.width = 256; rugC.height = 192;
@@ -964,7 +894,6 @@ const phoneDot = new THREE.Mesh(new THREE.CircleGeometry(0.018, 10), new THREE.M
 phoneDot.rotation.set(-Math.PI / 2, 0, 0.35); phoneDot.position.set(PHONE.x + 0.03, TABLE.top + 0.019, PHONE.z - 0.08);
 scene.add(phoneBody, phoneGlow, phoneDot);
 const phoneParts = [phoneBody, phoneGlow, phoneDot];
-
 // guestbook stand (방명록) beside the door
 const bookParts = [];
 ctx.bookSpot = null;
@@ -981,7 +910,6 @@ if (GB) {
   OBST.push({ x: p.x, z: p.z, hw: 0.32, hd: 0.32, rhw: 0.25, rhd: 0.25 });
   ctx.bookSpot = WALLS[GB.wall].point(GB.at, 0, 0.95);
 }
-
 // projector and screen
 const SCR = { wall: layout.screen.wall, at: layout.screen.at, y: 2.4, w: 1.6, h: 0.9 };
 const projC = document.createElement('canvas'); projC.width = 640; projC.height = 360;
@@ -1030,8 +958,6 @@ function drawProjection(reel, img) {
   g.fillStyle = vg; g.fillRect(0, 0, W, H);
   projTex.needsUpdate = true;
 }
-const viewsNum = v => { const n = parseFloat(v); return v?.includes('만') ? n * 1e4 : v?.includes('천') ? n * 1e3 : n || 0; };
-
 // ---------- character ----------
 const me = new THREE.Group();
 const body = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.25, 0.45, 7), flat(C.accent)); body.position.y = 0.5;
@@ -1047,7 +973,6 @@ me.add(eyeL, eyeR);
 if (ctx.doorSpot) { me.position.copy(ctx.doorSpot); me.rotation.y = Math.atan2(WALLS[DOOR.wall].n.x, WALLS[DOOR.wall].n.z); }
 else me.position.set(2.2, 0, 2.4);
 scene.add(me);
-
 // ====================================================================================
 // 5. The heap: shaped pile. Each card rests on whatever is under its corners and edges.
 // ====================================================================================
@@ -1138,7 +1063,6 @@ function stepAnim(c, dt) {
   }
   if (t >= 1) { c.position.copy(H.pos); c.quaternion.copy(H.quat); c.userData.anim = null; }
 }
-
 function makeCard(reel) {
   const aniso = renderer.capabilities.getMaxAnisotropy(), d = reel.wide ? DIMS.wide : DIMS.tall, fan = reel.kind === 'fan';
   const frontC = fan ? drawFanFront(reel) : drawCard(reel, null);
@@ -1179,7 +1103,6 @@ function paintPoster(card) {
   if (img) drawFit(g, img, 0, 0, W, H, true); else { g.fillStyle = NO_PHOTO; g.fillRect(0, 0, W, H); }
   poster.needsUpdate = true;
 }
-
 // ====================================================================================
 // 5b. Thumbnails: each card shows the video's chosen thumbnail in three tiers, loaded lazily and sharpened in place
 //   far    mqdefault (320x180, ~7 KB): every card, top of the pile first, once the room is on screen
@@ -1192,16 +1115,6 @@ const thumbFiles = (reel, tier) => tier === FAR ? ['mqdefault'] : tier === NEAR 
 const loadQueue = [], inFlight = new Set(); // { card, tier } jobs waiting in load order · Images still downloading
 let loading = 0;
 cleanups.push(() => { loadQueue.length = 0; for (const im of inFlight) { im.onload = im.onerror = null; im.src = ''; } inFlight.clear(); });
-// YouTube pads its small thumbnails: a Short's picture sits in the centre of a 16:9 or 4:3 frame between blurred sides,
-// and a wide video's hqdefault has black bars above and below. The picture is the centred part with the reel's own shape.
-function cropToShape(im, reel) {
-  const a = reel.wide ? 16 / 9 : 9 / 16, iw = im.naturalWidth, ih = im.naturalHeight;
-  if (Math.abs(iw / ih / a - 1) < 0.03) return im;
-  const sw = Math.min(iw, ih * a), sh = Math.min(ih, iw / a);
-  const c = document.createElement('canvas'); c.width = Math.round(sw); c.height = Math.round(sh);
-  c.getContext('2d').drawImage(im, (iw - sw) / 2, (ih - sh) / 2, sw, sh, 0, 0, c.width, c.height);
-  return c;
-}
 function landed(card, tier, im) {
   const u = card.userData;
   if (u.tier >= tier) return;
@@ -1239,7 +1152,6 @@ function request(card, tier, now = false) {
   if (now) { loading++; load(card, tier, thumbFiles(u.reel, tier)); } else { loadQueue.push({ card, tier }); pump(); }
 }
 function requestPile(tier) { for (let i = cards.length - 1; i >= 0; i--) request(cards[i], tier); } // cards runs bottom → top, so this asks top first
-
 // ====================================================================================
 // 6. Modes: room · sit (sift, move cards) · watch (projector) · sort (album shelf)
 // ====================================================================================
@@ -1293,7 +1205,6 @@ const HINTS = {
 };
 const setHint = k => { if (hint.dataset.k !== k) { hint.dataset.k = k; hint.textContent = HINTS[k]; } };
 const goTo = cam => { ctx.camGoal = cam; controls.enabled = false; };
-
 // Live room contents, for a creator's editor. Dispatch on the element given to mountRoom once the room is up (#status hidden):
 //   root.dispatchEvent(new CustomEvent('heap:items', { detail: itemsArray }))
 //     replaces everything built from layout.items. Same item shapes as layout.json.
@@ -1338,7 +1249,6 @@ on(root, 'heap:get', e => {
     });
   });
 });
-
 ALBUMS.forEach((a, i) => {
   const b = document.createElement('button'); b.className = 'btn paper'; b.type = 'button';
   b.innerHTML = `<span class="k">${i + 1}</span>`; b.append(a.name);
@@ -1358,7 +1268,6 @@ function syncUI() {
   $('albumrow').hidden = ctx.mode !== 'sort';
   root.dispatchEvent(new CustomEvent('heap:mode', { detail: ctx.mode })); // heap-room.tsx shows its 꾸미기 button in room mode only
 }
-
 function sit() {
   ctx.mode = 'sit'; ctx.walkTo = null; ctx.arrive = null; ctx.waypoints = []; ctx.perch = null;
   me.position.copy(SEAT); me.rotation.y = Math.PI;
@@ -1393,7 +1302,6 @@ function putBack() {
 }
 function flip() { if (ctx.held) ctx.heldFlipped = !ctx.heldFlipped; }
 on($('flip'), 'click', flip);
-
 function feed() {
   ctx.loaded = ctx.held; ctx.held = null; ctx.heldFlipped = false; ctx.mode = 'watch'; glowCard(ctx.loaded, 0);
   const { reel, img } = ctx.loaded.userData;
@@ -1410,7 +1318,6 @@ function eject() {
 }
 on($('stand'), 'click', () => (ctx.perch ? unperch() : stand()));
 on($('eject'), 'click', eject);
-
 // official YouTube embed, flat and unobstructed; if this host forbids embeds, fall back to the link out
 ctx.embedBlocked = false;
 const player = $('player'), frameBox = $('player-frame'), note = $('player-note');
@@ -1441,7 +1348,6 @@ function openPlayer(reel) {
 }
 function closePlayer() { frameBox.innerHTML = ''; player.hidden = true; }
 on($('player-close'), 'click', closePlayer);
-
 // music: the docked player at the room's top right, opposite the room name (item.fn kind "music" on a radio, speaker or TV).
 // A visible official embed of 200 px or more with nothing laid over it: heap-room.css keeps the overlays and the 꾸미기 panel out of its corner (--music-w).
 // It starts only from the visitor's click on the carrier, which is the gesture the browser wants before it lets a video play with sound.
@@ -1482,12 +1388,8 @@ on(document, 'securitypolicyviolation', e => {
   if (!player.hidden) { frameBox.innerHTML = ''; frameBox.style.width = frameBox.style.height = '0px'; note.hidden = false; }
   if (!dock.hidden) { dockFrame.replaceChildren(); layoutMusic(); }
 });
-
-// phone: the way into 버블. A room with no PC still lists the creator's links here, so nothing disappears until the owner puts a PC in.
-const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-const link = (text, href) => { const a = el('a', null, text); a.href = href; a.target = '_blank'; a.rel = 'noopener'; return a; };
+/* dom: lib */
 const safeHref = u => (opts.isSafeLink(u) ? u : null); // the server checks layout links before saving; this is the same check on what the DOM gets
-const shortUrl = u => { const t = u.replace(/^(https?:\/\/(www\.)?|mailto:)/i, ''); try { return decodeURIComponent(t); } catch { return t; } };
 // one link as a bubble: a titled link, or (L.email) the address with a copy button. The phone's fallback list and the PC panel share it.
 function linkBubble(L) {
   const b = el('div', 'bubble');
@@ -1542,7 +1444,6 @@ function openPhone() {
 }
 on($('phone-close'), 'click', () => { $('phone').hidden = true; });
 on($('phone'), 'click', e => { if (e.target.id === 'phone') $('phone').hidden = true; });
-
 // PC (a desk, monitor or laptop with fn.kind "pc"): the creator's links. fn.links is the owner's own list; without one the creator.json links stand in.
 function openPc(fn) {
   const list = $('pc-list'); list.replaceChildren();
@@ -1552,7 +1453,6 @@ function openPc(fn) {
 }
 on($('pc-close'), 'click', () => { $('pc').hidden = true; });
 on($('pc'), 'click', e => { if (e.target.id === 'pc') $('pc').hidden = true; });
-
 // keepsake (a wall frame or a shelf-top standee): name, date, caption, and the link to the original
 function openKeepsake(fn) {
   $('ks-title').textContent = fn.name;
@@ -1594,7 +1494,6 @@ function openCalendar(fn) {
 }
 on($('cal-close'), 'click', () => { $('calendar').hidden = true; });
 on($('calendar'), 'click', e => { if (e.target.id === 'calendar') $('calendar').hidden = true; });
-
 // TV (fn "latest"): sit down at the table, pick up the newest reel and feed it to the projector, the same steps as doing it by hand.
 function watchLatest() {
   if (ctx.mode !== 'room') return;
@@ -1607,7 +1506,6 @@ const openSlot = slot => {
   if (k === 'pc') openPc(slot.fn); else if (k === 'keepsake') openKeepsake(slot.fn);
   else if (k === 'music') openMusic(slot.fn); else if (k === 'latest') watchLatest(); else if (k === 'calendar') openCalendar(slot.fn);
 };
-
 // fan pieces: one that lands while the visitor is in the room drops onto the top of the heap from above the table
 function landPiece(p) {
   const c = makeCard(p);
@@ -1618,7 +1516,6 @@ function landPiece(p) {
   startAnim(c, 'drop'); Object.assign(c.userData.anim, { dur: 1.1, arc: 0.35 });
   toast(`${p.by}님의 팬 작품이 더미 위에 올라왔어요`);
 }
-
 // guestbook: names and dates only. Rows are database rows { id, name, createdAt (ISO) }, newest first, merged by id from the page, the poll and the visitor's own submit.
 const gbRows = new Map((DATA.guestbook || []).map(e => [e.id, { id: e.id, name: e.name, createdAt: e.createdAt }]));
 const gbSorted = () => [...gbRows.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt) || (a.id < b.id ? 1 : -1));
@@ -1664,7 +1561,6 @@ if (gbForm) on(gbForm, 'submit', async e => {
   } finally { gbBusy = false; if (!ctx.disposed) $('gb-submit').disabled = false; }
 });
 on($('gb-close'), 'click', () => { $('guestbook').hidden = true; });
-
 // polling: what others changed (guestbook rows, visit counts, 다녀감, landed pieces) every opts.pollMs while the tab is visible.
 // The first cursor is the snapshot's serverTime; each reply carries the next. Overlapping rows are merged by id.
 let cursor = DATA.serverTime, polling = false;
@@ -1699,7 +1595,6 @@ function schedulePoll() {
 }
 on(document, 'visibilitychange', () => { if (document.hidden) clearTimeout(ctx.pollTimer); else { poll().then(schedulePoll); } });
 cleanups.push(() => clearTimeout(ctx.pollTimer));
-
 // rooms: the door lists the other rooms; jumping fades out and hands the chosen id to opts.onNavigate
 function openRooms() {
   const list = $('roomlist'); list.innerHTML = '';
@@ -1723,7 +1618,6 @@ function jump(id) {
   setTimeout(() => { if (!ctx.disposed) opts.onNavigate(id); }, 380);
 }
 on($('rooms-close'), 'click', () => { $('rooms').hidden = true; });
-
 // album shelf: browse albums (the sorting round lives in archive/album-sort/)
 function updateAlbums() {
   if (!ctx.shelf) return;
@@ -1767,8 +1661,6 @@ function openAlbum(key) {
 on($('grid-close'), 'click', () => { $('grid').hidden = true; });
 ctx.toastTimer = 0;
 function toast(t) { $('toast').textContent = t; ctx.toastTimer = 2.2; }
-
-
 // ====================================================================================
 // 7. Input
 // ====================================================================================
@@ -1799,7 +1691,6 @@ on(window, 'keydown', ev => {
 });
 on(window, 'keyup', ev => keys.delete(ev.key.toLowerCase()));
 on(window, 'blur', () => keys.clear());
-
 // dragging a card across the desk (sit mode). Capture phase so orbit controls stand aside.
 const deskPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(TABLE.top + 0.12)), _hit = new THREE.Vector3();
 let down = null, dragOff = new THREE.Vector2();
@@ -1867,7 +1758,6 @@ canvas.addEventListener('pointerup', ev => {
   else if (hit.object === floor && !onTableFoot) walkRoute(p.clone().setY(0), null);
   else walkRoute(SEAT.clone(), 'sit');
 });
-
 // ---------- walking ----------
 const TBOX = { x0: TABLE.x - TABLE.w / 2 - 0.45, x1: TABLE.x + TABLE.w / 2 + 0.45, z0: TABLE.z - TABLE.d / 2 - 0.45, z1: TABLE.z + TABLE.d / 2 + 0.45 };
 function crossesTable(a, b) {
@@ -2044,7 +1934,6 @@ function stepCharacter(dt) {
   me.position.y = moving ? Math.abs(Math.sin(walkPhase)) * 0.04 : 0;
   setHint(nearTable() ? 'near' : nearShelf() ? 'nearShelf' : nearDoor() ? 'nearDoor' : nearBook() ? 'nearBook' : 'room');
 }
-
 // ====================================================================================
 // 8. Loop
 // ====================================================================================
@@ -2061,7 +1950,6 @@ function resize() {
 on(window, 'resize', resize);
 const sizeWatch = new ResizeObserver(resize); sizeWatch.observe(canvas);
 cleanups.push(() => sizeWatch.disconnect());
-
 function frame() {
   if (ctx.disposed) return;
   const rawDt = clock.getDelta(), dt = Math.min(rawDt, 0.05), t = clock.elapsedTime, a = reduced ? 1 : 1 - Math.exp(-dt * 7);
@@ -2126,7 +2014,6 @@ function frame() {
   renderer.render(scene, camera);
   ctx.raf = requestAnimationFrame(frame);
 }
-
 async function fontsReady() {
   const wait = Promise.all([document.fonts.load('40px "Nanum Pen Script"', '가나 abc'), document.fonts.load('600 20px "IBM Plex Sans KR"', '만 1234')]);
   await Promise.race([wait, new Promise(r => setTimeout(r, 3000))]);
