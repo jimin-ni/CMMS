@@ -3,20 +3,8 @@
 // Browser only: load it with a dynamic import from a client component.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-
-const thumbUrl = (reel, name) => `https://i.ytimg.com/vi/${reel.id}/${name}.jpg`;
-
-// keep: a Set of geometries and materials that outlive this object (the model cache)
-function disposeScene(scene, keep) {
-  scene.traverse(o => {
-    if (!keep?.has(o.geometry)) o.geometry?.dispose();
-    for (const m of [].concat(o.material ?? [])) {
-      if (keep?.has(m)) continue;
-      for (const v of Object.values(m)) if (v?.isTexture) v.dispose();
-      m.dispose();
-    }
-  });
-}
+import { createContext } from './context.js';
+import { mulberry32, thumbUrl, disposeScene } from './util.js';
 
 // ids of the nodes heap-room.tsx renders and the engine fills or shows
 const LISTS = ['albumrow', 'player-frame', 'music-frame', 'phone-feed', 'pc-list', 'ks-body', 'cal-body', 'grid-list', 'gb-list', 'roomlist'];
@@ -39,21 +27,11 @@ const HIDDEN = ['visit', 'albumrow', 'stand', 'flip', 'srclink', 'eject', 'ytlin
  * @returns {() => void}
  */
 export function mountRoom(root, opts) {
-let disposed = false, raf = 0, roomTitle = null, pollTimer = 0; // pollTimer lives out here so dispose can clear it even when run() stopped part-way
-const ac = new AbortController(), cleanups = [], prevTitle = document.title;
-const dataBase = opts.dataBase.replace(/\/?$/, '/');
-// A node the markup should have but does not (stale markup after a hot reload, an edited heap-room.tsx) must not stop the mount or the dispose:
-// it is replaced by a loose element that takes every call and shows nothing. The guestbook form nodes are absent for a signed-out viewer on purpose.
-const loose = new Map(), ABSENT_OK = new Set(['gb-form', 'gb-name', 'gb-submit']);
-const $ = id => {
-  const found = root.querySelector('#' + id);
-  if (found) return found;
-  if (!loose.has(id)) { if (!disposed && !ABSENT_OK.has(id)) console.warn(`[heap-room] #${id} is missing from the markup`); loose.set(id, document.createElement('div')); }
-  return loose.get(id);
-};
-const on = (target, type, fn) => target.addEventListener(type, fn, { signal: ac.signal });
+const ctx = createContext(root, opts);
+const { ac, cleanups, dataBase, prevTitle, $, on } = ctx;
 
 async function run() {
+const { rand, gauss } = ctx;
 // ====================================================================================
 // 1. Room data: the database part arrives in opts.data (rooms, layout, reels, pieces, guestbook, visits, creatorVisit).
 //    <dataBase><id>/creator.json (links, albums, linktree, phoneTitle) is still a static file.
@@ -78,7 +56,7 @@ creator.links = (Array.isArray(creator.links) ? creator.links : []).flatMap(L =>
 });
 creator.linktree = opts.isWebLink(creator.linktree) ? creator.linktree : null;
 const layout = structuredClone(DATA.layout);
-if (disposed) return;
+if (ctx.disposed) return;
 
 const DEFAULT_PALETTE = {
   olive: '#565344', accent: '#A6613C', paper: '#F3EADB', ink: '#2f2c24',
@@ -87,7 +65,7 @@ const DEFAULT_PALETTE = {
 };
 const C = { ...DEFAULT_PALETTE, ...(layout.palette || {}) };
 root.style.setProperty('--clay', C.accent);
-document.title = roomTitle = `${creator.name} Miniroom`;
+document.title = ctx.roomTitle = `${creator.name} Miniroom`;
 $('cname').textContent = creator.name;
 $('avatar').textContent = Array.from(creator.name)[0] ?? '';
 $('phone-title').textContent = creator.phoneTitle || creator.name;
@@ -103,15 +81,15 @@ function goldOf(r) { // album is certain from the channel or exactly one title r
 }
 
 // ---------- helpers ----------
-function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-const rand = mulberry32(20261112);
-const gauss = () => { let u = 0, v = 0; while (!u) u = rand(); while (!v) v = rand(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+
+
+
 const flat =(color, extra = {}) => new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: 0.88, ...extra });
 
 // 꾸미기 (room-editor.tsx, through the hooks in section 6): ORIGINAL is the layout as last saved in the database (the page's, or the one the editor just saved via heap:saved).
 // It is the editor's 처음으로 target. BASE_LAYOUT is the whole stored layout; the editor merges its items, time and room into it when it saves.
-let BASE_LAYOUT = structuredClone(DATA.layout);
-let ORIGINAL = { items: (layout.items || []).map(it => ({ ...it })), time: layout.time ?? 'auto' };
+ctx.baseLayout = structuredClone(DATA.layout);
+ctx.original = { items: (layout.items || []).map(it => ({ ...it })), time: layout.time ?? 'auto' };
 
 // ---------- reels ----------
 // A reel carries its linked channel's title (heap_creator_channels); the card back shows it and album rules with `channel` match it.
@@ -125,14 +103,14 @@ const nShorts = raw.filter(r => !r.wide).length, nWide = raw.length - nShorts;
 // TODAY/TOTAL, 다녀감 and the guestbook list are database values too, refreshed by the poll below.
 const seoulDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' });
 const fmtDay = iso => { const d = new Date(iso); if (Number.isNaN(d.getTime())) return ''; const p = Object.fromEntries(seoulDay.formatToParts(d).map(x => [x.type, x.value])); return `${p.year}.${p.month}.${p.day}`; };
-let visits = { today: DATA.visits.today, total: DATA.visits.total };
+ctx.visits = { today: DATA.visits.today, total: DATA.visits.total };
 const metaBase = nWide ? `쇼츠 ${nShorts} · 영상 ${nWide}` : `쇼츠 ${nShorts}`;
-function renderMeta() { $('meta').textContent = `${metaBase} · TODAY ${visits.today} · TOTAL ${visits.total.toLocaleString('ko-KR')}` + (opts.viewerName ? ` · ${opts.viewerName}` : ''); }
+function renderMeta() { $('meta').textContent = `${metaBase} · TODAY ${ctx.visits.today} · TOTAL ${ctx.visits.total.toLocaleString('ko-KR')}` + (opts.viewerName ? ` · ${opts.viewerName}` : ''); }
 renderMeta();
 // 다녀감: the day the creator last came by, "2026.11.12" (Asia/Seoul), or null. From heap_rooms.creator_visited_at.
-let creatorDay = typeof DATA.creatorVisit === 'string' && /^\d{4}\.\d{1,2}\.\d{1,2}$/.test(DATA.creatorVisit) ? DATA.creatorVisit : null;
-function creatorVisit() { return creatorDay; }
-function renderCreatorVisit() { if (creatorDay) { $('visit').textContent = `주인 다녀감 ${creatorDay.split('.').slice(1).join('.')}`; $('visit').hidden = false; } }
+ctx.creatorDay = typeof DATA.creatorVisit === 'string' && /^\d{4}\.\d{1,2}\.\d{1,2}$/.test(DATA.creatorVisit) ? DATA.creatorVisit : null;
+function creatorVisit() { return ctx.creatorDay; }
+function renderCreatorVisit() { if (ctx.creatorDay) { $('visit').textContent = `주인 다녀감 ${ctx.creatorDay.split('.').slice(1).join('.')}`; $('visit').hidden = false; } }
 renderCreatorVisit();
 const fanReelOf = (p, i) => ({ ...p, kind: 'fan', wide: false, title: p.caption, channel: p.by, views: '', age: 0.05, seed: 7000 + i * 131 });
 const fanReels = (DATA.pieces || []).map(fanReelOf);
@@ -470,18 +448,18 @@ if (DOOR) {
 // ====================================================================================
 // OBST: the fixed walk obstacles (the table first, then the guestbook stand). Each item's own obstacle is in ITEMS.obst.
 const OBST = [], shelfParts = [];
-let SHELF = null;
+ctx.shelf = null;
 // shadeNow: a lamp shade's glow at the current hour (section 4b sets it) · irand: where the builders draw their random numbers
-let shadeNow = 0.9, irand = rand;
+ctx.shadeNow = 0.9; ctx.irand = rand;
 // Lamps: the hand-built lamp and any model whose catalogue category is "lamp". Each adds { light, shades } to its build's lamps:
 // a PointLight inside the shade (or null) and the shade's materials. Section 4b sets every shade's glow and frame() every light's
 // intensity, so all the lamps in a room follow the hour together.
 // Only MAX_LAMP_LIGHTS lamps get a light: the hand-built ones first, then the lamp models, each in list order. A lamp past that glows and lights nothing.
 const MAX_LAMP_LIGHTS = 3, LAMP_GLOW = '#ffb767';
-let CATALOGUE = null; // catalogue.json once it has been read (getCatalogue below)
+ctx.catalogue = null; // catalogue.json once it has been read (getCatalogue below)
 // item.lit: the creator's switch. Absent or true = on, and the lamp then follows the clock exactly as before (glows and lights from evening to morning).
 // false = switched off for good: no light, no glow, and no share of the MAX_LAMP_LIGHTS budget.
-const isLampModel = it => it.type === 'model' && CATALOGUE?.models?.find(m => m.id === it.model)?.category === 'lamp';
+const isLampModel = it => it.type === 'model' && ctx.catalogue?.models?.find(m => m.id === it.model)?.category === 'lamp';
 const isLit = o => o.lit !== false;
 function lampLight(build, it) {
   if (!isLit(it)) return null;
@@ -495,8 +473,8 @@ function pottedPlant(parent, x, z, y, s) {
   for (let i = 0; i < 5; i++) {
     const leaf = new THREE.Mesh(new THREE.IcosahedronGeometry(0.22 * s, 0), flat([C.leaf, C.leaf2, C.leafDark][i % 3]));
     const a = i * 1.26;
-    leaf.position.set(x + Math.cos(a) * 0.14 * s, y + (0.45 + irand() * 0.25) * s, z + Math.sin(a) * 0.14 * s);
-    leaf.scale.set(1, 1.5, 0.6); leaf.rotation.set(irand(), a, irand() * 0.5); leaf.castShadow = true; parent.add(leaf);
+    leaf.position.set(x + Math.cos(a) * 0.14 * s, y + (0.45 + ctx.irand() * 0.25) * s, z + Math.sin(a) * 0.14 * s);
+    leaf.scale.set(1, 1.5, 0.6); leaf.rotation.set(ctx.irand(), a, ctx.irand() * 0.5); leaf.castShadow = true; parent.add(leaf);
   }
 }
 const BUILD = {
@@ -514,12 +492,12 @@ const BUILD = {
     for (let s = 0; s < 3; s++) {
       add(box(1.6, 0.05, 0.5, wood, 0, 0.27 + s * 0.7, 0, { parent: g }));
       if (s === 1) continue;
-      for (let b = 0; b < 6; b++) { const h = 0.35 + irand() * 0.15; add(box(0.16, h, 0.3, flat(bookCols[(s * 6 + b) % bookCols.length]), 0.6 - b * 0.22, 0.3 + s * 0.7 + h / 2, 0.02, { parent: g })); }
+      for (let b = 0; b < 6; b++) { const h = 0.35 + ctx.irand() * 0.15; add(box(0.16, h, 0.3, flat(bookCols[(s * 6 + b) % bookCols.length]), 0.6 - b * 0.22, 0.3 + s * 0.7 + h / 2, 0.02, { parent: g })); }
     }
     add(box(1.6, 0.05, 0.5, wood, 0, 2.2, 0, { parent: g }));
     pottedPlant(g, 0, 0, 2.22, 0.7);
     if (it.fn?.kind === 'keepsake') keepsakeObject(g, it, build, 'standee', 0.52, 2.225, 0.06); // the shelf top's keepsake
-    SHELF = { group: g, albums: [] };
+    ctx.shelf = { group: g, albums: [] };
     ALBUMS.forEach((a, i) => {
       const lx = -0.57 + i * 0.38;
       const m = new THREE.Mesh(new THREE.BoxGeometry(1, 0.52, 0.36), flat(a.color));
@@ -529,20 +507,20 @@ const BUILD = {
       const label = new THREE.Mesh(new THREE.PlaneGeometry(0.11, 0.41), new THREE.MeshStandardMaterial({ map: lt, roughness: 0.9 }));
       label.position.set(lx, 0.995 + 0.26, 0.181); label.userData.album = a.key;
       g.add(m, label); add(m); add(label);
-      SHELF.albums.push({ ...a, mesh: m, label, lc, lt, lx });
+      ctx.shelf.albums.push({ ...a, mesh: m, label, lc, lt, lx });
     });
     return { hw: 0.85, hd: 0.55 };
   },
   plant(g, it) { const s = it.size || 1; pottedPlant(g, 0, 0, 0, s); return { hw: 0.44 * s, hd: 0.44 * s }; },
   snake(g) {
     box(0.34, 0.4, 0.34, flat(C.olive), 0, 0.2, 0, { parent: g });
-    for (let i = 0; i < 6; i++) { const b = box(0.07, 0.8 + irand() * 0.5, 0.03, flat([C.leaf, C.leafDark][i % 2]), (irand() - 0.5) * 0.2, 0.75, (irand() - 0.5) * 0.2, { parent: g }); b.rotation.set((irand() - 0.5) * 0.3, irand() * 3, (irand() - 0.5) * 0.3); }
+    for (let i = 0; i < 6; i++) { const b = box(0.07, 0.8 + ctx.irand() * 0.5, 0.03, flat([C.leaf, C.leafDark][i % 2]), (ctx.irand() - 0.5) * 0.2, 0.75, (ctx.irand() - 0.5) * 0.2, { parent: g }); b.rotation.set((ctx.irand() - 0.5) * 0.3, ctx.irand() * 3, (ctx.irand() - 0.5) * 0.3); }
     return { hw: 0.4, hd: 0.4 };
   },
   lamp(g, it, build) {
     box(0.3, 0.04, 0.3, flat(C.olive), 0, 0.02, 0, { parent: g });
     box(0.04, 1.7, 0.04, flat(C.olive), 0, 0.87, 0, { parent: g });
-    const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.26, 0.3, 8, 1, true), new THREE.MeshStandardMaterial({ color: '#f6dcb2', emissive: LAMP_GLOW, emissiveIntensity: isLit(it) ? shadeNow : 0, side: THREE.DoubleSide, flatShading: true }));
+    const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.26, 0.3, 8, 1, true), new THREE.MeshStandardMaterial({ color: '#f6dcb2', emissive: LAMP_GLOW, emissiveIntensity: isLit(it) ? ctx.shadeNow : 0, side: THREE.DoubleSide, flatShading: true }));
     shade.position.y = 1.8; g.add(shade);
     const light = lampLight(build, it);
     if (light) { light.position.y = 1.72; g.add(light); }
@@ -550,7 +528,7 @@ const BUILD = {
     return { hw: 0.35, hd: 0.35 };
   },
   books(g) {
-    for (let i = 0; i < 4; i++) { const b = box(0.42, 0.08, 0.3, flat(bookCols[(i + 2) % bookCols.length]), 0, 0.04 + i * 0.08, 0, { parent: g }); b.rotation.y = (irand() - 0.5) * 0.5; }
+    for (let i = 0; i < 4; i++) { const b = box(0.42, 0.08, 0.3, flat(bookCols[(i + 2) % bookCols.length]), 0, 0.04 + i * 0.08, 0, { parent: g }); b.rotation.y = (ctx.irand() - 0.5) * 0.5; }
     return { hw: 0.45, hd: 0.4 };
   },
 };
@@ -563,7 +541,7 @@ const BUILD = {
 //   latest    a TV whose screen shows the newest reel's thumbnail. Clicking it sends that reel into the projector.
 //   calendar  a desk calendar (type "calendar", built by hand): the creator's dates for fans, listed in a panel.
 // ITEMS.slots lists them ({ it, fn, start? }) and ITEMS.slotMeshes holds the meshes a click can hit (each has userData.slot).
-let slotsLive = false; // true once the fonts are ready: the keepsake textures paint with their own fonts and load their pictures from then on
+ctx.slotsLive = false; // true once the fonts are ready: the keepsake textures paint with their own fonts and load their pictures from then on
 const KS = { tall: { cw: 180, ch: 320, strip: 44 }, wide: { cw: 320, ch: 180, strip: 40 } }; // canvas pixels: the picture and the name strip under it
 // What the link says about the picture: id is the YouTube video (its own thumbnail), tall is a Short, host is a plain card's source.
 function keepsakeLook(fn) {
@@ -623,13 +601,13 @@ function keepsakeObject(g, it, build, shape, x, y, z) {
   paintKeepsake(canvas, fn, look, null);
   if (!it.fn) return;
   const slot = { it, fn, started: false, start() { // called once the fonts are ready (or at once after that)
-    if (slot.started || build !== ITEMS) return;
+    if (slot.started || build !== ctx.build) return;
     slot.started = true; paintKeepsake(canvas, fn, look, null); tex.needsUpdate = true;
-    if (look.id) ksLoad(build, look, look.tall ? ['hqdefault'] : ['mqdefault'], img => { if (build === ITEMS) { paintKeepsake(canvas, fn, look, img); tex.needsUpdate = true; } });
+    if (look.id) ksLoad(build, look, look.tall ? ['hqdefault'] : ['mqdefault'], img => { if (build === ctx.build) { paintKeepsake(canvas, fn, look, img); tex.needsUpdate = true; } });
   } };
   for (const m of [frame, pic]) { m.userData.slot = slot; build.slotMeshes.push(m); }
   build.slots.push(slot);
-  if (slotsLive) slot.start();
+  if (ctx.slotsLive) slot.start();
 }
 // a keepsake's own picture: the video's thumbnail, cropped to its shape. A thumbnail that is missing leaves the placeholder.
 // ksPics keeps the finished pictures (by video and shape) for the life of the room, so a rebuild asks the network for nothing it already has.
@@ -641,7 +619,7 @@ function ksLoad(build, look, files, done) {
   const im = new Image(); im.crossOrigin = 'anonymous';
   const end = ok => {
     im.onload = im.onerror = null; inFlight.delete(im); build.loads.delete(im);
-    if (disposed) return;
+    if (ctx.disposed) return;
     if (!ok && files.length > 1) return ksLoad(build, look, files.slice(1), done);
     try { if (ok) { const pic = cropToShape(im, { wide: !look.tall }); ksPics.set(key, pic); done(pic); } } catch (e) { console.error('[heap-room]', e); }
   };
@@ -681,11 +659,11 @@ function tvScreen(inst, build, slot, s) {
   paintTv(canvas, null, what);
   slot.started = false;
   slot.start = () => { // once the fonts are ready (or at once after that)
-    if (slot.started || build !== ITEMS) return;
+    if (slot.started || build !== ctx.build) return;
     slot.started = true; paintTv(canvas, null, what); tex.needsUpdate = true;
-    if (what.id) ksLoad(build, { id: what.id, tall: what.tall }, what.tall ? ['hqdefault'] : ['mqdefault'], pic => { if (build === ITEMS) { paintTv(canvas, pic, what); tex.needsUpdate = true; } });
+    if (what.id) ksLoad(build, { id: what.id, tall: what.tall }, what.tall ? ['hqdefault'] : ['mqdefault'], pic => { if (build === ctx.build) { paintTv(canvas, pic, what); tex.needsUpdate = true; } });
   };
-  if (slotsLive) slot.start();
+  if (ctx.slotsLive) slot.start();
 }
 
 // Desk calendar (type "calendar", fn.kind "calendar"): a small stand with one paper page. The page shows the month of the next upcoming date
@@ -722,13 +700,13 @@ BUILD.calendar = (g, it, build) => {
   grp.position.y = it.y || 0; g.add(grp);
   paintCalendar(canvas, fn);
   if (it.fn?.kind !== 'calendar') return {};
-  const slot = { it, fn, started: false, start() { if (slot.started || build !== ITEMS) return; slot.started = true; paintCalendar(canvas, fn); tex.needsUpdate = true; } };
+  const slot = { it, fn, started: false, start() { if (slot.started || build !== ctx.build) return; slot.started = true; paintCalendar(canvas, fn); tex.needsUpdate = true; } };
   for (const m of [back, page]) { m.userData.slot = slot; build.slotMeshes.push(m); }
   build.slots.push(slot);
-  if (slotsLive) slot.start();
+  if (ctx.slotsLive) slot.start();
   return {};
 };
-function startSlots() { slotsLive = true; for (const s of ITEMS.slots) s.start?.(); }
+function startSlots() { ctx.slotsLive = true; for (const s of ctx.build.slots) s.start?.(); }
 
 // ---------- models: { type: 'model', model: <catalogue id>, x, z, rot, y, tint } ----------
 // <modelBase>catalogue.json lists the GLB files (Kenney Furniture Kit, CC0). A model is fetched and parsed once per mount,
@@ -750,7 +728,7 @@ const TINT = {
 const MODELS = new Map(), KEPT = new Set(), modelRoots = [];
 let catalogueP = null, gltfP = null;
 cleanups.push(() => { for (const r of modelRoots) disposeScene(r); });
-const getCatalogue = () => catalogueP ??= getJSON(MODEL_BASE + 'catalogue.json').then(c => CATALOGUE = c).catch(e => { if (!disposed) console.error('[heap-room]', e); return null; });
+const getCatalogue = () => catalogueP ??= getJSON(MODEL_BASE + 'catalogue.json').then(c => ctx.catalogue = c).catch(e => { if (!ctx.disposed) console.error('[heap-room]', e); return null; });
 function loadModel(id) {
   if (!MODELS.has(id)) MODELS.set(id, (async () => {
     const entry = (await getCatalogue())?.models?.find(m => m.id === id);
@@ -759,18 +737,18 @@ function loadModel(id) {
     const [loader, res] = await Promise.all([gltfP, fetch(MODEL_BASE + entry.file, { signal: ac.signal })]);
     if (!res.ok) throw new Error(`${entry.file}: ${res.status}`);
     const root = (await loader.parseAsync(await res.arrayBuffer(), '')).scene;
-    if (disposed) { disposeScene(root); return null; } // dispose() ran while this was loading
+    if (ctx.disposed) { disposeScene(root); return null; } // dispose() ran while this was loading
     modelRoots.push(root);
     root.traverse(o => { if (o.isMesh) { KEPT.add(o.geometry); for (const m of [].concat(o.material)) KEPT.add(m); } });
     const bb = new THREE.Box3().setFromObject(root, true), mid = bb.getCenter(new THREE.Vector3());
     root.position.set(-mid.x, -bb.min.y, -mid.z); // the file's own node transforms stay as they are; the whole model shifts
     return { root, entry, size: bb.getSize(new THREE.Vector3()).multiplyScalar(MODEL_SCALE) };
-  })().catch(e => { if (!disposed) console.error('[heap-room]', e); return null; }));
+  })().catch(e => { if (!ctx.disposed) console.error('[heap-room]', e); return null; }));
   return MODELS.get(id);
 }
 BUILD.model = (g, it, build) => {
   loadModel(it.model).then(m => {
-    if (!m || disposed || build !== ITEMS) return; // a failed load, or the items were replaced while it loaded
+    if (!m || ctx.disposed || build !== ctx.build) return; // a failed load, or the items were replaced while it loaded
     const inst = m.root.clone(), rug = m.entry.category === 'rug', lamp = m.entry.category === 'lamp', own = new Map(), shades = [];
     inst.traverse(o => {
       if (!o.isMesh) return;
@@ -779,7 +757,7 @@ BUILD.model = (g, it, build) => {
         if (!own.has(o.material)) {
           const c = o.material.clone();
           if (col) c.color.set(col);
-          if (glow) { c.emissive.set(LAMP_GLOW); c.emissiveIntensity = isLit(it) ? shadeNow : 0; }
+          if (glow) { c.emissive.set(LAMP_GLOW); c.emissiveIntensity = isLit(it) ? ctx.shadeNow : 0; }
           own.set(o.material, c);
         }
         o.material = own.get(o.material);
@@ -797,7 +775,7 @@ BUILD.model = (g, it, build) => {
       build.slots.push(slot);
       if (m.entry.screen && it.fn.kind !== 'pc') tvScreen(inst, build, slot, m.entry.screen);
     }
-    const seatRule = CATALOGUE?.seats?.[m.entry.category];
+    const seatRule = ctx.catalogue?.seats?.[m.entry.category];
     if (seatRule) addSeats(build, g, it, m, seatRule, inst);
     if (shades.length) { // the light sits at the centre of the shade: the box around the vertices the shade's own triangles use
       const light = lampLight(build, it), bb = new THREE.Box3(), v = new THREE.Vector3(); // (a model's meshes share one vertex buffer)
@@ -847,18 +825,18 @@ function addSeats(build, g, it, m, rule, inst) {
 //   slots: its functions, { it, fn, start? } each · slotMeshes: the meshes a click can hit, each with userData.slot (see the slots section above)
 //   seats / seatMeshes: see addSeats
 //   loads: the keepsake thumbnails this build still waits for (cancelled when the next build replaces it)
-let ITEMS = { group: null, obst: [], items: [], lamps: [], slots: [], slotMeshes: [], seats: [], seatMeshes: [], loads: new Set() };
+ctx.build = { group: null, obst: [], items: [], lamps: [], slots: [], slotMeshes: [], seats: [], seatMeshes: [], loads: new Set() };
 function buildItems(items, first = false) {
-  if (ITEMS.group) { for (const l of ITEMS.lamps) l.light?.dispose(); scene.remove(ITEMS.group); disposeScene(ITEMS.group, KEPT); }
-  shelfParts.length = 0; SHELF = null;
-  for (const im of ITEMS.loads) { im.onload = im.onerror = null; im.src = ''; inFlight.delete(im); } // the replaced build's thumbnails stop here
-  ITEMS.loads.clear();
-  const build = ITEMS = { group: new THREE.Group(), obst: [], items, lamps: [], slots: [], slotMeshes: [], seats: [], seatMeshes: [], loads: new Set() };
+  if (ctx.build.group) { for (const l of ctx.build.lamps) l.light?.dispose(); scene.remove(ctx.build.group); disposeScene(ctx.build.group, KEPT); }
+  shelfParts.length = 0; ctx.shelf = null;
+  for (const im of ctx.build.loads) { im.onload = im.onerror = null; im.src = ''; inFlight.delete(im); } // the replaced build's thumbnails stop here
+  ctx.build.loads.clear();
+  const build = ctx.build = { group: new THREE.Group(), obst: [], items, lamps: [], slots: [], slotMeshes: [], seats: [], seatMeshes: [], loads: new Set() };
   scene.add(build.group);
   items.forEach((it, i) => {
     // The first build draws from the room's shared sequence, as the room always has. A rebuild seeds each item by its place in the list,
     // so it leaves that sequence alone and an item keeps its look from one rebuild to the next.
-    irand = first ? rand : mulberry32(7919 * (i + 1));
+    ctx.irand = first ? rand : mulberry32(7919 * (i + 1));
     const g = new THREE.Group(), rot = THREE.MathUtils.degToRad(it.rot || 0);
     const fp = BUILD[it.type]?.(g, it, build); if (!fp) return;
     g.position.set(it.x, 0, it.z); g.rotation.y = rot; build.group.add(g); g.updateMatrixWorld(true);
@@ -869,7 +847,7 @@ function buildItems(items, first = false) {
   });
 }
 buildItems(layout.items || [], true);
-const shelfLocal = v => SHELF.group.localToWorld(v.clone());
+const shelfLocal = v => ctx.shelf.group.localToWorld(v.clone());
 
 // ====================================================================================
 // 4b. Time of day: the room's light follows the hour.
@@ -909,7 +887,7 @@ function parseTime(v) { // → an hour in [0, 24), 'auto', or null when it says 
   return Number.isFinite(n) ? ((n % 24) + 24) % 24 : null;
 }
 let timeSpec = parseTime(new URLSearchParams(location.search).get('time')) ?? parseTime(layout.time) ?? 'auto';
-let timeChoice = parseTime(layout.time) == null ? 'auto' : layout.time; // the room's own choice, as it was given; ?time= does not change it. heap:get reports it.
+ctx.timeChoice = parseTime(layout.time) == null ? 'auto' : layout.time; // the room's own choice, as it was given; ?time= does not change it. heap:get reports it.
 const seoulFmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 function seoulHour() {
   const part = Object.fromEntries(seoulFmt.formatToParts(new Date()).map(p => [p.type, Number(p.value)]));
@@ -918,14 +896,14 @@ function seoulHour() {
 const bgBase = scene.background.clone();
 const setCol = (c, [r, g, b]) => c.setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace);
 const css = c => `rgb(${c.map(Math.round).join(',')})`;
-let lampBase = 3.2, nextClock = 0, readGlow = 0;
+ctx.lampBase = 3.2; ctx.readGlow = 0; let nextClock = 0;
 function applyTime(hour) {
   const k = timeAt(hour);
   renderer.toneMappingExposure = k.exposure;
   scene.background.copy(bgBase).multiplyScalar(k.bg);
   setCol(hemi.color, k.hemiSky); setCol(hemi.groundColor, k.hemiGround); hemi.intensity = k.hemiI;
   fill.intensity = k.fillI;
-  readGlow = Math.min(0.4, Math.max(0, (1.6 - k.sunI) * 0.3)); // a card in hand lights itself when the room is dim; 0 from morning to golden hour
+  ctx.readGlow = Math.min(0.4, Math.max(0, (1.6 - k.sunI) * 0.3)); // a card in hand lights itself when the room is dim; 0 from morning to golden hour
   setCol(sun.color, k.sun); sun.intensity = k.sunI;
   SUN_DIR.copy(SUN_H).setY(-k.drop).normalize();
   if (WIN) sun.target.position.copy(WALLS[WIN.wall].point(WIN.at, WIN.y, 0)).addScaledVector(SUN_DIR, WIN.y / -SUN_DIR.y);
@@ -942,9 +920,9 @@ function applyTime(hour) {
     gr.addColorStop(0, css(k.sky[0])); gr.addColorStop(0.55, css(k.sky[1])); gr.addColorStop(1, css(k.sky[2])); sg.fillStyle = gr; sg.fillRect(0, 0, 4, 128);
     skyTex.needsUpdate = true;
   }
-  lampBase = k.lampI; // frame() gives it to every lamp's light
-  shadeNow = k.shadeI;
-  for (const l of ITEMS.lamps) for (const s of l.shades) s.emissiveIntensity = l.off ? 0 : shadeNow;
+  ctx.lampBase = k.lampI; // frame() gives it to every lamp's light
+  ctx.shadeNow = k.shadeI;
+  for (const l of ctx.build.lamps) for (const s of l.shades) s.emissiveIntensity = l.off ? 0 : ctx.shadeNow;
 }
 function tickClock() { // auto only: called from frame(), so it stops with the rAF loop on dispose (no timer of its own)
   if (timeSpec !== 'auto' || Date.now() < nextClock) return;
@@ -956,7 +934,7 @@ if (timeSpec === 'auto') tickClock(); else applyTime(timeSpec);
 on(root, 'heap:time', e => {
   const spec = parseTime(e.detail);
   if (spec == null) return;
-  timeSpec = spec; timeChoice = e.detail; nextClock = 0;
+  timeSpec = spec; ctx.timeChoice = e.detail; nextClock = 0;
   if (timeSpec === 'auto') tickClock(); else applyTime(timeSpec);
 });
 
@@ -1121,7 +1099,7 @@ function clampPlace(p) {
   }
   return p;
 }
-const inPile = c => c !== held && c !== loaded && c !== presenting && c !== dragging && !c.userData.fly;
+const inPile = c => c !== ctx.held && c !== ctx.loaded && c !== ctx.presenting && c !== ctx.dragging && !c.userData.fly;
 // recompute every resting pose bottom → top; cards whose support changed fall into place
 function settle(instant = false) {
   const placed = [];
@@ -1230,14 +1208,14 @@ function landed(card, tier, im) {
   u.tier = tier; u.img = cropToShape(im, u.reel);
   drawCard(u.reel, u.img, u.front.image); u.front.needsUpdate = true;
   if (u.poster) paintPoster(card);
-  if (card === loaded) drawProjection(u.reel, u.img);
-  if (card === phonePic?.card) showPhonePic();
+  if (card === ctx.loaded) drawProjection(u.reel, u.img);
+  if (card === ctx.phonePic?.card) showPhonePic();
 }
 function load(card, tier, files) {
   const im = new Image(); im.crossOrigin = 'anonymous';
   const end = ok => {
     im.onload = im.onerror = null; inFlight.delete(im);
-    if (disposed) return;
+    if (ctx.disposed) return;
     if (!ok && files.length > 1) return load(card, tier, files.slice(1)); // the tier's fallback file takes over the same slot
     try { if (ok) landed(card, tier, im); } catch (e) { console.error('[heap-room]', e); }
     loading--; pump();
@@ -1256,7 +1234,7 @@ function pump() {
 // now = true skips the queue: the one card the visitor has just picked up
 function request(card, tier, now = false) {
   const u = card.userData;
-  if (disposed || u.reel.kind === 'fan' || u.asked[tier] || u.tier >= tier) return;
+  if (ctx.disposed || u.reel.kind === 'fan' || u.asked[tier] || u.tier >= tier) return;
   u.asked[tier] = true;
   if (now) { loading++; load(card, tier, thumbFiles(u.reel, tier)); } else { loadQueue.push({ card, tier }); pump(); }
 }
@@ -1283,21 +1261,21 @@ const roomFit = aspect => needDist(RX, RZ, aspect) / needDist(4, 4, aspect);
 const tableCentre = new THREE.Vector3(TABLE.x, TABLE.top, TABLE.z);
 const SIT_CAM = { pos: tableCentre.clone().add(new THREE.Vector3(0, 2.0, 2.1)), target: tableCentre.clone() };
 const WATCH_CAM = { pos: SEAT.clone().add(new THREE.Vector3(0.7, 1.75, 2.1)), target: SCREEN_C.clone().addScaledVector(WALLS[SCR.wall].n, 1).add(new THREE.Vector3(0, -0.75, 0)) };
-let SORT_CAM = null, SHELF_SPOT = null, SHELF_STAND = null, shelfFacing = 0;
+ctx.sortCam = null; ctx.shelfSpot = null; ctx.shelfStand = null; ctx.shelfFacing = 0;
 function linkShelf() { // the album shelf's camera and standing spots; runs again after every buildItems()
-  SORT_CAM = SHELF_SPOT = SHELF_STAND = null;
-  if (!SHELF) return;
+  ctx.sortCam = ctx.shelfSpot = ctx.shelfStand = null;
+  if (!ctx.shelf) return;
   const albumsC = shelfLocal(new THREE.Vector3(0, 1.05, 0));
-  SORT_CAM = { pos: shelfLocal(new THREE.Vector3(-1.6, 2.2, 2.5)), target: albumsC };
-  SHELF_SPOT = shelfLocal(new THREE.Vector3(-0.75, 0, 0.9)); SHELF_SPOT.y = 0;
-  SHELF_STAND = shelfLocal(new THREE.Vector3(1.0, 0, 0.95)); SHELF_STAND.y = 0;
-  shelfFacing = SHELF.group.rotation.y + Math.PI;
+  ctx.sortCam = { pos: shelfLocal(new THREE.Vector3(-1.6, 2.2, 2.5)), target: albumsC };
+  ctx.shelfSpot = shelfLocal(new THREE.Vector3(-0.75, 0, 0.9)); ctx.shelfSpot.y = 0;
+  ctx.shelfStand = shelfLocal(new THREE.Vector3(1.0, 0, 0.95)); ctx.shelfStand.y = 0;
+  ctx.shelfFacing = ctx.shelf.group.rotation.y + Math.PI;
 }
 linkShelf();
-let mode = 'room', camGoal = null, held = null, heldFlipped = false, loaded = null, hovered = null, presenting = null, dragging = null;
-let walkTo = null, arrive = null, waypoints = [];
-let perch = null, seatTarget = null; // perch: the seat the visitor sits on in room mode · seatTarget: the seat being walked to
-let seatFrom = null, perchFrom = null; // the stand point the walk to seatTarget ends at · the stand point the visitor came to the perch from (they get up there)
+ctx.mode = 'room'; ctx.camGoal = null; ctx.held = null; ctx.heldFlipped = false; ctx.loaded = null; ctx.hovered = null; ctx.presenting = null; ctx.dragging = null;
+ctx.walkTo = null; ctx.arrive = null; ctx.waypoints = [];
+ctx.perch = null; ctx.seatTarget = null; // perch: the seat the visitor sits on in room mode · seatTarget: the seat being walked to
+ctx.seatFrom = null; ctx.perchFrom = null; // the stand point the walk to seatTarget ends at · the stand point the visitor came to the perch from (they get up there)
 const hint = $('hint');
 const HINTS = {
   room: '방향키·WASD 또는 바닥을 눌러 걷기 · 탁자, 책장, 문을 눌러 보세요',
@@ -1314,7 +1292,7 @@ const HINTS = {
   perch: '방향키·WASD 또는 바닥을 눌러 일어나기 · Esc로도 일어나요',
 };
 const setHint = k => { if (hint.dataset.k !== k) { hint.dataset.k = k; hint.textContent = HINTS[k]; } };
-const goTo = cam => { camGoal = cam; controls.enabled = false; };
+const goTo = cam => { ctx.camGoal = cam; controls.enabled = false; };
 
 // Live room contents, for a creator's editor. Dispatch on the element given to mountRoom once the room is up (#status hidden):
 //   root.dispatchEvent(new CustomEvent('heap:items', { detail: itemsArray }))
@@ -1332,31 +1310,31 @@ const goTo = cam => { camGoal = cam; controls.enabled = false; };
 // Walls, floor, table, heap, projector, phone and guestbook stay as they were built.
 on(root, 'heap:items', e => {
   if (!Array.isArray(e.detail)) return;
-  if (perch) unperch(); // the seat is about to be rebuilt
+  if (ctx.perch) unperch(); // the seat is about to be rebuilt
   buildItems(e.detail.filter(it => it && typeof it === 'object').map(it => ({ ...it })));
   // music that no longer has its radio, speaker or TV (or whose link was changed) stops
-  if (musicUrl && !ITEMS.items.some(it => it.fn?.kind === 'music' && it.fn.url === musicUrl)) closeMusic();
+  if (ctx.musicUrl && !ctx.build.items.some(it => it.fn?.kind === 'music' && it.fn.url === ctx.musicUrl)) closeMusic();
   linkShelf(); updateAlbums(); startSlots();
-  if (mode === 'sort') { if (SHELF) enterSort(); else exitSort(); }
+  if (ctx.mode === 'sort') { if (ctx.shelf) enterSort(); else exitSort(); }
 });
 on(root, 'heap:edit', e => { if (e.detail) closeMusic(); }); // heap-room.tsx: the 꾸미기 panel opened (true) or closed (false); the panel takes the dock's corner, so the music stops
 on(root, 'heap:saved', e => {
   const l = e.detail;
   if (!l || typeof l !== 'object' || !Array.isArray(l.items)) return;
-  BASE_LAYOUT = structuredClone(l);
-  ORIGINAL = { items: l.items.map(it => ({ ...it })), time: l.time ?? 'auto' };
+  ctx.baseLayout = structuredClone(l);
+  ctx.original = { items: l.items.map(it => ({ ...it })), time: l.time ?? 'auto' };
 });
 on(root, 'heap:get', e => {
   if (typeof e.detail !== 'function') return;
   getCatalogue().then(catalogue => {
-    if (disposed) return;
+    if (ctx.disposed) return;
     e.detail({
-      room: { w: 2 * RX, d: 2 * RZ }, layout: structuredClone(BASE_LAYOUT), items: ITEMS.items.map(it => ({ ...it })), catalogue,
+      room: { w: 2 * RX, d: 2 * RZ }, layout: structuredClone(ctx.baseLayout), items: ctx.build.items.map(it => ({ ...it })), catalogue,
       table: { x: TABLE.x, z: TABLE.z, w: TABLE.w, d: TABLE.d },
       door: DOOR ? { wall: DOOR.wall, at: DOOR.at } : null, window: WIN ? { wall: WIN.wall, at: WIN.at, w: WIN.w } : null,
-      time: timeChoice, original: { items: ORIGINAL.items.map(it => ({ ...it })), time: ORIGINAL.time },
+      time: ctx.timeChoice, original: { items: ctx.original.items.map(it => ({ ...it })), time: ctx.original.time },
       creatorLinks: creator.links.map(L => ({ ...L })), linktree: creator.linktree ?? null,
-      seats: ITEMS.seats.map(s => ({ id: s.id, kind: s.kind, x: s.pos.x, y: s.pos.y, z: s.pos.z, yaw: s.yaw })),
+      seats: ctx.build.seats.map(s => ({ id: s.id, kind: s.kind, x: s.pos.x, y: s.pos.y, z: s.pos.z, yaw: s.yaw })),
     });
   });
 });
@@ -1368,29 +1346,29 @@ ALBUMS.forEach((a, i) => {
   $('albumrow').appendChild(b);
 });
 function syncUI() {
-  const seated = mode === 'sit' || mode === 'watch';
-  $('stand').hidden = !(seated || perch);
-  $('flip').hidden = !(mode === 'sit' && held);
+  const seated = ctx.mode === 'sit' || ctx.mode === 'watch';
+  $('stand').hidden = !(seated || ctx.perch);
+  $('flip').hidden = !(ctx.mode === 'sit' && ctx.held);
   const isFan = c => c?.userData.reel.kind === 'fan';
-  $('srclink').hidden = !(mode === 'sit' && held) || isFan(held);
-  if (held && !isFan(held)) $('srclink').href = ytUrl(held.userData.reel);
-  $('eject').hidden = mode !== 'watch';
-  $('ytlink').hidden = mode !== 'watch' || isFan(loaded);
-  $('sortexit').hidden = mode !== 'sort';
-  $('albumrow').hidden = mode !== 'sort';
-  root.dispatchEvent(new CustomEvent('heap:mode', { detail: mode })); // heap-room.tsx shows its 꾸미기 button in room mode only
+  $('srclink').hidden = !(ctx.mode === 'sit' && ctx.held) || isFan(ctx.held);
+  if (ctx.held && !isFan(ctx.held)) $('srclink').href = ytUrl(ctx.held.userData.reel);
+  $('eject').hidden = ctx.mode !== 'watch';
+  $('ytlink').hidden = ctx.mode !== 'watch' || isFan(ctx.loaded);
+  $('sortexit').hidden = ctx.mode !== 'sort';
+  $('albumrow').hidden = ctx.mode !== 'sort';
+  root.dispatchEvent(new CustomEvent('heap:mode', { detail: ctx.mode })); // heap-room.tsx shows its 꾸미기 button in room mode only
 }
 
 function sit() {
-  mode = 'sit'; walkTo = null; arrive = null; waypoints = []; perch = null;
+  ctx.mode = 'sit'; ctx.walkTo = null; ctx.arrive = null; ctx.waypoints = []; ctx.perch = null;
   me.position.copy(SEAT); me.rotation.y = Math.PI;
   setHint('sit'); goTo(SIT_CAM); syncUI();
   requestPile(NEAR);
 }
 function stand() {
-  if (loaded) eject();
-  if (held) putBack();
-  mode = 'room'; hovered = null; controls.enabled = false; camGoal = null;
+  if (ctx.loaded) eject();
+  if (ctx.held) putBack();
+  ctx.mode = 'room'; ctx.hovered = null; controls.enabled = false; ctx.camGoal = null;
   me.position.copy(SEAT).add(new THREE.Vector3(0.6, 0, 0.5));
   setHint('room'); syncUI();
 }
@@ -1401,24 +1379,24 @@ function glowCard(c, v) { // both faces glow by their own picture, so the card r
     mat.emissive.set(v ? '#ffffff' : '#000000'); mat.emissiveMap = v ? mat.map : null; mat.emissiveIntensity = v; mat.needsUpdate = true;
   }
 }
-function pickUp(c) { held = c; heldFlipped = false; hovered = null; controls.enabled = false; settle(); setHint('held'); syncUI(); request(c, CLOSE, true); glowCard(c, readGlow); }
+function pickUp(c) { ctx.held = c; ctx.heldFlipped = false; ctx.hovered = null; controls.enabled = false; settle(); setHint('held'); syncUI(); request(c, CLOSE, true); glowCard(c, ctx.readGlow); }
 function dropOnTop(c) { // gently toward the middle of the pile, then fall into place
   const p = c.userData.place;
   c.userData.place = clampPlace({ x: TABLE.x + (p.x - TABLE.x) * 0.5 + gauss() * 0.15, z: TABLE.z + (p.z - TABLE.z) * 0.5 + gauss() * 0.1, yaw: p.yaw + gauss() * 0.6, faceUp: true });
   toTop(c);
 }
 function putBack() {
-  const c = held; held = null; heldFlipped = false; glowCard(c, 0);
+  const c = ctx.held; ctx.held = null; ctx.heldFlipped = false; glowCard(c, 0);
   dropOnTop(c); settle(); startAnim(c, 'drop');
-  if (!camGoal && mode === 'sit') controls.enabled = true;
+  if (!ctx.camGoal && ctx.mode === 'sit') controls.enabled = true;
   setHint('sit'); syncUI();
 }
-function flip() { if (held) heldFlipped = !heldFlipped; }
+function flip() { if (ctx.held) ctx.heldFlipped = !ctx.heldFlipped; }
 on($('flip'), 'click', flip);
 
 function feed() {
-  loaded = held; held = null; heldFlipped = false; mode = 'watch'; glowCard(loaded, 0);
-  const { reel, img } = loaded.userData;
+  ctx.loaded = ctx.held; ctx.held = null; ctx.heldFlipped = false; ctx.mode = 'watch'; glowCard(ctx.loaded, 0);
+  const { reel, img } = ctx.loaded.userData;
   drawProjection(reel, img); screen.material = screenOn;
   if (reel.kind !== 'fan') $('ytlink').href = ytUrl(reel);
   setHint('watch'); goTo(WATCH_CAM); syncUI();
@@ -1426,15 +1404,15 @@ function feed() {
 }
 function eject() {
   closePlayer();
-  const c = loaded; loaded = null; dropOnTop(c); settle(); startAnim(c, 'drop');
+  const c = ctx.loaded; ctx.loaded = null; dropOnTop(c); settle(); startAnim(c, 'drop');
   screen.material = screenIdle;
-  mode = 'sit'; setHint('sit'); goTo(SIT_CAM); syncUI();
+  ctx.mode = 'sit'; setHint('sit'); goTo(SIT_CAM); syncUI();
 }
-on($('stand'), 'click', () => (perch ? unperch() : stand()));
+on($('stand'), 'click', () => (ctx.perch ? unperch() : stand()));
 on($('eject'), 'click', eject);
 
 // official YouTube embed, flat and unobstructed; if this host forbids embeds, fall back to the link out
-let embedBlocked = false;
+ctx.embedBlocked = false;
 const player = $('player'), frameBox = $('player-frame'), note = $('player-note');
 // One official player at a time: the projector's and the music dock's share these two helpers, and opening either closes the other.
 const embedSrc = ({ video, list }) => `https://www.youtube-nocookie.com/embed/${video ?? 'videoseries'}?${new URLSearchParams({ autoplay: '1', playsinline: '1', rel: '0', ...(list ? { list } : {}) })}`;
@@ -1449,8 +1427,8 @@ function openPlayer(reel) {
   closeMusic(); // the projector takes over: only one YouTube player plays at a time
   $('player-title').textContent = reel.title || '';
   frameBox.innerHTML = '';
-  note.hidden = !embedBlocked;
-  if (!embedBlocked) {
+  note.hidden = !ctx.embedBlocked;
+  if (!ctx.embedBlocked) {
     const avail = Math.max(220, root.clientHeight - 230);
     let w, h;
     if (reel.wide) { w = Math.min(root.clientWidth - 32, 720, avail * 16 / 9); h = w * 9 / 16; }
@@ -1468,22 +1446,22 @@ on($('player-close'), 'click', closePlayer);
 // A visible official embed of 200 px or more with nothing laid over it: heap-room.css keeps the overlays and the 꾸미기 panel out of its corner (--music-w).
 // It starts only from the visitor's click on the carrier, which is the gesture the browser wants before it lets a video play with sound.
 const dock = $('music'), dockFrame = $('music-frame'), dockNote = $('music-note'), dockLink = $('music-link');
-let musicUrl = null, musicParsed = null;
+ctx.musicUrl = null; ctx.musicParsed = null;
 // The dock sits at the canvas's top right: 16 px from its edge, 8 px of padding, then the video. The canvas is what the 꾸미기 panel leaves of the room,
 // so the width the video may take is measured from it (not from the room): 16 + 8 + 8 + 16 px of room around it, and the room's name (top left) keeps its own width.
 const musicFit = () => Math.min(380, Math.floor(canvas.clientWidth - 48 - $('cname').getBoundingClientRect().width - 16));
 function openMusic(fn) {
   const p = opts.parseMusic(fn.url); // checked again here: the layout in the database is not trusted
-  if (!p || !player.hidden || (musicUrl === fn.url && !dock.hidden)) return;
-  closeMusic(); musicUrl = fn.url; musicParsed = p;
+  if (!p || !player.hidden || (ctx.musicUrl === fn.url && !dock.hidden)) return;
+  closeMusic(); ctx.musicUrl = fn.url; ctx.musicParsed = p;
   dock.hidden = false;
-  if (!embedBlocked && musicFit() >= 200) dockFrame.appendChild(makeFrame(embedSrc(p), '음악 플레이어')); // only a click gets here, and only a video 200 px wide or more is embedded
+  if (!ctx.embedBlocked && musicFit() >= 200) dockFrame.appendChild(makeFrame(embedSrc(p), '음악 플레이어')); // only a click gets here, and only a video 200 px wide or more is embedded
   layoutMusic();
 }
 // Sizes the dock to the room as it is now (also after a resize or the panel opening): a video that no longer fits 200 x 200 gives way to a link out,
 // and --music-w tells the CSS how much of the corner the overlays and the room-name line must leave free.
 function layoutMusic() {
-  if (dock.hidden || !musicParsed) return;
+  if (dock.hidden || !ctx.musicParsed) return;
   const fit = musicFit();
   if (dockFrame.firstChild && fit >= 200) {
     dockFrame.style.width = fit + 'px'; dockFrame.style.height = Math.max(200, Math.round(fit * 9 / 16)) + 'px';
@@ -1491,16 +1469,16 @@ function layoutMusic() {
     root.style.setProperty('--music-w', fit + 'px');
   } else {
     dockFrame.replaceChildren(); dockFrame.style.width = dockFrame.style.height = '0px';
-    dockNote.hidden = dockLink.hidden = false; dockLink.href = musicUrl;
+    dockNote.hidden = dockLink.hidden = false; dockLink.href = ctx.musicUrl;
     const w = Math.max(120, Math.min(300, fit));
     dockNote.style.maxWidth = w + 'px'; root.style.setProperty('--music-w', w + 'px');
   }
 }
-function closeMusic() { dockFrame.replaceChildren(); dock.hidden = true; musicUrl = null; musicParsed = null; root.style.removeProperty('--music-w'); }
+function closeMusic() { dockFrame.replaceChildren(); dock.hidden = true; ctx.musicUrl = null; ctx.musicParsed = null; root.style.removeProperty('--music-w'); }
 on($('music-close'), 'click', closeMusic);
 on(document, 'securitypolicyviolation', e => {
   if (!/youtube/.test(e.blockedURI || '')) return;
-  embedBlocked = true;
+  ctx.embedBlocked = true;
   if (!player.hidden) { frameBox.innerHTML = ''; frameBox.style.width = frameBox.style.height = '0px'; note.hidden = false; }
   if (!dock.hidden) { dockFrame.replaceChildren(); layoutMusic(); }
 });
@@ -1534,11 +1512,11 @@ function legacyLinks(into) {
   for (const L of creator.links) into.appendChild(linkBubble(L));
   if (creator.linktree) { const lt = el('div', 'bubble'); lt.appendChild(link(`${creator.linktree.replace(/^https:\/\//, '')} 전체 보기 ↗`, creator.linktree)); into.appendChild(lt); }
 }
-const hasPc = () => ITEMS.items.some(it => it.fn?.kind === 'pc');
-let phonePic = null; // { card, im }: the card whose picture the phone shows, so a sharper tier that lands later reaches it
+const hasPc = () => ctx.build.items.some(it => it.fn?.kind === 'pc');
+ctx.phonePic = null; // { card, im }: the card whose picture the phone shows, so a sharper tier that lands later reaches it
 function showPhonePic() {
-  const pic = phonePic.card.userData.img; // a canvas (fan drawing, cropped tier) or the close tier's own Image
-  if (pic) phonePic.im.src = pic.toDataURL ? pic.toDataURL('image/jpeg', 0.8) : pic.src;
+  const pic = ctx.phonePic.card.userData.img; // a canvas (fan drawing, cropped tier) or the close tier's own Image
+  if (pic) ctx.phonePic.im.src = pic.toDataURL ? pic.toDataURL('image/jpeg', 0.8) : pic.src;
 }
 function openPhone() {
   const feedEl = $('phone-feed'); feedEl.replaceChildren();
@@ -1548,13 +1526,13 @@ function openPhone() {
   open.addEventListener('click', e => { if (e.button || e.metaKey || e.ctrlKey || e.shiftKey) return; e.preventDefault(); opts.navigate(opts.bubbleHref); });
   bb.appendChild(open);
   feedEl.appendChild(bb);
-  const curCard = held || loaded, cur = curCard?.userData.reel;
-  phonePic = null;
+  const curCard = ctx.held || ctx.loaded, cur = curCard?.userData.reel;
+  ctx.phonePic = null;
   if (cur) {
     const b = el('div', 'bubble');
     b.appendChild(el('small', null, cur.kind === 'fan' ? `지금 보고 있는 팬 작품 · ${cur.by}` : '지금 보고 있는 사진'));
     const im = el('img'); im.crossOrigin = 'anonymous'; im.alt = ''; b.appendChild(im);
-    phonePic = { card: curCard, im }; showPhonePic();
+    ctx.phonePic = { card: curCard, im }; showPhonePic();
     b.appendChild(el('span', null, cur.title));
     if (cur.kind !== 'fan') b.appendChild(link('원본 보기 ↗', ytUrl(cur)));
     feedEl.appendChild(b);
@@ -1619,7 +1597,7 @@ on($('calendar'), 'click', e => { if (e.target.id === 'calendar') $('calendar').
 
 // TV (fn "latest"): sit down at the table, pick up the newest reel and feed it to the projector, the same steps as doing it by hand.
 function watchLatest() {
-  if (mode !== 'room') return;
+  if (ctx.mode !== 'room') return;
   const reel = newestReel(), card = reel && cards.find(c => c.userData.reel === reel);
   if (!card) { toast('아직 올라온 영상이 없어요'); return; }
   sit(); pickUp(card); feed();
@@ -1675,15 +1653,15 @@ if (gbForm) on(gbForm, 'submit', async e => {
   gbBusy = true; $('gb-submit').disabled = true; $('gb-msg').textContent = '';
   try {
     const res = await opts.addGuestbook(name);
-    if (disposed) return;
+    if (ctx.disposed) return;
     if (res.ok) {
       gbRows.set(res.entry.id, res.entry);
       $('gb-name').value = '';
       renderGuestbook(); toast(`${res.entry.name}님, 다녀가셨어요`);
     } else $('gb-msg').textContent = res.message;
   } catch {
-    if (!disposed) $('gb-msg').textContent = '지금은 남기지 못했어요. 잠시 뒤에 다시 시도해 주세요.';
-  } finally { gbBusy = false; if (!disposed) $('gb-submit').disabled = false; }
+    if (!ctx.disposed) $('gb-msg').textContent = '지금은 남기지 못했어요. 잠시 뒤에 다시 시도해 주세요.';
+  } finally { gbBusy = false; if (!ctx.disposed) $('gb-submit').disabled = false; }
 });
 on($('gb-close'), 'click', () => { $('guestbook').hidden = true; });
 
@@ -1691,16 +1669,16 @@ on($('gb-close'), 'click', () => { $('guestbook').hidden = true; });
 // The first cursor is the snapshot's serverTime; each reply carries the next. Overlapping rows are merged by id.
 let cursor = DATA.serverTime, polling = false;
 async function poll() {
-  if (disposed || polling) return;
+  if (ctx.disposed || polling) return;
   polling = true;
   try {
     const res = await fetch(`/api/heap/rooms/${encodeURIComponent(opts.roomUuid)}/changes?since=${encodeURIComponent(cursor)}`, { cache: 'no-store', signal: ac.signal });
-    if (!res.ok || disposed) return;
+    if (!res.ok || ctx.disposed) return;
     const d = await res.json();
-    if (disposed) return;
+    if (ctx.disposed) return;
     if (typeof d.cursor === 'string') cursor = d.cursor;
-    if (d.visits && Number.isFinite(d.visits.today) && Number.isFinite(d.visits.total)) { visits = { today: d.visits.today, total: d.visits.total }; renderMeta(); }
-    if (typeof d.creatorVisitedAt === 'string') { const day = fmtDay(d.creatorVisitedAt); if (day && day !== creatorDay) { creatorDay = day; renderCreatorVisit(); } }
+    if (d.visits && Number.isFinite(d.visits.today) && Number.isFinite(d.visits.total)) { ctx.visits = { today: d.visits.today, total: d.visits.total }; renderMeta(); }
+    if (typeof d.creatorVisitedAt === 'string') { const day = fmtDay(d.creatorVisitedAt); if (day && day !== ctx.creatorDay) { ctx.creatorDay = day; renderCreatorVisit(); } }
     for (const e of d.guestbook || []) gbRows.set(e.id, { id: e.id, name: e.name, createdAt: e.createdAt });
     if (!$('guestbook').hidden) renderGuestbook();
     // pieces: a newly landed one drops onto the heap. A card already on the heap stays when its piece is taken off (until fan pieces get their own screens)
@@ -1711,16 +1689,16 @@ async function poll() {
       landPiece(fan);
     }
   } catch (e) {
-    if (!disposed && e?.name !== 'AbortError') console.warn('[heap-room] poll', e);
+    if (!ctx.disposed && e?.name !== 'AbortError') console.warn('[heap-room] poll', e);
   } finally { polling = false; }
 }
 function schedulePoll() {
-  clearTimeout(pollTimer);
-  if (disposed || document.hidden) return;
-  pollTimer = setTimeout(async () => { await poll(); schedulePoll(); }, opts.pollMs);
+  clearTimeout(ctx.pollTimer);
+  if (ctx.disposed || document.hidden) return;
+  ctx.pollTimer = setTimeout(async () => { await poll(); schedulePoll(); }, opts.pollMs);
 }
-on(document, 'visibilitychange', () => { if (document.hidden) clearTimeout(pollTimer); else { poll().then(schedulePoll); } });
-cleanups.push(() => clearTimeout(pollTimer));
+on(document, 'visibilitychange', () => { if (document.hidden) clearTimeout(ctx.pollTimer); else { poll().then(schedulePoll); } });
+cleanups.push(() => clearTimeout(ctx.pollTimer));
 
 // rooms: the door lists the other rooms; jumping fades out and hands the chosen id to opts.onNavigate
 function openRooms() {
@@ -1742,14 +1720,14 @@ function openRooms() {
 }
 function jump(id) {
   $('rooms').hidden = true; $('fade').classList.add('on');
-  setTimeout(() => { if (!disposed) opts.onNavigate(id); }, 380);
+  setTimeout(() => { if (!ctx.disposed) opts.onNavigate(id); }, 380);
 }
 on($('rooms-close'), 'click', () => { $('rooms').hidden = true; });
 
 // album shelf: browse albums (the sorting round lives in archive/album-sort/)
 function updateAlbums() {
-  if (!SHELF) return;
-  for (const a of SHELF.albums) {
+  if (!ctx.shelf) return;
+  for (const a of ctx.shelf.albums) {
     const n = [...filed.values()].filter(v => v.album === a.key).length;
     a.mesh.scale.x = Math.min(0.32, 0.13 + n * 0.008); a.count = n;
     const g = a.lc.getContext('2d');
@@ -1764,14 +1742,14 @@ function updateAlbums() {
   }
 }
 function enterSort() { // "sort" mode = standing at the album shelf, browsing albums
-  if (!SHELF) return;
-  mode = 'sort'; walkTo = null; arrive = null; waypoints = []; perch = null;
-  me.position.copy(SHELF_STAND); me.rotation.y = shelfFacing - 0.4;
-  setHint('shelf'); goTo(SORT_CAM); syncUI();
+  if (!ctx.shelf) return;
+  ctx.mode = 'sort'; ctx.walkTo = null; ctx.arrive = null; ctx.waypoints = []; ctx.perch = null;
+  me.position.copy(ctx.shelfStand); me.rotation.y = ctx.shelfFacing - 0.4;
+  setHint('shelf'); goTo(ctx.sortCam); syncUI();
 }
-function exitSort() { mode = 'room'; camGoal = null; setHint('room'); syncUI(); }
+function exitSort() { ctx.mode = 'room'; ctx.camGoal = null; setHint('room'); syncUI(); }
 on($('sortexit'), 'click', exitSort);
-const albumAction = key => { if (mode === 'sort') openAlbum(key); };
+const albumAction = key => { if (ctx.mode === 'sort') openAlbum(key); };
 function openAlbum(key) {
   const list = $('grid-list'); list.innerHTML = '';
   const items = reels.filter(r => filed.get(r.id)?.album === key);
@@ -1787,8 +1765,8 @@ function openAlbum(key) {
   $('grid').hidden = false;
 }
 on($('grid-close'), 'click', () => { $('grid').hidden = true; });
-let toastTimer = 0;
-function toast(t) { $('toast').textContent = t; toastTimer = 2.2; }
+ctx.toastTimer = 0;
+function toast(t) { $('toast').textContent = t; ctx.toastTimer = 2.2; }
 
 
 // ====================================================================================
@@ -1808,15 +1786,15 @@ on(window, 'keydown', ev => {
   if (ev.target.closest?.('input, textarea')) { if (ev.key === 'Escape') $('guestbook').hidden = true; return; }
   if (ev.target.closest?.('.room-editor')) return; // a key pressed inside the 꾸미기 panel belongs to the panel (it closes itself on Esc)
   const k = ev.key.toLowerCase(); keys.add(k);
-  if (mode === 'room' && !anyOverlay() && (k === 'e' || k === 'enter')) { if (nearTable()) sit(); else if (nearShelf()) enterSort(); else if (nearDoor()) openRooms(); else if (nearBook()) openGuestbook(); }
-  if (mode === 'sit' && held && k === 'f') flip();
+  if (ctx.mode === 'room' && !anyOverlay() && (k === 'e' || k === 'enter')) { if (nearTable()) sit(); else if (nearShelf()) enterSort(); else if (nearDoor()) openRooms(); else if (nearBook()) openGuestbook(); }
+  if (ctx.mode === 'sit' && ctx.held && k === 'f') flip();
   if (k === 'escape') {
     for (const id of OVERLAYS) if (!$(id).hidden) { $(id).hidden = true; return; }
-    if (mode === 'watch') eject();
-    else if (mode === 'sort') exitSort();
-    else if (held) putBack();
-    else if (mode === 'sit') stand();
-    else if (perch) unperch();
+    if (ctx.mode === 'watch') eject();
+    else if (ctx.mode === 'sort') exitSort();
+    else if (ctx.held) putBack();
+    else if (ctx.mode === 'sit') stand();
+    else if (ctx.perch) unperch();
   }
 });
 on(window, 'keyup', ev => keys.delete(ev.key.toLowerCase()));
@@ -1827,7 +1805,7 @@ const deskPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(TABLE.top + 0.12
 let down = null, dragOff = new THREE.Vector2();
 canvas.addEventListener('pointerdown', ev => {
   down = { x: ev.clientX, y: ev.clientY, card: null };
-  if (mode !== 'sit' || held || camGoal) return;
+  if (ctx.mode !== 'sit' || ctx.held || ctx.camGoal) return;
   rayFrom(ev);
   const hit = ray.intersectObjects(pickables, false)[0];
   if (hit) {
@@ -1836,56 +1814,56 @@ canvas.addEventListener('pointerdown', ev => {
   }
 }, { capture: true });
 canvas.addEventListener('pointermove', ev => {
-  if (down?.card && !dragging && Math.hypot(ev.clientX - down.x, ev.clientY - down.y) > 6) {
-    dragging = down.card; hovered = null; canvas.setPointerCapture?.(ev.pointerId);
+  if (down?.card && !ctx.dragging && Math.hypot(ev.clientX - down.x, ev.clientY - down.y) > 6) {
+    ctx.dragging = down.card; ctx.hovered = null; canvas.setPointerCapture?.(ev.pointerId);
     settle(); setHint('drag');
   }
-  if (dragging) {
+  if (ctx.dragging) {
     rayFrom(ev);
-    if (ray.ray.intersectPlane(deskPlane, _hit)) Object.assign(dragging.userData.place, clampPlace({ x: _hit.x + dragOff.x, z: _hit.z + dragOff.y, yaw: dragging.userData.place.yaw, faceUp: dragging.userData.place.faceUp }));
+    if (ray.ray.intersectPlane(deskPlane, _hit)) Object.assign(ctx.dragging.userData.place, clampPlace({ x: _hit.x + dragOff.x, z: _hit.z + dragOff.y, yaw: ctx.dragging.userData.place.yaw, faceUp: ctx.dragging.userData.place.faceUp }));
     canvas.style.cursor = 'grabbing';
     return;
   }
   if (ev.buttons) return;
   rayFrom(ev);
-  if (mode === 'sort') { canvas.style.cursor = SHELF && ray.intersectObjects(SHELF.albums.flatMap(a => [a.mesh, a.label]), false).length ? 'pointer' : 'default'; return; }
-  if (mode === 'room') { canvas.style.cursor = ray.intersectObjects([...ITEMS.slotMeshes, ...ITEMS.seatMeshes], false).length ? 'pointer' : ''; return; }
-  if (mode !== 'sit' || camGoal) return;
+  if (ctx.mode === 'sort') { canvas.style.cursor = ctx.shelf && ray.intersectObjects(ctx.shelf.albums.flatMap(a => [a.mesh, a.label]), false).length ? 'pointer' : 'default'; return; }
+  if (ctx.mode === 'room') { canvas.style.cursor = ray.intersectObjects([...ctx.build.slotMeshes, ...ctx.build.seatMeshes], false).length ? 'pointer' : ''; return; }
+  if (ctx.mode !== 'sit' || ctx.camGoal) return;
   const hit = ray.intersectObjects([...pickables, ...projParts, ...phoneParts], false)[0];
-  hovered = hit && !held && hit.object.userData.card ? hit.object.userData.card : null;
+  ctx.hovered = hit && !ctx.held && hit.object.userData.card ? hit.object.userData.card : null;
   canvas.style.cursor = hit ? 'pointer' : 'grab';
 });
 canvas.addEventListener('pointerup', ev => {
-  const wasDrag = dragging;
-  if (dragging) {
-    const c = dragging; dragging = null; toTop(c); settle(); startAnim(c, 'drop'); c.userData.anim.arc = 0.02;
+  const wasDrag = ctx.dragging;
+  if (ctx.dragging) {
+    const c = ctx.dragging; ctx.dragging = null; toTop(c); settle(); startAnim(c, 'drop'); c.userData.anim.arc = 0.02;
     setHint('sit');
   }
-  if (mode === 'sit' && !held && !camGoal) controls.enabled = true;
+  if (ctx.mode === 'sit' && !ctx.held && !ctx.camGoal) controls.enabled = true;
   const d = down; down = null;
   if (wasDrag || !d || Math.hypot(ev.clientX - d.x, ev.clientY - d.y) > 6) return;
   rayFrom(ev);
-  if (mode === 'watch') { if (player.hidden && ray.intersectObject(screen, false).length) openPlayer(loaded.userData.reel); return; }
-  if (camGoal) return;
-  if (mode === 'sort') { const h = SHELF && ray.intersectObjects(SHELF.albums.flatMap(a => [a.mesh, a.label]), false)[0]; if (h) albumAction(h.object.userData.album); return; }
-  if (mode === 'sit') {
+  if (ctx.mode === 'watch') { if (player.hidden && ray.intersectObject(screen, false).length) openPlayer(ctx.loaded.userData.reel); return; }
+  if (ctx.camGoal) return;
+  if (ctx.mode === 'sort') { const h = ctx.shelf && ray.intersectObjects(ctx.shelf.albums.flatMap(a => [a.mesh, a.label]), false)[0]; if (h) albumAction(h.object.userData.album); return; }
+  if (ctx.mode === 'sit') {
     const hits = ray.intersectObjects([...pickables, ...projParts, ...phoneParts], false);
-    if (held && hits[0]?.object.userData.card === held) return flip();
-    const hit = hits.find(h => h.object.userData.card !== held);
-    if (hit && isProj(hit.object)) return held ? feed() : setHint('needcard');
+    if (ctx.held && hits[0]?.object.userData.card === ctx.held) return flip();
+    const hit = hits.find(h => h.object.userData.card !== ctx.held);
+    if (hit && isProj(hit.object)) return ctx.held ? feed() : setHint('needcard');
     if (hit && isPhone(hit.object)) return openPhone();
-    if (held) return putBack();
+    if (ctx.held) return putBack();
     if (hit) pickUp(hit.object.userData.card);
     return;
   }
-  const hit = ray.intersectObjects([tableTop, ...pickables, ...projParts, ...phoneParts, ...ITEMS.slotMeshes, ...ITEMS.seatMeshes, ...shelfParts, ...doorParts, ...bookParts, floor], false)[0];
+  const hit = ray.intersectObjects([tableTop, ...pickables, ...projParts, ...phoneParts, ...ctx.build.slotMeshes, ...ctx.build.seatMeshes, ...shelfParts, ...doorParts, ...bookParts, floor], false)[0];
   if (!hit) return;
   if (hit.object.userData.slot) return openSlot(hit.object.userData.slot); // a PC, a frame, a TV, a radio or a calendar: it acts where the visitor stands
   if (hit.object.userData.seats) return sitOn(hit.object.userData.seats, hit.point); // a chair, a sofa or a rug: walk there and sit
   const p = hit.point, onTableFoot = p.x > TBOX.x0 && p.x < TBOX.x1 && p.z > TBOX.z0 && p.z < TBOX.z1;
   if (doorParts.includes(hit.object)) walkRoute(DOOR_SPOT.clone(), 'door');
   else if (bookParts.includes(hit.object)) walkRoute(BOOK_SPOT.clone(), 'book');
-  else if (shelfParts.includes(hit.object)) walkRoute(SHELF_SPOT.clone(), 'sort');
+  else if (shelfParts.includes(hit.object)) walkRoute(ctx.shelfSpot.clone(), 'sort');
   else if (hit.object === floor && !onTableFoot) walkRoute(p.clone().setY(0), null);
   else walkRoute(SEAT.clone(), 'sit');
 });
@@ -1903,7 +1881,7 @@ function crossesTable(a, b) {
 // A seat is entered from one of its stand points, reached by a walk planned around every walk obstacle, and the visitor sits only on arriving there.
 // A seat whose centre lies inside the photo table, the guestbook stand or another item's own footprint is refused, so nobody ends up inside furniture.
 // perchOn / unperch: the seat's pose is held every frame by stepCharacter; any walking key, a click on the floor or Esc stands the visitor up at the stand point they came from.
-const walkBoxes = () => [OBST[0], ...ITEMS.obst, ...OBST.slice(1)];
+const walkBoxes = () => [OBST[0], ...ctx.build.obst, ...OBST.slice(1)];
 const walkFree = (x, z, margin = 0.05) => x > -RX + 0.35 && x < RX - 0.3 && z > -RZ + 0.35 && z < RZ - 0.3 && !walkBoxes().some(o => Math.abs(x - o.x) < o.hw + margin && Math.abs(z - o.z) < o.hd + margin);
 const seatUsable = s => s.pos.x > -RX + 0.2 && s.pos.x < RX - 0.2 && s.pos.z > -RZ + 0.2 && s.pos.z < RZ - 0.2 &&
   !walkBoxes().some(o => o.owner !== s.item && Math.abs(s.pos.x - o.x) < (o.rhw ?? o.hw) + 0.1 && Math.abs(s.pos.z - o.z) < (o.rhd ?? o.hd) + 0.1);
@@ -1958,7 +1936,7 @@ function planPath(from, to) {
 function sitOn(seats, point) { // the seat of this item nearest to where the click landed
   const s = seats.reduce((a, b) => (Math.hypot(a.pos.x - point.x, a.pos.z - point.z) <= Math.hypot(b.pos.x - point.x, b.pos.z - point.z) ? a : b));
   if (!seatUsable(s)) { toast('여기에는 앉을 수 없어요'); return; }
-  if (perch) unperch();
+  if (ctx.perch) unperch();
   const from = me.position.clone().setY(0);
   let best = null;
   for (const st of s.stands) {
@@ -1969,40 +1947,40 @@ function sitOn(seats, point) { // the seat of this item nearest to where the cli
     if (!best || len < best.len) best = { st, path, len };
   }
   if (!best) { toast('거기까지 갈 길이 없어요'); return; }
-  waypoints = best.path.slice(); walkTo = waypoints.shift(); arrive = 'seat'; seatTarget = s; seatFrom = best.st;
+  ctx.waypoints = best.path.slice(); ctx.walkTo = ctx.waypoints.shift(); ctx.arrive = 'seat'; ctx.seatTarget = s; ctx.seatFrom = best.st;
 }
 function perchOn(s) {
-  if (!s || !seatFrom || Math.hypot(me.position.x - seatFrom.x, me.position.z - seatFrom.z) > 0.3) return; // only from the stand point the walk was planned to
-  perch = s; perchFrom = seatFrom; walkTo = null; arrive = null; waypoints = [];
+  if (!s || !ctx.seatFrom || Math.hypot(me.position.x - ctx.seatFrom.x, me.position.z - ctx.seatFrom.z) > 0.3) return; // only from the stand point the walk was planned to
+  ctx.perch = s; ctx.perchFrom = ctx.seatFrom; ctx.walkTo = null; ctx.arrive = null; ctx.waypoints = [];
   setHint('perch'); syncUI();
 }
 function unperch() {
-  if (!perch) return;
-  perch = null;
-  me.position.copy(perchFrom).setY(0); collide(me.position); // back onto the floor where the seat was entered from
+  if (!ctx.perch) return;
+  ctx.perch = null;
+  me.position.copy(ctx.perchFrom).setY(0); collide(me.position); // back onto the floor where the seat was entered from
   setHint('room'); syncUI();
 }
 function walkRoute(to, action) {
-  if (perch) unperch();
+  if (ctx.perch) unperch();
   const from = me.position.clone().setY(0);
-  waypoints = [to]; arrive = action;
+  ctx.waypoints = [to]; ctx.arrive = action;
   if (crossesTable(from, to)) {
     const corners = [[TBOX.x0, TBOX.z0], [TBOX.x1, TBOX.z0], [TBOX.x0, TBOX.z1], [TBOX.x1, TBOX.z1]].map(([x, z]) => new THREE.Vector3(x, 0, z));
     const ok = corners.filter(c => !crossesTable(from, c) && !crossesTable(c, to));
-    if (ok.length) waypoints = [ok.sort((p, q) => (from.distanceTo(p) + p.distanceTo(to)) - (from.distanceTo(q) + q.distanceTo(to)))[0], to];
+    if (ok.length) ctx.waypoints = [ok.sort((p, q) => (from.distanceTo(p) + p.distanceTo(to)) - (from.distanceTo(q) + q.distanceTo(to)))[0], to];
     else {
       const near = corners.filter(c => !crossesTable(from, c)).sort((p, q) => from.distanceTo(p) - from.distanceTo(q))[0];
       const second = near && corners.filter(c => c !== near && !crossesTable(near, c) && !crossesTable(c, to)).sort((p, q) => p.distanceTo(to) - q.distanceTo(to))[0];
-      waypoints = second ? [near, second, to] : [to];
+      ctx.waypoints = second ? [near, second, to] : [to];
     }
   }
-  walkTo = waypoints.shift();
+  ctx.walkTo = ctx.waypoints.shift();
 }
 function collide(p) {
   p.x = THREE.MathUtils.clamp(p.x, -RX + 0.35, RX - 0.3);
   p.z = THREE.MathUtils.clamp(p.z, -RZ + 0.35, RZ - 0.3);
   // the table, the items, then the guestbook stand: the order they were checked in when all of them shared OBST
-  for (const o of [OBST[0], ...ITEMS.obst, ...OBST.slice(1)]) {
+  for (const o of [OBST[0], ...ctx.build.obst, ...OBST.slice(1)]) {
     const dx = p.x - o.x, dz = p.z - o.z;
     if (Math.abs(dx) < o.hw && Math.abs(dz) < o.hd) {
       const px = o.hw - Math.abs(dx), pz = o.hd - Math.abs(dz);
@@ -2011,22 +1989,22 @@ function collide(p) {
   }
 }
 const nearTable = () => me.position.distanceTo(SEAT) < 1.1;
-const nearShelf = () => !!SHELF_SPOT && me.position.distanceTo(SHELF_SPOT) < 1.1;
+const nearShelf = () => !!ctx.shelfSpot && me.position.distanceTo(ctx.shelfSpot) < 1.1;
 const nearDoor = () => !!DOOR_SPOT && me.position.distanceTo(DOOR_SPOT) < 0.7;
 const nearBook = () => !!BOOK_SPOT && me.position.distanceTo(BOOK_SPOT) < 0.7;
 const UP = new THREE.Vector3(-1, 0, -1).normalize(), RIGHT = new THREE.Vector3(1, 0, -1).normalize();
 const mv = new THREE.Vector3();
 let walkPhase = 0;
 function arrived() {
-  if (waypoints.length) { walkTo = waypoints.shift(); return; }
-  const a = arrive; walkTo = null; arrive = null;
-  if (a === 'sit') sit(); else if (a === 'sort') enterSort(); else if (a === 'door') openRooms(); else if (a === 'book') openGuestbook(); else if (a === 'seat') perchOn(seatTarget);
+  if (ctx.waypoints.length) { ctx.walkTo = ctx.waypoints.shift(); return; }
+  const a = ctx.arrive; ctx.walkTo = null; ctx.arrive = null;
+  if (a === 'sit') sit(); else if (a === 'sort') enterSort(); else if (a === 'door') openRooms(); else if (a === 'book') openGuestbook(); else if (a === 'seat') perchOn(ctx.seatTarget);
 }
 const WALK_KEYS = ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
 function stepCharacter(dt) {
-  if (perch) {
+  if (ctx.perch) {
     if (anyOverlay() || !WALK_KEYS.some(k => keys.has(k))) { // sitting: the pose stays until a walking key is pressed
-      me.position.set(perch.pos.x, perch.pos.y - 0.28, perch.pos.z); me.rotation.y = perch.yaw; legL.rotation.x = legR.rotation.x = -1.2;
+      me.position.set(ctx.perch.pos.x, ctx.perch.pos.y - 0.28, ctx.perch.pos.z); me.rotation.y = ctx.perch.yaw; legL.rotation.x = legR.rotation.x = -1.2;
       return;
     }
     unperch();
@@ -2038,23 +2016,23 @@ function stepCharacter(dt) {
     if (keys.has('d') || keys.has('arrowright')) mv.add(RIGHT);
     if (keys.has('a') || keys.has('arrowleft')) mv.sub(RIGHT);
   }
-  if (mv.lengthSq()) { walkTo = null; arrive = null; waypoints = []; mv.normalize(); }
-  else if (walkTo) {
-    mv.subVectors(walkTo, me.position).setY(0);
+  if (mv.lengthSq()) { ctx.walkTo = null; ctx.arrive = null; ctx.waypoints = []; mv.normalize(); }
+  else if (ctx.walkTo) {
+    mv.subVectors(ctx.walkTo, me.position).setY(0);
     const gap = mv.length();
     // a seat is entered only from its stand point, so the last step onto it never overshoots: within one step the visitor lands on it
-    if (arrive === 'seat' && !waypoints.length && gap <= 2.4 * dt) { me.position.x = walkTo.x; me.position.z = walkTo.z; mv.set(0, 0, 0); return arrived(); }
-    if (gap < (waypoints.length ? 0.2 : 0.08)) { mv.set(0, 0, 0); return arrived(); }
+    if (ctx.arrive === 'seat' && !ctx.waypoints.length && gap <= 2.4 * dt) { me.position.x = ctx.walkTo.x; me.position.z = ctx.walkTo.z; mv.set(0, 0, 0); return arrived(); }
+    if (gap < (ctx.waypoints.length ? 0.2 : 0.08)) { mv.set(0, 0, 0); return arrived(); }
     mv.normalize();
   }
   const moving = mv.lengthSq() > 0;
   if (moving) {
     const before = me.position.clone();
     me.position.addScaledVector(mv, 2.4 * dt); collide(me.position);
-    if (walkTo && me.position.distanceTo(before) < 0.2 * 2.4 * dt) {
-      if (waypoints.length) return arrived();
-      if ((arrive === 'sit' && nearTable()) || (arrive === 'sort' && nearShelf()) || (arrive === 'door' && nearDoor()) || (arrive === 'book' && nearBook())) return arrived();
-      walkTo = null; arrive = null;
+    if (ctx.walkTo && me.position.distanceTo(before) < 0.2 * 2.4 * dt) {
+      if (ctx.waypoints.length) return arrived();
+      if ((ctx.arrive === 'sit' && nearTable()) || (ctx.arrive === 'sort' && nearShelf()) || (ctx.arrive === 'door' && nearDoor()) || (ctx.arrive === 'book' && nearBook())) return arrived();
+      ctx.walkTo = null; ctx.arrive = null;
     }
     const want = Math.atan2(mv.x, mv.z);
     let dr = want - me.rotation.y; dr = Math.atan2(Math.sin(dr), Math.cos(dr));
@@ -2078,38 +2056,38 @@ function resize() {
   const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
   layoutMusic();
   renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
-  if (raf) renderer.render(scene, camera); // setSize clears the canvas; draw again so no blank frame shows
+  if (ctx.raf) renderer.render(scene, camera); // setSize clears the canvas; draw again so no blank frame shows
 }
 on(window, 'resize', resize);
 const sizeWatch = new ResizeObserver(resize); sizeWatch.observe(canvas);
 cleanups.push(() => sizeWatch.disconnect());
 
 function frame() {
-  if (disposed) return;
+  if (ctx.disposed) return;
   const rawDt = clock.getDelta(), dt = Math.min(rawDt, 0.05), t = clock.elapsedTime, a = reduced ? 1 : 1 - Math.exp(-dt * 7);
-  if (mode === 'room') {
+  if (ctx.mode === 'room') {
     stepCharacter(Math.min(rawDt, 0.2));
     const fit = Math.max(1, 1.25 / camera.aspect) * roomFit(camera.aspect);
     roomGoal.copy(ROOM_CAM.target).addScaledVector(ROOM_CAM.pos.clone().sub(ROOM_CAM.target), fit);
     camera.position.lerp(roomGoal, a); controls.target.lerp(ROOM_CAM.target, a); camera.lookAt(controls.target);
   } else {
-    const seated = mode === 'sit' || mode === 'watch';
+    const seated = ctx.mode === 'sit' || ctx.mode === 'watch';
     me.position.y = seated ? -0.18 : 0; legL.rotation.x = legR.rotation.x = seated ? -1.2 : 0;
-    if (camGoal) {
-      camera.position.lerp(camGoal.pos, a); controls.target.lerp(camGoal.target, a); camera.lookAt(controls.target);
-      if (camera.position.distanceTo(camGoal.pos) < 0.02 || reduced) { camGoal = null; controls.enabled = mode === 'sit' && !held && !dragging; }
-    } else if (mode === 'sit') controls.update();
+    if (ctx.camGoal) {
+      camera.position.lerp(ctx.camGoal.pos, a); controls.target.lerp(ctx.camGoal.target, a); camera.lookAt(controls.target);
+      if (camera.position.distanceTo(ctx.camGoal.pos) < 0.02 || reduced) { ctx.camGoal = null; controls.enabled = ctx.mode === 'sit' && !ctx.held && !ctx.dragging; }
+    } else if (ctx.mode === 'sit') controls.update();
   }
-  if (toastTimer > 0 && (toastTimer -= rawDt) <= 0) $('toast').textContent = '';
-  const on = mode === 'watch';
+  if (ctx.toastTimer > 0 && (ctx.toastTimer -= rawDt) <= 0) $('toast').textContent = '';
+  const on = ctx.mode === 'watch';
   const flick = 0.93 + 0.04 * Math.sin(t * 23) + 0.03 * Math.sin(t * 57);
   beamMat.opacity += ((on ? 0.07 * flick : 0) - beamMat.opacity) * a;
   projLight.intensity += ((on ? 2.2 * flick : 0) - projLight.intensity) * a;
   if (on) { screenOn.color.setScalar(flick); reelA.rotation.x = reelB.rotation.x = t * 3; }
   phoneDot.visible = Math.sin(t * 3) > -0.2;
   tickClock();
-  const lampNow = Math.max(0, lampBase + Math.sin(t * 1.3) * 0.05);
-  for (const l of ITEMS.lamps) if (l.light) l.light.intensity = lampNow;
+  const lampNow = Math.max(0, ctx.lampBase + Math.sin(t * 1.3) * 0.05);
+  for (const l of ctx.build.lamps) if (l.light) l.light.intensity = lampNow;
   stepMotes(t);
   // cards
   const tn = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
@@ -2118,21 +2096,21 @@ function frame() {
   for (const c of cards) {
     const d = c.userData.d;
     if (c.userData.fly) {
-      want.copy(c.userData.fly); flyQ.setFromAxisAngle(Yv, SHELF.group.rotation.y);
+      want.copy(c.userData.fly); flyQ.setFromAxisAngle(Yv, ctx.shelf.group.rotation.y);
       if (c.position.distanceTo(want) < 0.08) { c.userData.fly = null; c.position.copy(c.userData.home.pos); c.quaternion.copy(c.userData.home.quat); continue; }
       c.position.lerp(want, Math.min(1, a * 1.6)); c.quaternion.slerp(flyQ, a);
       continue;
     }
-    if (c === held) {
+    if (c === ctx.held) {
       const dist = Math.max(d.h / (1.5 * tn), d.w / (1.7 * tn * camera.aspect));
       want.copy(camera.position).addScaledVector(dir, dist); wantQ.copy(camera.quaternion);
-      if (heldFlipped) wantQ.multiply(FLIP);
-    } else if (c === presenting) {
+      if (ctx.heldFlipped) wantQ.multiply(FLIP);
+    } else if (c === ctx.presenting) {
       const dist = Math.max(d.h / (0.9 * tn), d.w / (1.0 * tn * camera.aspect));
       want.copy(camera.position).addScaledVector(dir, dist).addScaledVector(camUp, -0.16 * dist * tn); wantQ.copy(camera.quaternion);
-    } else if (c === loaded) {
+    } else if (c === ctx.loaded) {
       want.copy(SLOT.pos); want.y += d.h / 2; wantQ.copy(SLOT.quat);
-    } else if (c === dragging) {
+    } else if (c === ctx.dragging) {
       const p = c.userData.place, below = cards.filter(o => o !== c && inPile(o));
       want.set(p.x, supportAt(p.x, p.z, below) + 0.05, p.z);
       wantQ.copy(restPose(c, []).quat);
@@ -2141,12 +2119,12 @@ function frame() {
     } else {
       if (c.userData.anim) { stepAnim(c, animDt); continue; }
       want.copy(c.userData.home.pos); wantQ.copy(c.userData.home.quat);
-      if (c === hovered) want.y += 0.012;
+      if (c === ctx.hovered) want.y += 0.012;
     }
     c.position.lerp(want, a); c.quaternion.slerp(wantQ, a);
   }
   renderer.render(scene, camera);
-  raf = requestAnimationFrame(frame);
+  ctx.raf = requestAnimationFrame(frame);
 }
 
 async function fontsReady() {
@@ -2154,7 +2132,7 @@ async function fontsReady() {
   await Promise.race([wait, new Promise(r => setTimeout(r, 3000))]);
 }
 await fontsReady(); // the room does not wait for thumbnails: buildHeap() queues them and each card fills in as its picture lands
-if (disposed) return;
+if (ctx.disposed) return;
 buildHeap();
 updateAlbums();
 startSlots(); // keepsakes paint with their fonts and fetch their thumbnails from here on
@@ -2165,19 +2143,19 @@ $('status').hidden = true;
 frame();
 root.dispatchEvent(new CustomEvent('heap:ready'));
 // a signed-in visitor is recorded once per mount (the server keeps one row per person per day); anonymous viewers record nothing
-if (opts.signedIn) opts.recordVisit().then(r => { if (!disposed && r?.ok && r.recorded) poll(); }).catch(() => {});
+if (opts.signedIn) opts.recordVisit().then(r => { if (!ctx.disposed && r?.ok && r.recorded) poll(); }).catch(() => {});
 schedulePoll();
 }
 
-run().catch(e => { if (!disposed) console.error('[heap-room]', e); });
+run().catch(e => { if (!ctx.disposed) console.error('[heap-room]', e); });
 
 return function dispose() {
-  if (disposed) return;
-  disposed = true;
+  if (ctx.disposed) return;
+  ctx.disposed = true;
   // every step runs even when another one throws: a half-finished dispose would leave the poll timer, the frame loop or the listeners of a dead engine running
   const safe = (step, what) => { try { step(); } catch (e) { console.error('[heap-room] dispose:', what, e); } };
-  safe(() => clearTimeout(pollTimer), 'poll timer');
-  safe(() => cancelAnimationFrame(raf), 'frame loop');
+  safe(() => clearTimeout(ctx.pollTimer), 'poll timer');
+  safe(() => cancelAnimationFrame(ctx.raf), 'frame loop');
   safe(() => ac.abort(), 'listeners and requests');
   while (cleanups.length) safe(cleanups.pop(), 'cleanup');
   // put the React-rendered nodes back to their first-render state so a later mount starts clean
@@ -2186,6 +2164,6 @@ return function dispose() {
   safe(() => { $('status').hidden = false; $('fade').classList.remove('on'); }, 'status');
   safe(() => { $('toast').textContent = ''; $('gb-msg').textContent = ''; $('visit').textContent = ''; $('hint').textContent = ''; delete $('hint').dataset.k; }, 'texts');
   safe(() => { root.style.removeProperty('--clay'); root.style.removeProperty('--music-w'); }, 'root style');
-  safe(() => { if (roomTitle && document.title === roomTitle) document.title = prevTitle; }, 'title');
+  safe(() => { if (ctx.roomTitle && document.title === ctx.roomTitle) document.title = prevTitle; }, 'title');
 };
 }

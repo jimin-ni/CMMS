@@ -74,7 +74,7 @@ export function HeapRoom({
     const onMode = (e: Event) => setMode((e as CustomEvent<string>).detail);
     root.addEventListener("heap:ready", onReady);
     root.addEventListener("heap:mode", onMode);
-    import("./room-engine").then(({ mountRoom }) => {
+    import("./engine").then(({ mountRoom }) => {
       // StrictMode의 첫 번째 mount는 여기서 걸러져 엔진이 한 번만 뜬다.
       if (cancelled) return;
       dispose = mountRoom(root, {
