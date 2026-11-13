@@ -99,11 +99,15 @@ async function RoomContent({ params }: RoomPageProps) {
   // 꾸미기는 방 주인만. 서버 액션도 같은 검사를 다시 한다.
   const canEdit = viewer !== null && viewer.id === snapshot.room.creatorId;
 
+  // 방 주인에게만: 첫 방 열기 체크리스트(setup-checklist.tsx)가 읽는 값. 닉네임(방 이름을 지었는지 견준다)과 연결한 채널 수.
+  const owner = canEdit ? { nickname: snapshot.room.creatorName, channels: snapshot.channels.length } : null;
+
   // key: 다른 방으로 옮기면 꾸미기 패널의 상태도 새로 시작한다.
   return (
     <HeapRoom
       key={roomId}
       roomId={roomId}
+      owner={owner}
       data={toRoomData(snapshot, rooms, bubbleHref, changedSlugs)}
       viewerName={viewer?.name ?? null}
       signedIn={viewer !== null}

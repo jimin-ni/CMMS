@@ -5,9 +5,13 @@ export function setupHud(ctx) {
   const { root, C, creator, $, DATA, nWide, nShorts, opts } = ctx;
 
   root.style.setProperty('--clay', C.accent);
-  document.title = ctx.roomTitle = `${creator.name} Miniroom`;
-  $('cname').textContent = creator.name;
-  $('avatar').textContent = Array.from(creator.name)[0] ?? '';
+  // 방 이름을 화면에 쓴다. 꾸미기(edit.js)가 이름을 고치면 저장하기 전에도 바로 바꿔 쓴다 (팔로워로 보기에 보인다).
+  function showName(name) {
+    document.title = ctx.roomTitle = `${name} Miniroom`;
+    $('cname').textContent = name;
+    $('avatar').textContent = Array.from(name)[0] ?? '';
+  }
+  showName(creator.name);
   $('phone-title').textContent = creator.phoneTitle || creator.name;
   $('phone-sub').textContent = '버블';
 
@@ -54,5 +58,5 @@ export function setupHud(ctx) {
   ctx.toastTimer = 0;
   function toast(t) { $('toast').textContent = t; ctx.toastTimer = 2.2; }
 
-  Object.assign(ctx, { setHint, syncUI, toast, renderMeta, renderCreatorVisit });
+  Object.assign(ctx, { setHint, syncUI, toast, renderMeta, renderCreatorVisit, showName });
 }

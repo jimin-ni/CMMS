@@ -47,6 +47,8 @@ export async function setupData(ctx) {
   // 팔레트를 바꾸며 다시 마운트할 때(opts.resume, edit.js 의 remount)는 그 전 마운트의 기준을 그대로 잇는다: 그 사이에 저장했을 수 있다.
   const R = opts.resume;
   ctx.baseLayout = structuredClone(R?.baseLayout ?? DATA.layout);
+  // 마지막으로 저장한 방 이름. 꾸미기가 이름을 고쳐 저장하면 heap:saved 로 바뀐다 (editor-bridge.js). 화면의 이름(DATA.name)은 고친 이름일 수 있다.
+  ctx.savedName = typeof R?.savedName === 'string' ? R.savedName : DATA.name;
   ctx.original = R?.original
     ? { items: R.original.items.map(it => ({ ...it })), time: R.original.time, palette: R.original.palette ?? null }
     : { items: (layout.items || []).map(it => ({ ...it })), time: layout.time ?? 'auto', palette: layout.palette ?? null };

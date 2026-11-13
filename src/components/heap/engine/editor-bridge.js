@@ -17,8 +17,8 @@ export function setupEditorBridge(ctx) {
   //     seats 는 지금까지 지은 가구의 앉는 자리 { id, kind, x, y, z, yaw } 목록이다 (addSeats 참고): 앉는 모델은 첫 빌드 뒤에 읽힌다.
   //     time 은 방의 시간 선택을 준 그대로('auto', 이름, 시각)이고 original { items, time } 은 DB 에 마지막으로 저장된 레이아웃이다.
   //     layout 은 저장된 레이아웃 전체의 복사본이다: 패널은 저장하기 전에 자기 items, time, room 을 여기에 합친다.
-  //   root.dispatchEvent(new CustomEvent('heap:saved', { detail: { roomUuid, layout } }))
-  //     패널이 이 레이아웃 전체를 저장했다고 엔진에 알린다: 이것이 새 original 이자 처음으로 의 목표가 된다.
+  //   root.dispatchEvent(new CustomEvent('heap:saved', { detail: { roomUuid, layout, name? } }))
+  //     패널이 이 레이아웃 전체를 저장했다고 엔진에 알린다: 이것이 새 original 이자 처음으로 의 목표가 된다. name 을 주면 그것이 저장된 방 이름이 된다.
   //     roomUuid 가 이 방(opts.roomUuid)이 아니면 버린다: 방을 옮긴 뒤 늦게 끝난 저장이 이 방의 기준을 바꾸지 못하게.
   // 벽, 바닥, 탁자, 더미, 영사기, 휴대폰, 방명록 받침대는 지은 그대로 둔다.
   // 가구 목록을 바꾸고 그에 딸린 것(앉은 자리, 음악, 앨범 책장, 기능)을 맞춘다. 꾸미기(edit.js)도 놓을 때마다 이것을 부른다.
@@ -38,6 +38,7 @@ export function setupEditorBridge(ctx) {
     if (!l || typeof l !== 'object' || !Array.isArray(l.items)) return;
     ctx.baseLayout = structuredClone(l);
     ctx.original = { items: l.items.map(it => ({ ...it })), time: l.time ?? 'auto', palette: l.palette ?? null };
+    if (typeof e.detail.name === 'string') ctx.savedName = e.detail.name;
   });
   on(root, 'heap:get', e => {
     if (typeof e.detail !== 'function') return;
