@@ -2,6 +2,12 @@
   "source": "Kenney Furniture Kit 2.0 (CC0)",
   "licence": "kenney-furniture/License.txt",
   "_footprint": "w, d: 바닥에 차지하는 크기(엔진 단위, MODEL_SCALE 2.0 적용 뒤, 회전 전). w는 x 방향, d는 z 방향이에요. GLB의 경계 상자에서 잰 값이에요.",
+  "_slots": "item.fn 기능 종류와 그걸 달 수 있는 가구. models는 카탈로그 id, hand는 엔진이 직접 만드는 종류(type). 새 기능은 여기에 줄을 더하고 layout.ts의 검사(src/lib/heap/slots.ts)를 함께 늘린다.",
+  "slots": {
+    "pc": { "label": "PC (링크 모음)", "models": ["desk", "computerScreen", "laptop"], "hand": [] },
+    "keepsake": { "label": "기념품", "models": ["bookcaseOpen", "bookcaseClosedWide", "cabinetTelevision"], "hand": ["frame", "shelf"] }
+  },
+  "_lift": "lift: 꾸미기에서 새로 놓을 때 기본으로 띄우는 높이(y). 책상 위에 얹는 물건용이에요.",
   "models": [
     { "id": "bedDouble", "file": "kenney-furniture/bedDouble.glb", "label": "더블 침대", "category": "bed", "w": 1.91, "d": 2.25 },
     { "id": "bedSingle", "file": "kenney-furniture/bedSingle.glb", "label": "싱글 침대", "category": "bed", "w": 1.14, "d": 2.25 },
@@ -37,8 +43,8 @@
     { "id": "rugRound", "file": "kenney-furniture/rugRound.glb", "label": "둥근 러그", "category": "rug", "w": 1.84, "d": 1.84 },
     { "id": "rugRectangle", "file": "kenney-furniture/rugRectangle.glb", "label": "네모 러그", "category": "rug", "w": 3.14, "d": 1.84 },
     { "id": "televisionModern", "file": "kenney-furniture/televisionModern.glb", "label": "TV", "category": "screen", "w": 1.37, "d": 0.26 },
-    { "id": "laptop", "file": "kenney-furniture/laptop.glb", "label": "노트북", "category": "screen", "w": 0.53, "d": 0.48 },
-    { "id": "computerScreen", "file": "kenney-furniture/computerScreen.glb", "label": "모니터", "category": "screen", "w": 0.79, "d": 0.21 },
+    { "id": "laptop", "file": "kenney-furniture/laptop.glb", "label": "노트북", "category": "screen", "lift": 0.77, "w": 0.53, "d": 0.48 },
+    { "id": "computerScreen", "file": "kenney-furniture/computerScreen.glb", "label": "모니터", "category": "screen", "lift": 0.77, "w": 0.79, "d": 0.21 },
     { "id": "pillow", "file": "kenney-furniture/pillow.glb", "label": "쿠션", "category": "decor", "w": 0.46, "d": 0.18 },
     { "id": "books", "file": "kenney-furniture/books.glb", "label": "책 더미", "category": "decor", "w": 0.3, "d": 0.19 }
   ]

@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { getViewer } from "@/lib/session";
-import { getRoomSnapshot, listRooms, type HeapRoomSnapshot } from "@/lib/heap/repo";
+import { getOpenBubbleRoomId, getRoomSnapshot, listRooms, type HeapRoomSnapshot } from "@/lib/heap/repo";
 import { HeapRoom, type HeapRoomData } from "@/components/heap/heap-room";
 
 type RoomPageProps = {
@@ -31,8 +31,13 @@ function formatViews(count: number | null): string {
 
 // DB 스냅샷을 엔진이 읽는 모양으로 바꾼다. 서버에서 클라이언트로 넘기므로 Date는 문자열로 만든다.
 // 엔진은 YouTube 영상만 그릴 수 있어서 다른 플랫폼 영상은 뺀다 (지금 시드는 전부 YouTube).
-function toRoomData(snapshot: HeapRoomSnapshot, rooms: { slug: string; name: string; blurb: string }[]): HeapRoomData {
+function toRoomData(
+  snapshot: HeapRoomSnapshot,
+  rooms: { slug: string; name: string; blurb: string }[],
+  bubbleHref: string,
+): HeapRoomData {
   return {
+    bubbleHref,
     roomUuid: snapshot.room.id,
     name: snapshot.room.name,
     serverTime: snapshot.serverTime.toISOString(),
@@ -74,6 +79,9 @@ async function RoomContent({ params }: RoomPageProps) {
   if (!snapshot) {
     notFound();
   }
+  // 휴대폰이 여는 버블: 방 주인이 연 대화방이 있으면 그 방, 없으면 버블 목록. 로그인과 참여는 버블 쪽이 확인한다.
+  const bubbleRoomId = await getOpenBubbleRoomId(snapshot.room.creatorId);
+  const bubbleHref = bubbleRoomId ? `/bubble/${bubbleRoomId}` : "/bubble";
   // 꾸미기는 방 주인만. 서버 액션도 같은 검사를 다시 한다.
   const canEdit = viewer !== null && viewer.id === snapshot.room.creatorId;
 
@@ -82,7 +90,7 @@ async function RoomContent({ params }: RoomPageProps) {
     <HeapRoom
       key={roomId}
       roomId={roomId}
-      data={toRoomData(snapshot, rooms)}
+      data={toRoomData(snapshot, rooms, bubbleHref)}
       viewerName={viewer?.name ?? null}
       signedIn={viewer !== null}
       canEdit={canEdit}

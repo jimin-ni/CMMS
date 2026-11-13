@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { addGuestbookAction, recordVisitAction } from "@/lib/heap/actions";
 import { HEAP_POLICY } from "@/lib/heap/policy";
+import { parsePieceUrl } from "@/lib/heap/platform";
+import { isEmailAddress, isSafeLink, isWebLink } from "@/lib/heap/slots";
 import { RoomEditor } from "./room-editor";
 import "./heap-room.css";
 
@@ -20,6 +22,8 @@ export type HeapRoomData = {
   roomUuid: string;
   // 방 이름(heap_rooms.name). 화면 제목과 카드 뒷면에 쓴다.
   name: string;
+  // 휴대폰이 여는 버블 주소: 방 주인의 열린 대화방(/bubble/<id>) 또는 목록(/bubble)
+  bubbleHref: string;
   // 이 스냅샷을 읽은 DB 시각(ISO). 실시간 읽기의 첫 기준점이다.
   serverTime: string;
   rooms: { id: string; name: string; blurb: string }[];
@@ -75,6 +79,14 @@ export function HeapRoom({
         signedIn,
         roomUuid: data.roomUuid,
         pollMs: HEAP_POLICY.pollIntervalMs,
+        bubbleHref: data.bubbleHref,
+        navigate: (href: string) => router.push(href),
+        // 기념품 링크가 유튜브 게시물인지 알아보는 데 쓴다 (엔진이 썸네일 주소를 만든다)
+        parseLink: parsePieceUrl,
+        // 링크를 화면에 걸기 전의 검사. 서버가 저장 전에 하는 검사와 같은 함수다.
+        isSafeLink,
+        isWebLink,
+        isEmail: isEmailAddress,
         recordVisit: () => recordVisitAction(data.roomUuid),
         addGuestbook: (name: string) => addGuestbookAction(data.roomUuid, name),
         // 원본의 hash + reload 자리. 이동하면 이 방의 effect가 정리되면서 엔진이 dispose된다.
@@ -164,6 +176,32 @@ export function HeapRoom({
             </div>
             <div className="phone-feed" id="phone-feed" />
           </div>
+        </div>
+      </div>
+
+      {/* 책상 위 PC: 크리에이터의 링크 모음. 엔진이 pc-list를 채운다. */}
+      <div id="pc" className="overlay" hidden>
+        <div className="panel">
+          <div className="panel-head">
+            <b id="pc-title">링크 모음</b>
+            <button id="pc-close" className="btn ghost" type="button">
+              닫기
+            </button>
+          </div>
+          <div className="panel-body pc-list" id="pc-list" />
+        </div>
+      </div>
+
+      {/* 액자와 선반 위 기념품: 이름, 날짜, 설명, 원본 링크. 엔진이 ks-title과 ks-body를 채운다. */}
+      <div id="keepsake" className="overlay" hidden>
+        <div className="panel">
+          <div className="panel-head">
+            <b id="ks-title" />
+            <button id="ks-close" className="btn ghost" type="button">
+              닫기
+            </button>
+          </div>
+          <div className="panel-body" id="ks-body" />
         </div>
       </div>
 

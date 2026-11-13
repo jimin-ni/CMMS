@@ -30,6 +30,19 @@ export const HEAP_POLICY = {
   layoutItemSizeMax: 3,
   layoutItemYMax: 4,
   layoutPostersMax: 8,
+  // 벽 액자: 꾸미기가 놓는 높이(액자 가운데)와, 벽을 따라 모서리에서 떨어뜨리는 거리. 서버는 이 자리만 받는다 (layout.ts).
+  frameY: 1.9,
+  frameWallMargin: 0.5,
+
+  // 가구에 붙이는 기능(item.fn). 글자 수는 코드포인트 기준이다. 종류와 허용 가구는 public/heap/models/catalogue.json의 slots.
+  // PC(링크 모음): 링크 개수와 한 줄의 길이
+  pcLinksMax: 12,
+  linkTitleMaxChars: 40,
+  linkUrlMaxChars: 500,
+  linkEmailMaxChars: 120,
+  // 기념품(액자, 선반 위): 이름은 꼭 있어야 하고 나머지는 비워 둘 수 있다
+  keepsakeNameMaxChars: 24,
+  keepsakeCaptionMaxChars: 120,
 
   // 방 화면이 열려 있는 동안(탭이 보일 때) 바뀐 것을 가져오는 간격
   pollIntervalMs: 10_000,

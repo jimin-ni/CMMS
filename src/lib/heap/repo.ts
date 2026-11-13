@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, gt, gte, inArray, or, sql, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
+  bubbleRooms,
   heapCreatorChannels,
   heapGuestbook,
   heapPieceVotes,
@@ -316,6 +317,17 @@ export async function listCreatorChannels(creatorId: string): Promise<HeapChanne
     .from(heapCreatorChannels)
     .where(eq(heapCreatorChannels.creatorId, creatorId))
     .orderBy(asc(heapCreatorChannels.platform), asc(heapCreatorChannels.createdAt));
+}
+
+// 방 주인의 열린 버블 대화방 id. 버블 테이블을 읽기만 하고 버블 코드는 거치지 않는다.
+// 크리에이터는 열린 방을 하나만 가질 수 있다 (bubble_rooms_one_open_per_creator). 없으면 null.
+export async function getOpenBubbleRoomId(creatorId: string): Promise<string | null> {
+  const rows = await db
+    .select({ id: bubbleRooms.id })
+    .from(bubbleRooms)
+    .where(and(eq(bubbleRooms.creatorId, creatorId), eq(bubbleRooms.status, "open")))
+    .limit(1);
+  return rows[0]?.id ?? null;
 }
 
 // 방 화면이 처음 그릴 때 필요한 것 전부. 방을 먼저 읽고(1번), 나머지 5개 조회를 한꺼번에 보낸다.

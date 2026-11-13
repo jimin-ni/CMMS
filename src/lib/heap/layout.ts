@@ -1,5 +1,6 @@
 import catalogue from "../../../public/heap/models/catalogue.json";
 import { HEAP_POLICY } from "@/lib/heap/policy";
+import { checkFn } from "@/lib/heap/slots";
 
 // 방 꾸미기(layout) 검사. 서버 액션이 저장하기 전에 부른다. DB도 repo도 건드리지 않는다.
 // 형태는 room-engine.js 1번 구역과 room-editor.tsx, public/heap/rooms/*/layout.json에서 읽은 것이다.
@@ -13,7 +14,8 @@ type Obj = Record<string, unknown>;
 type Fail = { error: string };
 
 // 엔진 BUILD가 직접 만드는 가구. 나머지는 type "model" + 카탈로그 id.
-const HAND_TYPES = new Set(["bed", "shelf", "plant", "snake", "lamp", "books"]);
+// frame은 벽에 거는 액자다 (기념품 기능을 달 수 있다).
+const HAND_TYPES = new Set(["bed", "shelf", "plant", "snake", "lamp", "books", "frame"]);
 const MODEL_IDS = new Set(catalogue.models.map((model) => model.id));
 const WALLS = new Set(["back", "left"]);
 const TIME_NAMES = new Set(["auto", "night", "dawn", "morning", "noon", "golden", "dusk"]);
@@ -41,10 +43,10 @@ function unknownKey(obj: Obj, allowed: readonly string[]): string | null {
 function checkItem(raw: unknown, index: number): Fail | { item: Obj } {
   const at = `items[${index}]`;
   if (!isObj(raw)) return { error: `${at}: 객체가 아니에요.` };
-  const bad = unknownKey(raw, ["type", "x", "z", "rot", "size", "model", "tint", "y"]);
+  const bad = unknownKey(raw, ["type", "x", "z", "rot", "size", "model", "tint", "y", "fn"]);
   if (bad) return { error: `${at}: 알 수 없는 필드 ${bad}` };
 
-  const { type, x, z, rot, size, model, tint, y } = raw;
+  const { type, x, z, rot, size, model, tint, y, fn } = raw;
   if (typeof type !== "string" || !(type === "model" || HAND_TYPES.has(type))) {
     return { error: `${at}: 알 수 없는 가구 종류` };
   }
@@ -76,6 +78,12 @@ function checkItem(raw: unknown, index: number): Fail | { item: Obj } {
     if (typeof tint !== "boolean") return { error: `${at}: tint는 true/false여야 해요.` };
     item.tint = tint;
   }
+  if (fn !== undefined) {
+    // 가구에 붙는 기능. 그 가구가 달 수 있는 종류인지는 catalogue.json의 slots로 본다.
+    const r = checkFn(fn, type, item.model as string | undefined, `${at}.fn`);
+    if ("error" in r) return r;
+    item.fn = r.fn;
+  }
   return { item };
 }
 
@@ -98,6 +106,24 @@ function checkWallPart(
     part[key] = raw[key];
   }
   return { part };
+}
+
+// 벽 액자는 꾸미기가 놓는 자리에만 둘 수 있다: 뒷벽(z = -d/2, 0도) 또는 왼쪽 벽(x = -w/2, 90도), 벽을 따라 모서리에서 margin 이상,
+// 높이는 frameY. 방 크기가 없으면 엔진 기본(8 x 8)으로 본다. 그 밖의 자리에 걸면 바닥을 뚫거나 방 한가운데에 떠 있게 된다.
+function checkFrames(items: Obj[] | undefined, room: { w: number; d: number } | undefined): string | null {
+  const w = room?.w ?? 8, d = room?.d ?? 8, margin = HEAP_POLICY.frameWallMargin, eps = 0.01;
+  for (let i = 0; i < (items?.length ?? 0); i++) {
+    const it = items![i];
+    if (it.type !== "frame") continue;
+    const x = it.x as number, z = it.z as number, rot = ((it.rot as number | undefined) ?? 0);
+    const y = (it.y as number | undefined) ?? HEAP_POLICY.frameY;
+    const at = `items[${i}]`;
+    if (Math.abs(y - HEAP_POLICY.frameY) > eps) return `${at}: 액자 높이가 올바르지 않아요.`;
+    const onBack = Math.abs(z + d / 2) <= eps && rot === 0 && x >= -w / 2 + margin - eps && x <= w / 2 - margin + eps;
+    const onLeft = Math.abs(x + w / 2) <= eps && rot === 90 && z >= -d / 2 + margin - eps && z <= d / 2 - margin + eps;
+    if (!onBack && !onLeft) return `${at}: 액자는 뒷벽이나 왼쪽 벽에 붙여 걸어야 해요.`;
+  }
+  return null;
 }
 
 export function validateLayout(input: unknown): LayoutCheck {
@@ -204,6 +230,9 @@ export function validateLayout(input: unknown): LayoutCheck {
         return fail(`알 수 없는 필드 ${key}`);
     }
   }
+  // 벽 액자는 방 크기를 알아야 위치를 볼 수 있어서 모든 필드를 읽은 뒤에 본다.
+  const frameError = checkFrames(out.items as Obj[] | undefined, out.room as { w: number; d: number } | undefined);
+  if (frameError) return fail(frameError);
   // 엔진이 가드 없이 읽는 필드: table.x/z, screen.wall/at. 빠진 layout은 방을 그리다 멈춘다.
   if (!out.table) return fail("table이 필요해요.");
   if (!out.screen) return fail("screen이 필요해요.");

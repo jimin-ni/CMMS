@@ -83,6 +83,13 @@
 .heap-room .bubble img { width: 120px; border-radius: 8px; }
 .heap-room .bubble .copy { align-self: flex-start; font: 600 12px var(--ui); border: 1px solid var(--clay); color: var(--clay); background: none; border-radius: 999px; padding: 4px 10px; cursor: pointer; }
 .heap-room .email { user-select: all; }
+/* PC 링크 목록과 기념품 패널: 말풍선 꼴의 줄을 패널 폭에 맞춘다 */
+.heap-room .pc-list .bubble { align-self: stretch; max-width: none; }
+.heap-room .ks-pic { width: 100%; max-height: 260px; object-fit: cover; border-radius: 8px; background: #ddd; }
+.heap-room .ks-pic.tall { width: auto; max-width: 100%; align-self: center; }
+.heap-room .ks-meta { font-size: 13px; color: rgba(47, 44, 36, 0.62); font-variant-numeric: tabular-nums; }
+.heap-room .ks-caption { margin: 0; font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; }
+.heap-room #ks-body .btn { align-self: flex-start; }
 
 .heap-room .grid-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
 .heap-room .gitem { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 12px; }
@@ -144,3 +151,12 @@
 .heap-room .ed-pick { font: 600 13px var(--ui); color: var(--ink); background: none; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 999px; padding: 5px 10px; cursor: pointer; }
 .heap-room .ed-pick[aria-pressed="true"] { border-color: var(--clay); color: var(--clay); }
 .heap-room .ed-pick:focus-visible { outline: 2px solid var(--clay); outline-offset: 1px; }
+/* 꾸미기: 고른 가구에 기능을 달아 내용을 적는 칸 */
+.heap-room .ed-fn { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px dashed rgba(86, 83, 68, 0.25); }
+.heap-room .ed-fn b { font-size: 13px; }
+.heap-room .ed-field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: rgba(47, 44, 36, 0.7); }
+.heap-room .ed-field input, .heap-room .ed-field textarea { font: 13px var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 8px; padding: 6px 8px; }
+.heap-room .ed-field textarea { resize: vertical; min-height: 54px; }
+.heap-room .ed-linkrow { display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 10px; background: rgba(86, 83, 68, 0.07); }
+.heap-room .ed-linkrow input { font: 13px var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 8px; padding: 6px 8px; }
+.heap-room .ed-bad { color: #a23a2a; }

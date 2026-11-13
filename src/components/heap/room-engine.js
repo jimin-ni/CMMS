@@ -19,8 +19,8 @@ function disposeScene(scene, keep) {
 }
 
 // ids of the nodes heap-room.tsx renders and the engine fills or shows
-const LISTS = ['albumrow', 'player-frame', 'phone-feed', 'grid-list', 'gb-list', 'roomlist'];
-const HIDDEN = ['visit', 'albumrow', 'stand', 'flip', 'srclink', 'eject', 'ytlink', 'sortexit', 'player', 'player-note', 'phone', 'grid', 'guestbook', 'rooms'];
+const LISTS = ['albumrow', 'player-frame', 'phone-feed', 'pc-list', 'ks-body', 'grid-list', 'gb-list', 'roomlist'];
+const HIDDEN = ['visit', 'albumrow', 'stand', 'flip', 'srclink', 'eject', 'ytlink', 'sortexit', 'player', 'player-note', 'phone', 'pc', 'keepsake', 'grid', 'guestbook', 'rooms'];
 
 /**
  * Mounts the room into `root` (the element heap-room.tsx renders) and returns a dispose function.
@@ -32,7 +32,9 @@ const HIDDEN = ['visit', 'albumrow', 'stand', 'flip', 'srclink', 'eject', 'ytlin
  * `data` is what the server read from the database (page.tsx maps it): { roomUuid, name, serverTime, rooms, layout, reels, pieces, guestbook, visits, creatorVisit }.
  * creator.json (links, albums) is still fetched from `dataBase`; a room without one gets empty links and albums.
  * Writes go through opts.recordVisit() and opts.addGuestbook(name) (server actions, wired in heap-room.tsx). Reads of what others changed: a poll every opts.pollMs.
- * @param {{ roomId: string, roomUuid: string, dataBase: string, modelBase?: string, data: any, viewerName: string | null, signedIn: boolean, pollMs: number, recordVisit: () => Promise<any>, addGuestbook: (name: string) => Promise<any>, onNavigate: (roomId: string) => void }} opts
+ * opts.bubbleHref is where the phone leads (the owner's 버블 room or the list), opts.navigate(href) opens it, opts.parseLink(url) says whether a keepsake link is a YouTube post (platform.ts).
+ * opts.isSafeLink / isWebLink / isEmail are the server's link checks (slots.ts): a link reaches an href only after one of them says yes.
+ * @param {{ roomId: string, roomUuid: string, dataBase: string, modelBase?: string, data: any, viewerName: string | null, signedIn: boolean, pollMs: number, bubbleHref: string, navigate: (href: string) => void, parseLink: (url: string) => ({ platform: string, externalId: string, wide: boolean | null } | null), isSafeLink: (v: unknown) => boolean, isWebLink: (v: unknown) => boolean, isEmail: (v: unknown) => boolean, recordVisit: () => Promise<any>, addGuestbook: (name: string) => Promise<any>, onNavigate: (roomId: string) => void }} opts
  * @returns {() => void}
  */
 export function mountRoom(root, opts) {
@@ -59,6 +61,13 @@ let creatorJson = {};
   if (r.ok) creatorJson = await r.json(); else if (r.status !== 404) throw new Error(`${BASE}creator.json: ${r.status}`);
 }
 const creator = { links: [], albums: [], linktree: null, ...creatorJson, name: DATA.name, phoneTitle: creatorJson.phoneTitle || DATA.name };
+// creator.json is a static file. Only links that pass the server's checks reach the page: an absolute http(s) address with a host, or a mailto to one recipient, or an email address. The rest are dropped.
+creator.links = (Array.isArray(creator.links) ? creator.links : []).flatMap(L => {
+  if (!L || typeof L.title !== 'string') return [];
+  if (L.email != null) return L.url == null && opts.isEmail(L.email) ? [{ title: L.title, email: L.email }] : [];
+  return opts.isSafeLink(L.url) ? [{ title: L.title, url: L.url }] : [];
+});
+creator.linktree = opts.isWebLink(creator.linktree) ? creator.linktree : null;
 const layout = structuredClone(DATA.layout);
 if (disposed) return;
 
@@ -73,7 +82,7 @@ document.title = roomTitle = `${creator.name} Miniroom`;
 $('cname').textContent = creator.name;
 $('avatar').textContent = Array.from(creator.name)[0] ?? '';
 $('phone-title').textContent = creator.phoneTitle || creator.name;
-$('phone-sub').textContent = creator.linktree ? `링크 모음 · ${creator.linktree.replace(/^https:\/\//, '')}` : '링크 모음';
+$('phone-sub').textContent = '버블';
 
 const ALBUMS = creator.albums.map(a => ({ ...a, re: a.match ? new RegExp(a.match, 'i') : null }));
 const albumName = k => ALBUMS.find(a => a.key === k)?.name ?? k;
@@ -89,8 +98,6 @@ function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = 
 const rand = mulberry32(20261112);
 const gauss = () => { let u = 0, v = 0; while (!u) u = rand(); while (!v) v = rand(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
 const flat =(color, extra = {}) => new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: 0.88, ...extra });
-const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
-const KEY = k => `heap:${roomId}:${k}`;
 
 // 꾸미기 (room-editor.tsx, through the hooks in section 6): ORIGINAL is the layout as last saved in the database (the page's, or the one the editor just saved via heap:saved).
 // It is the editor's 처음으로 target. BASE_LAYOUT is the whole stored layout; the editor merges its items, time and room into it when it saves.
@@ -105,7 +112,8 @@ const reels = raw.map(r => ({ ...r, channel: r.channel || creator.name }));
 reels.forEach((r, i) => { r.age = reels.length > 1 ? 1 - i / (reels.length - 1) : 0; r.seed = Math.floor(rand() * 1e9); r.gold = goldOf(r); });
 const nShorts = raw.filter(r => !r.wide).length, nWide = raw.length - nShorts;
 
-// Fan pieces (landed ones, from the database) wait in the reception box. TODAY/TOTAL, 다녀감 and the guestbook list are database values too, refreshed by the poll below.
+// Fan pieces (landed ones, from the database) lie on the heap from the start; one that lands while the visitor is here drops onto it (poll below). There is no reception box any more.
+// TODAY/TOTAL, 다녀감 and the guestbook list are database values too, refreshed by the poll below.
 const seoulDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' });
 const fmtDay = iso => { const d = new Date(iso); if (Number.isNaN(d.getTime())) return ''; const p = Object.fromEntries(seoulDay.formatToParts(d).map(x => [x.type, x.value])); return `${p.year}.${p.month}.${p.day}`; };
 let visits = { today: DATA.visits.today, total: DATA.visits.total };
@@ -119,7 +127,6 @@ function renderCreatorVisit() { if (creatorDay) { $('visit').textContent = `주�
 renderCreatorVisit();
 const fanReelOf = (p, i) => ({ ...p, kind: 'fan', wide: false, title: p.caption, channel: p.by, views: '', age: 0.05, seed: 7000 + i * 131 });
 const fanReels = (DATA.pieces || []).map(fanReelOf);
-let landedIds = []; try { landedIds = JSON.parse(store.get(KEY('landed')) || '[]'); } catch {}
 const ytUrl = r => r.wide ? `https://www.youtube.com/watch?v=${r.id}` : `https://www.youtube.com/shorts/${r.id}`;
 const ytShort = r => r.wide ? `youtube.com/watch?v=${r.id}` : `youtube.com/shorts/${r.id}`;
 
@@ -487,7 +494,7 @@ const BUILD = {
     box(0.6, 0.16, 0.45, flat('#f7f1e6'), -1.0, 0.56, 0, { parent: g });
     return { hw: 1.6, hd: 0.95 };
   },
-  shelf(g) {
+  shelf(g, it, build) {
     const wood = flat(C.woodDark), add = m => { shelfParts.push(m); return m; };
     add(box(1.6, 2.2, 0.12, wood, 0, 1.1, -0.22, { parent: g }));
     for (const sx of [-0.77, 0.77]) add(box(0.06, 2.2, 0.5, wood, sx, 1.1, 0, { parent: g }));
@@ -498,6 +505,7 @@ const BUILD = {
     }
     add(box(1.6, 0.05, 0.5, wood, 0, 2.2, 0, { parent: g }));
     pottedPlant(g, 0, 0, 2.22, 0.7);
+    if (it.fn?.kind === 'keepsake') keepsakeObject(g, it, build, 'standee', 0.52, 2.225, 0.06); // the shelf top's keepsake
     SHELF = { group: g, albums: [] };
     ALBUMS.forEach((a, i) => {
       const lx = -0.57 + i * 0.38;
@@ -533,6 +541,100 @@ const BUILD = {
     return { hw: 0.45, hd: 0.4 };
   },
 };
+
+// ---------- slots: item.fn (one function, many skins) ----------
+// An item that carries a function in the layout (item.fn, checked by the server: src/lib/heap/slots.ts) can be clicked in room mode.
+//   pc        opens the links panel: fn.links, or the room's creator.json links when the item has none of its own
+//   keepsake  a picture with a name, date, caption and link. On a wall frame (type "frame"), or as a standee on the top of a shelf-like item.
+// ITEMS.slots lists them ({ it, fn, start? }) and ITEMS.slotMeshes holds the meshes a click can hit (each has userData.slot).
+let slotsLive = false; // true once the fonts are ready: the keepsake textures paint with their own fonts and load their pictures from then on
+const KS = { tall: { cw: 180, ch: 320, strip: 44 }, wide: { cw: 320, ch: 180, strip: 40 } }; // canvas pixels: the picture and the name strip under it
+// What the link says about the picture: id is the YouTube video (its own thumbnail), tall is a Short, host is a plain card's source.
+function keepsakeLook(fn) {
+  let host = '', hit = null;
+  if (fn.link && opts.isWebLink(fn.link)) {
+    try { host = new URL(fn.link).hostname.replace(/^www\./, ''); } catch {}
+    hit = opts.parseLink?.(fn.link) ?? null;
+  }
+  const yt = hit && hit.platform === 'youtube' ? hit : null;
+  return { id: yt ? yt.externalId : null, tall: !!yt && yt.wide === false, host };
+}
+const ksDay = d => (typeof d === 'string' ? d.replace(/-/g, '.') : '');
+function paintKeepsake(canvas, fn, look, img) {
+  const k = look.tall ? KS.tall : KS.wide, W = k.cw, H = k.ch + k.strip, g = canvas.getContext('2d'), B = 8;
+  g.clearRect(0, 0, W, H);
+  paper(g, W, H, mulberry32(11), 0.3);
+  const x0 = B, y0 = B, w = W - 2 * B, h = k.ch - B;
+  const plain = !look.id; // a post that is not YouTube, or no link at all: a titled card
+  if (plain) {
+    g.fillStyle = '#e6d8bf'; g.fillRect(x0, y0, w, h);
+    g.fillStyle = 'rgba(86, 83, 68, 0.95)'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    let size = Math.round(h * 0.3), lines;
+    for (;;) { g.font = `${size}px "Nanum Pen Script", cursive`; lines = wrap(g, fn.name || '', w * 0.86); if (lines.length * size * 1.05 <= h * 0.8 || size < 14) break; size -= 2; }
+    lines.forEach((l, i) => g.fillText(l, W / 2, y0 + h / 2 + (i - (lines.length - 1) / 2) * size * 1.05));
+  } else {
+    g.save(); g.beginPath(); g.rect(x0, y0, w, h); g.clip();
+    if (img) drawFit(g, img, x0, y0, w, h, true); else { g.fillStyle = NO_PHOTO; g.fillRect(x0, y0, w, h); }
+    g.fillStyle = 'rgba(214, 170, 120, 0.1)'; g.fillRect(x0, y0, w, h);
+    g.restore();
+  }
+  g.strokeStyle = 'rgba(0,0,0,0.18)'; g.lineWidth = 1; g.strokeRect(x0 + 0.5, y0 + 0.5, w - 1, h - 1);
+  // the strip: the name under a picture, or (plain card) the date or the source
+  const sub = plain ? (ksDay(fn.date) || look.host) : fn.name;
+  if (sub) {
+    g.fillStyle = 'rgba(86, 83, 68, 0.95)'; g.textAlign = 'left'; g.textBaseline = 'middle';
+    let size = Math.round(k.strip * 0.62);
+    for (; size > 10; size -= 1) { g.font = `${size}px "Nanum Pen Script", cursive`; if (g.measureText(sub).width <= W * 0.86) break; }
+    g.fillText(sub, W * 0.07, k.ch + k.strip * 0.52);
+  }
+}
+// shape 'frame': flat on a wall, centred on (x, y, z) in the item's local space · 'standee': leaning back a little on a small base, bottom at y
+function keepsakeObject(g, it, build, shape, x, y, z) {
+  const fn = it.fn?.kind === 'keepsake' ? it.fn : { kind: 'keepsake', name: '' }; // a frame with no keepsake yet is an empty frame
+  const look = keepsakeLook(fn), k = look.tall ? KS.tall : KS.wide, W = k.cw, H = k.ch + k.strip;
+  const pw = shape === 'frame' ? (look.tall ? 0.55 : 0.95) : (look.tall ? 0.2 : 0.32), ph = pw * H / W, rim = shape === 'frame' ? 0.045 : 0.03;
+  const grp = new THREE.Group(), wood = flat(C.woodDark);
+  const canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
+  const tex = new THREE.CanvasTexture(canvas); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  const frame = box(pw + 2 * rim, ph + 2 * rim, 0.04, wood, 0, 0, 0.02, { cast: shape !== 'frame', parent: grp });
+  const pic = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6 })); pic.position.z = 0.042; grp.add(pic);
+  if (shape === 'frame') grp.position.set(x, y, z);
+  else {
+    box(pw + 0.08, 0.02, 0.1, wood, x, y + 0.01, z, { parent: g });
+    grp.position.set(x, y + 0.02 + (ph + 2 * rim) / 2, z - 0.01); grp.rotation.x = -0.12;
+  }
+  g.add(grp);
+  paintKeepsake(canvas, fn, look, null);
+  if (!it.fn) return;
+  const slot = { it, fn, started: false, start() { // called once the fonts are ready (or at once after that)
+    if (slot.started || build !== ITEMS) return;
+    slot.started = true; paintKeepsake(canvas, fn, look, null); tex.needsUpdate = true;
+    if (look.id) ksLoad(build, look, look.tall ? ['hqdefault'] : ['mqdefault'], img => { if (build === ITEMS) { paintKeepsake(canvas, fn, look, img); tex.needsUpdate = true; } });
+  } };
+  for (const m of [frame, pic]) { m.userData.slot = slot; build.slotMeshes.push(m); }
+  build.slots.push(slot);
+  if (slotsLive) slot.start();
+}
+// a keepsake's own picture: the video's thumbnail, cropped to its shape. A thumbnail that is missing leaves the placeholder.
+// ksPics keeps the finished pictures (by video and shape) for the life of the room, so a rebuild asks the network for nothing it already has.
+// An Image still downloading belongs to its build (build.loads): the next build cancels it instead of letting requests pile up.
+const ksPics = new Map();
+function ksLoad(build, look, files, done) {
+  const key = `${look.id}:${look.tall ? 't' : 'w'}`;
+  if (ksPics.has(key)) return done(ksPics.get(key));
+  const im = new Image(); im.crossOrigin = 'anonymous';
+  const end = ok => {
+    im.onload = im.onerror = null; inFlight.delete(im); build.loads.delete(im);
+    if (disposed) return;
+    if (!ok && files.length > 1) return ksLoad(build, look, files.slice(1), done);
+    try { if (ok) { const pic = cropToShape(im, { wide: !look.tall }); ksPics.set(key, pic); done(pic); } } catch (e) { console.error('[heap-room]', e); }
+  };
+  im.onload = () => end(im.naturalWidth > 120); // a missing thumbnail answers 404 with a 120px placeholder that still fires load
+  im.onerror = () => end(false);
+  inFlight.add(im); build.loads.add(im); im.src = thumbUrl({ id: look.id }, files[0]);
+}
+BUILD.frame = (g, it, build) => { keepsakeObject(g, it, build, 'frame', 0, it.y ?? 1.9, 0); return {}; };
+function startSlots() { slotsLive = true; for (const s of ITEMS.slots) s.start?.(); }
 
 // ---------- models: { type: 'model', model: <catalogue id>, x, z, rot, y, tint } ----------
 // <modelBase>catalogue.json lists the GLB files (Kenney Furniture Kit, CC0). A model is fetched and parsed once per mount,
@@ -594,6 +696,8 @@ BUILD.model = (g, it, build) => {
     const hold = new THREE.Group();
     hold.scale.setScalar(MODEL_SCALE); hold.position.y = (it.y || 0) + (rug ? 0.012 : 0); // a rug lies just above the floor so the two do not flicker
     hold.add(inst); g.add(hold);
+    if (it.fn?.kind === 'keepsake') keepsakeObject(g, it, build, 'standee', 0, (it.y || 0) + m.size.y, 0); // on top of the shelf-like piece
+    else if (it.fn?.kind === 'pc') { const slot = { it, fn: it.fn }; inst.traverse(o => { if (o.isMesh) { o.userData.slot = slot; build.slotMeshes.push(o); } }); build.slots.push(slot); }
     if (shades.length) { // the light sits at the centre of the shade: the box around the vertices the shade's own triangles use
       const light = lampLight(build, it), bb = new THREE.Box3(), v = new THREE.Vector3(); // (a model's meshes share one vertex buffer)
       if (light) {
@@ -615,11 +719,15 @@ BUILD.model = (g, it, build) => {
 
 // ITEMS: what the last buildItems() made. group: every object built from the items · obst: their walk obstacles · items: the list itself
 //   lamps: its lamps, { light, shades } each (see MAX_LAMP_LIGHTS above)
-let ITEMS = { group: null, obst: [], items: [], lamps: [] };
+//   slots: its functions, { it, fn, start? } each · slotMeshes: the meshes a click can hit, each with userData.slot (see the slots section above)
+//   loads: the keepsake thumbnails this build still waits for (cancelled when the next build replaces it)
+let ITEMS = { group: null, obst: [], items: [], lamps: [], slots: [], slotMeshes: [], loads: new Set() };
 function buildItems(items, first = false) {
   if (ITEMS.group) { for (const l of ITEMS.lamps) l.light?.dispose(); scene.remove(ITEMS.group); disposeScene(ITEMS.group, KEPT); }
   shelfParts.length = 0; SHELF = null;
-  const build = ITEMS = { group: new THREE.Group(), obst: [], items, lamps: [] };
+  for (const im of ITEMS.loads) { im.onload = im.onerror = null; im.src = ''; inFlight.delete(im); } // the replaced build's thumbnails stop here
+  ITEMS.loads.clear();
+  const build = ITEMS = { group: new THREE.Group(), obst: [], items, lamps: [], slots: [], slotMeshes: [], loads: new Set() };
   scene.add(build.group);
   items.forEach((it, i) => {
     // The first build draws from the room's shared sequence, as the room always has. A rebuild seeds each item by its place in the list,
@@ -752,33 +860,6 @@ phoneDot.rotation.set(-Math.PI / 2, 0, 0.35); phoneDot.position.set(PHONE.x + 0.
 scene.add(phoneBody, phoneGlow, phoneDot);
 const phoneParts = [phoneBody, phoneGlow, phoneDot];
 
-// reception box (팬 우편함) on the left of the desk: fan pieces wait here, then land on the heap
-const RBOX = { x: TABLE.x - 0.86, z: TABLE.z + 0.52 };
-const rbox = new THREE.Group(); rbox.position.set(RBOX.x, TABLE.top, RBOX.z); rbox.rotation.y = 0.15;
-const rboxWood = flat(C.woodDark);
-const boxParts = [
-  box(0.36, 0.03, 0.28, rboxWood, 0, 0.015, 0, { parent: rbox }),
-  box(0.36, 0.13, 0.03, rboxWood, 0, 0.065, -0.125, { parent: rbox }),
-  box(0.36, 0.09, 0.03, rboxWood, 0, 0.045, 0.125, { parent: rbox }),
-  box(0.03, 0.13, 0.28, rboxWood, -0.165, 0.065, 0, { parent: rbox }),
-  box(0.03, 0.13, 0.28, rboxWood, 0.165, 0.065, 0, { parent: rbox }),
-];
-const boxLabelC = document.createElement('canvas'); boxLabelC.width = 256; boxLabelC.height = 64;
-const boxLabelT = new THREE.CanvasTexture(boxLabelC); boxLabelT.colorSpace = THREE.SRGBColorSpace;
-const boxLabel = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.075), new THREE.MeshStandardMaterial({ map: boxLabelT }));
-boxLabel.position.set(0, 0.05, 0.142); rbox.add(boxLabel); boxParts.push(boxLabel);
-const waiting = []; // little paper stack inside the box, one sheet per pending piece
-for (let i = 0; i < 4; i++) { const s = box(0.24, 0.006, 0.17, flat(C.paper), (rand() - 0.5) * 0.02, 0.035 + i * 0.008, (rand() - 0.5) * 0.02, { parent: rbox }); s.rotation.y = (rand() - 0.5) * 0.3; s.visible = false; waiting.push(s); boxParts.push(s); }
-scene.add(rbox);
-function updateBox(n) {
-  const g = boxLabelC.getContext('2d');
-  g.fillStyle = C.paper; g.fillRect(0, 0, 256, 64);
-  g.fillStyle = C.ink; g.font = '40px "Nanum Pen Script", cursive'; g.textBaseline = 'middle'; g.fillText('팬 우편함', 14, 34);
-  if (n) { g.fillStyle = C.accent; g.beginPath(); g.arc(222, 32, 22, 0, Math.PI * 2); g.fill(); g.fillStyle = C.paper; g.font = '600 26px "IBM Plex Sans KR", sans-serif'; g.textAlign = 'center'; g.fillText(String(n), 222, 33); }
-  boxLabelT.needsUpdate = true;
-  waiting.forEach((s, i) => { s.visible = i < n; });
-}
-
 // guestbook stand (방명록) beside the door
 const bookParts = [];
 let BOOK_SPOT = null;
@@ -867,7 +948,7 @@ scene.add(me);
 // ====================================================================================
 const cards = []; // stack order, bottom → top
 const pickables = [];
-const EXCL = [{ x: PROJ.x, z: PROJ.z, r: 0.42 }, { x: MUG.x, z: MUG.z, r: 0.18 }, { x: PHONE.x, z: PHONE.z, r: 0.26 }, { x: RBOX.x, z: RBOX.z, r: 0.3 }];
+const EXCL = [{ x: PROJ.x, z: PROJ.z, r: 0.42 }, { x: MUG.x, z: MUG.z, r: 0.18 }, { x: PHONE.x, z: PHONE.z, r: 0.26 }];
 const GAP = 0.0035, MAX_SLOPE = 0.32;
 const _inv = new THREE.Quaternion(), _v = new THREE.Vector3(), _n = new THREE.Vector3();
 // height of a resting card's surface above (x, z), or -Infinity if (x, z) is outside it
@@ -971,9 +1052,8 @@ function makeCard(reel) {
 }
 function buildHeap() {
   const made = reels.map(reel => makeCard(reel));
-  for (const p of fanReels) if (landedIds.includes(p.id)) { const c = makeCard(p); c.userData.place.faceUp = true; }
+  for (const p of fanReels) { const c = makeCard(p); c.userData.place.faceUp = true; }
   settle(true);
-  updateBox(pendingFans().length);
   requestPile(FAR);
   // posters: the three most-viewed shorts. Each paints from its card's picture, so it fills in and sharpens as that card's tiers land.
   const top3 = made.filter(c => !c.userData.reel.wide).sort((a, b) => viewsNum(b.userData.reel.views) - viewsNum(a.userData.reel.views)).slice(0, 3);
@@ -1095,14 +1175,13 @@ const HINTS = {
   near: 'E 또는 탁자를 눌러 앉기',
   nearShelf: 'E 또는 책장을 눌러 앨범 정리하기',
   nearDoor: 'E 또는 문을 눌러 다른 방으로',
-  sit: '사진을 눌러 집기 · 끌어서 옮기기 · 휴대폰을 눌러 링크 보기',
+  sit: '사진을 눌러 집기 · 끌어서 옮기기 · 휴대폰을 눌러 버블 열기',
   held: '사진을 눌러 뒤집기 · 영사기를 눌러 상영 · 바깥을 눌러 내려놓기',
   drag: '원하는 곳에 놓으세요',
   needcard: '사진을 먼저 집어 든 다음 영사기를 눌러 보세요',
   watch: '상영 중 · 스크린을 눌러 다시 재생 · Esc로 사진 꺼내기',
   shelf: '앨범을 눌러 안을 보기 · Esc로 물러나기',
   nearBook: 'E 또는 방명록을 눌러 이름 남기기',
-  needcardBox: '팬 우편함이 비어 있어요',
 };
 const setHint = k => { if (hint.dataset.k !== k) { hint.dataset.k = k; hint.textContent = HINTS[k]; } };
 const goTo = cam => { camGoal = cam; controls.enabled = false; };
@@ -1114,15 +1193,16 @@ const goTo = cam => { camGoal = cam; controls.enabled = false; };
 //     calls cb({ room: { w, d }, layout, items, catalogue, table, door, window, time, original }) once the model catalogue has been read
 //     (catalogue is null if it could not be). items is a copy of the list now in the room; catalogue is catalogue.json as it is.
 //     table { x, z, w, d }, door { wall, at } and window { wall, at, w } are the fixed parts a floor plan shows (door and window may be null).
+//     creatorLinks is the links list of creator.json (the PC's fallback) and linktree its linktree address or null: the editor offers them when an owner sets up a PC.
 //     time is the room's time choice as it was given ('auto', a name or an hour); original { items, time } is the layout as last saved in the database;
 //     layout is the whole stored layout (a copy): the editor merges its items, time and room into it before saving.
 //   root.dispatchEvent(new CustomEvent('heap:saved', { detail: layout }))
 //     tells the engine the editor saved this whole layout: it becomes the new original / 처음으로 target.
-// Walls, floor, table, heap, projector, phone, reception box and guestbook stay as they were built.
+// Walls, floor, table, heap, projector, phone and guestbook stay as they were built.
 on(root, 'heap:items', e => {
   if (!Array.isArray(e.detail)) return;
   buildItems(e.detail.filter(it => it && typeof it === 'object').map(it => ({ ...it })));
-  linkShelf(); updateAlbums();
+  linkShelf(); updateAlbums(); startSlots();
   if (mode === 'sort') { if (SHELF) enterSort(); else exitSort(); }
 });
 on(root, 'heap:saved', e => {
@@ -1140,6 +1220,7 @@ on(root, 'heap:get', e => {
       table: { x: TABLE.x, z: TABLE.z, w: TABLE.w, d: TABLE.d },
       door: DOOR ? { wall: DOOR.wall, at: DOOR.at } : null, window: WIN ? { wall: WIN.wall, at: WIN.at, w: WIN.w } : null,
       time: timeChoice, original: { items: ORIGINAL.items.map(it => ({ ...it })), time: ORIGINAL.time },
+      creatorLinks: creator.links.map(L => ({ ...L })), linktree: creator.linktree ?? null,
     });
   });
 });
@@ -1169,7 +1250,6 @@ function sit() {
   me.position.copy(SEAT); me.rotation.y = Math.PI;
   setHint('sit'); goTo(SIT_CAM); syncUI();
   requestPile(NEAR);
-  if (!autoLanded && pendingFans().length) { autoLanded = true; setTimeout(() => { if (!disposed && mode === 'sit') landNext(); }, 1200); }
 }
 function stand() {
   if (loaded) eject();
@@ -1248,17 +1328,49 @@ on(document, 'securitypolicyviolation', e => {
   if (!player.hidden) { frameBox.innerHTML = ''; frameBox.style.width = frameBox.style.height = '0px'; note.hidden = false; }
 });
 
-// phone: the creator's links in a bubble-style screen
+// phone: the way into 버블. A room with no PC still lists the creator's links here, so nothing disappears until the owner puts a PC in.
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const link = (text, href) => { const a = el('a', null, text); a.href = href; a.target = '_blank'; a.rel = 'noopener'; return a; };
+const safeHref = u => (opts.isSafeLink(u) ? u : null); // the server checks layout links before saving; this is the same check on what the DOM gets
+const shortUrl = u => { const t = u.replace(/^(https?:\/\/(www\.)?|mailto:)/i, ''); try { return decodeURIComponent(t); } catch { return t; } };
+// one link as a bubble: a titled link, or (L.email) the address with a copy button. The phone's fallback list and the PC panel share it.
+function linkBubble(L) {
+  const b = el('div', 'bubble');
+  if (L.email) {
+    b.appendChild(el('small', null, L.title));
+    const em = el('span', 'email', L.email); b.appendChild(em);
+    const cp = el('button', 'copy', '주소 복사'); cp.type = 'button';
+    cp.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(L.email); cp.textContent = '복사했어요'; }
+      catch { const s = getSelection(), rg = document.createRange(); rg.selectNodeContents(em); s.removeAllRanges(); s.addRange(rg); cp.textContent = '주소를 선택했어요'; }
+    });
+    b.appendChild(cp);
+  } else if (safeHref(L.url)) {
+    b.appendChild(link(`${L.title} ↗`, L.url));
+    b.appendChild(el('small', null, shortUrl(L.url)));
+  } else b.appendChild(el('span', null, L.title));
+  return b;
+}
+// the creator.json links, as they were on the phone: the note, each link, the linktree's full list
+function legacyLinks(into) {
+  if (creator.linksNote) into.appendChild(el('span', 'chip', creator.linksNote));
+  for (const L of creator.links) into.appendChild(linkBubble(L));
+  if (creator.linktree) { const lt = el('div', 'bubble'); lt.appendChild(link(`${creator.linktree.replace(/^https:\/\//, '')} 전체 보기 ↗`, creator.linktree)); into.appendChild(lt); }
+}
+const hasPc = () => ITEMS.items.some(it => it.fn?.kind === 'pc');
 let phonePic = null; // { card, im }: the card whose picture the phone shows, so a sharper tier that lands later reaches it
 function showPhonePic() {
   const pic = phonePic.card.userData.img; // a canvas (fan drawing, cropped tier) or the close tier's own Image
   if (pic) phonePic.im.src = pic.toDataURL ? pic.toDataURL('image/jpeg', 0.8) : pic.src;
 }
 function openPhone() {
-  const feedEl = $('phone-feed'); feedEl.innerHTML = '';
-  if (creator.linksNote) feedEl.appendChild(el('span', 'chip', creator.linksNote));
+  const feedEl = $('phone-feed'); feedEl.replaceChildren();
+  const bb = el('div', 'bubble');
+  bb.appendChild(el('small', null, '크리에이터와 1:1 대화'));
+  const open = el('a', null, '버블 열기 →'); open.href = opts.bubbleHref;
+  open.addEventListener('click', e => { if (e.button || e.metaKey || e.ctrlKey || e.shiftKey) return; e.preventDefault(); opts.navigate(opts.bubbleHref); });
+  bb.appendChild(open);
+  feedEl.appendChild(bb);
   const curCard = held || loaded, cur = curCard?.userData.reel;
   phonePic = null;
   if (cur) {
@@ -1270,45 +1382,58 @@ function openPhone() {
     if (cur.kind !== 'fan') b.appendChild(link('원본 보기 ↗', ytUrl(cur)));
     feedEl.appendChild(b);
   }
-  for (const L of creator.links) {
-    const b = el('div', 'bubble');
-    if (L.email) {
-      b.appendChild(el('small', null, L.title));
-      const em = el('span', 'email', L.email); b.appendChild(em);
-      const cp = el('button', 'copy', '주소 복사'); cp.type = 'button';
-      cp.addEventListener('click', async () => {
-        try { await navigator.clipboard.writeText(L.email); cp.textContent = '복사했어요'; }
-        catch { const s = getSelection(), rg = document.createRange(); rg.selectNodeContents(em); s.removeAllRanges(); s.addRange(rg); cp.textContent = '주소를 선택했어요'; }
-      });
-      b.appendChild(cp);
-    } else {
-      b.appendChild(link(`${L.title} ↗`, L.url));
-      b.appendChild(el('small', null, decodeURIComponent(L.url.replace(/^https:\/\/(www\.)?/, ''))));
-    }
-    feedEl.appendChild(b);
-  }
-  if (creator.linktree) { const lt = el('div', 'bubble'); lt.appendChild(link(`${creator.linktree.replace(/^https:\/\//, '')} 전체 보기 ↗`, creator.linktree)); feedEl.appendChild(lt); }
+  if (!hasPc()) legacyLinks(feedEl);
   $('phone').hidden = false;
 }
 on($('phone-close'), 'click', () => { $('phone').hidden = true; });
 on($('phone'), 'click', e => { if (e.target.id === 'phone') $('phone').hidden = true; });
 
-// fan pieces: the next waiting piece rises out of the reception box and lands on top of the heap
-function pendingFans() { return fanReels.filter(p => !landedIds.includes(p.id)); }
-function landNext() {
-  const p = pendingFans()[0];
-  if (!p) { toast('팬 우편함이 비어 있어요'); return; }
+// PC (a desk, monitor or laptop with fn.kind "pc"): the creator's links. fn.links is the owner's own list; without one the creator.json links stand in.
+function openPc(fn) {
+  const list = $('pc-list'); list.replaceChildren();
+  if (Array.isArray(fn.links)) for (const L of fn.links) list.appendChild(linkBubble(L)); else legacyLinks(list);
+  if (!list.children.length) list.appendChild(el('p', 'note', '아직 링크가 없어요.'));
+  $('pc').hidden = false;
+}
+on($('pc-close'), 'click', () => { $('pc').hidden = true; });
+on($('pc'), 'click', e => { if (e.target.id === 'pc') $('pc').hidden = true; });
+
+// keepsake (a wall frame or a shelf-top standee): name, date, caption, and the link to the original
+function openKeepsake(fn) {
+  $('ks-title').textContent = fn.name;
+  const body = $('ks-body'); body.replaceChildren();
+  const look = keepsakeLook(fn);
+  if (look.id) {
+    const im = el('img', look.tall ? 'ks-pic tall' : 'ks-pic'); im.alt = '';
+    const files = look.tall ? ['oardefault', 'hqdefault'] : ['hq720', 'mqdefault'];
+    let n = 0;
+    const next = () => { im.src = thumbUrl({ id: look.id }, files[n]); };
+    im.addEventListener('load', () => { if (im.naturalWidth <= 120 && ++n < files.length) next(); }); // a missing thumbnail is a 120px placeholder
+    im.addEventListener('error', () => { if (++n < files.length) next(); else im.remove(); });
+    next(); body.appendChild(im);
+  }
+  if (fn.date) body.appendChild(el('div', 'ks-meta', ksDay(fn.date)));
+  if (fn.caption) body.appendChild(el('p', 'ks-caption', fn.caption));
+  if (fn.link && opts.isWebLink(fn.link)) {
+    if (!look.id && look.host) body.appendChild(el('div', 'ks-meta', look.host));
+    const a = link('원본 보기', fn.link); a.className = 'btn'; body.appendChild(a);
+  }
+  $('keepsake').hidden = false;
+}
+on($('ks-close'), 'click', () => { $('keepsake').hidden = true; });
+on($('keepsake'), 'click', e => { if (e.target.id === 'keepsake') $('keepsake').hidden = true; });
+const openSlot = slot => { if (slot.fn.kind === 'pc') openPc(slot.fn); else if (slot.fn.kind === 'keepsake') openKeepsake(slot.fn); };
+
+// fan pieces: one that lands while the visitor is in the room drops onto the top of the heap from above the table
+function landPiece(p) {
   const c = makeCard(p);
-  c.position.copy(rbox.position).add(new THREE.Vector3(0, 0.12, 0));
+  c.position.set(TABLE.x, TABLE.top + 0.9, TABLE.z);
   c.quaternion.setFromAxisAngle(Xv, -Math.PI / 2);
   c.userData.place = clampPlace({ x: TABLE.x + gauss() * 0.15, z: TABLE.z + gauss() * 0.1, yaw: gauss() * 0.5, faceUp: true });
   settle();
   startAnim(c, 'drop'); Object.assign(c.userData.anim, { dur: 1.1, arc: 0.35 });
-  landedIds.push(p.id); store.set(KEY('landed'), JSON.stringify(landedIds));
-  updateBox(pendingFans().length);
   toast(`${p.by}님의 팬 작품이 더미 위에 올라왔어요`);
 }
-let autoLanded = false;
 
 // guestbook: names and dates only. Rows are database rows { id, name, createdAt (ISO) }, newest first, merged by id from the page, the poll and the visitor's own submit.
 const gbRows = new Map((DATA.guestbook || []).map(e => [e.id, { id: e.id, name: e.name, createdAt: e.createdAt }]));
@@ -1372,18 +1497,13 @@ async function poll() {
     if (typeof d.creatorVisitedAt === 'string') { const day = fmtDay(d.creatorVisitedAt); if (day && day !== creatorDay) { creatorDay = day; renderCreatorVisit(); } }
     for (const e of d.guestbook || []) gbRows.set(e.id, { id: e.id, name: e.name, createdAt: e.createdAt });
     if (!$('guestbook').hidden) renderGuestbook();
-    // pieces: landed ones wait in the reception box; removed ones leave it (a card already on the heap stays until fan pieces get their own screens)
-    let boxChanged = false;
+    // pieces: a newly landed one drops onto the heap. A card already on the heap stays when its piece is taken off (until fan pieces get their own screens)
     for (const p of d.pieces || []) {
       if (p.status !== 'landed' || fanReels.some(f => f.id === p.id)) continue;
-      fanReels.push(fanReelOf({ id: p.id, by: p.submitterName ?? '알 수 없음', date: fmtDay(p.landedAt ?? p.createdAt), caption: p.title || p.note || '팬 작품' }, fanReels.length));
-      boxChanged = true;
+      const fan = fanReelOf({ id: p.id, by: p.submitterName ?? '알 수 없음', date: fmtDay(p.landedAt ?? p.createdAt), caption: p.title || p.note || '팬 작품' }, fanReels.length);
+      fanReels.push(fan);
+      landPiece(fan);
     }
-    for (const id of d.removedPieceIds || []) {
-      const i = fanReels.findIndex(f => f.id === id);
-      if (i >= 0 && !landedIds.includes(id)) { fanReels.splice(i, 1); boxChanged = true; }
-    }
-    if (boxChanged) updateBox(pendingFans().length);
   } catch (e) {
     if (!disposed && e?.name !== 'AbortError') console.warn('[heap-room] poll', e);
   } finally { polling = false; }
@@ -1470,7 +1590,7 @@ function rayFrom(ev) {
 }
 const isProj = o => projParts.includes(o), isPhone = o => phoneParts.includes(o);
 const keys = new Set();
-const OVERLAYS = ['phone', 'grid', 'rooms', 'guestbook'];
+const OVERLAYS = ['phone', 'pc', 'keepsake', 'grid', 'rooms', 'guestbook'];
 const anyOverlay = () => OVERLAYS.some(id => !$(id).hidden);
 on(window, 'keydown', ev => {
   if (ev.target.closest?.('input, textarea')) { if (ev.key === 'Escape') $('guestbook').hidden = true; return; }
@@ -1516,8 +1636,9 @@ canvas.addEventListener('pointermove', ev => {
   if (ev.buttons) return;
   rayFrom(ev);
   if (mode === 'sort') { canvas.style.cursor = SHELF && ray.intersectObjects(SHELF.albums.flatMap(a => [a.mesh, a.label]), false).length ? 'pointer' : 'default'; return; }
+  if (mode === 'room') { canvas.style.cursor = ray.intersectObjects(ITEMS.slotMeshes, false).length ? 'pointer' : ''; return; }
   if (mode !== 'sit' || camGoal) return;
-  const hit = ray.intersectObjects([...pickables, ...projParts, ...phoneParts, ...boxParts], false)[0];
+  const hit = ray.intersectObjects([...pickables, ...projParts, ...phoneParts], false)[0];
   hovered = hit && !held && hit.object.userData.card ? hit.object.userData.card : null;
   canvas.style.cursor = hit ? 'pointer' : 'grab';
 });
@@ -1535,18 +1656,18 @@ canvas.addEventListener('pointerup', ev => {
   if (camGoal) return;
   if (mode === 'sort') { const h = SHELF && ray.intersectObjects(SHELF.albums.flatMap(a => [a.mesh, a.label]), false)[0]; if (h) albumAction(h.object.userData.album); return; }
   if (mode === 'sit') {
-    const hits = ray.intersectObjects([...pickables, ...projParts, ...phoneParts, ...boxParts], false);
+    const hits = ray.intersectObjects([...pickables, ...projParts, ...phoneParts], false);
     if (held && hits[0]?.object.userData.card === held) return flip();
     const hit = hits.find(h => h.object.userData.card !== held);
     if (hit && isProj(hit.object)) return held ? feed() : setHint('needcard');
     if (hit && isPhone(hit.object)) return openPhone();
-    if (hit && boxParts.includes(hit.object) && !held) return landNext();
     if (held) return putBack();
     if (hit) pickUp(hit.object.userData.card);
     return;
   }
-  const hit = ray.intersectObjects([tableTop, ...pickables, ...projParts, ...phoneParts, ...boxParts, ...shelfParts, ...doorParts, ...bookParts, floor], false)[0];
+  const hit = ray.intersectObjects([tableTop, ...pickables, ...projParts, ...phoneParts, ...ITEMS.slotMeshes, ...shelfParts, ...doorParts, ...bookParts, floor], false)[0];
   if (!hit) return;
+  if (hit.object.userData.slot) return openSlot(hit.object.userData.slot); // a PC, a frame or a standee: its panel opens where the visitor stands
   const p = hit.point, onTableFoot = p.x > TBOX.x0 && p.x < TBOX.x1 && p.z > TBOX.z0 && p.z < TBOX.z1;
   if (doorParts.includes(hit.object)) walkRoute(DOOR_SPOT.clone(), 'door');
   else if (bookParts.includes(hit.object)) walkRoute(BOOK_SPOT.clone(), 'book');
@@ -1726,6 +1847,7 @@ await fontsReady(); // the room does not wait for thumbnails: buildHeap() queues
 if (disposed) return;
 buildHeap();
 updateAlbums();
+startSlots(); // keepsakes paint with their fonts and fetch their thumbnails from here on
 resize();
 camera.position.copy(ROOM_CAM.pos); controls.target.copy(ROOM_CAM.target); camera.lookAt(ROOM_CAM.target);
 setHint('room'); syncUI();
