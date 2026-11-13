@@ -3,7 +3,7 @@ import { HEAP_POLICY } from "@/lib/heap/policy";
 import { checkFn } from "@/lib/heap/slots";
 
 // 방 꾸미기(layout) 검사. 서버 액션이 저장하기 전에 부른다. DB도 repo도 건드리지 않는다.
-// 형태는 room-engine.js 1번 구역과 room-editor.tsx, public/heap/rooms/*/layout.json에서 읽은 것이다.
+// 형태는 engine/data.js 와 room-editor.tsx, public/heap/rooms/*/layout.json에서 읽은 것이다.
 // 입력을 그대로 저장하지 않고, 검사를 통과한 필드만 새 객체로 옮겨 돌려준다.
 
 export type LayoutCheck =
@@ -17,7 +17,7 @@ type Fail = { error: string };
 // frame은 벽에 거는 액자다 (기념품 기능을 달 수 있다). calendar는 책상 위 달력이다 (달력 기능을 단다).
 const HAND_TYPES = new Set(["bed", "shelf", "plant", "snake", "lamp", "books", "frame", "calendar"]);
 const MODEL_IDS = new Set(catalogue.models.map((model) => model.id));
-// 손으로 만드는 가구의 바닥 크기(엔진 단위, 회전 전). room-engine.js BUILD의 치수에서 읽은 값이고 room-editor.tsx도 이 표를 쓴다.
+// 손으로 만드는 가구의 바닥 크기(엔진 단위, 회전 전). engine/furniture.js BUILD의 치수에서 읽은 값이고 room-editor.tsx도 이 표를 쓴다.
 // frame은 벽에 걸려서 바닥을 차지하지 않으니 없다. plant는 item.size를 곱한다.
 export const HAND_FOOTPRINT: Record<string, { w: number; d: number }> = {
   bed: { w: 2.8, d: 1.4 },

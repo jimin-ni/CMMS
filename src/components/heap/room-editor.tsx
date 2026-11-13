@@ -7,7 +7,7 @@ import { HAND_FOOTPRINT, itemHalfExtents } from "@/lib/heap/layout";
 import { parseMusicUrl, slotKindsFor, slotLabel, type CalendarEntry, type PcLink, type SlotFn, type SlotKind } from "@/lib/heap/slots";
 
 // 꾸미기 패널. 방 주인이 가구를 옮기고 시간대를 고른 뒤 서버에 저장한다.
-// 엔진(room-engine.js)과는 방 루트 요소의 이벤트로만 이야기한다: heap:get 으로 읽고, heap:items / heap:time 으로 바꾼다.
+// 엔진(engine/)과는 방 루트 요소의 이벤트로만 이야기한다: heap:get 으로 읽고, heap:items / heap:time 으로 바꾼다.
 // 평면도는 뒷벽(z = -d/2)이 위, 왼쪽 벽(x = -w/2)이 왼쪽이다. 3D 화면에서 벽이 있는 두 변이 위와 왼쪽에 온다.
 // 고른 가구가 기능(item.fn)을 달 수 있으면 그 아래에 기능 칸이 나온다 (종류와 허용 가구: catalogue.json의 slots, 검사: slots.ts).
 
@@ -27,7 +27,7 @@ type Item = {
 type Model = { id: string; label: string; category: string; w?: number; d?: number; lift?: number };
 type Wall = "back" | "left";
 type TimeChoice = string | number;
-// heap:get 이 돌려주는 값 (room-engine.js 6번 구역)
+// heap:get 이 돌려주는 값 (engine/editor-bridge.js)
 type RoomState = {
   room: { w: number; d: number };
   // DB에 저장된 layout 전체. 저장할 때 여기에 items, time, room을 덮어 쓴다.
@@ -45,7 +45,7 @@ type RoomState = {
   original: { items: Item[]; time: TimeChoice };
 };
 
-// 엔진이 직접 만드는 가구의 이름과 바닥 크기(엔진 단위, 회전 전). room-engine.js 의 BUILD 치수에서 읽은 값이다.
+// 엔진이 직접 만드는 가구의 이름과 바닥 크기(엔진 단위, 회전 전). engine/furniture.js 의 BUILD 치수에서 읽은 값이다.
 // 화분(plant)은 item.size 를 곱한다. 모델(type: model)의 크기는 catalogue.json 의 w, d 를 쓴다.
 // 바닥 크기는 서버 검사와 같은 표(layout.ts의 HAND_FOOTPRINT)에서 가져온다. 액자는 벽에 걸려서 표에 없고 여기서만 그린다.
 const HAND: Record<string, { label: string; w: number; d: number }> = {

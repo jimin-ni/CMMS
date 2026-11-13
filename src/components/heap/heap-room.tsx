@@ -36,7 +36,7 @@ export type HeapRoomData = {
   creatorVisit: string | null;
 };
 
-// 미니룸 화면. 마크업은 room.html의 HUD/오버레이 그대로이고, 엔진(room-engine.js)이 id로 찾아 채운다.
+// 미니룸 화면. 마크업은 room.html의 HUD/오버레이 그대로이고, 엔진(engine/)이 id로 찾아 채운다.
 // three는 브라우저에서만 돌아야 하므로 엔진은 effect 안에서 dynamic import로 불러온다.
 // canEdit: 꾸미기 버튼을 보여 줄지. 방을 걸어 다니는 동안(엔진의 room 모드)에만 버튼이 나온다.
 export function HeapRoom({
