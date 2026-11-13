@@ -8,11 +8,15 @@ import { setupHud } from './hud.js';
 import { setupCardArt } from './card-art.js';
 import { setupScene } from './scene.js';
 import { setupShell } from './shell.js';
+import { setupFurniture } from './furniture.js';
+import { setupSlots } from './slots.js';
+import { setupModels } from './models.js';
+import { setupShelf } from './shelf.js';
 import { setupTime } from './time.js';
-import { flat, paper, wrap, drawFit, NO_PHOTO, cropToShape } from './draw.js';
-import { ksDay, seoulDay, viewsNum, ytUrl, fmtDay } from './format.js';
+import { flat, drawFit, NO_PHOTO, cropToShape } from './draw.js';
+import { viewsNum, ytUrl, ksDay, seoulDay, fmtDay } from './format.js';
 import { el, link, shortUrl } from './dom.js';
-import { mulberry32, thumbUrl, disposeScene } from './util.js';
+import { thumbUrl } from './util.js';
 
 // ids of the nodes heap-room.tsx renders and the engine fills or shows
 const LISTS = ['albumrow', 'player-frame', 'music-frame', 'phone-feed', 'pc-list', 'ks-body', 'cal-body', 'grid-list', 'gb-list', 'roomlist'];
@@ -41,415 +45,25 @@ const { ac, cleanups, dataBase, prevTitle, $, on } = ctx;
 async function run() {
 const { rand, gauss } = ctx;
 await setupData(ctx);
-const { C, ALBUMS, reels, getJSON, layout, fanReels, creator, DATA, fanReelOf, ROOMS, roomId, filed, albumName } = ctx;
+const { layout, C, reels, fanReels, creator, DATA, fanReelOf, ROOMS, roomId } = ctx;
 if (ctx.disposed) return;
 setupHud(ctx);
 const { setHint, syncUI, toast, creatorVisit, renderMeta, renderCreatorVisit } = ctx;
 setupCardArt(ctx);
 const { DIMS, drawFanFront, drawCard, drawFanBack, drawBack } = ctx;
 setupScene(ctx);
-const { box, scene, onWall, WALLS, Yv, Xv, renderer, camera, WALL_H, RX, RZ, controls, canvas, floor } = ctx;
+const { scene, box, onWall, WALLS, Yv, Xv, renderer, camera, WALL_H, RX, RZ, controls, canvas, floor } = ctx;
 setupShell(ctx);
 const { DOOR, tA, WIN, doorParts, stepMotes } = ctx;
-// ====================================================================================
-// 4. Furniture from layout.items (each builder works in local space: front = +z)
-//   Everything built from the items sits in one group. buildItems(items) disposes that group and builds a new one,
-//   so the furniture can change without a remount. Walls, floor, table and heap are not part of it.
-// ====================================================================================
-// OBST: the fixed walk obstacles (the table first, then the guestbook stand). Each item's own obstacle is in ITEMS.obst.
-const OBST = [], shelfParts = [];
-ctx.shelf = null;
-// shadeNow: a lamp shade's glow at the current hour (section 4b sets it) · irand: where the builders draw their random numbers
-ctx.shadeNow = 0.9; ctx.irand = rand;
-// Lamps: the hand-built lamp and any model whose catalogue category is "lamp". Each adds { light, shades } to its build's lamps:
-// a PointLight inside the shade (or null) and the shade's materials. Section 4b sets every shade's glow and frame() every light's
-// intensity, so all the lamps in a room follow the hour together.
-// Only MAX_LAMP_LIGHTS lamps get a light: the hand-built ones first, then the lamp models, each in list order. A lamp past that glows and lights nothing.
-const MAX_LAMP_LIGHTS = 3, LAMP_GLOW = '#ffb767';
-ctx.catalogue = null; // catalogue.json once it has been read (getCatalogue below)
-// item.lit: the creator's switch. Absent or true = on, and the lamp then follows the clock exactly as before (glows and lights from evening to morning).
-// false = switched off for good: no light, no glow, and no share of the MAX_LAMP_LIGHTS budget.
-const isLampModel = it => it.type === 'model' && ctx.catalogue?.models?.find(m => m.id === it.model)?.category === 'lamp';
-const isLit = o => o.lit !== false;
-function lampLight(build, it) {
-  if (!isLit(it)) return null;
-  const hand = build.items.filter(o => o.type === 'lamp' && isLit(o));
-  const rank = it.type === 'lamp' ? hand.indexOf(it) : hand.length + build.items.filter(o => isLampModel(o) && isLit(o)).indexOf(it);
-  return rank < MAX_LAMP_LIGHTS ? new THREE.PointLight(0xffb86b, 3.2, 9, 1.2) : null;
-}
-const bookCols = [C.accent, C.olive, '#c9a46a', '#7d8a5a', '#d8c7a8', '#8a4f33'];
-function pottedPlant(parent, x, z, y, s) {
-  box(0.36 * s, 0.34 * s, 0.36 * s, flat(C.accent), x, y + 0.17 * s, z, { parent });
-  for (let i = 0; i < 5; i++) {
-    const leaf = new THREE.Mesh(new THREE.IcosahedronGeometry(0.22 * s, 0), flat([C.leaf, C.leaf2, C.leafDark][i % 3]));
-    const a = i * 1.26;
-    leaf.position.set(x + Math.cos(a) * 0.14 * s, y + (0.45 + ctx.irand() * 0.25) * s, z + Math.sin(a) * 0.14 * s);
-    leaf.scale.set(1, 1.5, 0.6); leaf.rotation.set(ctx.irand(), a, ctx.irand() * 0.5); leaf.castShadow = true; parent.add(leaf);
-  }
-}
-const BUILD = {
-  bed(g) {
-    box(2.8, 0.3, 1.4, flat(C.woodB), 0, 0.15, 0, { parent: g });
-    box(2.7, 0.18, 1.3, flat(C.paper), 0, 0.39, 0, { parent: g });
-    box(1.6, 0.06, 1.36, flat(C.accent), 0.45, 0.5, 0, { parent: g });
-    box(0.6, 0.16, 0.45, flat('#f7f1e6'), -1.0, 0.56, 0, { parent: g });
-    return { hw: 1.6, hd: 0.95 };
-  },
-  shelf(g, it, build) {
-    const wood = flat(C.woodDark), add = m => { shelfParts.push(m); return m; };
-    add(box(1.6, 2.2, 0.12, wood, 0, 1.1, -0.22, { parent: g }));
-    for (const sx of [-0.77, 0.77]) add(box(0.06, 2.2, 0.5, wood, sx, 1.1, 0, { parent: g }));
-    for (let s = 0; s < 3; s++) {
-      add(box(1.6, 0.05, 0.5, wood, 0, 0.27 + s * 0.7, 0, { parent: g }));
-      if (s === 1) continue;
-      for (let b = 0; b < 6; b++) { const h = 0.35 + ctx.irand() * 0.15; add(box(0.16, h, 0.3, flat(bookCols[(s * 6 + b) % bookCols.length]), 0.6 - b * 0.22, 0.3 + s * 0.7 + h / 2, 0.02, { parent: g })); }
-    }
-    add(box(1.6, 0.05, 0.5, wood, 0, 2.2, 0, { parent: g }));
-    pottedPlant(g, 0, 0, 2.22, 0.7);
-    if (it.fn?.kind === 'keepsake') keepsakeObject(g, it, build, 'standee', 0.52, 2.225, 0.06); // the shelf top's keepsake
-    ctx.shelf = { group: g, albums: [] };
-    ALBUMS.forEach((a, i) => {
-      const lx = -0.57 + i * 0.38;
-      const m = new THREE.Mesh(new THREE.BoxGeometry(1, 0.52, 0.36), flat(a.color));
-      m.position.set(lx, 0.995 + 0.26, 0); m.castShadow = m.receiveShadow = true; m.userData.album = a.key;
-      const lc = document.createElement('canvas'); lc.width = 96; lc.height = 360;
-      const lt = new THREE.CanvasTexture(lc); lt.colorSpace = THREE.SRGBColorSpace;
-      const label = new THREE.Mesh(new THREE.PlaneGeometry(0.11, 0.41), new THREE.MeshStandardMaterial({ map: lt, roughness: 0.9 }));
-      label.position.set(lx, 0.995 + 0.26, 0.181); label.userData.album = a.key;
-      g.add(m, label); add(m); add(label);
-      ctx.shelf.albums.push({ ...a, mesh: m, label, lc, lt, lx });
-    });
-    return { hw: 0.85, hd: 0.55 };
-  },
-  plant(g, it) { const s = it.size || 1; pottedPlant(g, 0, 0, 0, s); return { hw: 0.44 * s, hd: 0.44 * s }; },
-  snake(g) {
-    box(0.34, 0.4, 0.34, flat(C.olive), 0, 0.2, 0, { parent: g });
-    for (let i = 0; i < 6; i++) { const b = box(0.07, 0.8 + ctx.irand() * 0.5, 0.03, flat([C.leaf, C.leafDark][i % 2]), (ctx.irand() - 0.5) * 0.2, 0.75, (ctx.irand() - 0.5) * 0.2, { parent: g }); b.rotation.set((ctx.irand() - 0.5) * 0.3, ctx.irand() * 3, (ctx.irand() - 0.5) * 0.3); }
-    return { hw: 0.4, hd: 0.4 };
-  },
-  lamp(g, it, build) {
-    box(0.3, 0.04, 0.3, flat(C.olive), 0, 0.02, 0, { parent: g });
-    box(0.04, 1.7, 0.04, flat(C.olive), 0, 0.87, 0, { parent: g });
-    const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.26, 0.3, 8, 1, true), new THREE.MeshStandardMaterial({ color: '#f6dcb2', emissive: LAMP_GLOW, emissiveIntensity: isLit(it) ? ctx.shadeNow : 0, side: THREE.DoubleSide, flatShading: true }));
-    shade.position.y = 1.8; g.add(shade);
-    const light = lampLight(build, it);
-    if (light) { light.position.y = 1.72; g.add(light); }
-    build.lamps.push({ light, shades: [shade.material], off: !isLit(it) });
-    return { hw: 0.35, hd: 0.35 };
-  },
-  books(g) {
-    for (let i = 0; i < 4; i++) { const b = box(0.42, 0.08, 0.3, flat(bookCols[(i + 2) % bookCols.length]), 0, 0.04 + i * 0.08, 0, { parent: g }); b.rotation.y = (ctx.irand() - 0.5) * 0.5; }
-    return { hw: 0.45, hd: 0.4 };
-  },
-};
-// ---------- slots: item.fn (one function, many skins) ----------
-// An item that carries a function in the layout (item.fn, checked by the server: src/lib/heap/slots.ts) can be clicked in room mode.
-//   pc        opens the links panel: fn.links, or the room's creator.json links when the item has none of its own
-//   keepsake  a picture with a name, date, caption and link. On a wall frame (type "frame"), or as a standee on the top of a shelf-like item.
-//   music     a YouTube video or playlist. Opens the docked player at the top right (radio, speaker or TV).
-//   latest    a TV whose screen shows the newest reel's thumbnail. Clicking it sends that reel into the projector.
-//   calendar  a desk calendar (type "calendar", built by hand): the creator's dates for fans, listed in a panel.
-// ITEMS.slots lists them ({ it, fn, start? }) and ITEMS.slotMeshes holds the meshes a click can hit (each has userData.slot).
-ctx.slotsLive = false; // true once the fonts are ready: the keepsake textures paint with their own fonts and load their pictures from then on
-const KS = { tall: { cw: 180, ch: 320, strip: 44 }, wide: { cw: 320, ch: 180, strip: 40 } }; // canvas pixels: the picture and the name strip under it
-// What the link says about the picture: id is the YouTube video (its own thumbnail), tall is a Short, host is a plain card's source.
-function keepsakeLook(fn) {
-  let host = '', hit = null;
-  if (fn.link && opts.isWebLink(fn.link)) {
-    try { host = new URL(fn.link).hostname.replace(/^www\./, ''); } catch {}
-    hit = opts.parseLink?.(fn.link) ?? null;
-  }
-  const yt = hit && hit.platform === 'youtube' ? hit : null;
-  return { id: yt ? yt.externalId : null, tall: !!yt && yt.wide === false, host };
-}
-function paintKeepsake(canvas, fn, look, img) {
-  const k = look.tall ? KS.tall : KS.wide, W = k.cw, H = k.ch + k.strip, g = canvas.getContext('2d'), B = 8;
-  g.clearRect(0, 0, W, H);
-  paper(g, W, H, mulberry32(11), 0.3);
-  const x0 = B, y0 = B, w = W - 2 * B, h = k.ch - B;
-  const plain = !look.id; // a post that is not YouTube, or no link at all: a titled card
-  if (plain) {
-    g.fillStyle = '#e6d8bf'; g.fillRect(x0, y0, w, h);
-    g.fillStyle = 'rgba(86, 83, 68, 0.95)'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    let size = Math.round(h * 0.3), lines;
-    for (;;) { g.font = `${size}px "Nanum Pen Script", cursive`; lines = wrap(g, fn.name || '', w * 0.86); if (lines.length * size * 1.05 <= h * 0.8 || size < 14) break; size -= 2; }
-    lines.forEach((l, i) => g.fillText(l, W / 2, y0 + h / 2 + (i - (lines.length - 1) / 2) * size * 1.05));
-  } else {
-    g.save(); g.beginPath(); g.rect(x0, y0, w, h); g.clip();
-    if (img) drawFit(g, img, x0, y0, w, h, true); else { g.fillStyle = NO_PHOTO; g.fillRect(x0, y0, w, h); }
-    g.fillStyle = 'rgba(214, 170, 120, 0.1)'; g.fillRect(x0, y0, w, h);
-    g.restore();
-  }
-  g.strokeStyle = 'rgba(0,0,0,0.18)'; g.lineWidth = 1; g.strokeRect(x0 + 0.5, y0 + 0.5, w - 1, h - 1);
-  // the strip: the name under a picture, or (plain card) the date or the source
-  const sub = plain ? (ksDay(fn.date) || look.host) : fn.name;
-  if (sub) {
-    g.fillStyle = 'rgba(86, 83, 68, 0.95)'; g.textAlign = 'left'; g.textBaseline = 'middle';
-    let size = Math.round(k.strip * 0.62);
-    for (; size > 10; size -= 1) { g.font = `${size}px "Nanum Pen Script", cursive`; if (g.measureText(sub).width <= W * 0.86) break; }
-    g.fillText(sub, W * 0.07, k.ch + k.strip * 0.52);
-  }
-}
-// shape 'frame': flat on a wall, centred on (x, y, z) in the item's local space · 'standee': leaning back a little on a small base, bottom at y
-function keepsakeObject(g, it, build, shape, x, y, z) {
-  const fn = it.fn?.kind === 'keepsake' ? it.fn : { kind: 'keepsake', name: '' }; // a frame with no keepsake yet is an empty frame
-  const look = keepsakeLook(fn), k = look.tall ? KS.tall : KS.wide, W = k.cw, H = k.ch + k.strip;
-  const pw = shape === 'frame' ? (look.tall ? 0.55 : 0.95) : (look.tall ? 0.2 : 0.32), ph = pw * H / W, rim = shape === 'frame' ? 0.045 : 0.03;
-  const grp = new THREE.Group(), wood = flat(C.woodDark);
-  const canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
-  const tex = new THREE.CanvasTexture(canvas); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
-  const frame = box(pw + 2 * rim, ph + 2 * rim, 0.04, wood, 0, 0, 0.02, { cast: shape !== 'frame', parent: grp });
-  const pic = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6 })); pic.position.z = 0.042; grp.add(pic);
-  if (shape === 'frame') grp.position.set(x, y, z);
-  else {
-    box(pw + 0.08, 0.02, 0.1, wood, x, y + 0.01, z, { parent: g });
-    grp.position.set(x, y + 0.02 + (ph + 2 * rim) / 2, z - 0.01); grp.rotation.x = -0.12;
-  }
-  g.add(grp);
-  paintKeepsake(canvas, fn, look, null);
-  if (!it.fn) return;
-  const slot = { it, fn, started: false, start() { // called once the fonts are ready (or at once after that)
-    if (slot.started || build !== ctx.build) return;
-    slot.started = true; paintKeepsake(canvas, fn, look, null); tex.needsUpdate = true;
-    if (look.id) ksLoad(build, look, look.tall ? ['hqdefault'] : ['mqdefault'], img => { if (build === ctx.build) { paintKeepsake(canvas, fn, look, img); tex.needsUpdate = true; } });
-  } };
-  for (const m of [frame, pic]) { m.userData.slot = slot; build.slotMeshes.push(m); }
-  build.slots.push(slot);
-  if (ctx.slotsLive) slot.start();
-}
-// a keepsake's own picture: the video's thumbnail, cropped to its shape. A thumbnail that is missing leaves the placeholder.
-// ksPics keeps the finished pictures (by video and shape) for the life of the room, so a rebuild asks the network for nothing it already has.
-// An Image still downloading belongs to its build (build.loads): the next build cancels it instead of letting requests pile up.
-const ksPics = new Map();
-function ksLoad(build, look, files, done) {
-  const key = `${look.id}:${look.tall ? 't' : 'w'}`;
-  if (ksPics.has(key)) return done(ksPics.get(key));
-  const im = new Image(); im.crossOrigin = 'anonymous';
-  const end = ok => {
-    im.onload = im.onerror = null; inFlight.delete(im); build.loads.delete(im);
-    if (ctx.disposed) return;
-    if (!ok && files.length > 1) return ksLoad(build, look, files.slice(1), done);
-    try { if (ok) { const pic = cropToShape(im, { wide: !look.tall }); ksPics.set(key, pic); done(pic); } } catch (e) { console.error('[heap-room]', e); }
-  };
-  im.onload = () => end(im.naturalWidth > 120); // a missing thumbnail answers 404 with a 120px placeholder that still fires load
-  im.onerror = () => end(false);
-  inFlight.add(im); build.loads.add(im); im.src = thumbUrl({ id: look.id }, files[0]);
-}
-BUILD.frame = (g, it, build) => { keepsakeObject(g, it, build, 'frame', 0, it.y ?? 1.9, 0); return {}; };
-// The newest reel: the latest publish day, and the list's own order (newest first from the server) when two share a day or none has a date.
-const newestReel = () => { let best = null; for (const r of reels) if (r.published && (!best || r.published > best.published)) best = r; return best ?? reels[0] ?? null; };
-// A TV's screen (a catalogue model with `screen`, in file units): a plane just in front of the model's own screen, painted by the slot.
-//   latest  the newest reel's thumbnail, a Short pillar-boxed        music  the video's thumbnail, or a note for a playlist link
-function tvContent(fn) {
-  if (fn.kind === 'latest') { const r = newestReel(); return { id: r ? r.id : null, tall: !!r && !r.wide, label: '최신 영상', note: '▶' }; }
-  const p = opts.parseMusic(fn.url);
-  return { id: p?.video ?? null, tall: false, label: '음악', note: '♪' };
-}
-function paintTv(canvas, pic, what) {
-  const g = canvas.getContext('2d'), W = canvas.width, H = canvas.height;
-  g.fillStyle = '#16130f'; g.fillRect(0, 0, W, H);
-  if (pic) drawFit(g, pic, 0, 0, W, H, false);
-  else { g.fillStyle = 'rgba(243, 234, 219, 0.35)'; g.font = `${Math.round(H * 0.4)}px "IBM Plex Sans KR", system-ui, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(what.note, W / 2, H / 2); }
-  g.fillStyle = 'rgba(0, 0, 0, 0.1)'; for (let y = 0; y < H; y += 3) g.fillRect(0, y, W, 1);
-  const sh = g.createLinearGradient(0, H * 0.72, 0, H); sh.addColorStop(0, 'rgba(0,0,0,0)'); sh.addColorStop(1, 'rgba(0,0,0,0.6)');
-  g.fillStyle = sh; g.fillRect(0, H * 0.72, W, H * 0.28);
-  g.fillStyle = 'rgba(243, 234, 219, 0.95)'; g.font = `${Math.round(H * 0.15)}px "Nanum Pen Script", cursive`; g.textAlign = 'left'; g.textBaseline = 'alphabetic';
-  g.fillText(what.label, W * 0.04, H * 0.95);
-}
-function tvScreen(inst, build, slot, s) {
-  const canvas = document.createElement('canvas'); canvas.width = 320; canvas.height = 180;
-  const tex = new THREE.CanvasTexture(canvas); tex.colorSpace = THREE.SRGBColorSpace;
-  const plane = new THREE.Mesh(new THREE.PlaneGeometry(s.w, s.h), new THREE.MeshBasicMaterial({ map: tex, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
-  plane.position.set(s.x, s.y, s.z); plane.userData.slot = slot; inst.add(plane); build.slotMeshes.push(plane);
-  const what = tvContent(slot.fn);
-  paintTv(canvas, null, what);
-  slot.started = false;
-  slot.start = () => { // once the fonts are ready (or at once after that)
-    if (slot.started || build !== ctx.build) return;
-    slot.started = true; paintTv(canvas, null, what); tex.needsUpdate = true;
-    if (what.id) ksLoad(build, { id: what.id, tall: what.tall }, what.tall ? ['hqdefault'] : ['mqdefault'], pic => { if (build === ctx.build) { paintTv(canvas, pic, what); tex.needsUpdate = true; } });
-  };
-  if (ctx.slotsLive) slot.start();
-}
-// Desk calendar (type "calendar", fn.kind "calendar"): a small stand with one paper page. The page shows the month of the next upcoming date
-// (this month when there is none) with a ring on the days that carry an entry. Hand-built: the kit has no calendar.
-function paintCalendar(canvas, fn) {
-  const g = canvas.getContext('2d'), W = canvas.width, H = canvas.height;
-  const entries = (fn.entries ?? []).filter(e => typeof e?.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(e.date));
-  const today = seoulDay.format(new Date()), next = entries.filter(e => e.date >= today).map(e => e.date).sort()[0];
-  const [y, m] = (next ?? today).split('-').map(Number);
-  paper(g, W, H, mulberry32(5), 0.2);
-  g.fillStyle = C.accent; g.fillRect(0, 0, W, 40);
-  g.fillStyle = C.paper; g.textBaseline = 'middle'; g.textAlign = 'left'; g.font = `32px "Nanum Pen Script", cursive`; g.fillText(`${m}월`, 14, 21);
-  g.textAlign = 'right'; g.font = `600 14px "IBM Plex Sans KR", system-ui, sans-serif`; g.fillText(String(y), W - 14, 21);
-  const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(), days = new Date(Date.UTC(y, m, 0)).getUTCDate(), cw = (W - 16) / 7;
-  g.textAlign = 'center'; g.font = `600 11px "IBM Plex Sans KR", system-ui, sans-serif`; g.fillStyle = 'rgba(86, 83, 68, 0.6)';
-  [...'일월화수목금토'].forEach((c, i) => g.fillText(c, 8 + cw * (i + 0.5), 54));
-  const marked = new Set(entries.filter(e => e.date.startsWith(`${y}-${String(m).padStart(2, '0')}-`)).map(e => Number(e.date.slice(8))));
-  g.font = `13px "IBM Plex Sans KR", system-ui, sans-serif`;
-  for (let d = 1; d <= days; d++) {
-    const cell = first + d - 1, cx = 8 + cw * (cell % 7 + 0.5), cy = 72 + Math.floor(cell / 7) * 22;
-    if (marked.has(d)) { g.strokeStyle = C.accent; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy, 10, 0, Math.PI * 2); g.stroke(); }
-    g.fillStyle = marked.has(d) ? C.accent : 'rgba(47, 44, 36, 0.85)'; g.fillText(String(d), cx, cy + 1);
-  }
-}
-BUILD.calendar = (g, it, build) => {
-  const fn = it.fn?.kind === 'calendar' ? it.fn : { kind: 'calendar', entries: [] }; // a calendar with no function yet is an empty one
-  const canvas = document.createElement('canvas'); canvas.width = 192; canvas.height = 192;
-  const tex = new THREE.CanvasTexture(canvas); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
-  const wood = flat(C.woodDark), grp = new THREE.Group(), W = 0.4, H = 0.4;
-  box(W + 0.06, 0.03, 0.16, wood, 0, 0.015, 0, { parent: grp });
-  const lean = new THREE.Group(); lean.position.set(0, 0.03, -0.03); lean.rotation.x = -0.3; grp.add(lean);
-  const back = box(W + 0.04, H + 0.04, 0.02, wood, 0, H / 2, 0, { parent: lean });
-  const page = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 })); page.position.set(0, H / 2, 0.012); page.castShadow = true; lean.add(page);
-  grp.position.y = it.y || 0; g.add(grp);
-  paintCalendar(canvas, fn);
-  if (it.fn?.kind !== 'calendar') return {};
-  const slot = { it, fn, started: false, start() { if (slot.started || build !== ctx.build) return; slot.started = true; paintCalendar(canvas, fn); tex.needsUpdate = true; } };
-  for (const m of [back, page]) { m.userData.slot = slot; build.slotMeshes.push(m); }
-  build.slots.push(slot);
-  if (ctx.slotsLive) slot.start();
-  return {};
-};
-function startSlots() { ctx.slotsLive = true; for (const s of ctx.build.slots) s.start?.(); }
-// ---------- models: { type: 'model', model: <catalogue id>, x, z, rot, y, tint } ----------
-// <modelBase>catalogue.json lists the GLB files (Kenney Furniture Kit, CC0). A model is fetched and parsed once per mount,
-// shifted so that the item's x, z is the centre of its footprint and its base rests on the floor, then cloned for each item that uses it.
-// It shows up when it has loaded; the room does not wait for it.
-//   y     (default 0) lifts a piece, to stand it on other furniture
-//   tint  (default true) recolours it to the room palette by material name; false keeps the file's own colours
-const MODEL_BASE = opts.modelBase ?? dataBase.replace(/[^/]+\/$/, 'models/');
-const MODEL_SCALE = 2.0; // the kit is built at about 1 unit per floor tile, half this room's scale
-const darkAccent = '#' + new THREE.Color(C.accent).multiplyScalar(0.55).getHexString();
-// material name → colour. A name that is missing here (glass) is left alone. This is the base look of every model.
-// Wood takes the hand-built table's two browns (top and legs), so a wooden frame reads apart from its fabric, which stays on the accent.
-// Kept as one plain object so a per-creator theme can replace it later.
-const TINT = {
-  wood: C.woodB, woodDark: C.woodDark, carpet: C.accent, carpetDarker: darkAccent, carpetBlue: C.olive, carpetWhite: C.paper, _defaultMat: C.paper,
-  plant: C.leaf, lamp: '#f6dcb2', fur: C.woodB, metal: '#a39d90', metalLight: '#c9c3b6', metalMedium: '#8f8a7e', metalDark: '#4a463e',
-};
-// MODELS: catalogue id → Promise of { root, entry, size } or null · KEPT: geometries and materials the cache owns · modelRoots: the parsed scenes
-const MODELS = new Map(), KEPT = new Set(), modelRoots = [];
-let catalogueP = null, gltfP = null;
-cleanups.push(() => { for (const r of modelRoots) disposeScene(r); });
-const getCatalogue = () => catalogueP ??= getJSON(MODEL_BASE + 'catalogue.json').then(c => ctx.catalogue = c).catch(e => { if (!ctx.disposed) console.error('[heap-room]', e); return null; });
-function loadModel(id) {
-  if (!MODELS.has(id)) MODELS.set(id, (async () => {
-    const entry = (await getCatalogue())?.models?.find(m => m.id === id);
-    if (!entry) throw new Error(`model "${id}" is not in the catalogue`);
-    gltfP ??= import('three/addons/loaders/GLTFLoader.js').then(m => new m.GLTFLoader());
-    const [loader, res] = await Promise.all([gltfP, fetch(MODEL_BASE + entry.file, { signal: ac.signal })]);
-    if (!res.ok) throw new Error(`${entry.file}: ${res.status}`);
-    const root = (await loader.parseAsync(await res.arrayBuffer(), '')).scene;
-    if (ctx.disposed) { disposeScene(root); return null; } // dispose() ran while this was loading
-    modelRoots.push(root);
-    root.traverse(o => { if (o.isMesh) { KEPT.add(o.geometry); for (const m of [].concat(o.material)) KEPT.add(m); } });
-    const bb = new THREE.Box3().setFromObject(root, true), mid = bb.getCenter(new THREE.Vector3());
-    root.position.set(-mid.x, -bb.min.y, -mid.z); // the file's own node transforms stay as they are; the whole model shifts
-    return { root, entry, size: bb.getSize(new THREE.Vector3()).multiplyScalar(MODEL_SCALE) };
-  })().catch(e => { if (!ctx.disposed) console.error('[heap-room]', e); return null; }));
-  return MODELS.get(id);
-}
-BUILD.model = (g, it, build) => {
-  loadModel(it.model).then(m => {
-    if (!m || ctx.disposed || build !== ctx.build) return; // a failed load, or the items were replaced while it loaded
-    const inst = m.root.clone(), rug = m.entry.category === 'rug', lamp = m.entry.category === 'lamp', own = new Map(), shades = [];
-    inst.traverse(o => {
-      if (!o.isMesh) return;
-      const col = it.tint !== false && TINT[o.material.name], glow = lamp && o.material.name === 'lamp';
-      if (col || glow) { // a copy of the material for this instance, tinted and (a lamp's shade) glowing; the cached original stays as the file has it
-        if (!own.has(o.material)) {
-          const c = o.material.clone();
-          if (col) c.color.set(col);
-          if (glow) { c.emissive.set(LAMP_GLOW); c.emissiveIntensity = isLit(it) ? ctx.shadeNow : 0; }
-          own.set(o.material, c);
-        }
-        o.material = own.get(o.material);
-        if (glow) shades.push(o);
-      }
-      o.castShadow = !rug && !o.material.transparent; o.receiveShadow = true;
-    });
-    const hold = new THREE.Group();
-    hold.scale.setScalar(MODEL_SCALE); hold.position.y = (it.y || 0) + (rug ? 0.012 : 0); // a rug lies just above the floor so the two do not flicker
-    hold.add(inst); g.add(hold);
-    if (it.fn?.kind === 'keepsake') keepsakeObject(g, it, build, 'standee', 0, (it.y || 0) + m.size.y, 0); // on top of the shelf-like piece
-    else if (it.fn && ['pc', 'music', 'latest'].includes(it.fn.kind)) { // the whole model is the button; a TV with a function also gets a painted screen
-      const slot = { it, fn: it.fn };
-      inst.traverse(o => { if (o.isMesh) { o.userData.slot = slot; build.slotMeshes.push(o); } });
-      build.slots.push(slot);
-      if (m.entry.screen && it.fn.kind !== 'pc') tvScreen(inst, build, slot, m.entry.screen);
-    }
-    const seatRule = ctx.catalogue?.seats?.[m.entry.category];
-    if (seatRule) addSeats(build, g, it, m, seatRule, inst);
-    if (shades.length) { // the light sits at the centre of the shade: the box around the vertices the shade's own triangles use
-      const light = lampLight(build, it), bb = new THREE.Box3(), v = new THREE.Vector3(); // (a model's meshes share one vertex buffer)
-      if (light) {
-        g.updateMatrixWorld(true);
-        for (const o of shades) {
-          const pos = o.geometry.getAttribute('position'), idx = o.geometry.index;
-          for (let i = 0, n = idx ? idx.count : pos.count; i < n; i++) bb.expandByPoint(v.fromBufferAttribute(pos, idx ? idx.getX(i) : i).applyMatrix4(o.matrixWorld));
-        }
-        g.add(light); g.worldToLocal(bb.getCenter(light.position));
-      }
-      build.lamps.push({ light, shades: [...new Set(shades.map(o => o.material))], off: !isLit(it) });
-    }
-    if (rug || it.y) return; // a rug is walked over; a piece standing on other furniture adds no obstacle of its own
-    const swap = Math.round((it.rot || 0) / 90) % 2 !== 0, hw = m.size.x / 2 + 0.2, hd = m.size.z / 2 + 0.2;
-    // hw, hd: the walk box (the model's half size and 0.2 more) · rhw, rhd: the model's own half size · owner: the item, so its own seat can tell which box is its
-    build.obst.push({ x: it.x, z: it.z, hw: swap ? hd : hw, hd: swap ? hw : hd, rhw: (swap ? m.size.z : m.size.x) / 2, rhd: (swap ? m.size.x : m.size.z) / 2, owner: it });
-  });
-  return {};
-};
-// Seats: the points where a visitor (and later a fan's ghost) can sit, worked out from a model's footprint and the catalogue's `seats` rules (chair, sofa, rug).
-// Nothing about them is stored in the layout. A model's own `seatY` (file units) replaces the rule's `top` share of its height when the share does not fit it.
-// Each seat: { id, kind: 'chair' | 'sofa' | 'floor', item, pos (world: the sitting surface), yaw (the way the sitter faces, radians),
-//   stands (floor points the seat can be entered from: front, back, left, right; a rug seat is entered at its own point) }.
-// sitOn (below) picks the stand a walk can reach around the obstacles and refuses a seat whose centre is inside another item or the photo table.
-// ITEMS.seats lists them all; each seat mesh carries userData.seats, the seats of its item.
-function addSeats(build, g, it, m, rule, inst) {
-  g.updateMatrixWorld(true);
-  const w = m.size.x, d = m.size.z, floor = !!rule.floor;
-  const top = (it.y || 0) + (floor ? 0.012 : 0) + (m.entry.seatY != null ? m.entry.seatY * MODEL_SCALE : m.size.y * rule.top);
-  const kx = floor ? Math.max(1, Math.floor(w)) : rule.per ? Math.max(1, Math.round(w / rule.per)) : 1, kz = floor ? Math.max(1, Math.floor(d)) : 1;
-  const kind = floor ? 'floor' : rule.per ? 'sofa' : 'chair', yaw = THREE.MathUtils.degToRad(it.rot || 0), index = build.items.indexOf(it), seats = [];
-  for (let i = 0; i < kx; i++) for (let j = 0; j < kz; j++) {
-    const lx = (i + 0.5) / kx * w - w / 2, lz = (j + 0.5) / kz * d - d / 2;
-    const pos = g.localToWorld(new THREE.Vector3(lx, 0, lz)).setY(top);
-    const at = (x, z) => g.localToWorld(new THREE.Vector3(x, 0, z)).setY(0), gap = 0.55;
-    const stands = floor ? [pos.clone().setY(0)] : [at(lx, d / 2 + gap), at(lx, -d / 2 - gap), at(-w / 2 - gap, lz), at(w / 2 + gap, lz)];
-    seats.push({ id: `${index}:${i}${j}`, kind, item: it, pos, yaw, stands });
-  }
-  build.seats.push(...seats);
-  inst.traverse(o => { if (o.isMesh) { o.userData.seats = seats; build.seatMeshes.push(o); } });
-}
-// ITEMS: what the last buildItems() made. group: every object built from the items · obst: their walk obstacles · items: the list itself
-//   lamps: its lamps, { light, shades, off } each (see MAX_LAMP_LIGHTS above)
-//   slots: its functions, { it, fn, start? } each · slotMeshes: the meshes a click can hit, each with userData.slot (see the slots section above)
-//   seats / seatMeshes: see addSeats
-//   loads: the keepsake thumbnails this build still waits for (cancelled when the next build replaces it)
-ctx.build = { group: null, obst: [], items: [], lamps: [], slots: [], slotMeshes: [], seats: [], seatMeshes: [], loads: new Set() };
-function buildItems(items, first = false) {
-  if (ctx.build.group) { for (const l of ctx.build.lamps) l.light?.dispose(); scene.remove(ctx.build.group); disposeScene(ctx.build.group, KEPT); }
-  shelfParts.length = 0; ctx.shelf = null;
-  for (const im of ctx.build.loads) { im.onload = im.onerror = null; im.src = ''; inFlight.delete(im); } // the replaced build's thumbnails stop here
-  ctx.build.loads.clear();
-  const build = ctx.build = { group: new THREE.Group(), obst: [], items, lamps: [], slots: [], slotMeshes: [], seats: [], seatMeshes: [], loads: new Set() };
-  scene.add(build.group);
-  items.forEach((it, i) => {
-    // The first build draws from the room's shared sequence, as the room always has. A rebuild seeds each item by its place in the list,
-    // so it leaves that sequence alone and an item keeps its look from one rebuild to the next.
-    ctx.irand = first ? rand : mulberry32(7919 * (i + 1));
-    const g = new THREE.Group(), rot = THREE.MathUtils.degToRad(it.rot || 0);
-    const fp = BUILD[it.type]?.(g, it, build); if (!fp) return;
-    g.position.set(it.x, 0, it.z); g.rotation.y = rot; build.group.add(g); g.updateMatrixWorld(true);
-    if (!fp.hw) return; // a model adds its obstacle when it has loaded
-    const swap = Math.round((it.rot || 0) / 90) % 2 !== 0;
-    const ohw = swap ? fp.hd : fp.hw, ohd = swap ? fp.hw : fp.hd;
-    build.obst.push({ x: it.x, z: it.z, hw: ohw, hd: ohd, rhw: Math.max(0.1, ohw - 0.2), rhd: Math.max(0.1, ohd - 0.2), owner: it });
-  });
-}
+setupFurniture(ctx);
+const { buildItems, OBST, shelfParts } = ctx;
+setupSlots(ctx);
+const { startSlots, keepsakeLook, newestReel } = ctx;
+setupModels(ctx);
+const { getCatalogue } = ctx;
 buildItems(layout.items || [], true);
-const shelfLocal = v => ctx.shelf.group.localToWorld(v.clone());
+setupShelf(ctx);
+const { linkShelf, updateAlbums, enterSort, exitSort, albumAction } = ctx;
 setupTime(ctx);
 const { tickClock } = ctx;
 // table, rug, cushion, mug, phone (positions relative to layout.table)
@@ -544,6 +158,7 @@ function drawProjection(reel, img) {
 }
 // ---------- character ----------
 const me = new THREE.Group();
+ctx.me = me;
 const body = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.25, 0.45, 7), flat(C.accent)); body.position.y = 0.5;
 const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.26, 1), flat('#f2cfb3')); head.position.y = 0.95;
 const hair = new THREE.Mesh(new THREE.SphereGeometry(0.28, 7, 4, 0, Math.PI * 2, 0, Math.PI / 2), flat('#3a2a22')); hair.position.set(0, 0.98, -0.02);
@@ -697,6 +312,7 @@ function paintPoster(card) {
 const FAR = 0, NEAR = 1, CLOSE = 2, MAX_LOADS = 6;
 const thumbFiles = (reel, tier) => tier === FAR ? ['mqdefault'] : tier === NEAR ? ['hqdefault'] : reel.wide ? ['hq720', 'hqdefault'] : ['oardefault'];
 const loadQueue = [], inFlight = new Set(); // { card, tier } jobs waiting in load order · Images still downloading
+ctx.inFlight = inFlight;
 let loading = 0;
 cleanups.push(() => { loadQueue.length = 0; for (const im of inFlight) { im.onload = im.onerror = null; im.src = ''; } inFlight.clear(); });
 function landed(card, tier, im) {
@@ -757,22 +373,12 @@ const roomFit = aspect => needDist(RX, RZ, aspect) / needDist(4, 4, aspect);
 const tableCentre = new THREE.Vector3(TABLE.x, TABLE.top, TABLE.z);
 const SIT_CAM = { pos: tableCentre.clone().add(new THREE.Vector3(0, 2.0, 2.1)), target: tableCentre.clone() };
 const WATCH_CAM = { pos: SEAT.clone().add(new THREE.Vector3(0.7, 1.75, 2.1)), target: SCREEN_C.clone().addScaledVector(WALLS[SCR.wall].n, 1).add(new THREE.Vector3(0, -0.75, 0)) };
-ctx.sortCam = null; ctx.shelfSpot = null; ctx.shelfStand = null; ctx.shelfFacing = 0;
-function linkShelf() { // the album shelf's camera and standing spots; runs again after every buildItems()
-  ctx.sortCam = ctx.shelfSpot = ctx.shelfStand = null;
-  if (!ctx.shelf) return;
-  const albumsC = shelfLocal(new THREE.Vector3(0, 1.05, 0));
-  ctx.sortCam = { pos: shelfLocal(new THREE.Vector3(-1.6, 2.2, 2.5)), target: albumsC };
-  ctx.shelfSpot = shelfLocal(new THREE.Vector3(-0.75, 0, 0.9)); ctx.shelfSpot.y = 0;
-  ctx.shelfStand = shelfLocal(new THREE.Vector3(1.0, 0, 0.95)); ctx.shelfStand.y = 0;
-  ctx.shelfFacing = ctx.shelf.group.rotation.y + Math.PI;
-}
-linkShelf();
 ctx.mode = 'room'; ctx.camGoal = null; ctx.held = null; ctx.heldFlipped = false; ctx.loaded = null; ctx.hovered = null; ctx.presenting = null; ctx.dragging = null;
 ctx.walkTo = null; ctx.arrive = null; ctx.waypoints = [];
 ctx.perch = null; ctx.seatTarget = null; // perch: the seat the visitor sits on in room mode · seatTarget: the seat being walked to
 ctx.seatFrom = null; ctx.perchFrom = null; // the stand point the walk to seatTarget ends at · the stand point the visitor came to the perch from (they get up there)
 const goTo = cam => { ctx.camGoal = cam; controls.enabled = false; };
+ctx.goTo = goTo;
 // Live room contents, for a creator's editor. Dispatch on the element given to mountRoom once the room is up (#status hidden):
 //   root.dispatchEvent(new CustomEvent('heap:items', { detail: itemsArray }))
 //     replaces everything built from layout.items. Same item shapes as layout.json.
@@ -816,12 +422,6 @@ on(root, 'heap:get', e => {
       seats: ctx.build.seats.map(s => ({ id: s.id, kind: s.kind, x: s.pos.x, y: s.pos.y, z: s.pos.z, yaw: s.yaw })),
     });
   });
-});
-ALBUMS.forEach((a, i) => {
-  const b = document.createElement('button'); b.className = 'btn paper'; b.type = 'button';
-  b.innerHTML = `<span class="k">${i + 1}</span>`; b.append(a.name);
-  b.addEventListener('click', () => albumAction(a.key));
-  $('albumrow').appendChild(b);
 });
 function sit() {
   ctx.mode = 'sit'; ctx.walkTo = null; ctx.arrive = null; ctx.waypoints = []; ctx.perch = null;
@@ -1172,47 +772,6 @@ function jump(id) {
   setTimeout(() => { if (!ctx.disposed) opts.onNavigate(id); }, 380);
 }
 on($('rooms-close'), 'click', () => { $('rooms').hidden = true; });
-// album shelf: browse albums (the sorting round lives in archive/album-sort/)
-function updateAlbums() {
-  if (!ctx.shelf) return;
-  for (const a of ctx.shelf.albums) {
-    const n = [...filed.values()].filter(v => v.album === a.key).length;
-    a.mesh.scale.x = Math.min(0.32, 0.13 + n * 0.008); a.count = n;
-    const g = a.lc.getContext('2d');
-    g.fillStyle = C.paper; g.fillRect(0, 0, 96, 360);
-    g.fillStyle = C.ink; g.textAlign = 'center'; g.textBaseline = 'middle';
-    const chars = [...a.name.replace(/\s/g, '')], fs = Math.min(52, 270 / chars.length);
-    g.font = `${fs}px "Nanum Pen Script", cursive`;
-    chars.forEach((ch, i) => g.fillText(ch, 48, 30 + fs / 2 + i * fs));
-    g.font = '600 26px "IBM Plex Sans KR", sans-serif'; g.fillStyle = C.accent;
-    g.fillText(String(n), 48, 330);
-    a.lt.needsUpdate = true;
-  }
-}
-function enterSort() { // "sort" mode = standing at the album shelf, browsing albums
-  if (!ctx.shelf) return;
-  ctx.mode = 'sort'; ctx.walkTo = null; ctx.arrive = null; ctx.waypoints = []; ctx.perch = null;
-  me.position.copy(ctx.shelfStand); me.rotation.y = ctx.shelfFacing - 0.4;
-  setHint('shelf'); goTo(ctx.sortCam); syncUI();
-}
-function exitSort() { ctx.mode = 'room'; ctx.camGoal = null; setHint('room'); syncUI(); }
-on($('sortexit'), 'click', exitSort);
-const albumAction = key => { if (ctx.mode === 'sort') openAlbum(key); };
-function openAlbum(key) {
-  const list = $('grid-list'); list.innerHTML = '';
-  const items = reels.filter(r => filed.get(r.id)?.album === key);
-  $('grid-title').textContent = `${albumName(key)} · ${items.length}장`;
-  for (const r of items) {
-    const it = el('div', 'gitem' + (r.wide ? ' wide' : ''));
-    // near tier; the grid's object-fit: cover crops YouTube's padded frame down to the picture
-    const im = el('img'); im.crossOrigin = 'anonymous'; im.src = thumbUrl(r, 'hqdefault'); im.alt = ''; im.loading = 'lazy'; it.appendChild(im);
-    it.appendChild(el('span', null, r.title)); it.appendChild(link('원본 ↗', ytUrl(r)));
-    list.appendChild(it);
-  }
-  if (!items.length) list.appendChild(el('p', 'note', '아직 비어 있어요.'));
-  $('grid').hidden = false;
-}
-on($('grid-close'), 'click', () => { $('grid').hidden = true; });
 // ====================================================================================
 // 7. Input
 // ====================================================================================
