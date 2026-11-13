@@ -1,7 +1,8 @@
 // item.fn 기능이 달린 가구의 3D 쪽: 기념품, TV 화면, 달력.
 import * as THREE from 'three';
 import { mulberry32 } from './util.js';
-import { paper, wrap, drawFit, NO_PHOTO, flat, cropToShape, makeCanvas, canvasTexture } from './draw.js';
+import { paper, wrap, drawFit, NO_PHOTO, cropToShape, makeCanvas, canvasTexture } from './draw.js';
+import { tone } from './palette.js';
 import { ksDay, seoulDay } from './format.js';
 
 export function setupSlots(ctx) {
@@ -61,7 +62,7 @@ export function setupSlots(ctx) {
     const fn = it.fn?.kind === 'keepsake' ? it.fn : { kind: 'keepsake', name: '' }; // 기념품이 아직 없는 액자는 빈 액자다
     const look = keepsakeLook(fn), k = look.tall ? KS.tall : KS.wide, W = k.cw, H = k.ch + k.strip;
     const pw = shape === 'frame' ? (look.tall ? 0.55 : 0.95) : (look.tall ? 0.2 : 0.32), ph = pw * H / W, rim = shape === 'frame' ? 0.045 : 0.03;
-    const grp = new THREE.Group(), wood = flat(C.woodDark);
+    const grp = new THREE.Group(), wood = tone(C, 'woodDark');
     const canvas = makeCanvas(W, H);
     const tex = canvasTexture(canvas, 4);
     const frame = box(pw + 2 * rim, ph + 2 * rim, 0.04, wood, 0, 0, 0.02, { cast: shape !== 'frame', parent: grp });
@@ -179,11 +180,12 @@ export function setupSlots(ctx) {
     const fn = it.fn?.kind === 'calendar' ? it.fn : { kind: 'calendar', entries: [] }; // 기능이 아직 없는 달력은 빈 달력이다
     const canvas = makeCanvas(192, 192);
     const tex = canvasTexture(canvas, 4);
-    const wood = flat(C.woodDark), grp = new THREE.Group(), W = 0.4, H = 0.4;
+    const wood = tone(C, 'woodDark'), grp = new THREE.Group(), W = 0.4, H = 0.4;
     box(W + 0.06, 0.03, 0.16, wood, 0, 0.015, 0, { parent: grp });
     const lean = new THREE.Group(); lean.position.set(0, 0.03, -0.03); lean.rotation.x = -0.3; grp.add(lean);
     const back = box(W + 0.04, H + 0.04, 0.02, wood, 0, H / 2, 0, { parent: lean });
     const page = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 })); page.position.set(0, H / 2, 0.012); page.castShadow = true; lean.add(page);
+    page.material.userData.repaint = () => { paintCalendar(canvas, fn); tex.needsUpdate = true; }; // 머리띠와 동그라미는 포인트 색이다
     grp.position.y = it.y || 0; g.add(grp);
     paintCalendar(canvas, fn);
     if (it.fn?.kind !== 'calendar') return {};

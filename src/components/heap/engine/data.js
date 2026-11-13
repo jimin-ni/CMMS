@@ -32,6 +32,7 @@ export async function setupData(ctx) {
   };
   const C = { ...DEFAULT_PALETTE, ...(layout.palette || {}) };
   ctx.DEFAULT_PALETTE = DEFAULT_PALETTE;
+  ctx.look = JSON.stringify(C); // 지금 칠한 색 (가구 목록 그림의 캐시 열쇠). recolour.js 가 바꾼다
 
   const ALBUMS = creator.albums.map(a => ({ ...a, re: a.match ? new RegExp(a.match, 'i') : null }));
   const albumName = k => ALBUMS.find(a => a.key === k)?.name ?? k;
@@ -49,9 +50,10 @@ export async function setupData(ctx) {
   ctx.baseLayout = structuredClone(R?.baseLayout ?? DATA.layout);
   // 마지막으로 저장한 방 이름. 꾸미기가 이름을 고쳐 저장하면 heap:saved 로 바뀐다 (editor-bridge.js). 화면의 이름(DATA.name)은 고친 이름일 수 있다.
   ctx.savedName = typeof R?.savedName === 'string' ? R.savedName : DATA.name;
+  // backdrop: 방 뒤의 배경 (없으면 null = 시간 따라) · brand: 주인이 넣은 브랜드 색 (없으면 null). 둘 다 꾸미기의 되돌리기와 저장에 든다
   ctx.original = R?.original
-    ? { items: R.original.items.map(it => ({ ...it })), time: R.original.time, palette: R.original.palette ?? null }
-    : { items: (layout.items || []).map(it => ({ ...it })), time: layout.time ?? 'auto', palette: layout.palette ?? null };
+    ? { items: R.original.items.map(it => ({ ...it })), time: R.original.time, palette: R.original.palette ?? null, backdrop: R.original.backdrop ?? null, brand: R.original.brand ?? null }
+    : { items: (layout.items || []).map(it => ({ ...it })), time: layout.time ?? 'auto', palette: layout.palette ?? null, backdrop: layout.backdrop?.mode === 'colour' ? layout.backdrop : null, brand: layout.brand ?? null };
 
   // ---------- 카드 목록 ----------
   // 영상은 연결된 채널의 제목(heap_creator_channels)을 가진다. 카드 뒷면에 보이고 `channel` 앨범 규칙이 이것으로 맞춘다.

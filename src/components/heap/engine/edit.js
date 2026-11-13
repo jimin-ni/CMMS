@@ -6,19 +6,21 @@
 //                                     palette(palette | null), swap(index, to { type, model? }), plan(value?: 위에서 보기를 켜고 끈다), fit(구도 맞추기),
 //                                     lift(dir: 1 | -1, 벽 가구의 높이. PageUp/PageDown 과 같다),
 //                                     name(value: 방 이름, 검사는 room-editor.tsx 와 서버가 한다), load(layout { items, palette, shell?, time? }, name?: 템플릿이나 저장 전 모습을 한 걸음으로 깐다),
-//                                     preview(value: 팔로워로 보기를 켜고 끈다)
+//                                     preview(value: 팔로워로 보기를 켜고 끈다), palhover(palette | null: 팔레트 카드 위에 올린 동안 방에 미리 칠한다. null 이면 되돌린다. 걸음이 아니다),
+//                                     backdrop(value: { mode: 'colour', top, bottom? } | null = 시간 따라). palette 는 brand(브랜드 색 목록 | null)를 함께 줄 수 있다
 //            heap:saved { roomUuid, layout, name? } (editor-bridge.js 와 함께): 저장된 레이아웃과 이름이 새 기준이 된다. 다른 방의 것은 버린다
-//   보내는 것 heap:editstate { items, sel, moving, canUndo, canRedo, dirty, time, notice, palette, look, mount, placed, busy, view { plan, fitted },
+//   보내는 것 heap:editstate { items, sel, moving, canUndo, canRedo, dirty, time, notice, palette, backdrop, brand, look, mount, placed, busy, view { plan, fitted },
 //                              shell, name, savedName, preview }  바뀔 때마다
-//            heap:remount { edit, items, time, palette, shell, name, savedName, hist, future, saved, original, baseLayout, plan }  팔레트나 방의 틀이 바뀔 때 (아래 remount)
+//            heap:remount { edit, items, time, palette, backdrop, brand, shell, name, savedName, hist, future, saved, original, baseLayout, plan }  방의 틀이 바뀔 때 (아래 remount)
 // 방의 틀(shell): 방 크기와 고정된 것(창문, 문, 스크린, 방명록, 포스터, 사진 탁자)의 자리. 템플릿을 깔면 바뀌고, 바뀌면 팔레트처럼 다시 마운트한다.
 // 방 이름도 되돌리기 기록에 든다: 이름 하나를 고치는 것이 한 걸음이고, 저장 안 된 변경으로 센다. 화면 왼쪽 위의 이름(hud.js 의 showName)도 바로 바뀐다.
 // 팔로워로 보기(preview): 편집 상태는 그대로 두고, 카메라는 방 카메라로, 발판·격자·막대는 숨기고, 포인터와 키는 받지 않는다 (room-editor.tsx 가 키를 받아 돌아간다).
 // 카메라(B6)는 edit-camera.js 의 ctx.editCam 이다: 휠 확대, 오른쪽 끌기 이동(움직이지 않은 오른쪽 클릭은 취소), T 평면도, Home 또는 0 맞추기.
 // 집고 놓는 일은 지금 화면의 카메라로 하므로 두 카메라에서 같다. 평면도에서 벽 액자는 가까운 벽을 따르고, 맞은 메시가 없으면 바닥의 발판으로 고른다.
 // 들고 있는 가구가 다른 가구에 가리면 옅은 그림자(실루엣)로 비쳐 보이고, 발판의 점선 테두리는 늘 보인다 (아래 그림자).
-// 팔레트는 벽, 바닥과 여러 곳의 색이 마운트 때 한 번 읽는 값(data.js 의 C)이라, 바꾸면 방을 다시 마운트한다 (1초쯤). 편집 상태와 되돌리기 기록은
-// heap:remount 로 heap-room.tsx 에 넘기고, 새 마운트가 opts.resume 으로 받아 이어 간다. 그 사이 방 안의 상태(앉은 자리, 음악)는 처음으로 돌아간다.
+// 팔레트는 그 자리에서 다시 칠한다 (recolour.js: 다시 마운트하지 않는다). 배경(backdrop)도 그 자리에서 바뀐다 (time.js 의 setBackdrop).
+// 방의 틀(템플릿)은 다시 마운트한다 (1초쯤). 편집 상태와 되돌리기 기록은 heap:remount 로 heap-room.tsx 에 넘기고,
+// 새 마운트가 opts.resume 으로 받아 이어 간다. 그 사이 방 안의 상태(앉은 자리, 음악)는 처음으로 돌아간다.
 // 끄는 동안에는 그 가구의 그룹만 프레임마다 옮기고, 놓을 때 한 번 buildItems 로 다시 짓는다 (applyItems, editor-bridge.js).
 // 가구끼리 겹치는 것은 막지 않는다. 막는 것은 서버가 거절하는 자리(opts.placementError = layout.ts 의 itemPlacementError)와,
 // 기능에 닿지 못하게 하는 자리(사진 탁자와 그 앞자리, 문 앞, 방명록 앞, 창문·스크린·문 위의 액자와 벽 가구)뿐이다. 방 밖은 막지 않고 안으로 당긴다.
@@ -72,11 +74,13 @@ export function setupEdit(ctx) {
     alt: false, last: null, notice: null, seq: 0, fnTimer: 0,
     // palette: layout.palette (없으면 null = 기본 올리브 오후) · placed: 방금 내려놓은 새 가구 { index, seq } (기능 말풍선을 연다) · busy: 다시 마운트를 기다린다
     palette: null, placed: null, busy: false,
+    // backdrop: layout.backdrop (null = 시간 따라) · brand: layout.brand, 주인이 넣은 브랜드 색 1~3개 (null = 없음)
+    backdrop: null, brand: null,
     // shell: 방의 틀 (위 SHELL_KEYS) · name: 방 이름 · preview: 팔로워로 보기 중
     shell: {}, name: '', preview: false,
   };
-  // 이 마운트의 번호와, 이 마운트가 실제로 칠한 색 (가구 목록의 그림은 이 색으로 그려진다: dock-thumbs.js)
-  const MOUNT = Math.floor(Math.random() * 1e9), LOOK = JSON.stringify(ctx.C);
+  // 이 마운트의 번호. 칠한 색(look)은 ctx.look 이다: 가구 목록의 그림은 그 색으로 그려진다 (dock-thumbs.js)
+  const MOUNT = Math.floor(Math.random() * 1e9);
   ctx.onDispose(() => clearTimeout(ed.fnTimer));
 
   // ---------- 규칙 ----------
@@ -368,10 +372,10 @@ export function setupEdit(ctx) {
   }
 
   // ---------- 상태 알리기, 되돌리기 ----------
-  const snap = () => JSON.stringify({ items: ed.items, time: ed.time, palette: ed.palette, shell: ed.shell, name: ed.name });
-  const keyOf = (items, time, palette, shell, name) => JSON.stringify({ items, time, palette: palette ?? null, shell, name });
+  const snap = () => JSON.stringify({ items: ed.items, time: ed.time, palette: ed.palette, shell: ed.shell, name: ed.name, backdrop: ed.backdrop, brand: ed.brand });
+  const keyOf = (items, time, palette, shell, name, backdrop, brand) => JSON.stringify({ items, time, palette: palette ?? null, shell, name, backdrop: backdrop ?? null, brand: brand ?? null });
   // 마지막으로 저장한 모습의 비교 문자열 (ctx.original, ctx.baseLayout, ctx.savedName 은 editor-bridge.js 가 저장 뒤에 고친다)
-  const savedKey = () => keyOf(ctx.original.items, ctx.original.time, ctx.original.palette, shellOf(ctx.baseLayout), ctx.savedName);
+  const savedKey = () => keyOf(ctx.original.items, ctx.original.time, ctx.original.palette, shellOf(ctx.baseLayout), ctx.savedName, ctx.original.backdrop, ctx.original.brand);
   const palKey = p => JSON.stringify(p ?? null);
   function emit() {
     if (ctx.disposed) return;
@@ -379,7 +383,7 @@ export function setupEdit(ctx) {
       on: ed.on, items: ed.items.map(it => ({ ...it })), sel: ed.sel, time: ed.time,
       moving: ed.move ? { isNew: ed.move.isNew, label: labelOf(ed.move.base) } : null,
       canUndo: ed.hist.length > 0, canRedo: ed.future.length > 0, dirty: snap() !== ed.saved, notice: ed.notice,
-      palette: ed.palette, look: LOOK, mount: MOUNT, placed: ed.placed, busy: ed.busy,
+      palette: ed.palette, backdrop: ed.backdrop, brand: ed.brand, look: ctx.look, mount: MOUNT, placed: ed.placed, busy: ed.busy,
       view: { plan: ctx.editCam.plan, fitted: ctx.editCam.fitted() },
       shell: structuredClone(ed.shell), name: ed.name, savedName: ctx.savedName, preview: ed.preview,
     } }));
@@ -397,46 +401,78 @@ export function setupEdit(ctx) {
     ed.future = []; ed.tag = tag;
   }
   function setTime(v) { ed.time = v; root.dispatchEvent(new CustomEvent('heap:time', { detail: v })); }
+  // 꾸미기가 다루는 배경은 색 배경 아니면 null(시간 따라)뿐이다. 예전에 저장된 { mode: 'time' } 도 null 로 본다 (codex)
+  const colourBackdrop = b => (b && b.mode === 'colour' ? b : null);
   function setName(n) { if (typeof n !== 'string' || n === ed.name) return; ed.name = n; ctx.showName(n); }
-  // 팔레트와 방의 틀을 바꾼다. 어느 쪽이든 바뀌었으면 다시 마운트하고(again 이 false 면 꾸미기 밖으로), 아니면 가구만 다시 짓는다.
-  function setLook(pal, shell, again = true) {
-    const changed = palKey(pal) !== palKey(ed.palette) || palKey(shell) !== palKey(ed.shell);
+  // 방의 모습(팔레트, 방의 틀, 배경, 브랜드 색)을 바꾼다. 방의 틀이 바뀌었으면 다시 마운트하고(again 이 false 면 꾸미기 밖으로),
+  // 아니면 팔레트와 배경은 그 자리에서 칠하고 가구를 다시 짓는다. look 에 없는(undefined) backdrop, brand 는 그대로 둔다.
+  function setLook(look, again = true) {
+    const { palette: pal, shell } = look;
+    const shellChanged = palKey(shell) !== palKey(ed.shell), palChanged = palKey(pal) !== palKey(ed.palette);
     ed.palette = pal; ed.shell = shell;
-    if (changed) remount(again); else rebuild();
+    if (look.brand !== undefined) { // 꾸미기에 다시 들어올 때(enter) 이 값에서 시작한다. 팔레트(recolour.js)와 배경(setBackdrop)도 ctx.layout 을 고친다
+      ed.brand = look.brand;
+      if (ed.brand) ctx.layout.brand = [...ed.brand]; else delete ctx.layout.brand;
+    }
+    if (look.backdrop !== undefined && palKey(colourBackdrop(look.backdrop)) !== palKey(ed.backdrop)) { ed.backdrop = colourBackdrop(look.backdrop); ctx.setBackdrop(ed.backdrop); }
+    if (shellChanged) { remount(again); return; }
+    if (palChanged || hovering) { hovering = false; ctx.recolour(pal); }
+    rebuild();
   }
   function restore(s) {
     const o = JSON.parse(s);
     ed.items = o.items; ed.sel = null; ed.tag = null;
     if (o.time !== ed.time) setTime(o.time);
     setName(o.name ?? ed.name);
-    setLook(o.palette ?? null, o.shell ?? ed.shell);
+    setLook({ palette: o.palette ?? null, shell: o.shell ?? ed.shell, backdrop: o.backdrop ?? null, brand: o.brand ?? null });
   }
 
-  // ---------- 팔레트: 다시 마운트 ----------
+  // ---------- 방의 틀: 다시 마운트 ----------
   // 지금 편집 상태를 heap-room.tsx 에 넘긴다. heap-room.tsx 는 이 방을 버리고 items, time, palette 를 얹은 레이아웃으로 다시 마운트하며,
   // 새 마운트의 edit.js 가 heap:ready 에서 이 상태로 다시 들어온다 (edit 이 false 면 들어오지 않는다: 나가며 버릴 때).
   function remount(edit = true) {
     clearTimeout(ed.fnTimer); ed.fnTimer = 0;
     ed.move = null; ed.press = null; ed.sel = null; grid.visible = false; ed.busy = edit;
     root.dispatchEvent(new CustomEvent('heap:remount', { detail: {
-      edit, items: ed.items.map(it => ({ ...it })), time: ed.time, palette: ed.palette,
+      edit, items: ed.items.map(it => ({ ...it })), time: ed.time, palette: ed.palette, backdrop: ed.backdrop, brand: ed.brand,
       shell: structuredClone(ed.shell), name: ed.name, savedName: ctx.savedName,
       hist: ed.hist.slice(), future: ed.future.slice(), saved: ed.saved, seq: ed.seq,
-      original: { items: ctx.original.items.map(it => ({ ...it })), time: ctx.original.time, palette: ctx.original.palette ?? null },
+      original: { items: ctx.original.items.map(it => ({ ...it })), time: ctx.original.time, palette: ctx.original.palette ?? null, backdrop: ctx.original.backdrop ?? null, brand: ctx.original.brand ?? null },
       baseLayout: structuredClone(ctx.baseLayout), plan: ctx.editCam.plan,
     } }));
   }
   // 팔레트 하나를 통째로 칠한다 (프리셋 또는 직접 고른 색). 한 걸음이고, 저장하기 전까지는 팔로워에게 보이지 않는다.
   // 값의 검사는 저장할 때 서버(layout.ts 의 palette)가 한다. 여기서는 모양만 본다: 색 이름 → #RRGGBB, floor 는 그 목록 (1~6개).
+  // brand: 내 색 카드로 칠할 때 주인이 넣은 브랜드 색 (1~3개). 주지 않으면(undefined) 지금 것을 둔다.
   const HEXC = /^#[0-9a-fA-F]{6}$/;
-  function setPalette(p) {
-    const ok = p === null || (typeof p === 'object' && !Array.isArray(p) && Object.entries(p).every(([k, v]) => (k === 'floor'
-      ? Array.isArray(v) && v.length >= 1 && v.length <= 6 && v.every(c => HEXC.test(c))
-      : typeof v === 'string' && HEXC.test(v))));
-    if (!ok || palKey(p) === palKey(ed.palette)) return;
+  const palOk = p => p === null || (typeof p === 'object' && !Array.isArray(p) && Object.entries(p).every(([k, v]) => (k === 'floor'
+    ? Array.isArray(v) && v.length >= 1 && v.length <= 6 && v.every(c => HEXC.test(c))
+    : typeof v === 'string' && HEXC.test(v))));
+  const brandOk = b => b === null || (Array.isArray(b) && b.length >= 1 && b.length <= 3 && b.every(c => HEXC.test(c)));
+  function setPalette(p, brand) {
+    if (!palOk(p) || (brand !== undefined && !brandOk(brand))) return;
+    const nextBrand = brand === undefined ? ed.brand : brand;
+    if (palKey(p) === palKey(ed.palette) && palKey(nextBrand) === palKey(ed.brand)) { previewPalette(null); return; }
     endMove(); pushUndo();
-    ed.palette = p ? structuredClone(p) : null; ed.notice = null;
-    remount();
+    ed.notice = null;
+    setLook({ palette: p ? structuredClone(p) : null, shell: ed.shell, brand: nextBrand ? [...nextBrand] : null });
+  }
+  // 팔레트 카드 위에 올린 동안: 방에 미리 칠하고, 걸음과 저장 상태는 건드리지 않는다. null 이면 지금 팔레트(ed.palette)로 돌아간다.
+  // 가구를 다시 짓지 않는다: 미리보기는 재질의 색만 바꾼다.
+  let hovering = false;
+  function previewPalette(p) {
+    if (p !== null && !palOk(p)) return;
+    if (p === null) { if (!hovering) return; hovering = false; ctx.recolour(ed.palette); return; }
+    hovering = true; ctx.recolour(p);
+  }
+  // 배경: 시간 따라(null) 또는 고른 색 { mode: 'colour', top, bottom? }. 한 걸음이다.
+  function setBackdrop(b) {
+    const ok = b === null || (b && typeof b === 'object' && b.mode === 'colour' && HEXC.test(b.top) && (b.bottom === undefined || HEXC.test(b.bottom)));
+    if (!ok) return;
+    const next = b ? (b.bottom !== undefined ? { mode: 'colour', top: b.top, bottom: b.bottom } : { mode: 'colour', top: b.top }) : null;
+    if (palKey(next) === palKey(ed.backdrop)) return;
+    endMove(); pushUndo(); ed.notice = null;
+    ed.backdrop = next; ctx.setBackdrop(next);
   }
   function undo() { endMove(); if (!ed.hist.length) return; ed.future.push(snap()); restore(ed.hist.pop()); ed.notice = null; }
   function redo() { endMove(); if (!ed.future.length) return; ed.hist.push(snap()); restore(ed.future.pop()); ed.notice = null; }
@@ -795,7 +831,7 @@ export function setupEdit(ctx) {
     if (ed.time !== ctx.original.time) setTime(ctx.original.time);
     setName(ctx.savedName);
     notice('마지막으로 저장한 모습으로 돌아왔어요', true);
-    setLook(ctx.original.palette ?? null, shellOf(ctx.baseLayout));
+    setLook({ palette: ctx.original.palette ?? null, shell: shellOf(ctx.baseLayout), backdrop: ctx.original.backdrop ?? null, brand: ctx.original.brand ?? null });
   }
   // 템플릿이나 저장 전 모습을 깐다: 가구, 팔레트, (있으면) 방의 틀과 시간과 이름을 한 걸음으로 바꾼다. 기능을 옮기는 일은 room-editor.tsx 가 미리 한다.
   // 알림은 room-editor.tsx 가 띄운다 (다시 마운트하면 엔진의 알림은 지워진다).
@@ -805,7 +841,11 @@ export function setupEdit(ctx) {
     ed.items = l.items.filter(it => it && typeof it === 'object').map(it => ({ ...it })); ed.sel = null; ed.notice = null;
     if (l.time !== undefined && l.time !== ed.time) setTime(l.time);
     setName(name);
-    setLook(l.palette ? structuredClone(l.palette) : null, l.shell && typeof l.shell === 'object' ? shellOf(l.shell) : ed.shell);
+    // 템플릿은 배경과 브랜드 색을 갖지 않는다: 그때는 주인이 고른 것을 그대로 둔다. 저장 전 모습은 둘 다 준다 (없으면 null)
+    setLook({
+      palette: l.palette ? structuredClone(l.palette) : null, shell: l.shell && typeof l.shell === 'object' ? shellOf(l.shell) : ed.shell,
+      backdrop: l.backdrop, brand: l.brand,
+    });
   }
   // 앉는 가구가 다른 가구와 겹치면 저장은 되지만 그 자리에는 앉을 수 없다 (예전 꾸미기 패널의 안내)
   function seatNote(i) {
@@ -824,7 +864,8 @@ export function setupEdit(ctx) {
     ed.items = ctx.original.items.map(it => ({ ...it })); ed.sel = null; ed.hist = []; ed.future = []; ed.tag = null; ed.notice = null;
     if (ed.time !== ctx.original.time) setTime(ctx.original.time);
     setName(ctx.savedName);
-    setLook(ctx.original.palette ?? null, shellOf(ctx.baseLayout), false); // 칠한 색과 방의 틀은 다시 마운트해야 돌아간다
+    // 팔레트와 배경은 그 자리에서 돌아가고, 방의 틀은 다시 마운트해야 돌아간다
+    setLook({ palette: ctx.original.palette ?? null, shell: shellOf(ctx.baseLayout), backdrop: ctx.original.backdrop ?? null, brand: ctx.original.brand ?? null }, false);
   }
   // 팔로워로 보기를 켜고 끈다. 들고 있던 것은 내려놓지 않고 끝내고, 고른 것도 푼다. 되돌리기 기록과 저장 안 된 변경은 그대로다.
   function setPreview(v) {
@@ -848,7 +889,8 @@ export function setupEdit(ctx) {
     me.position.y = 0;
     ctx.syncUI();
     ed.on = true; ed.items = ctx.build.items.map(it => ({ ...it })); ed.time = ctx.timeChoice; ed.sel = null;
-    ed.palette = ctx.layout.palette ?? null; ed.placed = null; ed.busy = false;
+    ed.palette = ctx.layout.palette ?? null; ed.placed = null; ed.busy = false; hovering = false;
+    ed.backdrop = colourBackdrop(ctx.layout.backdrop); ed.brand = Array.isArray(ctx.layout.brand) ? [...ctx.layout.brand] : null;
     ed.hist = resume?.hist ?? []; ed.seq = resume?.seq ?? ed.seq; // 알림과 내려놓기의 번호는 마운트를 건너 이어진다 (room-editor.tsx 가 번호로 새것을 가린다)
     ed.future = resume?.future ?? []; ed.tag = null; ed.notice = null; ed.move = null; ed.press = null;
     // 방의 틀은 지금 지은 방(ctx.layout)의 것이다. 이름은 다시 마운트했으면 그 전 마운트의 것, 아니면 저장된 이름이다.
@@ -884,6 +926,7 @@ export function setupEdit(ctx) {
     const c = e.detail;
     if (!ed.on || !c || typeof c !== 'object') return;
     if (c.op === 'preview') { setPreview(!!c.value); emit(); return; }
+    if (c.op === 'palhover') { if (!ed.preview) previewPalette(c.palette ?? null); return; } // 걸음도 상태 알림도 아니다
     if (ed.preview) return; // 팔로워로 보는 동안에는 고치지 않는다
     if (c.op !== 'fn' && c.op !== 'lift') { ed.tag = null; flushFn(); }
     if (c.op === 'lift') flushFn();
@@ -901,7 +944,8 @@ export function setupEdit(ctx) {
       case 'cancel': cancel(); break;
       case 'reset': reset(); break;
       case 'discard': discard(); break;
-      case 'palette': setPalette(c.palette ?? null); break;
+      case 'palette': setPalette(c.palette ?? null, c.brand); break;
+      case 'backdrop': setBackdrop(c.value ?? null); break;
       case 'swap': if (Number.isInteger(c.index)) swap(c.index, c.to); break;
       case 'plan': setPlan(typeof c.value === 'boolean' ? c.value : !ctx.editCam.plan); break;
       case 'fit': fitView(); break;

@@ -229,6 +229,20 @@
 .heap-room .ed-well { display: flex; align-items: center; gap: 6px; }
 .heap-room .ed-well span { width: 3em; }
 .heap-room .ed-well input { width: 34px; height: 24px; padding: 0; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 4px; background: none; cursor: pointer; }
+/* 색·무늬 탭의 내 색, 배경 (colour-pane.tsx). 좁은 화면에서는 탭 안이 가로로 넘어간다 */
+.heap-room .ed-palpane { overflow-x: auto; scrollbar-width: thin; }
+.heap-room .ed-palpane .ed-strip { min-width: 236px; }
+.heap-room .ed-palcard small { color: rgba(47, 44, 36, 0.62); font-size: 11px; }
+.heap-room .ed-palcard.mine { border-style: dashed; }
+.heap-room .ed-brand, .heap-room .ed-backdrop { flex: none; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; font-size: 12.5px; color: rgba(47, 44, 36, 0.75); }
+.heap-room .ed-brandrow { display: flex; align-items: center; gap: 4px; }
+.heap-room .ed-brandrow input[type="color"], .heap-room .ed-dot { width: 26px; height: 22px; padding: 0; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 4px; background: none; cursor: pointer; }
+.heap-room .ed-brandrow input[type="text"] { width: 66px; font: 12px var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 6px; padding: 1px 5px; }
+.heap-room .ed-brandrow .ed-x { margin-left: 0; width: 20px; height: 20px; font-size: 15px; }
+.heap-room .ed-link { padding: 0; border: 0; background: none; font: 600 12px var(--ui); color: var(--clay); cursor: pointer; }
+.heap-room .ed-link:disabled, .heap-room .ed-dot:disabled { opacity: 0.5; cursor: default; }
+.heap-room .ed-bdmodes, .heap-room .ed-bdrow { display: flex; align-items: center; gap: 4px; }
+.heap-room .ed-dot { width: 20px; height: 20px; border-radius: 50%; }
 .heap-room .ed-busy { position: absolute; left: 50%; top: calc(var(--ed-top) + 16px); transform: translateX(-50%); z-index: 6; margin: 0; padding: 6px 16px; border-radius: 999px; background: var(--ink); color: var(--paper); font-size: 14px; }
 .heap-room .ed-bar {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, calc(-100% - 10px)); z-index: 4;

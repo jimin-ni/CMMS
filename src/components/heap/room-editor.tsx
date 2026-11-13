@@ -11,7 +11,7 @@ import type { HeapOwnerData, SavedRoom } from "./heap-room";
 import { ChannelTab } from "./channel-tab";
 import type { ChecklistAction } from "./setup-checklist";
 import { FnForm, canCarryFn, isLamp, itemLabel, newFn, type Item, type Model } from "./fn-form";
-import { PRESETS, WELLS, effectivePalette, samePalette, swatches, wellValue, withWell, type Palette, type Well } from "./palettes";
+import { ColourPane, type Backdrop } from "./colour-pane";
 
 // 꾸미기 화면. 방 주인이 방 안에서 가구를 놓고 옮긴 뒤 저장한다 (design/editor.md, B1~B9).
 // B8: 방 이름 고치기(위 막대의 이름을 누른다, 저장 한 번에 레이아웃과 함께 간다), 팔로워로 보기(V), 저장 안 된 채 창을 닫을 때의 브라우저 경고,
@@ -46,11 +46,14 @@ type EditState = {
   notice: { text: string; undo: boolean; seq: number } | null;
   // layout.palette (null이면 기본 올리브 오후) · look: 이 마운트가 칠한 색 (그림 캐시의 열쇠) · mount: 엔진 마운트 번호
   palette: Record<string, unknown> | null;
+  // layout.backdrop (null이면 시간 따라) · layout.brand (주인이 넣은 브랜드 색, null이면 없음)
+  backdrop: Backdrop;
+  brand: string[] | null;
   look: string;
   mount: number;
   // 방금 내려놓은 새 가구. 기능을 달 수 있으면 말풍선을 연다.
   placed: { index: number; seq: number } | null;
-  // 팔레트를 칠하느라 방을 다시 띄우는 중
+  // 방의 틀(템플릿)을 바꾸느라 방을 다시 띄우는 중. 팔레트와 배경은 다시 띄우지 않고 칠한다
   busy: boolean;
   // 카메라 (engine/edit-camera.js): plan 은 위에서 보기, fitted 는 확대나 이동 없이 맞춘 구도인지
   view: { plan: boolean; fitted: boolean };
@@ -187,25 +190,6 @@ function Tile({ m, pic, pressed, disabled, onPick }: { m: Model; pic: string | n
         </span>
       )}
     </button>
-  );
-}
-
-// 직접 고르는 색 한 칸. 고르는 동안은 칸만 바뀌고, 고르기를 마치면(change) 방에 칠한다.
-function ColorWell({ label, value, onCommit, disabled }: { label: string; value: string; onCommit: (v: string) => void; disabled: boolean }) {
-  const ref = useRef<HTMLInputElement>(null);
-  const [v, setV] = useState(value);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const h = () => onCommit(el.value);
-    el.addEventListener("change", h);
-    return () => el.removeEventListener("change", h);
-  }, [onCommit]);
-  return (
-    <label className="ed-well">
-      <span>{label}</span>
-      <input ref={ref} type="color" value={v} disabled={disabled} onChange={(e) => setV(e.target.value)} aria-label={`${label} 색`} />
-    </label>
   );
 }
 
@@ -413,6 +397,10 @@ export function RoomEditor({
     if (!layout.room) layout.room = { w: room.room.w, d: room.room.d };
     if (st.palette) layout.palette = st.palette;
     else delete layout.palette;
+    if (st.backdrop) layout.backdrop = st.backdrop;
+    else delete layout.backdrop;
+    if (st.brand) layout.brand = st.brand;
+    else delete layout.brand;
     const name = st.name !== st.savedName ? st.name : undefined;
     const prev: SavedRoom = { layout: room.layout, name: st.savedName };
     try {
@@ -637,7 +625,14 @@ export function RoomEditor({
     const l = beforeSave.layout;
     cmd({
       op: "load",
-      layout: { items: Array.isArray(l.items) ? l.items : [], palette: l.palette ?? null, shell: shellOf(l), time: l.time ?? "auto" },
+      layout: {
+        items: Array.isArray(l.items) ? l.items : [],
+        palette: l.palette ?? null,
+        shell: shellOf(l),
+        time: l.time ?? "auto",
+        backdrop: l.backdrop ?? null,
+        brand: l.brand ?? null,
+      },
       name: beforeSave.name,
     });
     setBubbleFor(null);
@@ -677,22 +672,11 @@ export function RoomEditor({
   ];
   const thumb = useThumbs(rootRef, look, st?.mount ?? 0, thumbIds);
 
-  // ---------- 팔레트 ----------
-  const pal = effectivePalette(st?.palette);
-  const activePreset = PRESETS.find((p) => samePalette(p.palette, pal))?.id ?? null;
-  const applyPalette = (p: Palette) => {
-    if (samePalette(p, pal)) return;
-    cmd({ op: "palette", palette: p });
-  };
-  const commitWell = (key: Well) => (v: string) => {
-    if (/^#[0-9a-fA-F]{6}$/.test(v)) applyPalette(effectivePalette(withWell(pal, key, v)));
-  };
-
   const time = st?.time ?? "auto";
   const timeLabel = TIMES.find(([key]) => key === time)?.[1] ?? `${time}시`;
   const nextTime = () => cmd({ op: "time", value: TIMES[(TIMES.findIndex(([key]) => key === time) + 1) % TIMES.length][0] });
   const saveState = busy
-    ? "색을 칠하는 중…"
+    ? "방을 다시 짓는 중…"
     : saving
       ? "저장하는 중…"
       : saveNote
@@ -1027,7 +1011,7 @@ export function RoomEditor({
         </div>
       )}
 
-      {busy && <p className="ed-busy" role="status">색을 칠하는 중…</p>}
+      {busy && <p className="ed-busy" role="status">방을 다시 짓는 중…</p>}
 
       <div className="ed-dock">
         <div className="ed-tabs" role="tablist" aria-label="꾸미기 독">
@@ -1141,39 +1125,7 @@ export function RoomEditor({
         {tab === "ch" && <ChannelTab owner={owner} />}
 
         {tab === "pal" && (
-          <div className="ed-pane">
-            <div className="ed-strip">
-              {PRESETS.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  className="ed-palcard"
-                  aria-pressed={activePreset === p.id}
-                  disabled={busy}
-                  onClick={() => applyPalette(p.palette)}
-                >
-                  <span className="ed-sw" aria-hidden="true">
-                    {swatches(p.palette).map((c, i) => (
-                      <i key={i} style={{ background: c }} />
-                    ))}
-                  </span>
-                  {p.name}
-                </button>
-              ))}
-            </div>
-            <div className="ed-wells" aria-label="직접 고르기">
-              <span className="ed-wells-h">직접</span>
-              {WELLS.map((w) => (
-                <ColorWell
-                  key={`${w.key}:${wellValue(pal, w.key)}`}
-                  label={w.label}
-                  value={wellValue(pal, w.key)}
-                  disabled={busy}
-                  onCommit={commitWell(w.key)}
-                />
-              ))}
-            </div>
-          </div>
+          <ColourPane palette={st?.palette ?? null} brand={st?.brand ?? null} backdrop={st?.backdrop ?? null} busy={busy} cmd={cmd} />
         )}
       </div>
     </>

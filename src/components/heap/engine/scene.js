@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { disposeScene } from './util.js';
-import { flat } from './draw.js';
+import { tone } from './palette.js';
 
 export function setupScene(ctx) {
   const { $, onDispose, C, layout } = ctx;
@@ -17,7 +17,7 @@ export function setupScene(ctx) {
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.12;
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(C.olive);
+  // 방 뒤의 배경은 time.js 가 칠한다 (시간 따라 바뀌는 그라데이션 또는 주인이 고른 색)
   const camera = new THREE.PerspectiveCamera(30, 1, 0.05, 80);
   const controls = new OrbitControls(camera, canvas);
   onDispose(() => { controls.dispose(); disposeScene(scene); renderer.dispose(); renderer.forceContextLoss(); });
@@ -44,7 +44,7 @@ export function setupScene(ctx) {
   const onWall = (wall, u, y, off, obj) => { obj.position.copy(WALLS[wall].point(u, y, off)); obj.rotation.y = WALLS[wall].rotY; scene.add(obj); return obj; };
 
   // 바닥 널: x 방향으로 폭 1. w 가 정수가 아니면 마지막 널이 더 좁다
-  for (let i = 0; i < 2 * RX; i++) { const bw = Math.min(1, 2 * RX - i); box(bw, 0.1, 2 * RZ, flat(C.floor[i % C.floor.length]), -RX + i + bw / 2, -0.05, 0, { cast: false }); }
+  for (let i = 0; i < 2 * RX; i++) { const bw = Math.min(1, 2 * RX - i); box(bw, 0.1, 2 * RZ, tone(C, `floor:${i}`), -RX + i + bw / 2, -0.05, 0, { cast: false }); }
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(2 * RX, 2 * RZ), new THREE.MeshBasicMaterial({ visible: false }));
   floor.rotation.x = -Math.PI / 2; scene.add(floor);
 

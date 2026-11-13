@@ -1,7 +1,8 @@
 // 사진 더미: 쌓이는 모양, 떨어지는 움직임, 카드, 벽 포스터.
 import * as THREE from 'three';
 import { viewsNum } from './format.js';
-import { flat, drawFit, NO_PHOTO, makeCanvas, canvasTexture } from './draw.js';
+import { drawFit, NO_PHOTO, makeCanvas, canvasTexture } from './draw.js';
+import { tone } from './palette.js';
 
 export function setupHeap(ctx) {
   const {
@@ -128,7 +129,7 @@ export function setupHeap(ctx) {
       posterSlots.push(t);
       paintPoster(card); ctx.request(card, ctx.NEAR);
       const g = new THREE.Group();
-      box(0.74, 1.2, 0.05, flat(C.woodDark), 0, 0, 0.025, { cast: false, parent: g });
+      box(0.74, 1.2, 0.05, tone(C, 'woodDark'), 0, 0, 0.025, { cast: false, parent: g });
       const p = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 1.07), new THREE.MeshStandardMaterial({ map: t, roughness: 0.6 })); p.position.z = 0.055; g.add(p);
       onWall(layout.posters.wall, u, 2.5, 0, g);
     });
