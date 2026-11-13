@@ -65,3 +65,40 @@ export const HEAP_POLICY = {
   snapshotReelsMax: 300,
   snapshotPiecesMax: 200,
 } as const;
+
+// 크리에이터 깔때기(방 만들기, 방 목록, 영상 가져오기) 규칙. 위와 마찬가지로 1차 값이다.
+export const HEAP_FUNNEL_POLICY = {
+  // 방 주소(슬러그). 글자 수는 db/migrations/0007의 check(2~40자)보다 좁다. 규칙 본문은 slug.ts.
+  slugMinChars: 3,
+  slugMaxChars: 24,
+  // 방 이름은 한글 기준 글자 수(코드포인트). 0007의 check와 같다.
+  roomNameMaxChars: 40,
+  // 방 만들기를 시도할 수 있는 횟수(사용자당, 10분 동안). 슬러그를 하나씩 찔러 보는 일을 막는다.
+  claimAttemptsPer10Min: 10,
+
+  // /rooms의 추천 방. 이 slug 목록을 바꾸면 된다. 없는 방은 건너뛴다.
+  featuredSlugs: ["lovesoo", "dname", "sample"],
+  roomsFollowedMax: 30,
+  roomsFeaturedMax: 12,
+  roomsSearchMax: 24,
+  // 검색어는 공백을 다듬은 뒤 이 길이로 자른다 (코드포인트).
+  roomsSearchQueryMaxChars: 40,
+
+  // 영상 가져오기 상한. 크리에이터 한 명이 방에 둘 수 있는 영상 수다 (채널이 여럿이어도 합산).
+  // 쇼츠는 모든 채널(틱톡 포함), 롱폼은 모든 채널, 인스타그램은 따로 센다. 안 쓴 몫은 다른 쪽으로 넘어간다 (caps.ts).
+  importCaps: { shorts: 150, long: 100, instagram: 50 },
+  importTotalMax: 300,
+  // 가져오기는 크리에이터당 이 간격마다 한 번. 실패한 시도도 채널을 찾은 뒤에는 간격에 든다.
+  importMinIntervalMs: 10 * 60 * 1000,
+  // 채널 확인만 하다 끝나는 시도(찾지 못한 핸들 등)는 메모리 제한기가 막는다: 사용자당 10분에 이 횟수까지.
+  importAttemptsPer10Min: 5,
+  // 업로드 목록은 50개씩 읽는다. 이 쪽수까지만 거슬러 올라간다 (쪽당 API 1유닛).
+  importMaxPages: 8,
+  // 크리에이터 한 명이 연결할 수 있는 유튜브 채널 수
+  importChannelsMax: 5,
+  // 영상 길이가 이 초 이하면 쇼츠로 본다 (가로 여부는 wide = false). 쇼츠는 2024년 10월부터 3분까지 올릴 수 있다.
+  // 길이로 짐작하는 값이다. Data API에는 쇼츠 표시가 없어서 3분 이하의 가로 영상이 쇼츠로 잘못 분류될 수 있다.
+  shortMaxSeconds: 180,
+  // 방 layout의 excludedReels(힙에서 뺀 영상 목록) 상한
+  excludedReelsMax: 600,
+} as const;

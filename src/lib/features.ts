@@ -16,4 +16,11 @@ export const FEATURES: FeatureCard[] = [
     status: "개발 중",
     href: "/bubble",
   },
+  {
+    title: "힙 미니룸",
+    description: "크리에이터의 방. 지난 영상이 사진 더미로 쌓이고, 팬이 들러 방명록을 남긴다",
+    owner: "주요 기능 2 (윤)",
+    status: "개발 중",
+    href: "/rooms",
+  },
 ];
