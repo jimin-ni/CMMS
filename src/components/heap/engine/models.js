@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { disposeScene } from './util.js';
 
 export function setupModels(ctx) {
-  const { opts, dataBase, C, cleanups, getJSON, ac, root } = ctx;
+  const { opts, dataBase, C, cleanups, getJSON, ac } = ctx;
 
   // ---------- models: { type: 'model', model: <catalogue id>, x, z, rot, y, tint } ----------
   // <modelBase>catalogue.json lists the GLB files (Kenney Furniture Kit, CC0). A model is fetched and parsed once per mount,

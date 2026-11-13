@@ -13,8 +13,11 @@ import { setupSlots } from './slots.js';
 import { setupModels } from './models.js';
 import { setupShelf } from './shelf.js';
 import { setupTime } from './time.js';
-import { flat, drawFit, NO_PHOTO, cropToShape } from './draw.js';
-import { viewsNum, ytUrl, ksDay, seoulDay, fmtDay } from './format.js';
+import { setupProps } from './props.js';
+import { setupHeap } from './heap.js';
+import { setupThumbs } from './thumbs.js';
+import { flat } from './draw.js';
+import { ytUrl, ksDay, seoulDay, fmtDay } from './format.js';
 import { el, link, shortUrl } from './dom.js';
 import { thumbUrl } from './util.js';
 
@@ -45,18 +48,17 @@ const { ac, cleanups, dataBase, prevTitle, $, on } = ctx;
 async function run() {
 const { rand, gauss } = ctx;
 await setupData(ctx);
-const { layout, C, reels, fanReels, creator, DATA, fanReelOf, ROOMS, roomId } = ctx;
+const { layout, C, creator, DATA, fanReels, fanReelOf, ROOMS, roomId } = ctx;
 if (ctx.disposed) return;
 setupHud(ctx);
 const { setHint, syncUI, toast, creatorVisit, renderMeta, renderCreatorVisit } = ctx;
 setupCardArt(ctx);
-const { DIMS, drawFanFront, drawCard, drawFanBack, drawBack } = ctx;
 setupScene(ctx);
-const { scene, box, onWall, WALLS, Yv, Xv, renderer, camera, WALL_H, RX, RZ, controls, canvas, floor } = ctx;
+const { WALLS, scene, Yv, camera, WALL_H, RX, RZ, controls, canvas, Xv, floor, renderer } = ctx;
 setupShell(ctx);
 const { DOOR, tA, WIN, doorParts, stepMotes } = ctx;
 setupFurniture(ctx);
-const { buildItems, OBST, shelfParts } = ctx;
+const { buildItems, shelfParts, OBST } = ctx;
 setupSlots(ctx);
 const { startSlots, keepsakeLook, newestReel } = ctx;
 setupModels(ctx);
@@ -66,96 +68,11 @@ setupShelf(ctx);
 const { linkShelf, updateAlbums, enterSort, exitSort, albumAction } = ctx;
 setupTime(ctx);
 const { tickClock } = ctx;
-// table, rug, cushion, mug, phone (positions relative to layout.table)
-const TABLE = { x: layout.table.x, z: layout.table.z, w: 2.6, d: 1.8, top: 0.56 };
-const rugC = document.createElement('canvas'); rugC.width = 256; rugC.height = 192;
-{ const g = rugC.getContext('2d'); g.fillStyle = C.paper; g.fillRect(0, 0, 256, 192);
-  [[C.accent, 14, 16], [C.olive, 40, 6], [C.accent, 150, 10], [C.olive, 168, 4]].forEach(([c, y, h]) => { g.fillStyle = c; g.fillRect(0, y, 256, h); });
-  for (let i = 0; i < 2000; i++) { g.fillStyle = `rgba(80,60,40,${Math.random() * 0.06})`; g.fillRect(Math.random() * 256, Math.random() * 192, 2, 1); } }
-const rugTex = new THREE.CanvasTexture(rugC); rugTex.colorSpace = THREE.SRGBColorSpace;
-const rug = new THREE.Mesh(new THREE.PlaneGeometry(3.8, 2.9), new THREE.MeshStandardMaterial({ map: rugTex, roughness: 1 }));
-rug.rotation.x = -Math.PI / 2; rug.position.set(TABLE.x, 0.006, TABLE.z + 0.15); rug.receiveShadow = true; scene.add(rug);
-const tableTop = box(TABLE.w, 0.08, TABLE.d, flat(C.woodB), TABLE.x, TABLE.top - 0.04, TABLE.z);
-for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(0.12, TABLE.top - 0.08, 0.12, flat(C.woodDark), TABLE.x + sx * (TABLE.w / 2 - 0.15), (TABLE.top - 0.08) / 2, TABLE.z + sz * (TABLE.d / 2 - 0.15));
-OBST.unshift({ x: TABLE.x, z: TABLE.z, hw: TABLE.w / 2 + 0.25, hd: TABLE.d / 2 + 0.25, rhw: TABLE.w / 2, rhd: TABLE.d / 2 });
-const SEAT = new THREE.Vector3(TABLE.x, 0, TABLE.z + TABLE.d / 2 + 0.5);
-box(0.75, 0.1, 0.75, flat(C.accent), SEAT.x, 0.05, SEAT.z, { cast: false });
-const MUG = { x: TABLE.x + 1.05, z: TABLE.z + 0.6 };
-const mug = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.055, 0.12, 8), flat(C.paper)); mug.position.set(MUG.x, TABLE.top + 0.06, MUG.z); mug.castShadow = true; scene.add(mug);
-const coffee = new THREE.Mesh(new THREE.CircleGeometry(0.052, 8), flat('#4a2f1e')); coffee.rotation.x = -Math.PI / 2; coffee.position.set(MUG.x, TABLE.top + 0.115, MUG.z); scene.add(coffee);
-const PHONE = { x: TABLE.x + 0.68, z: TABLE.z + 0.62 };
-const phoneBody = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.018, 0.32), flat(C.ink, { roughness: 0.5 }));
-phoneBody.position.set(PHONE.x, TABLE.top + 0.009, PHONE.z); phoneBody.rotation.y = 0.35; phoneBody.castShadow = true;
-const phoneGlow = new THREE.Mesh(new THREE.PlaneGeometry(0.145, 0.29), new THREE.MeshStandardMaterial({ color: '#efe6d6', emissive: '#f3d9b0', emissiveIntensity: 0.6 }));
-phoneGlow.rotation.set(-Math.PI / 2, 0, 0.35); phoneGlow.position.set(PHONE.x, TABLE.top + 0.0185, PHONE.z);
-const phoneDot = new THREE.Mesh(new THREE.CircleGeometry(0.018, 10), new THREE.MeshBasicMaterial({ color: C.accent }));
-phoneDot.rotation.set(-Math.PI / 2, 0, 0.35); phoneDot.position.set(PHONE.x + 0.03, TABLE.top + 0.019, PHONE.z - 0.08);
-scene.add(phoneBody, phoneGlow, phoneDot);
-const phoneParts = [phoneBody, phoneGlow, phoneDot];
-// guestbook stand (방명록) beside the door
-const bookParts = [];
-ctx.bookSpot = null;
-const GB = layout.guestbook ?? (DOOR ? { wall: DOOR.wall, at: DOOR.at - 0.95 } : null);
-if (GB) {
-  const g = new THREE.Group();
-  bookParts.push(box(0.5, 0.78, 0.36, flat(C.woodB), 0, 0.39, 0, { parent: g }));
-  const pageL = box(0.22, 0.02, 0.3, flat(C.paper), -0.11, 0.8, 0.02, { parent: g }), pageR = box(0.22, 0.02, 0.3, flat(C.paper), 0.11, 0.8, 0.02, { parent: g });
-  pageL.rotation.z = 0.12; pageR.rotation.z = -0.12;
-  const pen = box(0.015, 0.015, 0.16, flat(C.accent), 0.14, 0.83, 0.02, { parent: g }); pen.rotation.y = 0.5;
-  bookParts.push(pageL, pageR, pen);
-  onWall(GB.wall, GB.at, 0, 0.32, g);
-  const p = WALLS[GB.wall].point(GB.at, 0, 0.32);
-  OBST.push({ x: p.x, z: p.z, hw: 0.32, hd: 0.32, rhw: 0.25, rhd: 0.25 });
-  ctx.bookSpot = WALLS[GB.wall].point(GB.at, 0, 0.95);
-}
-// projector and screen
-const SCR = { wall: layout.screen.wall, at: layout.screen.at, y: 2.4, w: 1.6, h: 0.9 };
-const projC = document.createElement('canvas'); projC.width = 640; projC.height = 360;
-const projTex = new THREE.CanvasTexture(projC); projTex.colorSpace = THREE.SRGBColorSpace;
-const screenIdle = flat(C.paper), screenOn = new THREE.MeshBasicMaterial({ map: projTex });
-const screenG = new THREE.Group();
-box(SCR.w + 0.14, SCR.h + 0.14, 0.05, flat(C.olive), 0, 0, 0.025, { cast: false, parent: screenG });
-const screen = new THREE.Mesh(new THREE.PlaneGeometry(SCR.w, SCR.h), screenIdle); screen.position.z = 0.06; screen.receiveShadow = true; screenG.add(screen);
-onWall(SCR.wall, SCR.at, SCR.y, 0, screenG); screenG.updateMatrixWorld(true);
-const SCREEN_C = screen.getWorldPosition(new THREE.Vector3());
-const side = layout.table.projector === 'right' ? 1 : -1;
-const PROJ = new THREE.Vector3(TABLE.x + side * 0.85, TABLE.top, TABLE.z - 0.5);
-const proj = new THREE.Group(); proj.position.copy(PROJ);
-proj.rotation.y = Math.atan2(-(SCREEN_C.x - PROJ.x), -(SCREEN_C.z - PROJ.z));
-const metal = flat('#3f3d32', { roughness: 0.55, metalness: 0.3 });
-const pBody = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.2, 0.36), flat(C.olive)); pBody.position.y = 0.12;
-const pLens = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.065, 0.12, 10), metal); pLens.rotation.x = Math.PI / 2; pLens.position.set(0, 0.13, -0.23);
-const lensGlass = new THREE.Mesh(new THREE.CircleGeometry(0.045, 10), new THREE.MeshBasicMaterial({ color: '#5b5a4a' })); lensGlass.position.set(0, 0.13, -0.291); lensGlass.rotation.y = Math.PI;
-const pFoot = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.03, 0.3), metal); pFoot.position.y = 0.015;
-const reelGeo = new THREE.CylinderGeometry(0.09, 0.09, 0.025, 12);
-const reelA = new THREE.Mesh(reelGeo, flat(C.accent)), reelB = new THREE.Mesh(reelGeo, flat(C.accent));
-reelA.rotation.z = reelB.rotation.z = Math.PI / 2; reelA.position.set(0, 0.33, -0.1); reelB.position.set(0, 0.33, 0.1);
-const arm = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.12, 0.3), metal); arm.position.set(0, 0.26, 0);
-const projParts = [pBody, pLens, lensGlass, pFoot, reelA, reelB, arm];
-for (const m of projParts) { m.castShadow = true; proj.add(m); }
-scene.add(proj); proj.updateMatrixWorld(true);
-const LENS = lensGlass.getWorldPosition(new THREE.Vector3());
-const SLOT = { pos: proj.localToWorld(new THREE.Vector3(0, 0, 0.3)), quat: proj.quaternion.clone() };
-const beamGeo = new THREE.BufferGeometry();
-{
-  const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => screen.localToWorld(new THREE.Vector3(sx * SCR.w / 2, sy * SCR.h / 2, 0.01)));
-  beamGeo.setAttribute('position', new THREE.Float32BufferAttribute([LENS, ...corners].flatMap(p => [p.x, p.y, p.z]), 3));
-  beamGeo.setIndex([0, 1, 2, 0, 2, 3, 0, 3, 4, 0, 4, 1]);
-}
-const beamMat = new THREE.MeshBasicMaterial({ color: '#fff1d6', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
-scene.add(new THREE.Mesh(beamGeo, beamMat));
-const projLight = new THREE.SpotLight(0xfff0d6, 0, 0, 0.22, 0.5, 0);
-projLight.position.copy(LENS); projLight.target.position.copy(SCREEN_C); scene.add(projLight, projLight.target);
-function drawProjection(reel, img) {
-  const g = projC.getContext('2d'), W = projC.width, H = projC.height;
-  g.fillStyle = '#1b1812'; g.fillRect(0, 0, W, H);
-  if (img) drawFit(g, img, 0, 0, W, H, !!reel.wide);
-  g.fillStyle = 'rgba(255, 214, 160, 0.08)'; g.fillRect(0, 0, W, H);
-  const vg = g.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, W * 0.62);
-  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.55)');
-  g.fillStyle = vg; g.fillRect(0, 0, W, H);
-  projTex.needsUpdate = true;
-}
+setupProps(ctx);
+const {
+  TABLE, SEAT, SCREEN_C, SCR, drawProjection, screen, screenOn, screenIdle, projParts, phoneParts,
+  tableTop, bookParts, beamMat, projLight, reelA, reelB, phoneDot, SLOT,
+} = ctx;
 // ---------- character ----------
 const me = new THREE.Group();
 ctx.me = me;
@@ -172,186 +89,13 @@ me.add(eyeL, eyeR);
 if (ctx.doorSpot) { me.position.copy(ctx.doorSpot); me.rotation.y = Math.atan2(WALLS[DOOR.wall].n.x, WALLS[DOOR.wall].n.z); }
 else me.position.set(2.2, 0, 2.4);
 scene.add(me);
-// ====================================================================================
-// 5. The heap: shaped pile. Each card rests on whatever is under its corners and edges.
-// ====================================================================================
-const cards = []; // stack order, bottom → top
-const pickables = [];
-const EXCL = [{ x: PROJ.x, z: PROJ.z, r: 0.42 }, { x: MUG.x, z: MUG.z, r: 0.18 }, { x: PHONE.x, z: PHONE.z, r: 0.26 }];
-const GAP = 0.0035, MAX_SLOPE = 0.32;
-const _inv = new THREE.Quaternion(), _v = new THREE.Vector3(), _n = new THREE.Vector3();
-// height of a resting card's surface above (x, z), or -Infinity if (x, z) is outside it
-function surfaceAt(c, x, z) {
-  const { pos, quat } = c.userData.home, d = c.userData.d;
-  _n.set(0, 0, 1).applyQuaternion(quat);
-  if (Math.abs(_n.y) < 0.2) return -Infinity;
-  const y = pos.y - (_n.x * (x - pos.x) + _n.z * (z - pos.z)) / _n.y;
-  _v.set(x - pos.x, y - pos.y, z - pos.z).applyQuaternion(_inv.copy(quat).invert());
-  return Math.abs(_v.x) <= d.w / 2 && Math.abs(_v.y) <= d.h / 2 ? y : -Infinity;
-}
-function supportAt(x, z, below) {
-  let h = TABLE.top;
-  for (const c of below) h = Math.max(h, surfaceAt(c, x, z) + GAP);
-  return h;
-}
-const SAMPLES = [-1, 0, 1].flatMap(a => [-1, 0, 1].map(b => [a * 0.47, b * 0.47]));
-const _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion();
-function restPose(card, below) {
-  const { x, z, yaw, faceUp } = card.userData.place, d = card.userData.d;
-  const cs = Math.cos(yaw), sn = Math.sin(yaw);
-  const pts = SAMPLES.map(([a, b]) => { const lx = a * d.w, lz = b * d.h; const dx = lx * cs + lz * sn, dz = -lx * sn + lz * cs; return { dx, dz, h: supportAt(x + dx, z + dz, below) }; });
-  // least-squares slope of the support, then lift the plane until nothing pokes through
-  const mean = pts.reduce((s, p) => s + p.h, 0) / pts.length;
-  let sxx = 0, szz = 0, sxz = 0, sxh = 0, szh = 0;
-  for (const p of pts) { sxx += p.dx * p.dx; szz += p.dz * p.dz; sxz += p.dx * p.dz; sxh += p.dx * (p.h - mean); szh += p.dz * (p.h - mean); }
-  const det = sxx * szz - sxz * sxz || 1;
-  let a = (sxh * szz - szh * sxz) / det, b = (szh * sxx - sxh * sxz) / det;
-  const m = Math.hypot(a, b); if (m > MAX_SLOPE) { a *= MAX_SLOPE / m; b *= MAX_SLOPE / m; }
-  let c = -Infinity; for (const p of pts) c = Math.max(c, p.h - a * p.dx - b * p.dz);
-  const up = new THREE.Vector3(-a, 1, -b).normalize();
-  const quat = _q1.setFromUnitVectors(Yv, up).clone()
-    .multiply(_q2.setFromAxisAngle(Yv, yaw))
-    .multiply(new THREE.Quaternion().setFromAxisAngle(Xv, faceUp ? -Math.PI / 2 : Math.PI / 2));
-  return { pos: new THREE.Vector3(x, c + 0.0015, z), quat };
-}
-function clampPlace(p) {
-  p.x = THREE.MathUtils.clamp(p.x, TABLE.x - TABLE.w / 2 + 0.18, TABLE.x + TABLE.w / 2 - 0.18);
-  p.z = THREE.MathUtils.clamp(p.z, TABLE.z - TABLE.d / 2 + 0.18, TABLE.z + TABLE.d / 2 - 0.18);
-  for (const e of EXCL) {
-    const dx = p.x - e.x, dz = p.z - e.z, dd = Math.hypot(dx, dz);
-    if (dd < e.r) { p.x = e.x + (dd ? dx / dd : 1) * e.r; p.z = e.z + (dd ? dz / dd : 0) * e.r; }
-  }
-  return p;
-}
-const inPile = c => c !== ctx.held && c !== ctx.loaded && c !== ctx.presenting && c !== ctx.dragging && !c.userData.fly;
-// recompute every resting pose bottom → top; cards whose support changed fall into place
-function settle(instant = false) {
-  const placed = [];
-  for (const c of cards) {
-    if (!inPile(c)) continue;
-    const prev = c.userData.home;
-    c.userData.home = restPose(c, placed);
-    placed.push(c);
-    if (instant || !prev) { c.position.copy(c.userData.home.pos); c.quaternion.copy(c.userData.home.quat); c.userData.anim = null; continue; }
-    const moved = prev.pos.distanceTo(c.userData.home.pos) > 0.002 || prev.quat.angleTo(c.userData.home.quat) > 0.01;
-    if (moved && !c.userData.anim) startAnim(c, 'settle');
-  }
-}
-function toTop(c) { cards.splice(cards.indexOf(c), 1); cards.push(c); }
-// motion: 'drop' arcs down with a flutter and a small bounce; 'settle' falls under gravity
-function startAnim(c, kind) {
-  c.userData.anim = { kind, t: 0, dur: kind === 'drop' ? 0.6 : 0.28, from: c.position.clone(), fromQ: c.quaternion.clone(), axis: new THREE.Vector3(rand() - 0.5, 0, rand() - 0.5).normalize(), arc: kind === 'drop' ? 0.08 : 0 };
-}
-const _fq = new THREE.Quaternion();
-function stepAnim(c, dt) {
-  const A = c.userData.anim, H = c.userData.home;
-  A.t = Math.min(1, A.t + dt / A.dur);
-  const t = A.t;
-  if (A.kind === 'drop') {
-    const e = 1 - Math.pow(1 - t, 3);
-    c.position.lerpVectors(A.from, H.pos, e);
-    const fall = t < 0.8 ? (t / 0.8) ** 2 : 1;
-    c.position.y = A.from.y + (H.pos.y - A.from.y) * fall + Math.sin(Math.PI * Math.min(1, t / 0.8)) * A.arc
-      + (t > 0.8 ? Math.sin((t - 0.8) / 0.2 * Math.PI) * 0.006 : 0);
-    c.quaternion.slerpQuaternions(A.fromQ, H.quat, e);
-    c.quaternion.premultiply(_fq.setFromAxisAngle(A.axis, 0.28 * (1 - t) * Math.sin(t * 17)));
-  } else {
-    const fall = t * t;
-    c.position.lerpVectors(A.from, H.pos, fall);
-    c.quaternion.slerpQuaternions(A.fromQ, H.quat, fall);
-  }
-  if (t >= 1) { c.position.copy(H.pos); c.quaternion.copy(H.quat); c.userData.anim = null; }
-}
-function makeCard(reel) {
-  const aniso = renderer.capabilities.getMaxAnisotropy(), d = reel.wide ? DIMS.wide : DIMS.tall, fan = reel.kind === 'fan';
-  const frontC = fan ? drawFanFront(reel) : drawCard(reel, null);
-  const tex = new THREE.CanvasTexture(frontC); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = aniso;
-  const btex = new THREE.CanvasTexture(fan ? drawFanBack(reel) : drawBack(reel)); btex.colorSpace = THREE.SRGBColorSpace; btex.anisotropy = aniso;
-  const card = new THREE.Group();
-  const front = new THREE.Mesh(d.geo, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.5 }));
-  const back = new THREE.Mesh(d.geo, new THREE.MeshStandardMaterial({ map: btex, roughness: 0.9 }));
-  back.rotation.y = Math.PI; back.position.z = -0.001;
-  for (const m of [front, back]) { m.castShadow = m.receiveShadow = true; m.userData.card = card; pickables.push(m); }
-  card.add(front, back);
-  // img: the best picture the card has so far (a fan piece is its own drawing) · tier: that picture's tier, -1 before any lands · asked: tiers already requested
-  Object.assign(card.userData, { reel, d, img: fan ? frontC : null, tier: -1, asked: [], front: tex, place: clampPlace({ x: TABLE.x + gauss() * 0.42, z: TABLE.z + gauss() * 0.28, yaw: rand() * Math.PI * 2, faceUp: rand() > 0.1 }) });
-  cards.push(card); scene.add(card);
-  return card;
-}
-function buildHeap() {
-  const made = reels.map(reel => makeCard(reel));
-  for (const p of fanReels) { const c = makeCard(p); c.userData.place.faceUp = true; }
-  settle(true);
-  requestPile(FAR);
-  // posters: the three most-viewed shorts. Each paints from its card's picture, so it fills in and sharpens as that card's tiers land.
-  const top3 = made.filter(c => !c.userData.reel.wide).sort((a, b) => viewsNum(b.userData.reel.views) - viewsNum(a.userData.reel.views)).slice(0, 3);
-  (layout.posters?.at || []).forEach((u, k) => {
-    const card = top3[k];
-    if (!card) return;
-    const pc = document.createElement('canvas'); pc.width = 202; pc.height = 360; // the size of the near tier's picture
-    const t = card.userData.poster = new THREE.CanvasTexture(pc); t.colorSpace = THREE.SRGBColorSpace;
-    paintPoster(card); request(card, NEAR);
-    const g = new THREE.Group();
-    box(0.74, 1.2, 0.05, flat(C.woodDark), 0, 0, 0.025, { cast: false, parent: g });
-    const p = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 1.07), new THREE.MeshStandardMaterial({ map: t, roughness: 0.6 })); p.position.z = 0.055; g.add(p);
-    onWall(layout.posters.wall, u, 2.5, 0, g);
-  });
-}
-function paintPoster(card) {
-  const { poster, img } = card.userData, W = poster.image.width, H = poster.image.height, g = poster.image.getContext('2d');
-  if (img) drawFit(g, img, 0, 0, W, H, true); else { g.fillStyle = NO_PHOTO; g.fillRect(0, 0, W, H); }
-  poster.needsUpdate = true;
-}
-// ====================================================================================
-// 5b. Thumbnails: each card shows the video's chosen thumbnail in three tiers, loaded lazily and sharpened in place
-//   far    mqdefault (320x180, ~7 KB): every card, top of the pile first, once the room is on screen
-//   near   hqdefault (480x360, ~14 KB): the wall posters, and every card once the visitor sits at the table
-//   close  oardefault (a Short's chosen vertical thumbnail, ~160 KB) or hq720 (a wide video): only a card that is picked up
-// A card never drops back a tier. A tier that fails leaves the card as it was.
-// ====================================================================================
-const FAR = 0, NEAR = 1, CLOSE = 2, MAX_LOADS = 6;
-const thumbFiles = (reel, tier) => tier === FAR ? ['mqdefault'] : tier === NEAR ? ['hqdefault'] : reel.wide ? ['hq720', 'hqdefault'] : ['oardefault'];
-const loadQueue = [], inFlight = new Set(); // { card, tier } jobs waiting in load order · Images still downloading
-ctx.inFlight = inFlight;
-let loading = 0;
-cleanups.push(() => { loadQueue.length = 0; for (const im of inFlight) { im.onload = im.onerror = null; im.src = ''; } inFlight.clear(); });
-function landed(card, tier, im) {
-  const u = card.userData;
-  if (u.tier >= tier) return;
-  u.tier = tier; u.img = cropToShape(im, u.reel);
-  drawCard(u.reel, u.img, u.front.image); u.front.needsUpdate = true;
-  if (u.poster) paintPoster(card);
-  if (card === ctx.loaded) drawProjection(u.reel, u.img);
-  if (card === ctx.phonePic?.card) showPhonePic();
-}
-function load(card, tier, files) {
-  const im = new Image(); im.crossOrigin = 'anonymous';
-  const end = ok => {
-    im.onload = im.onerror = null; inFlight.delete(im);
-    if (ctx.disposed) return;
-    if (!ok && files.length > 1) return load(card, tier, files.slice(1)); // the tier's fallback file takes over the same slot
-    try { if (ok) landed(card, tier, im); } catch (e) { console.error('[heap-room]', e); }
-    loading--; pump();
-  };
-  im.onload = () => end(im.naturalWidth > 120); // a missing thumbnail answers 404 with a 120px placeholder that still fires load
-  im.onerror = () => end(false);
-  inFlight.add(im); im.src = thumbUrl(card.userData.reel, files[0]);
-}
-function pump() {
-  while (loading < MAX_LOADS && loadQueue.length) {
-    const { card, tier } = loadQueue.shift();
-    if (card.userData.tier >= tier) continue; // a sharper picture is already on the card
-    loading++; load(card, tier, thumbFiles(card.userData.reel, tier));
-  }
-}
-// now = true skips the queue: the one card the visitor has just picked up
-function request(card, tier, now = false) {
-  const u = card.userData;
-  if (ctx.disposed || u.reel.kind === 'fan' || u.asked[tier] || u.tier >= tier) return;
-  u.asked[tier] = true;
-  if (now) { loading++; load(card, tier, thumbFiles(u.reel, tier)); } else { loadQueue.push({ card, tier }); pump(); }
-}
-function requestPile(tier) { for (let i = cards.length - 1; i >= 0; i--) request(cards[i], tier); } // cards runs bottom → top, so this asks top first
+setupHeap(ctx);
+const {
+  settle, clampPlace, toTop, startAnim, cards, makeCard, pickables, inPile, supportAt, restPose,
+  stepAnim, buildHeap,
+} = ctx;
+setupThumbs(ctx);
+const { requestPile, NEAR, request, CLOSE } = ctx;
 // ====================================================================================
 // 6. Modes: room · sit (sift, move cards) · watch (projector) · sort (album shelf)
 // ====================================================================================
@@ -574,6 +318,7 @@ function showPhonePic() {
   const pic = ctx.phonePic.card.userData.img; // a canvas (fan drawing, cropped tier) or the close tier's own Image
   if (pic) ctx.phonePic.im.src = pic.toDataURL ? pic.toDataURL('image/jpeg', 0.8) : pic.src;
 }
+ctx.showPhonePic = showPhonePic;
 function openPhone() {
   const feedEl = $('phone-feed'); feedEl.replaceChildren();
   const bb = el('div', 'bubble');
