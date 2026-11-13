@@ -29,7 +29,10 @@ const HIDDEN = ['visit', 'albumrow', 'stand', 'flip', 'srclink', 'eject', 'ytlin
  * and `heap:ready` once the room is on screen.
  * `modelBase` is the folder that holds the furniture models and their catalogue.json. Left out, it is "models/" beside `dataBase`.
  * @param {HTMLElement} root
- * @param {{ roomId: string, dataBase: string, modelBase?: string, viewerName: string | null, onNavigate: (roomId: string) => void }} opts
+ * `data` is what the server read from the database (page.tsx maps it): { roomUuid, name, serverTime, rooms, layout, reels, pieces, guestbook, visits, creatorVisit }.
+ * creator.json (links, albums) is still fetched from `dataBase`; a room without one gets empty links and albums.
+ * Writes go through opts.recordVisit() and opts.addGuestbook(name) (server actions, wired in heap-room.tsx). Reads of what others changed: a poll every opts.pollMs.
+ * @param {{ roomId: string, roomUuid: string, dataBase: string, modelBase?: string, data: any, viewerName: string | null, signedIn: boolean, pollMs: number, recordVisit: () => Promise<any>, addGuestbook: (name: string) => Promise<any>, onNavigate: (roomId: string) => void }} opts
  * @returns {() => void}
  */
 export function mountRoom(root, opts) {
@@ -41,14 +44,22 @@ const on = (target, type, fn) => target.addEventListener(type, fn, { signal: ac.
 
 async function run() {
 // ====================================================================================
-// 1. Room data: <dataBase>index.json lists rooms; <dataBase><id>/ holds creator.json, layout.json, reels.json, fans.json
+// 1. Room data: the database part arrives in opts.data (rooms, layout, reels, pieces, guestbook, visits, creatorVisit).
+//    <dataBase><id>/creator.json (links, albums, linktree, phoneTitle) is still a static file.
 // ====================================================================================
 const getJSON = async p => { const r = await fetch(p, { signal: ac.signal }); if (!r.ok) throw new Error(`${p}: ${r.status}`); return r.json(); };
-const ROOMS = await getJSON(dataBase + 'index.json');
-if (disposed) return;
-const roomId = ROOMS.find(r => r.id === opts.roomId)?.id ?? ROOMS[0].id;
+const DATA = opts.data;
+const ROOMS = DATA.rooms;
+const roomId = opts.roomId;
 const BASE = `${dataBase}${roomId}/`;
-const [creator, layout, raw] = await Promise.all(['creator.json', 'layout.json', 'reels.json'].map(f => getJSON(BASE + f)));
+// creator.json holds links and albums. A room without one (404) falls back to no links, no albums; the title is always the room's own name (heap_rooms.name).
+let creatorJson = {};
+{
+  const r = await fetch(BASE + 'creator.json', { signal: ac.signal });
+  if (r.ok) creatorJson = await r.json(); else if (r.status !== 404) throw new Error(`${BASE}creator.json: ${r.status}`);
+}
+const creator = { links: [], albums: [], linktree: null, ...creatorJson, name: DATA.name, phoneTitle: creatorJson.phoneTitle || DATA.name };
+const layout = structuredClone(DATA.layout);
 if (disposed) return;
 
 const DEFAULT_PALETTE = {
@@ -60,7 +71,7 @@ const C = { ...DEFAULT_PALETTE, ...(layout.palette || {}) };
 root.style.setProperty('--clay', C.accent);
 document.title = roomTitle = `${creator.name} Miniroom`;
 $('cname').textContent = creator.name;
-$('avatar').textContent = creator.name[0];
+$('avatar').textContent = Array.from(creator.name)[0] ?? '';
 $('phone-title').textContent = creator.phoneTitle || creator.name;
 $('phone-sub').textContent = creator.linktree ? `링크 모음 · ${creator.linktree.replace(/^https:\/\//, '')}` : '링크 모음';
 
@@ -81,42 +92,33 @@ const flat =(color, extra = {}) => new THREE.MeshStandardMaterial({ color, flatS
 const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
 const KEY = k => `heap:${roomId}:${k}`;
 
-// 꾸미기 (room-editor.tsx, through the hooks in section 6): a layout saved on this device, { items, time } under heap:<roomId>:layout,
-// replaces layout.items and layout.time here, so the first build already uses it. ORIGINAL keeps layout.json's own for the editor's 처음으로.
-const ORIGINAL = { items: (layout.items || []).map(it => ({ ...it })), time: layout.time ?? 'auto' };
-try {
-  const saved = JSON.parse(store.get(KEY('layout')) || 'null');
-  if (Array.isArray(saved?.items)) {
-    layout.items = saved.items.filter(it => it && typeof it.type === 'string' && Number.isFinite(it.x) && Number.isFinite(it.z));
-    if (saved.time != null) layout.time = saved.time;
-  }
-} catch {}
+// 꾸미기 (room-editor.tsx, through the hooks in section 6): ORIGINAL is the layout as last saved in the database (the page's, or the one the editor just saved via heap:saved).
+// It is the editor's 처음으로 target. BASE_LAYOUT is the whole stored layout; the editor merges its items, time and room into it when it saves.
+let BASE_LAYOUT = structuredClone(DATA.layout);
+let ORIGINAL = { items: (layout.items || []).map(it => ({ ...it })), time: layout.time ?? 'auto' };
 
 // ---------- reels ----------
-const byCh = {};
-for (const r of raw) (byCh[r.channel] ??= []).push(r);
-const queues = Object.values(byCh).map(a => a.slice());
-const reels = [];
-while (queues.some(q => q.length)) {
-  const total = queues.reduce((n, q) => n + q.length, 0);
-  let pick = rand() * total;
-  const q = queues.find(q => (pick -= q.length) < 0) ?? queues.find(q => q.length);
-  reels.push(q.shift());
-}
+// A reel carries its linked channel's title (heap_creator_channels); the card back shows it and album rules with `channel` match it.
+// Reels with no linked channel fall back to the creator's name, so a `channel` album rule finds nothing for them (title rules still work).
+const raw = DATA.reels;
+const reels = raw.map(r => ({ ...r, channel: r.channel || creator.name }));
 reels.forEach((r, i) => { r.age = reels.length > 1 ? 1 - i / (reels.length - 1) : 0; r.seed = Math.floor(rand() * 1e9); r.gold = goldOf(r); });
 const nShorts = raw.filter(r => !r.wide).length, nWide = raw.length - nShorts;
 
-// fans.json (optional, mock for now): fan pieces waiting in the reception box, guestbook, visit counter
-const FANS = await fetch(BASE + 'fans.json', { signal: ac.signal }).then(r => r.ok ? r.json() : null).catch(() => null) ?? { pieces: [], guestbook: [] };
-if (disposed) return;
-const todayStr = (() => { const d = new Date(); return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`; })();
-store.set(KEY('visit-' + todayStr), '1');
-const counter = FANS.today != null ? ` · TODAY ${FANS.today + 1} · TOTAL ${(FANS.total + 1).toLocaleString('ko-KR')} (예시)` : '';
-$('meta').textContent = (nWide ? `쇼츠 ${nShorts} · 영상 ${nWide}` : `쇼츠 ${nShorts}`) + counter + (opts.viewerName ? ` · ${opts.viewerName}` : '');
-// 다녀감: the day the creator last came by, "2026.11.12", or null. Mock for now (fans.json's creatorVisit); the real value will come from the database.
-function creatorVisit() { const v = FANS.creatorVisit; return typeof v === 'string' && /^\d{4}\.\d{1,2}\.\d{1,2}$/.test(v) ? v : null; }
-if (creatorVisit()) { $('visit').textContent = `주인 다녀감 ${creatorVisit().split('.').slice(1).join('.')} (예시)`; $('visit').hidden = false; }
-const fanReels = (FANS.pieces || []).map((p, i) => ({ ...p, kind: 'fan', wide: false, title: p.caption, channel: p.by, views: '', age: 0.05, seed: 7000 + i * 131 }));
+// Fan pieces (landed ones, from the database) wait in the reception box. TODAY/TOTAL, 다녀감 and the guestbook list are database values too, refreshed by the poll below.
+const seoulDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' });
+const fmtDay = iso => { const d = new Date(iso); if (Number.isNaN(d.getTime())) return ''; const p = Object.fromEntries(seoulDay.formatToParts(d).map(x => [x.type, x.value])); return `${p.year}.${p.month}.${p.day}`; };
+let visits = { today: DATA.visits.today, total: DATA.visits.total };
+const metaBase = nWide ? `쇼츠 ${nShorts} · 영상 ${nWide}` : `쇼츠 ${nShorts}`;
+function renderMeta() { $('meta').textContent = `${metaBase} · TODAY ${visits.today} · TOTAL ${visits.total.toLocaleString('ko-KR')}` + (opts.viewerName ? ` · ${opts.viewerName}` : ''); }
+renderMeta();
+// 다녀감: the day the creator last came by, "2026.11.12" (Asia/Seoul), or null. From heap_rooms.creator_visited_at.
+let creatorDay = typeof DATA.creatorVisit === 'string' && /^\d{4}\.\d{1,2}\.\d{1,2}$/.test(DATA.creatorVisit) ? DATA.creatorVisit : null;
+function creatorVisit() { return creatorDay; }
+function renderCreatorVisit() { if (creatorDay) { $('visit').textContent = `주인 다녀감 ${creatorDay.split('.').slice(1).join('.')}`; $('visit').hidden = false; } }
+renderCreatorVisit();
+const fanReelOf = (p, i) => ({ ...p, kind: 'fan', wide: false, title: p.caption, channel: p.by, views: '', age: 0.05, seed: 7000 + i * 131 });
+const fanReels = (DATA.pieces || []).map(fanReelOf);
 let landedIds = []; try { landedIds = JSON.parse(store.get(KEY('landed')) || '[]'); } catch {}
 const ytUrl = r => r.wide ? `https://www.youtube.com/watch?v=${r.id}` : `https://www.youtube.com/shorts/${r.id}`;
 const ytShort = r => r.wide ? `youtube.com/watch?v=${r.id}` : `youtube.com/shorts/${r.id}`;
@@ -222,7 +224,7 @@ function drawBack(reel) {
   return c;
 }
 
-// fan pieces (mock): a crayon drawing on paper, marked 예시
+// fan pieces: placeholder art, a crayon drawing on paper (the motif is always the default until the fan piece screens are designed)
 function crayon(g, pts, color, width, r, closed = false) {
   for (let pass = 0; pass < 3; pass++) {
     g.strokeStyle = color; g.globalAlpha = 0.55 + r() * 0.3; g.lineWidth = width * (0.7 + r() * 0.5); g.lineCap = g.lineJoin = 'round';
@@ -270,9 +272,6 @@ function drawFanFront(p) {
   }
   g.fillStyle = 'rgba(86,83,68,0.85)'; g.font = `${Math.round(PX * 0.07)}px "Nanum Pen Script", cursive`; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
   g.fillText(`${creator.name} ♥`, cx, y0 + h * 0.82);
-  // 예시 stamp
-  g.save(); g.translate(x0 + w - 34, y0 + 30); g.rotate(0.2); g.strokeStyle = '#b03a2e'; g.lineWidth = 2; g.strokeRect(-26, -13, 52, 26);
-  g.fillStyle = '#b03a2e'; g.font = '600 15px "IBM Plex Sans KR", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('예시', 0, 1); g.restore();
   g.strokeStyle = 'rgba(0,0,0,0.12)'; g.strokeRect(x0 + 0.5, y0 + 0.5, w - 1, h - 1);
   const sy = (d.B + d.PH) * PX;
   g.fillStyle = 'rgba(86, 83, 68, 0.95)'; g.textAlign = 'left'; g.textBaseline = 'top';
@@ -291,8 +290,6 @@ function drawFanBack(p) {
   g.fillStyle = 'rgba(86, 83, 68, 0.95)'; g.font = `${Math.round(PXB * 0.095)}px "Nanum Pen Script", cursive`;
   let y = pad + PXB * 0.16;
   for (const l of [`보낸 사람 · ${p.by}`, p.date, ...wrap(g, p.caption, W - pad * 2)]) { g.fillText(l, pad, y); y += PXB * 0.1; }
-  g.fillStyle = '#b03a2e'; g.font = `600 ${Math.round(PXB * 0.05)}px "IBM Plex Sans KR", sans-serif`;
-  g.fillText('시연용 예시 · 실제 팬 작품이 아니에요', pad, H - pad * 1.8);
   return c;
 }
 
@@ -1114,11 +1111,13 @@ const goTo = cam => { camGoal = cam; controls.enabled = false; };
 //   root.dispatchEvent(new CustomEvent('heap:items', { detail: itemsArray }))
 //     replaces everything built from layout.items. Same item shapes as layout.json.
 //   root.dispatchEvent(new CustomEvent('heap:get', { detail: cb }))
-//     calls cb({ room: { w, d }, items, catalogue, table, door, window, time, original, saveKey }) once the model catalogue has been read
+//     calls cb({ room: { w, d }, layout, items, catalogue, table, door, window, time, original }) once the model catalogue has been read
 //     (catalogue is null if it could not be). items is a copy of the list now in the room; catalogue is catalogue.json as it is.
 //     table { x, z, w, d }, door { wall, at } and window { wall, at, w } are the fixed parts a floor plan shows (door and window may be null).
-//     time is the room's time choice as it was given ('auto', a name or an hour); original { items, time } is layout.json's own;
-//     saveKey is the localStorage key a saved { items, time } is read from at mount (section 1).
+//     time is the room's time choice as it was given ('auto', a name or an hour); original { items, time } is the layout as last saved in the database;
+//     layout is the whole stored layout (a copy): the editor merges its items, time and room into it before saving.
+//   root.dispatchEvent(new CustomEvent('heap:saved', { detail: layout }))
+//     tells the engine the editor saved this whole layout: it becomes the new original / 처음으로 target.
 // Walls, floor, table, heap, projector, phone, reception box and guestbook stay as they were built.
 on(root, 'heap:items', e => {
   if (!Array.isArray(e.detail)) return;
@@ -1126,15 +1125,21 @@ on(root, 'heap:items', e => {
   linkShelf(); updateAlbums();
   if (mode === 'sort') { if (SHELF) enterSort(); else exitSort(); }
 });
+on(root, 'heap:saved', e => {
+  const l = e.detail;
+  if (!l || typeof l !== 'object' || !Array.isArray(l.items)) return;
+  BASE_LAYOUT = structuredClone(l);
+  ORIGINAL = { items: l.items.map(it => ({ ...it })), time: l.time ?? 'auto' };
+});
 on(root, 'heap:get', e => {
   if (typeof e.detail !== 'function') return;
   getCatalogue().then(catalogue => {
     if (disposed) return;
     e.detail({
-      room: { w: 2 * RX, d: 2 * RZ }, items: ITEMS.items.map(it => ({ ...it })), catalogue,
+      room: { w: 2 * RX, d: 2 * RZ }, layout: structuredClone(BASE_LAYOUT), items: ITEMS.items.map(it => ({ ...it })), catalogue,
       table: { x: TABLE.x, z: TABLE.z, w: TABLE.w, d: TABLE.d },
       door: DOOR ? { wall: DOOR.wall, at: DOOR.at } : null, window: WIN ? { wall: WIN.wall, at: WIN.at, w: WIN.w } : null,
-      time: timeChoice, original: { items: ORIGINAL.items.map(it => ({ ...it })), time: ORIGINAL.time }, saveKey: KEY('layout'),
+      time: timeChoice, original: { items: ORIGINAL.items.map(it => ({ ...it })), time: ORIGINAL.time },
     });
   });
 });
@@ -1258,7 +1263,7 @@ function openPhone() {
   phonePic = null;
   if (cur) {
     const b = el('div', 'bubble');
-    b.appendChild(el('small', null, cur.kind === 'fan' ? `지금 보고 있는 팬 작품 · ${cur.by} (예시)` : '지금 보고 있는 사진'));
+    b.appendChild(el('small', null, cur.kind === 'fan' ? `지금 보고 있는 팬 작품 · ${cur.by}` : '지금 보고 있는 사진'));
     const im = el('img'); im.crossOrigin = 'anonymous'; im.alt = ''; b.appendChild(im);
     phonePic = { card: curCard, im }; showPhonePic();
     b.appendChild(el('span', null, cur.title));
@@ -1301,42 +1306,95 @@ function landNext() {
   startAnim(c, 'drop'); Object.assign(c.userData.anim, { dur: 1.1, arc: 0.35 });
   landedIds.push(p.id); store.set(KEY('landed'), JSON.stringify(landedIds));
   updateBox(pendingFans().length);
-  toast(`${p.by}님의 팬 작품이 더미 위에 올라왔어요 (예시)`);
+  toast(`${p.by}님의 팬 작품이 더미 위에 올라왔어요`);
 }
 let autoLanded = false;
 
-// guestbook: names and dates only
-function guestRows() {
-  let mine = []; try { mine = JSON.parse(store.get(KEY('guestbook')) || '[]'); } catch {}
-  return [...mine.map(e => ({ ...e, mock: false })), ...(FANS.guestbook || []).map(e => ({ ...e, mock: true }))];
-}
-function openGuestbook() {
+// guestbook: names and dates only. Rows are database rows { id, name, createdAt (ISO) }, newest first, merged by id from the page, the poll and the visitor's own submit.
+const gbRows = new Map((DATA.guestbook || []).map(e => [e.id, { id: e.id, name: e.name, createdAt: e.createdAt }]));
+const gbSorted = () => [...gbRows.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt) || (a.id < b.id ? 1 : -1));
+function renderGuestbook() {
   const list = $('gb-list'); list.innerHTML = '';
   if (creatorVisit()) { // 다녀감: the creator's own row comes first
     const row = el('div', 'gb-row owner');
     row.appendChild(el('span', null, creator.name));
-    row.appendChild(el('small', null, `주인 · ${creatorVisit()} · 예시`));
+    row.appendChild(el('small', null, `주인 · ${creatorVisit()}`));
     list.appendChild(row);
   }
-  for (const e of guestRows()) {
+  for (const e of gbSorted()) {
     const row = el('div', 'gb-row');
     row.appendChild(el('span', null, e.name));
-    row.appendChild(el('small', null, e.date + (e.mock ? ' · 예시' : '')));
+    row.appendChild(el('small', null, fmtDay(e.createdAt)));
     list.appendChild(row);
   }
-  $('guestbook').hidden = false;
-  setTimeout(() => $('gb-name').focus(), 50);
 }
-on($('gb-form'), 'submit', e => {
+function openGuestbook() {
+  renderGuestbook();
+  $('gb-msg').textContent = '';
+  $('guestbook').hidden = false;
+  setTimeout(() => $('gb-name')?.focus(), 50);
+}
+let gbBusy = false;
+const gbForm = $('gb-form'); // absent for a signed-out viewer: heap-room.tsx shows a sign-in line instead
+if (gbForm) on(gbForm, 'submit', async e => {
   e.preventDefault();
-  const name = $('gb-name').value.trim().slice(0, 12);
+  if (gbBusy) return;
+  const name = $('gb-name').value.trim();
   if (!name) { $('gb-name').focus(); return; }
-  let mine = []; try { mine = JSON.parse(store.get(KEY('guestbook')) || '[]'); } catch {}
-  mine.unshift({ name, date: todayStr }); store.set(KEY('guestbook'), JSON.stringify(mine.slice(0, 50)));
-  $('gb-name').value = '';
-  openGuestbook(); toast(`${name}님, 다녀가셨어요`);
+  gbBusy = true; $('gb-submit').disabled = true; $('gb-msg').textContent = '';
+  try {
+    const res = await opts.addGuestbook(name);
+    if (disposed) return;
+    if (res.ok) {
+      gbRows.set(res.entry.id, res.entry);
+      $('gb-name').value = '';
+      renderGuestbook(); toast(`${res.entry.name}님, 다녀가셨어요`);
+    } else $('gb-msg').textContent = res.message;
+  } catch {
+    if (!disposed) $('gb-msg').textContent = '지금은 남기지 못했어요. 잠시 뒤에 다시 시도해 주세요.';
+  } finally { gbBusy = false; if (!disposed) $('gb-submit').disabled = false; }
 });
 on($('gb-close'), 'click', () => { $('guestbook').hidden = true; });
+
+// polling: what others changed (guestbook rows, visit counts, 다녀감, landed pieces) every opts.pollMs while the tab is visible.
+// The first cursor is the snapshot's serverTime; each reply carries the next. Overlapping rows are merged by id.
+let cursor = DATA.serverTime, polling = false, pollTimer = 0;
+async function poll() {
+  if (disposed || polling) return;
+  polling = true;
+  try {
+    const res = await fetch(`/api/heap/rooms/${encodeURIComponent(opts.roomUuid)}/changes?since=${encodeURIComponent(cursor)}`, { cache: 'no-store', signal: ac.signal });
+    if (!res.ok || disposed) return;
+    const d = await res.json();
+    if (disposed) return;
+    if (typeof d.cursor === 'string') cursor = d.cursor;
+    if (d.visits && Number.isFinite(d.visits.today) && Number.isFinite(d.visits.total)) { visits = { today: d.visits.today, total: d.visits.total }; renderMeta(); }
+    if (typeof d.creatorVisitedAt === 'string') { const day = fmtDay(d.creatorVisitedAt); if (day && day !== creatorDay) { creatorDay = day; renderCreatorVisit(); } }
+    for (const e of d.guestbook || []) gbRows.set(e.id, { id: e.id, name: e.name, createdAt: e.createdAt });
+    if (!$('guestbook').hidden) renderGuestbook();
+    // pieces: landed ones wait in the reception box; removed ones leave it (a card already on the heap stays until fan pieces get their own screens)
+    let boxChanged = false;
+    for (const p of d.pieces || []) {
+      if (p.status !== 'landed' || fanReels.some(f => f.id === p.id)) continue;
+      fanReels.push(fanReelOf({ id: p.id, by: p.submitterName ?? '알 수 없음', date: fmtDay(p.landedAt ?? p.createdAt), caption: p.title || p.note || '팬 작품' }, fanReels.length));
+      boxChanged = true;
+    }
+    for (const id of d.removedPieceIds || []) {
+      const i = fanReels.findIndex(f => f.id === id);
+      if (i >= 0 && !landedIds.includes(id)) { fanReels.splice(i, 1); boxChanged = true; }
+    }
+    if (boxChanged) updateBox(pendingFans().length);
+  } catch (e) {
+    if (!disposed && e?.name !== 'AbortError') console.warn('[heap-room] poll', e);
+  } finally { polling = false; }
+}
+function schedulePoll() {
+  clearTimeout(pollTimer);
+  if (disposed || document.hidden) return;
+  pollTimer = setTimeout(async () => { await poll(); schedulePoll(); }, opts.pollMs);
+}
+on(document, 'visibilitychange', () => { if (document.hidden) clearTimeout(pollTimer); else { poll().then(schedulePoll); } });
+cleanups.push(() => clearTimeout(pollTimer));
 
 // rooms: the door lists the other rooms; jumping fades out and hands the chosen id to opts.onNavigate
 function openRooms() {
@@ -1674,6 +1732,9 @@ setHint('room'); syncUI();
 $('status').hidden = true;
 frame();
 root.dispatchEvent(new CustomEvent('heap:ready'));
+// a signed-in visitor is recorded once per mount (the server keeps one row per person per day); anonymous viewers record nothing
+if (opts.signedIn) opts.recordVisit().then(r => { if (!disposed && r?.ok && r.recorded) poll(); }).catch(() => {});
+schedulePoll();
 }
 
 run().catch(e => { if (!disposed) console.error('[heap-room]', e); });
@@ -1688,7 +1749,7 @@ return function dispose() {
   for (const id of LISTS) $(id).innerHTML = '';
   for (const id of HIDDEN) $(id).hidden = true;
   $('status').hidden = false; $('fade').classList.remove('on');
-  $('toast').textContent = ''; $('visit').textContent = ''; $('hint').textContent = ''; delete $('hint').dataset.k;
+  $('toast').textContent = ''; $('gb-msg').textContent = ''; $('visit').textContent = ''; $('hint').textContent = ''; delete $('hint').dataset.k;
   root.style.removeProperty('--clay');
   if (roomTitle && document.title === roomTitle) document.title = prevTitle;
 };

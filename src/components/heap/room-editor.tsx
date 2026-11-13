@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties, type MouseEvent, type RefObject } from "react";
+import { saveLayoutAction } from "@/lib/heap/actions";
 
-// 꾸미기 패널. 방 주인이 가구를 옮기고 시간대를 고른 뒤 이 기기에 저장한다.
+// 꾸미기 패널. 방 주인이 가구를 옮기고 시간대를 고른 뒤 서버에 저장한다.
 // 엔진(room-engine.js)과는 방 루트 요소의 이벤트로만 이야기한다: heap:get 으로 읽고, heap:items / heap:time 으로 바꾼다.
 // 평면도는 뒷벽(z = -d/2)이 위, 왼쪽 벽(x = -w/2)이 왼쪽이다. 3D 화면에서 벽이 있는 두 변이 위와 왼쪽에 온다.
 
@@ -22,14 +23,16 @@ type TimeChoice = string | number;
 // heap:get 이 돌려주는 값 (room-engine.js 6번 구역)
 type RoomState = {
   room: { w: number; d: number };
+  // DB에 저장된 layout 전체. 저장할 때 여기에 items, time, room을 덮어 쓴다.
+  layout: Record<string, unknown>;
   items: Item[];
   catalogue: { models: Model[] } | null;
   table: { x: number; z: number; w: number; d: number };
   door: { wall: Wall; at: number } | null;
   window: { wall: Wall; at: number; w: number } | null;
   time: TimeChoice;
+  // 마지막으로 저장된 상태. 처음으로 버튼이 여기로 돌아간다.
   original: { items: Item[]; time: TimeChoice };
-  saveKey: string;
 };
 
 // 엔진이 직접 만드는 가구의 이름과 바닥 크기(엔진 단위, 회전 전). room-engine.js 의 BUILD 치수에서 읽은 값이다.
@@ -89,9 +92,11 @@ function footprint(it: Item, models: Model[]) {
 
 export function RoomEditor({
   rootRef,
+  roomUuid,
   onClose,
 }: {
   rootRef: RefObject<HTMLDivElement | null>;
+  roomUuid: string;
   onClose: () => void;
 }) {
   const [room, setRoom] = useState<RoomState | null>(null);
@@ -101,6 +106,7 @@ export function RoomEditor({
   const [armed, setArmed] = useState<string | null>(null);
   const [group, setGroup] = useState(0);
   const [saveNote, setSaveNote] = useState("");
+  const [saving, setSaving] = useState(false);
 
   // 열릴 때 지금 방에 있는 것을 엔진에서 읽어 온다.
   useEffect(() => {
@@ -208,20 +214,29 @@ export function RoomEditor({
     setSaveNote("");
     send("heap:time", next);
   };
-  const save = () => {
+  // 서버에는 layout 전체를 보낸다. DB의 기존 layout(창, 문, 팔레트 등)에 편집한 items, time, room만 덮어 쓴다.
+  const save = async () => {
+    if (saving) return;
+    setSaving(true);
+    setSaveNote("");
+    const layout = { ...room.layout, room: { w: room.room.w, d: room.room.d }, items, time };
     try {
-      localStorage.setItem(room.saveKey, JSON.stringify({ items, time }));
-      setSaveNote("이 기기에 저장했어요");
+      const result = await saveLayoutAction(roomUuid, layout);
+      if (result.ok) {
+        // 엔진과 이 패널의 기준(처음으로)을 방금 저장한 상태로 옮긴다.
+        send("heap:saved", layout);
+        setRoom({ ...room, layout, original: { items, time } });
+        setSaveNote("저장했어요.");
+      } else {
+        setSaveNote("detail" in result ? `${result.message} (${result.detail})` : result.message);
+      }
     } catch {
-      setSaveNote("이 기기에 저장하지 못했어요");
+      setSaveNote("저장하지 못했어요. 잠시 뒤에 다시 시도해 주세요.");
+    } finally {
+      setSaving(false);
     }
   };
   const reset = () => {
-    try {
-      localStorage.removeItem(room.saveKey);
-    } catch {
-      // 저장소를 쓸 수 없으면 지울 것도 없다.
-    }
     setItems(room.original.items);
     setTime(room.original.time);
     setSel(null);
@@ -359,15 +374,18 @@ export function RoomEditor({
       </div>
       <div className="ed-foot">
         <div className="row">
-          <button className="btn" type="button" onClick={save}>
-            저장
+          <button className="btn" type="button" disabled={saving} onClick={save}>
+            {saving ? "저장하는 중…" : "저장"}
           </button>
           <button className="btn ghost" type="button" onClick={reset}>
             처음으로
           </button>
         </div>
-        {saveNote && <p className="note">{saveNote}</p>}
-        <p className="note">지금은 이 기기에만 저장돼요.</p>
+        {saveNote && (
+          <p className="note" role="status">
+            {saveNote}
+          </p>
+        )}
       </div>
     </aside>
   );

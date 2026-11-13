@@ -1,26 +1,50 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { addGuestbookAction, recordVisitAction } from "@/lib/heap/actions";
+import { HEAP_POLICY } from "@/lib/heap/policy";
 import { RoomEditor } from "./room-editor";
 import "./heap-room.css";
 
-// 방 데이터(JSON)는 public/heap/rooms/ 아래에 있다.
+// 크리에이터 정보(creator.json)는 public/heap/rooms/ 아래의 정적 파일이다. 나머지 방 데이터는 서버가 DB에서 읽어 data로 넘긴다.
 const DATA_BASE = "/heap/rooms/";
 // 엔진이 캔버스에 글자를 그릴 때 이 두 글꼴 이름을 그대로 쓴다.
 const FONTS_HREF =
   "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600&family=Nanum+Pen+Script&display=swap";
+
+// page.tsx가 DB 스냅샷을 엔진이 쓰는 모양으로 바꿔 넘긴다. 날짜는 한국 시간 "YYYY.MM.DD" 문자열.
+export type HeapRoomData = {
+  // heap_rooms.id (uuid). 서버 액션과 실시간 읽기 주소가 이 값을 쓴다. 주소의 slug와 다르다.
+  roomUuid: string;
+  // 방 이름(heap_rooms.name). 화면 제목과 카드 뒷면에 쓴다.
+  name: string;
+  // 이 스냅샷을 읽은 DB 시각(ISO). 실시간 읽기의 첫 기준점이다.
+  serverTime: string;
+  rooms: { id: string; name: string; blurb: string }[];
+  layout: Record<string, unknown>;
+  reels: { id: string; title: string; channel: string | null; wide: boolean; views: string; published: string | null }[];
+  pieces: { id: string; by: string; date: string; caption: string }[];
+  guestbook: { id: string; name: string; createdAt: string }[];
+  visits: { today: number; total: number };
+  creatorVisit: string | null;
+};
 
 // 미니룸 화면. 마크업은 room.html의 HUD/오버레이 그대로이고, 엔진(room-engine.js)이 id로 찾아 채운다.
 // three는 브라우저에서만 돌아야 하므로 엔진은 effect 안에서 dynamic import로 불러온다.
 // canEdit: 꾸미기 버튼을 보여 줄지. 방을 걸어 다니는 동안(엔진의 room 모드)에만 버튼이 나온다.
 export function HeapRoom({
   roomId,
+  data,
   viewerName,
+  signedIn,
   canEdit = false,
 }: {
   roomId: string;
+  data: HeapRoomData;
   viewerName: string | null;
+  signedIn: boolean;
   canEdit?: boolean;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -46,7 +70,13 @@ export function HeapRoom({
       dispose = mountRoom(root, {
         roomId,
         dataBase: DATA_BASE,
+        data,
         viewerName,
+        signedIn,
+        roomUuid: data.roomUuid,
+        pollMs: HEAP_POLICY.pollIntervalMs,
+        recordVisit: () => recordVisitAction(data.roomUuid),
+        addGuestbook: (name: string) => addGuestbookAction(data.roomUuid, name),
         // 원본의 hash + reload 자리. 이동하면 이 방의 effect가 정리되면서 엔진이 dispose된다.
         onNavigate: (id) => router.push(`/room/${encodeURIComponent(id)}`),
       });
@@ -57,7 +87,7 @@ export function HeapRoom({
       root.removeEventListener("heap:mode", onMode);
       dispose?.();
     };
-  }, [roomId, viewerName, router]);
+  }, [roomId, data, viewerName, signedIn, router]);
 
   return (
     <div ref={rootRef} className={editing ? "heap-room editing" : "heap-room"}>
@@ -104,7 +134,7 @@ export function HeapRoom({
         </div>
       </div>
       <p id="toast" />
-      {editing && <RoomEditor rootRef={rootRef} onClose={closeEditor} />}
+      {editing && <RoomEditor rootRef={rootRef} roomUuid={data.roomUuid} onClose={closeEditor} />}
 
       <div id="player" hidden>
         <div className="player-bar">
@@ -161,23 +191,28 @@ export function HeapRoom({
             </button>
           </div>
           <div className="panel-body">
-            <form className="gb-form" id="gb-form">
-              <input
-                id="gb-name"
-                name="gb-name"
-                maxLength={12}
-                autoComplete="nickname"
-                placeholder="이름 (12자까지)"
-                aria-label="방명록에 남길 이름"
-              />
-              <button className="btn" type="submit">
-                이름 남기기
-              </button>
-            </form>
+            {signedIn ? (
+              <form className="gb-form" id="gb-form">
+                <input
+                  id="gb-name"
+                  name="gb-name"
+                  maxLength={HEAP_POLICY.guestbookNameMaxChars}
+                  autoComplete="nickname"
+                  placeholder={`이름 (${HEAP_POLICY.guestbookNameMaxChars}자까지)`}
+                  aria-label="방명록에 남길 이름"
+                />
+                <button className="btn" type="submit" id="gb-submit">
+                  이름 남기기
+                </button>
+              </form>
+            ) : (
+              <p className="note" id="gb-login">
+                이름을 남기려면 <Link href="/login">로그인</Link>이 필요해요.
+              </p>
+            )}
+            <p className="note" id="gb-msg" role="status" />
             <div className="gb-list" id="gb-list" />
-            <p className="note">
-              이름과 날짜만 남아요. 예시 표시가 붙은 줄은 시연용이고, 내가 남긴 이름은 지금은 이 기기에만 저장돼요.
-            </p>
+            <p className="note">이름과 날짜만 남아요.</p>
           </div>
         </div>
       </div>

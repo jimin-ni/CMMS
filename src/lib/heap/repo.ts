@@ -46,6 +46,8 @@ export type HeapReel = {
   wide: boolean | null;
   viewCount: number | null;
   publishedAt: Date | null;
+  // 연결된 채널의 이름. 채널을 모르면 null.
+  channelTitle: string | null;
 };
 
 export type HeapPieceStatus = "pending" | "rejected" | "voting" | "landed" | "lifted";
@@ -143,6 +145,9 @@ const clockNow = sql`clock_timestamp()`;
 // 같은 사용자가 같은 방에 동시에 보낸 요청을 줄 세운다. 하루 제한을 세고 넣는 사이에 끼어들지 못하게 한다.
 async function lockUserInRoom(tx: Tx, kind: string, roomId: string, userId: string): Promise<void> {
   const key = `heap:${kind}:${roomId}:${userId}`;
+  // 잠금 대기를 실시간 읽기의 겹침(changesCursorOverlapMs, 10초)보다 짧게 묶는다.
+  // 그래야 늦게 커밋된 줄이 커서 뒤로 밀려 영영 안 읽히는 일이 없다.
+  await tx.execute(sql`set local lock_timeout = '5s'`);
   await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
 }
 
@@ -215,8 +220,10 @@ export async function listReels(roomId: string): Promise<HeapReel[]> {
       wide: heapReels.wide,
       viewCount: heapReels.viewCount,
       publishedAt: heapReels.publishedAt,
+      channelTitle: heapCreatorChannels.title,
     })
     .from(heapReels)
+    .leftJoin(heapCreatorChannels, eq(heapCreatorChannels.id, heapReels.channelId))
     .where(eq(heapReels.roomId, roomId))
     .orderBy(
       sql`${heapReels.publishedAt} desc nulls last`,
@@ -436,7 +443,8 @@ export async function addGuestbookEntry(
 
     const [entry] = await tx
       .insert(heapGuestbook)
-      .values({ roomId, userId, name: trimmed })
+      // 트랜잭션 시작 시각(now()) 대신 잠금을 얻은 뒤의 시각을 찍는다. 실시간 읽기 커서와 맞추기 위해서다.
+      .values({ roomId, userId, name: trimmed, createdAt: sql`clock_timestamp()` })
       .returning({ id: heapGuestbook.id, name: heapGuestbook.name, createdAt: heapGuestbook.createdAt });
     return { ok: true as const, entry };
   });
@@ -714,6 +722,62 @@ export async function upsertReels(roomId: string, reels: HeapReelInput[]): Promi
         updatedAt: sql`now()`,
       },
     })
+    .returning({ id: heapReels.id });
+  return rows.length;
+}
+
+export type HeapChannelInput = {
+  creatorId: string;
+  platform: HeapChannelPlatform;
+  externalId: string;
+  channelUrl: string;
+  title: string;
+};
+
+// 크리에이터 채널을 넣거나 고친다. (creator_id, platform, external_id)가 같으면 주소와 이름만 새로 고친다.
+export async function upsertCreatorChannel(
+  input: HeapChannelInput,
+): Promise<{ id: string; created: boolean }> {
+  const [row] = await db
+    .insert(heapCreatorChannels)
+    .values(input)
+    .onConflictDoUpdate({
+      target: [heapCreatorChannels.creatorId, heapCreatorChannels.platform, heapCreatorChannels.externalId],
+      set: { channelUrl: sql`excluded.channel_url`, title: sql`excluded.title`, updatedAt: sql`now()` },
+    })
+    .returning({
+      id: heapCreatorChannels.id,
+      // 새로 넣은 줄만 xmax가 0이다.
+      created: sql<boolean>`(xmax = 0)`,
+    });
+  return row;
+}
+
+// 방의 영상을 채널에 잇는다. 영상 ID(external_id)로 찾고, 이미 같은 채널이면 건드리지 않는다.
+// 채널은 방 주인의 것이어야 한다. 아니면 아무것도 잇지 않고 0을 돌려준다. 돌려주는 값은 새로 이은 줄 수.
+export async function linkReelsToChannel(
+  roomId: string,
+  channelId: string,
+  videoIds: string[],
+): Promise<number> {
+  if (videoIds.length === 0 || !isUuid(roomId) || !isUuid(channelId)) return 0;
+  const owned = await db
+    .select({ id: heapCreatorChannels.id })
+    .from(heapCreatorChannels)
+    .innerJoin(heapRooms, eq(heapRooms.creatorId, heapCreatorChannels.creatorId))
+    .where(and(eq(heapCreatorChannels.id, channelId), eq(heapRooms.id, roomId)));
+  if (!owned[0]) return 0;
+  const rows = await db
+    .update(heapReels)
+    .set({ channelId, updatedAt: sql`now()` })
+    .where(
+      and(
+        eq(heapReels.roomId, roomId),
+        eq(heapReels.platform, "youtube"),
+        inArray(heapReels.externalId, videoIds),
+        sql`${heapReels.channelId} is distinct from ${channelId}`,
+      ),
+    )
     .returning({ id: heapReels.id });
   return rows.length;
 }

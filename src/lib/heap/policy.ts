@@ -18,4 +18,22 @@ export const HEAP_POLICY = {
 
   // 방 화면에 처음 보여 주는 방명록 줄 수
   guestbookPageSize: 30,
+
+  // 방 꾸미기(layout) 저장 한도. 서버가 저장 전에 검사한다 (src/lib/heap/layout.ts).
+  layoutMaxBytes: 64 * 1024,
+  layoutMaxItems: 200,
+  // 방 크기는 엔진의 roomDim 범위(6..12)와 같다. 가구 좌표는 가장 큰 방(12)의 반쪽에 여유를 둔 값.
+  layoutRoomMin: 6,
+  layoutRoomMax: 12,
+  layoutCoordMax: 8,
+  layoutItemSizeMin: 0.3,
+  layoutItemSizeMax: 3,
+  layoutItemYMax: 4,
+  layoutPostersMax: 8,
+
+  // 방 화면이 열려 있는 동안(탭이 보일 때) 바뀐 것을 가져오는 간격
+  pollIntervalMs: 10_000,
+
+  // 실시간 읽기(?since=)에서 다음 기준점을 serverTime보다 앞당기는 시간. 버블과 같은 값.
+  changesCursorOverlapMs: 10_000,
 } as const;
