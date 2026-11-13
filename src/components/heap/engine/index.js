@@ -360,8 +360,8 @@ buildWall('back'); buildWall('left');
 
 // window: frame, glass, a dusk backdrop and a tree outside; the sun comes through it
 const frameMat = flat(C.paper);
-let SUN_DIR = new THREE.Vector3(1.6, -2.55, 3.5).normalize(), shaftCorners = null;
-let SUN_H = new THREE.Vector3(1.6, 0, 3.5), skyTex = null; // SUN_H: the sun's horizontal heading (tied to the window); applyTime sets its drop
+ctx.sunDir = new THREE.Vector3(1.6, -2.55, 3.5).normalize(); ctx.shaftCorners = null;
+ctx.sunHeading = new THREE.Vector3(1.6, 0, 3.5); ctx.skyTex = null; // SUN_H: the sun's horizontal heading (tied to the window); applyTime sets its drop
 if (WIN) {
   const W = WALLS[WIN.wall], ww = WIN.w, wh = WIN.h;
   const g = new THREE.Group();
@@ -375,8 +375,8 @@ if (WIN) {
   const skyC = document.createElement('canvas'); skyC.width = 4; skyC.height = 128;
   { const sg = skyC.getContext('2d'), gr = sg.createLinearGradient(0, 0, 0, 128);
     gr.addColorStop(0, '#f2c48f'); gr.addColorStop(0.55, '#e9a46b'); gr.addColorStop(1, '#8a7a55'); sg.fillStyle = gr; sg.fillRect(0, 0, 4, 128); }
-  skyTex = new THREE.CanvasTexture(skyC); skyTex.colorSpace = THREE.SRGBColorSpace;
-  onWall(WIN.wall, WIN.at, 0.9, -3.5, new THREE.Mesh(new THREE.PlaneGeometry(2 * W.half, 3.6), new THREE.MeshBasicMaterial({ map: skyTex })));
+  ctx.skyTex = new THREE.CanvasTexture(skyC); ctx.skyTex.colorSpace = THREE.SRGBColorSpace;
+  onWall(WIN.wall, WIN.at, 0.9, -3.5, new THREE.Mesh(new THREE.PlaneGeometry(2 * W.half, 3.6), new THREE.MeshBasicMaterial({ map: ctx.skyTex })));
   const out = new THREE.Mesh(new THREE.PlaneGeometry(2 * W.half, 3.4), flat('#6b6a4a')); out.rotation.x = -Math.PI / 2;
   const og = new THREE.Group(); og.add(out); out.position.set(0, -0.12, 0); onWall(WIN.wall, WIN.at, 0, -1.9, og);
   const tree = new THREE.Group();
@@ -386,38 +386,38 @@ if (WIN) {
   }
   onWall(WIN.wall, WIN.at + 0.5, 0, -2.2, tree);
   const toCentre = Math.sign(-WIN.at) || 1;
-  SUN_H = W.n.clone().multiplyScalar(3.5).addScaledVector(W.axis, 1.6 * toCentre);
-  SUN_DIR = SUN_H.clone().add(new THREE.Vector3(0, -2.55, 0)).normalize();
-  shaftCorners = [[WIN.u0, WIN.y0], [WIN.u1, WIN.y0], [WIN.u1, WIN.y1], [WIN.u0, WIN.y1]].map(([u, y]) => W.point(u, y, 0));
+  ctx.sunHeading = W.n.clone().multiplyScalar(3.5).addScaledVector(W.axis, 1.6 * toCentre);
+  ctx.sunDir = ctx.sunHeading.clone().add(new THREE.Vector3(0, -2.55, 0)).normalize();
+  ctx.shaftCorners = [[WIN.u0, WIN.y0], [WIN.u1, WIN.y0], [WIN.u1, WIN.y1], [WIN.u0, WIN.y1]].map(([u, y]) => W.point(u, y, 0));
 }
 const sun = new THREE.DirectionalLight(0xffb066, 3.0);
-if (WIN) sun.target.position.copy(WALLS[WIN.wall].point(WIN.at, WIN.y, 0)).addScaledVector(SUN_DIR, WIN.y / -SUN_DIR.y);
-sun.position.copy(sun.target.position).addScaledVector(SUN_DIR, -11);
+if (WIN) sun.target.position.copy(WALLS[WIN.wall].point(WIN.at, WIN.y, 0)).addScaledVector(ctx.sunDir, WIN.y / -ctx.sunDir.y);
+sun.position.copy(sun.target.position).addScaledVector(ctx.sunDir, -11);
 sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
 const SHADOW = Math.max(8, 2 * RX, 2 * RZ); // half-size of the sun's shadow frustum: 8 for the original room, wider for a longer one
 Object.assign(sun.shadow.camera, { left: -SHADOW, right: SHADOW, top: SHADOW, bottom: -SHADOW, near: 1, far: 30 });
 sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.012;
 scene.add(sun, sun.target);
-let moteGeo = null, shaftGeo = null, shaftMat = null, moteMat = null; const moteSeeds = [];
-if (shaftCorners) {
-  const shaftFloor = shaftCorners.map(p => p.clone().addScaledVector(SUN_DIR, p.y / -SUN_DIR.y));
-  const v = [...shaftCorners, ...shaftFloor].flatMap(p => [p.x, p.y, p.z]);
+ctx.moteGeo = null; ctx.shaftGeo = null; ctx.shaftMat = null; ctx.moteMat = null; const moteSeeds = [];
+if (ctx.shaftCorners) {
+  const shaftFloor = ctx.shaftCorners.map(p => p.clone().addScaledVector(ctx.sunDir, p.y / -ctx.sunDir.y));
+  const v = [...ctx.shaftCorners, ...shaftFloor].flatMap(p => [p.x, p.y, p.z]);
   const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
   sg.setIndex([0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4, 7]);
-  shaftGeo = sg; shaftMat = new THREE.MeshBasicMaterial({ color: '#ffc98a', transparent: true, opacity: 0.07, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
-  scene.add(new THREE.Mesh(sg, shaftMat));
-  moteGeo = new THREE.BufferGeometry(); moteGeo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(90 * 3), 3));
+  ctx.shaftGeo = sg; ctx.shaftMat = new THREE.MeshBasicMaterial({ color: '#ffc98a', transparent: true, opacity: 0.07, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  scene.add(new THREE.Mesh(sg, ctx.shaftMat));
+  ctx.moteGeo = new THREE.BufferGeometry(); ctx.moteGeo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(90 * 3), 3));
   for (let i = 0; i < 90; i++) moteSeeds.push([rand(), rand(), rand(), rand() * 6.28]);
-  moteMat = new THREE.PointsMaterial({ color: '#ffe0b0', size: 0.03, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false });
-  scene.add(new THREE.Points(moteGeo, moteMat));
+  ctx.moteMat = new THREE.PointsMaterial({ color: '#ffe0b0', size: 0.03, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false });
+  scene.add(new THREE.Points(ctx.moteGeo, ctx.moteMat));
 }
 const tA = new THREE.Vector3(), tB = new THREE.Vector3();
 function stepMotes(t) {
-  if (!moteGeo) return;
-  const pos = moteGeo.attributes.position;
+  if (!ctx.moteGeo) return;
+  const pos = ctx.moteGeo.attributes.position;
   moteSeeds.forEach(([u, v, w, ph], i) => {
-    tA.lerpVectors(shaftCorners[0], shaftCorners[1], u).lerp(tB.lerpVectors(shaftCorners[3], shaftCorners[2], u), v);
-    tA.addScaledVector(SUN_DIR, (tA.y / -SUN_DIR.y) * ((w + t * 0.01) % 1) * 0.9);
+    tA.lerpVectors(ctx.shaftCorners[0], ctx.shaftCorners[1], u).lerp(tB.lerpVectors(ctx.shaftCorners[3], ctx.shaftCorners[2], u), v);
+    tA.addScaledVector(ctx.sunDir, (tA.y / -ctx.sunDir.y) * ((w + t * 0.01) % 1) * 0.9);
     pos.setXYZ(i, tA.x + Math.sin(t * 0.3 + ph) * 0.05, tA.y + Math.sin(t * 0.21 + ph * 2) * 0.05, tA.z);
   });
   pos.needsUpdate = true;
@@ -425,7 +425,7 @@ function stepMotes(t) {
 
 // door to other rooms
 const doorParts = [];
-let DOOR_SPOT = null;
+ctx.doorSpot = null;
 if (DOOR) {
   const g = new THREE.Group();
   const panel = box(0.92, 2.1, 0.06, flat(C.accent), 0, 1.05, -0.1, { parent: g });
@@ -438,7 +438,7 @@ if (DOOR) {
   const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.16), new THREE.MeshStandardMaterial({ map: st })); plate.position.set(0, 1.62, -0.065); g.add(plate);
   onWall(DOOR.wall, DOOR.at, 0, 0, g);
   doorParts.push(panel, knob, plate);
-  DOOR_SPOT = WALLS[DOOR.wall].point(DOOR.at, 0, 0.85);
+  ctx.doorSpot = WALLS[DOOR.wall].point(DOOR.at, 0, 0.85);
 }
 
 // ====================================================================================
@@ -905,20 +905,20 @@ function applyTime(hour) {
   fill.intensity = k.fillI;
   ctx.readGlow = Math.min(0.4, Math.max(0, (1.6 - k.sunI) * 0.3)); // a card in hand lights itself when the room is dim; 0 from morning to golden hour
   setCol(sun.color, k.sun); sun.intensity = k.sunI;
-  SUN_DIR.copy(SUN_H).setY(-k.drop).normalize();
-  if (WIN) sun.target.position.copy(WALLS[WIN.wall].point(WIN.at, WIN.y, 0)).addScaledVector(SUN_DIR, WIN.y / -SUN_DIR.y);
-  sun.position.copy(sun.target.position).addScaledVector(SUN_DIR, -11);
-  if (shaftGeo) { // the shaft's floor end and the motes follow the sun's new drop
-    const pos = shaftGeo.attributes.position;
-    shaftCorners.forEach((p, i) => { tA.copy(p).addScaledVector(SUN_DIR, p.y / -SUN_DIR.y); pos.setXYZ(4 + i, tA.x, tA.y, tA.z); });
-    pos.needsUpdate = true; shaftGeo.computeBoundingSphere(); moteGeo.boundingSphere = null;
-    setCol(shaftMat.color, k.shaft); shaftMat.opacity = k.shaftO;
-    setCol(moteMat.color, k.mote); moteMat.opacity = k.moteO;
+  ctx.sunDir.copy(ctx.sunHeading).setY(-k.drop).normalize();
+  if (WIN) sun.target.position.copy(WALLS[WIN.wall].point(WIN.at, WIN.y, 0)).addScaledVector(ctx.sunDir, WIN.y / -ctx.sunDir.y);
+  sun.position.copy(sun.target.position).addScaledVector(ctx.sunDir, -11);
+  if (ctx.shaftGeo) { // the shaft's floor end and the motes follow the sun's new drop
+    const pos = ctx.shaftGeo.attributes.position;
+    ctx.shaftCorners.forEach((p, i) => { tA.copy(p).addScaledVector(ctx.sunDir, p.y / -ctx.sunDir.y); pos.setXYZ(4 + i, tA.x, tA.y, tA.z); });
+    pos.needsUpdate = true; ctx.shaftGeo.computeBoundingSphere(); ctx.moteGeo.boundingSphere = null;
+    setCol(ctx.shaftMat.color, k.shaft); ctx.shaftMat.opacity = k.shaftO;
+    setCol(ctx.moteMat.color, k.mote); ctx.moteMat.opacity = k.moteO;
   }
-  if (skyTex) {
-    const sg = skyTex.image.getContext('2d'), gr = sg.createLinearGradient(0, 0, 0, 128);
+  if (ctx.skyTex) {
+    const sg = ctx.skyTex.image.getContext('2d'), gr = sg.createLinearGradient(0, 0, 0, 128);
     gr.addColorStop(0, css(k.sky[0])); gr.addColorStop(0.55, css(k.sky[1])); gr.addColorStop(1, css(k.sky[2])); sg.fillStyle = gr; sg.fillRect(0, 0, 4, 128);
-    skyTex.needsUpdate = true;
+    ctx.skyTex.needsUpdate = true;
   }
   ctx.lampBase = k.lampI; // frame() gives it to every lamp's light
   ctx.shadeNow = k.shadeI;
@@ -967,7 +967,7 @@ const phoneParts = [phoneBody, phoneGlow, phoneDot];
 
 // guestbook stand (방명록) beside the door
 const bookParts = [];
-let BOOK_SPOT = null;
+ctx.bookSpot = null;
 const GB = layout.guestbook ?? (DOOR ? { wall: DOOR.wall, at: DOOR.at - 0.95 } : null);
 if (GB) {
   const g = new THREE.Group();
@@ -979,7 +979,7 @@ if (GB) {
   onWall(GB.wall, GB.at, 0, 0.32, g);
   const p = WALLS[GB.wall].point(GB.at, 0, 0.32);
   OBST.push({ x: p.x, z: p.z, hw: 0.32, hd: 0.32, rhw: 0.25, rhd: 0.25 });
-  BOOK_SPOT = WALLS[GB.wall].point(GB.at, 0, 0.95);
+  ctx.bookSpot = WALLS[GB.wall].point(GB.at, 0, 0.95);
 }
 
 // projector and screen
@@ -1044,7 +1044,7 @@ const eyeL = new THREE.Mesh(eyeGeo, eyeMat), eyeR = new THREE.Mesh(eyeGeo, eyeMa
 eyeL.position.set(-0.09, 0.97, 0.23); eyeR.position.set(0.09, 0.97, 0.23);
 for (const m of [body, head, hair, legL, legR]) { m.castShadow = true; me.add(m); }
 me.add(eyeL, eyeR);
-if (DOOR_SPOT) { me.position.copy(DOOR_SPOT); me.rotation.y = Math.atan2(WALLS[DOOR.wall].n.x, WALLS[DOOR.wall].n.z); }
+if (ctx.doorSpot) { me.position.copy(ctx.doorSpot); me.rotation.y = Math.atan2(WALLS[DOOR.wall].n.x, WALLS[DOOR.wall].n.z); }
 else me.position.set(2.2, 0, 2.4);
 scene.add(me);
 
@@ -1861,8 +1861,8 @@ canvas.addEventListener('pointerup', ev => {
   if (hit.object.userData.slot) return openSlot(hit.object.userData.slot); // a PC, a frame, a TV, a radio or a calendar: it acts where the visitor stands
   if (hit.object.userData.seats) return sitOn(hit.object.userData.seats, hit.point); // a chair, a sofa or a rug: walk there and sit
   const p = hit.point, onTableFoot = p.x > TBOX.x0 && p.x < TBOX.x1 && p.z > TBOX.z0 && p.z < TBOX.z1;
-  if (doorParts.includes(hit.object)) walkRoute(DOOR_SPOT.clone(), 'door');
-  else if (bookParts.includes(hit.object)) walkRoute(BOOK_SPOT.clone(), 'book');
+  if (doorParts.includes(hit.object)) walkRoute(ctx.doorSpot.clone(), 'door');
+  else if (bookParts.includes(hit.object)) walkRoute(ctx.bookSpot.clone(), 'book');
   else if (shelfParts.includes(hit.object)) walkRoute(ctx.shelfSpot.clone(), 'sort');
   else if (hit.object === floor && !onTableFoot) walkRoute(p.clone().setY(0), null);
   else walkRoute(SEAT.clone(), 'sit');
@@ -1990,8 +1990,8 @@ function collide(p) {
 }
 const nearTable = () => me.position.distanceTo(SEAT) < 1.1;
 const nearShelf = () => !!ctx.shelfSpot && me.position.distanceTo(ctx.shelfSpot) < 1.1;
-const nearDoor = () => !!DOOR_SPOT && me.position.distanceTo(DOOR_SPOT) < 0.7;
-const nearBook = () => !!BOOK_SPOT && me.position.distanceTo(BOOK_SPOT) < 0.7;
+const nearDoor = () => !!ctx.doorSpot && me.position.distanceTo(ctx.doorSpot) < 0.7;
+const nearBook = () => !!ctx.bookSpot && me.position.distanceTo(ctx.bookSpot) < 0.7;
 const UP = new THREE.Vector3(-1, 0, -1).normalize(), RIGHT = new THREE.Vector3(1, 0, -1).normalize();
 const mv = new THREE.Vector3();
 let walkPhase = 0;
