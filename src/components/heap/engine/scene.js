@@ -7,9 +7,7 @@ import { flat } from './draw.js';
 export function setupScene(ctx) {
   const { $, onDispose, C, layout } = ctx;
 
-  // ====================================================================================
-  // 3. Renderer, lights, walls (built from layout)
-  // ====================================================================================
+  // 렌더러, 조명, 벽 (layout 으로 짓는다)
   const canvas = document.createElement('canvas'); canvas.id = 'scene';
   canvas.setAttribute('aria-label', '크리에이터의 미니룸. 탁자 위에 지난 영상들이 사진처럼 쌓여 있고, 영사기와 휴대폰, 앨범 책장, 다른 방으로 가는 문이 있다');
   $('scene-host').appendChild(canvas);

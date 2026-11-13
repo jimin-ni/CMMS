@@ -10,9 +10,7 @@ export function setupInput(ctx) {
     walkRoute, SEAT,
   } = ctx;
 
-  // ====================================================================================
-  // 7. Input
-  // ====================================================================================
+  // 키보드와 포인터 입력
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
   function rayFrom(ev) {
     const b = canvas.getBoundingClientRect();

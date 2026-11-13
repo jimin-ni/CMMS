@@ -1,7 +1,7 @@
 // 사진 더미: 쌓이는 모양, 떨어지는 움직임, 카드, 벽 포스터.
 import * as THREE from 'three';
 import { viewsNum } from './format.js';
-import { flat, drawFit, NO_PHOTO } from './draw.js';
+import { flat, drawFit, NO_PHOTO, makeCanvas, canvasTexture } from './draw.js';
 
 export function setupHeap(ctx) {
   const {
@@ -9,9 +9,7 @@ export function setupHeap(ctx) {
     gauss, scene, reels, fanReels, layout, box, C, onWall,
   } = ctx;
 
-  // ====================================================================================
-  // 5. The heap: shaped pile. Each card rests on whatever is under its corners and edges.
-  // ====================================================================================
+  // 사진 더미: 모양을 잡아 쌓는다. 카드는 자기 모서리와 가장자리 아래에 있는 것 위에 놓인다.
   const cards = []; // stack order, bottom → top
   const pickables = [];
   const EXCL = [{ x: PROJ.x, z: PROJ.z, r: 0.42 }, { x: MUG.x, z: MUG.z, r: 0.18 }, { x: PHONE.x, z: PHONE.z, r: 0.26 }];
@@ -60,7 +58,7 @@ export function setupHeap(ctx) {
     }
     return p;
   }
-  const inPile = c => c !== ctx.held && c !== ctx.loaded && c !== ctx.presenting && c !== ctx.dragging && !c.userData.fly;
+  const inPile = c => c !== ctx.held && c !== ctx.loaded && c !== ctx.dragging;
   // recompute every resting pose bottom → top; cards whose support changed fall into place
   function settle(instant = false) {
     const placed = [];
@@ -103,8 +101,8 @@ export function setupHeap(ctx) {
   function makeCard(reel) {
     const aniso = renderer.capabilities.getMaxAnisotropy(), d = reel.wide ? DIMS.wide : DIMS.tall, fan = reel.kind === 'fan';
     const frontC = fan ? drawFanFront(reel) : drawCard(reel, null);
-    const tex = new THREE.CanvasTexture(frontC); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = aniso;
-    const btex = new THREE.CanvasTexture(fan ? drawFanBack(reel) : drawBack(reel)); btex.colorSpace = THREE.SRGBColorSpace; btex.anisotropy = aniso;
+    const tex = canvasTexture(frontC, aniso);
+    const btex = canvasTexture(fan ? drawFanBack(reel) : drawBack(reel), aniso);
     const card = new THREE.Group();
     const front = new THREE.Mesh(d.geo, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.5 }));
     const back = new THREE.Mesh(d.geo, new THREE.MeshStandardMaterial({ map: btex, roughness: 0.9 }));
@@ -126,8 +124,7 @@ export function setupHeap(ctx) {
     (layout.posters?.at || []).forEach((u, k) => {
       const card = top3[k];
       if (!card) return;
-      const pc = document.createElement('canvas'); pc.width = 202; pc.height = 360; // the size of the near tier's picture
-      const t = card.userData.poster = new THREE.CanvasTexture(pc); t.colorSpace = THREE.SRGBColorSpace;
+      const t = card.userData.poster = canvasTexture(makeCanvas(202, 360)); // 202 x 360 은 가까운 단계 그림의 크기
       paintPoster(card); ctx.request(card, ctx.NEAR);
       const g = new THREE.Group();
       box(0.74, 1.2, 0.05, flat(C.woodDark), 0, 0, 0.025, { cast: false, parent: g });

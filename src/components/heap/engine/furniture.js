@@ -1,16 +1,14 @@
 // layout.items 로 짓는 가구와 램프, 앉는 자리.
 import * as THREE from 'three';
 import { disposeScene, mulberry32 } from './util.js';
-import { flat } from './draw.js';
+import { flat, makeCanvas, canvasTexture } from './draw.js';
 
 export function setupFurniture(ctx) {
   const { rand, C, box, ALBUMS, scene } = ctx;
 
-  // ====================================================================================
-  // 4. Furniture from layout.items (each builder works in local space: front = +z)
-  //   Everything built from the items sits in one group. buildItems(items) disposes that group and builds a new one,
-  //   so the furniture can change without a remount. Walls, floor, table and heap are not part of it.
-  // ====================================================================================
+  // layout.items 로 가구를 짓는다 (각 builder 는 지역 좌표에서 일한다: 앞이 +z).
+  // 항목에서 만든 것은 모두 한 그룹에 둔다. buildItems(items) 는 그 그룹을 치우고 새로 지으므로, 다시 마운트하지 않고도 가구가 바뀐다.
+  // 벽, 바닥, 탁자, 더미는 여기 속하지 않는다.
   // OBST: the fixed walk obstacles (the table first, then the guestbook stand). Each item's own obstacle is in ITEMS.obst.
   const OBST = [], shelfParts = [];
   ctx.shelf = null;
@@ -67,12 +65,12 @@ export function setupFurniture(ctx) {
         const lx = -0.57 + i * 0.38;
         const m = new THREE.Mesh(new THREE.BoxGeometry(1, 0.52, 0.36), flat(a.color));
         m.position.set(lx, 0.995 + 0.26, 0); m.castShadow = m.receiveShadow = true; m.userData.album = a.key;
-        const lc = document.createElement('canvas'); lc.width = 96; lc.height = 360;
-        const lt = new THREE.CanvasTexture(lc); lt.colorSpace = THREE.SRGBColorSpace;
+        const lc = makeCanvas(96, 360);
+        const lt = canvasTexture(lc);
         const label = new THREE.Mesh(new THREE.PlaneGeometry(0.11, 0.41), new THREE.MeshStandardMaterial({ map: lt, roughness: 0.9 }));
         label.position.set(lx, 0.995 + 0.26, 0.181); label.userData.album = a.key;
         g.add(m, label); add(m); add(label);
-        ctx.shelf.albums.push({ ...a, mesh: m, label, lc, lt, lx });
+        ctx.shelf.albums.push({ ...a, mesh: m, label, lc, lt });
       });
       return { hw: 0.85, hd: 0.55 };
     },
@@ -181,8 +179,7 @@ export function setupFurniture(ctx) {
   function buildItems(items, first = false) {
     if (ctx.build.group) { for (const l of ctx.build.lamps) l.light?.dispose(); scene.remove(ctx.build.group); disposeScene(ctx.build.group, ctx.KEPT); }
     shelfParts.length = 0; ctx.shelf = null;
-    for (const im of ctx.build.loads) { im.onload = im.onerror = null; im.src = ''; ctx.inFlight.delete(im); } // the replaced build's thumbnails stop here
-    ctx.build.loads.clear();
+    if (ctx.build.loads.size) ctx.cancelThumbs(ctx.build.loads); // 바뀐 가구가 아직 받던 썸네일은 여기서 멈춘다
     const build = ctx.build = { group: new THREE.Group(), obst: [], items, lamps: [], slots: [], slotMeshes: [], seats: [], seatMeshes: [], loads: new Set() };
     scene.add(build.group);
     items.forEach((it, i) => {

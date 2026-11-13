@@ -3,11 +3,8 @@
 export async function setupData(ctx) {
   const { ac, opts, dataBase, rand } = ctx;
 
-  // ====================================================================================
-  // 1. Room data: the database part arrives in opts.data (rooms, layout, reels, pieces, guestbook, visits, creatorVisit).
-  //    <dataBase><id>/creator.json (links, albums, linktree, phoneTitle) is still a static file.
-  // ====================================================================================
-  const getJSON = async p => { const r = await fetch(p, { signal: ac.signal }); if (!r.ok) throw new Error(`${p}: ${r.status}`); return r.json(); };
+  // 방 데이터: DB 에서 읽은 부분은 opts.data 로 온다 (rooms, layout, reels, pieces, guestbook, visits, creatorVisit).
+  // <dataBase><id>/creator.json (링크, 앨범, 링크트리, 휴대폰 제목)은 아직 정적 파일이다.
   const DATA = opts.data;
   const ROOMS = DATA.rooms;
   const roomId = opts.roomId;
@@ -64,7 +61,7 @@ export async function setupData(ctx) {
   for (const r of reels) if (r.gold) filed.set(r.id, { album: r.gold });
 
   Object.assign(ctx, {
-    C, creator, DATA, nWide, nShorts, layout, ALBUMS, reels, getJSON, fanReels, fanReelOf, ROOMS, roomId,
+    C, creator, DATA, nWide, nShorts, layout, ALBUMS, reels, fanReels, fanReelOf, ROOMS, roomId,
     filed, albumName,
   });
 }

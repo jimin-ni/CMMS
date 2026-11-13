@@ -1,6 +1,6 @@
 // 방의 껍데기: 벽, 창, 햇빛, 먼지, 문.
 import * as THREE from 'three';
-import { flat } from './draw.js';
+import { flat, makeCanvas, canvasTexture } from './draw.js';
 
 export function setupShell(ctx) {
   const { layout, C, WALLS, box, WALL_H, onWall, RX, RZ, scene, rand } = ctx;
@@ -47,10 +47,10 @@ export function setupShell(ctx) {
     const glass = new THREE.Mesh(new THREE.PlaneGeometry(ww, wh), new THREE.MeshStandardMaterial({ color: '#ffd9a8', transparent: true, opacity: 0.12, roughness: 0.1 }));
     glass.position.z = -0.1; g.add(glass);
     onWall(WIN.wall, WIN.at, WIN.y, 0, g);
-    const skyC = document.createElement('canvas'); skyC.width = 4; skyC.height = 128;
+    const skyC = makeCanvas(4, 128);
     { const sg = skyC.getContext('2d'), gr = sg.createLinearGradient(0, 0, 0, 128);
       gr.addColorStop(0, '#f2c48f'); gr.addColorStop(0.55, '#e9a46b'); gr.addColorStop(1, '#8a7a55'); sg.fillStyle = gr; sg.fillRect(0, 0, 4, 128); }
-    ctx.skyTex = new THREE.CanvasTexture(skyC); ctx.skyTex.colorSpace = THREE.SRGBColorSpace;
+    ctx.skyTex = canvasTexture(skyC);
     onWall(WIN.wall, WIN.at, 0.9, -3.5, new THREE.Mesh(new THREE.PlaneGeometry(2 * W.half, 3.6), new THREE.MeshBasicMaterial({ map: ctx.skyTex })));
     const out = new THREE.Mesh(new THREE.PlaneGeometry(2 * W.half, 3.4), flat('#6b6a4a')); out.rotation.x = -Math.PI / 2;
     const og = new THREE.Group(); og.add(out); out.position.set(0, -0.12, 0); onWall(WIN.wall, WIN.at, 0, -1.9, og);
@@ -107,14 +107,14 @@ export function setupShell(ctx) {
     for (const sx of [-0.52, 0.52]) box(0.08, 2.2, 0.24, frameMat, sx, 1.1, -0.06, { parent: g });
     box(1.12, 0.1, 0.24, frameMat, 0, 2.2, -0.06, { parent: g });
     const knob = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), flat('#d8b27a', { metalness: 0.4, roughness: 0.4 })); knob.position.set(0.34, 1.0, -0.04); g.add(knob);
-    const sign = document.createElement('canvas'); sign.width = 256; sign.height = 96;
+    const sign = makeCanvas(256, 96);
     { const sgc = sign.getContext('2d'); sgc.fillStyle = C.paper; sgc.fillRect(0, 0, 256, 96); sgc.fillStyle = C.ink; sgc.font = '44px "Nanum Pen Script", cursive'; sgc.textAlign = 'center'; sgc.textBaseline = 'middle'; sgc.fillText('다른 방', 128, 50); }
-    const st = new THREE.CanvasTexture(sign); st.colorSpace = THREE.SRGBColorSpace;
+    const st = canvasTexture(sign);
     const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.16), new THREE.MeshStandardMaterial({ map: st })); plate.position.set(0, 1.62, -0.065); g.add(plate);
     onWall(DOOR.wall, DOOR.at, 0, 0, g);
     doorParts.push(panel, knob, plate);
     ctx.doorSpot = WALLS[DOOR.wall].point(DOOR.at, 0, 0.85);
   }
 
-  Object.assign(ctx, { sun, WIN, tA, DOOR, doorParts, stepMotes });
+  Object.assign(ctx, { sun, WIN, DOOR, doorParts, stepMotes });
 }

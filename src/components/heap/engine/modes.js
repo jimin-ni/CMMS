@@ -9,7 +9,7 @@ export function setupModes(ctx) {
     unperch,
   } = ctx;
 
-  ctx.mode = 'room'; ctx.camGoal = null; ctx.held = null; ctx.heldFlipped = false; ctx.loaded = null; ctx.hovered = null; ctx.presenting = null; ctx.dragging = null;
+  ctx.mode = 'room'; ctx.camGoal = null; ctx.held = null; ctx.heldFlipped = false; ctx.loaded = null; ctx.hovered = null; ctx.dragging = null;
   ctx.walkTo = null; ctx.arrive = null; ctx.waypoints = [];
   ctx.perch = null; ctx.seatTarget = null; // perch: the seat the visitor sits on in room mode · seatTarget: the seat being walked to
   ctx.seatFrom = null; ctx.perchFrom = null; // the stand point the walk to seatTarget ends at · the stand point the visitor came to the perch from (they get up there)

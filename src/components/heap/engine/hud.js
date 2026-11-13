@@ -17,7 +17,6 @@ export function setupHud(ctx) {
   renderMeta();
   // 다녀감: the day the creator last came by, "2026.11.12" (Asia/Seoul), or null. From heap_rooms.creator_visited_at.
   ctx.creatorDay = typeof DATA.creatorVisit === 'string' && /^\d{4}\.\d{1,2}\.\d{1,2}$/.test(DATA.creatorVisit) ? DATA.creatorVisit : null;
-  function creatorVisit() { return ctx.creatorDay; }
   function renderCreatorVisit() { if (ctx.creatorDay) { $('visit').textContent = `주인 다녀감 ${ctx.creatorDay.split('.').slice(1).join('.')}`; $('visit').hidden = false; } }
   renderCreatorVisit();
 
@@ -55,5 +54,5 @@ export function setupHud(ctx) {
   ctx.toastTimer = 0;
   function toast(t) { $('toast').textContent = t; ctx.toastTimer = 2.2; }
 
-  Object.assign(ctx, { setHint, syncUI, toast, creatorVisit, renderMeta, renderCreatorVisit });
+  Object.assign(ctx, { setHint, syncUI, toast, renderMeta, renderCreatorVisit });
 }

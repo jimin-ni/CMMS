@@ -17,6 +17,7 @@ export function setupPath(ctx) {
   // A seat is entered from one of its stand points, reached by a walk planned around every walk obstacle, and the visitor sits only on arriving there.
   // A seat whose centre lies inside the photo table, the guestbook stand or another item's own footprint is refused, so nobody ends up inside furniture.
   // perchOn / unperch: the seat's pose is held every frame by stepCharacter; any walking key, a click on the floor or Esc stands the visitor up at the stand point they came from.
+  // 걷기를 막는 상자: 탁자, 가구들, 방명록 받침대 순서 (충돌은 이 순서로 검사한다)
   const walkBoxes = () => [OBST[0], ...ctx.build.obst, ...OBST.slice(1)];
   const walkFree = (x, z, margin = 0.05) => x > -RX + 0.35 && x < RX - 0.3 && z > -RZ + 0.35 && z < RZ - 0.3 && !walkBoxes().some(o => Math.abs(x - o.x) < o.hw + margin && Math.abs(z - o.z) < o.hd + margin);
   const seatUsable = s => s.pos.x > -RX + 0.2 && s.pos.x < RX - 0.2 && s.pos.z > -RZ + 0.2 && s.pos.z < RZ - 0.2 &&
@@ -73,8 +74,7 @@ export function setupPath(ctx) {
   function collide(p) {
     p.x = THREE.MathUtils.clamp(p.x, -RX + 0.35, RX - 0.3);
     p.z = THREE.MathUtils.clamp(p.z, -RZ + 0.35, RZ - 0.3);
-    // the table, the items, then the guestbook stand: the order they were checked in when all of them shared OBST
-    for (const o of [OBST[0], ...ctx.build.obst, ...OBST.slice(1)]) {
+    for (const o of walkBoxes()) {
       const dx = p.x - o.x, dz = p.z - o.z;
       if (Math.abs(dx) < o.hw && Math.abs(dz) < o.hd) {
         const px = o.hw - Math.abs(dx), pz = o.hd - Math.abs(dz);

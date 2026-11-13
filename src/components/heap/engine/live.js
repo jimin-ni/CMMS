@@ -1,10 +1,10 @@
 // 다른 사람이 남긴 것: 방명록, 방문 수, 올라온 팬 작품. 주기적으로 읽어 온다.
-import { el } from './dom.js';
+import { el, bindOverlay } from './dom.js';
 import { fmtDay } from './format.js';
 
 export function setupLive(ctx) {
   const {
-    makeCard, TABLE, Xv, clampPlace, gauss, settle, startAnim, toast, DATA, $, creatorVisit, creator,
+    makeCard, TABLE, Xv, clampPlace, gauss, settle, startAnim, toast, DATA, $, creator,
     root, on, opts, ac, renderMeta, renderCreatorVisit, fanReels, fanReelOf, onDispose,
   } = ctx;
 
@@ -24,10 +24,10 @@ export function setupLive(ctx) {
   const gbSorted = () => [...gbRows.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt) || (a.id < b.id ? 1 : -1));
   function renderGuestbook() {
     const list = $('gb-list'); list.innerHTML = '';
-    if (creatorVisit()) { // 다녀감: the creator's own row comes first
+    if (ctx.creatorDay) { // 다녀감: the creator's own row comes first
       const row = el('div', 'gb-row owner');
       row.appendChild(el('span', null, creator.name));
-      row.appendChild(el('small', null, `주인 · ${creatorVisit()}`));
+      row.appendChild(el('small', null, `주인 · ${ctx.creatorDay}`));
       list.appendChild(row);
     }
     for (const e of gbSorted()) {
@@ -63,7 +63,7 @@ export function setupLive(ctx) {
       if (!ctx.disposed) $('gb-msg').textContent = '지금은 남기지 못했어요. 잠시 뒤에 다시 시도해 주세요.';
     } finally { gbBusy = false; if (!ctx.disposed) $('gb-submit').disabled = false; }
   });
-  on($('gb-close'), 'click', () => { $('guestbook').hidden = true; });
+  bindOverlay(ctx, 'guestbook', 'gb-close');
 
   // polling: what others changed (guestbook rows, visit counts, 다녀감, landed pieces) every opts.pollMs while the tab is visible.
   // The first cursor is the snapshot's serverTime; each reply carries the next. Overlapping rows are merged by id.

@@ -3,7 +3,9 @@ import * as THREE from 'three';
 import { disposeScene } from './util.js';
 
 export function setupModels(ctx) {
-  const { opts, dataBase, C, onDispose, getJSON, ac } = ctx;
+  const { opts, dataBase, C, onDispose, ac } = ctx;
+
+  const getJSON = async p => { const r = await fetch(p, { signal: ac.signal }); if (!r.ok) throw new Error(`${p}: ${r.status}`); return r.json(); };
 
   // ---------- models: { type: 'model', model: <catalogue id>, x, z, rot, y, tint } ----------
   // <modelBase>catalogue.json lists the GLB files (Kenney Furniture Kit, CC0). A model is fetched and parsed once per mount,

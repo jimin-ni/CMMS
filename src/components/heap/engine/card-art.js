@@ -1,15 +1,13 @@
 // 카드 그림: 앞면, 뒷면, 팬 작품.
 import * as THREE from 'three';
 import { mulberry32 } from './util.js';
-import { paper, drawFit, NO_PHOTO, wrap, crayon, ring } from './draw.js';
+import { paper, drawFit, NO_PHOTO, wrap, crayon, ring, makeCanvas } from './draw.js';
 import { ytShort } from './format.js';
 
 export function setupCardArt(ctx) {
   const { C, creator } = ctx;
 
-  // ====================================================================================
-  // 2. Card textures
-  // ====================================================================================
+  // 카드 그림: 쇼츠는 세로, 영상은 가로. 캔버스에 그리고 텍스처로 쓴다.
   const PX = 340, PXB = 220, S = 0.26;
   const DIMS = {
     tall: { CW: 1, B: 0.06, PW: 0.88, PH: 0.88 * 16 / 9, STRIP: 0.30 },
@@ -55,7 +53,7 @@ export function setupCardArt(ctx) {
   function drawBack(reel) {
     const d = reel.wide ? DIMS.wide : DIMS.tall, r = mulberry32(reel.seed + 7);
     const W = Math.round(d.CW * PXB), H = Math.round(d.CH * PXB);
-    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const c = makeCanvas(W, H);
     const g = c.getContext('2d');
     paper(g, W, H, r, reel.age * 0.6);
     const pad = W * 0.09, maxW = W - pad * 2;
@@ -83,7 +81,7 @@ export function setupCardArt(ctx) {
   function drawFanFront(p) {
     const d = DIMS.tall, r = mulberry32(p.seed);
     const W = Math.round(d.CW * PX), H = Math.round(d.CH * PX);
-    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const c = makeCanvas(W, H);
     const g = c.getContext('2d');
     paper(g, W, H, r, 0);
     const x0 = d.B * PX, y0 = d.B * PX, w = d.PW * PX, h = d.PH * PX, cx = x0 + w / 2, cy = y0 + h * 0.42, s = w * 0.36;
@@ -126,7 +124,7 @@ export function setupCardArt(ctx) {
   function drawFanBack(p) {
     const d = DIMS.tall, r = mulberry32(p.seed + 7);
     const W = Math.round(d.CW * PXB), H = Math.round(d.CH * PXB);
-    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const c = makeCanvas(W, H);
     const g = c.getContext('2d');
     paper(g, W, H, r, 0);
     const pad = W * 0.09; g.textBaseline = 'top';

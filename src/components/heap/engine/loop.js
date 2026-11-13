@@ -3,18 +3,17 @@ import * as THREE from 'three';
 
 export function setupLoop(ctx) {
   const {
-    Yv, camera, WALL_H, tA, RX, RZ, TABLE, SEAT, SCREEN_C, WALLS, SCR, canvas, renderer, scene, on,
+    Yv, camera, WALL_H, RX, RZ, TABLE, SEAT, SCREEN_C, WALLS, SCR, canvas, renderer, scene, on,
     onDispose, stepCharacter, controls, me, legL, legR, $, beamMat, projLight, screenOn, reelA, reelB,
     phoneDot, tickClock, stepMotes, cards, SLOT, inPile, supportAt, restPose, stepAnim,
   } = ctx;
 
-  // ====================================================================================
-  // 6. Modes: room · sit (sift, move cards) · watch (projector) · sort (album shelf)
-  // ====================================================================================
+  // 카메라 구도: 방(room), 앉기(sit), 영사기 보기(watch)
   const ROOM_CAM = { pos: new THREE.Vector3(9.4, 8.6, 9.4), target: new THREE.Vector3(0, 0.9, 0) };
   // A floor plan other than 8 x 8 moves the room camera along its own line of sight. needDist is how far back a plain frustum fit
   // has to sit to hold the floor corners and the wall tops. roomFit is this room's distance over the 8 x 8 room's, so that room is
   // framed exactly as before and any other room is framed as tightly as that one is.
+  const tA = new THREE.Vector3(); // needDist 의 임시 벡터
   const camDir = ROOM_CAM.pos.clone().sub(ROOM_CAM.target).normalize(), camRight = new THREE.Vector3().crossVectors(Yv, camDir).normalize(), camTop = new THREE.Vector3().crossVectors(camDir, camRight);
   function needDist(hx, hz, aspect) {
     const tv = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
@@ -30,12 +29,10 @@ export function setupLoop(ctx) {
   const SIT_CAM = { pos: tableCentre.clone().add(new THREE.Vector3(0, 2.0, 2.1)), target: tableCentre.clone() };
   const WATCH_CAM = { pos: SEAT.clone().add(new THREE.Vector3(0.7, 1.75, 2.1)), target: SCREEN_C.clone().addScaledVector(WALLS[SCR.wall].n, 1).add(new THREE.Vector3(0, -0.75, 0)) };
 
-  // ====================================================================================
-  // 8. Loop
-  // ====================================================================================
+  // 프레임 루프
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const clock = new THREE.Clock(), dir = new THREE.Vector3(), camUp = new THREE.Vector3(), want = new THREE.Vector3(), wantQ = new THREE.Quaternion();
-  const roomGoal = new THREE.Vector3(), flyQ = new THREE.Quaternion(), FLIP = new THREE.Quaternion().setFromAxisAngle(Yv, Math.PI);
+  const clock = new THREE.Clock(), dir = new THREE.Vector3(), want = new THREE.Vector3(), wantQ = new THREE.Quaternion();
+  const roomGoal = new THREE.Vector3(), FLIP = new THREE.Quaternion().setFromAxisAngle(Yv, Math.PI);
   // The canvas is sized by CSS: the whole room area, or what the 꾸미기 panel leaves of it. The observer catches both that and a window resize.
   function resize() {
     const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
@@ -77,23 +74,14 @@ export function setupLoop(ctx) {
     stepMotes(t);
     // cards
     const tn = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
-    camera.getWorldDirection(dir); camUp.setFromMatrixColumn(camera.matrixWorld, 1);
+    camera.getWorldDirection(dir);
     const animDt = reduced ? 1 : Math.min(rawDt, 0.1);
     for (const c of cards) {
       const d = c.userData.d;
-      if (c.userData.fly) {
-        want.copy(c.userData.fly); flyQ.setFromAxisAngle(Yv, ctx.shelf.group.rotation.y);
-        if (c.position.distanceTo(want) < 0.08) { c.userData.fly = null; c.position.copy(c.userData.home.pos); c.quaternion.copy(c.userData.home.quat); continue; }
-        c.position.lerp(want, Math.min(1, a * 1.6)); c.quaternion.slerp(flyQ, a);
-        continue;
-      }
       if (c === ctx.held) {
         const dist = Math.max(d.h / (1.5 * tn), d.w / (1.7 * tn * camera.aspect));
         want.copy(camera.position).addScaledVector(dir, dist); wantQ.copy(camera.quaternion);
         if (ctx.heldFlipped) wantQ.multiply(FLIP);
-      } else if (c === ctx.presenting) {
-        const dist = Math.max(d.h / (0.9 * tn), d.w / (1.0 * tn * camera.aspect));
-        want.copy(camera.position).addScaledVector(dir, dist).addScaledVector(camUp, -0.16 * dist * tn); wantQ.copy(camera.quaternion);
       } else if (c === ctx.loaded) {
         want.copy(SLOT.pos); want.y += d.h / 2; wantQ.copy(SLOT.quat);
       } else if (c === ctx.dragging) {

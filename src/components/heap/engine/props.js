@@ -1,17 +1,17 @@
 // 고정 소품: 탁자, 러그, 머그, 휴대폰, 방명록 받침대, 스크린과 영사기.
 import * as THREE from 'three';
-import { flat, drawFit } from './draw.js';
+import { flat, drawFit, makeCanvas, canvasTexture } from './draw.js';
 
 export function setupProps(ctx) {
   const { layout, C, scene, box, OBST, DOOR, onWall, WALLS } = ctx;
 
   // table, rug, cushion, mug, phone (positions relative to layout.table)
   const TABLE = { x: layout.table.x, z: layout.table.z, w: 2.6, d: 1.8, top: 0.56 };
-  const rugC = document.createElement('canvas'); rugC.width = 256; rugC.height = 192;
+  const rugC = makeCanvas(256, 192);
   { const g = rugC.getContext('2d'); g.fillStyle = C.paper; g.fillRect(0, 0, 256, 192);
     [[C.accent, 14, 16], [C.olive, 40, 6], [C.accent, 150, 10], [C.olive, 168, 4]].forEach(([c, y, h]) => { g.fillStyle = c; g.fillRect(0, y, 256, h); });
     for (let i = 0; i < 2000; i++) { g.fillStyle = `rgba(80,60,40,${Math.random() * 0.06})`; g.fillRect(Math.random() * 256, Math.random() * 192, 2, 1); } }
-  const rugTex = new THREE.CanvasTexture(rugC); rugTex.colorSpace = THREE.SRGBColorSpace;
+  const rugTex = canvasTexture(rugC);
   const rug = new THREE.Mesh(new THREE.PlaneGeometry(3.8, 2.9), new THREE.MeshStandardMaterial({ map: rugTex, roughness: 1 }));
   rug.rotation.x = -Math.PI / 2; rug.position.set(TABLE.x, 0.006, TABLE.z + 0.15); rug.receiveShadow = true; scene.add(rug);
   const tableTop = box(TABLE.w, 0.08, TABLE.d, flat(C.woodB), TABLE.x, TABLE.top - 0.04, TABLE.z);
@@ -51,8 +51,8 @@ export function setupProps(ctx) {
 
   // projector and screen
   const SCR = { wall: layout.screen.wall, at: layout.screen.at, y: 2.4, w: 1.6, h: 0.9 };
-  const projC = document.createElement('canvas'); projC.width = 640; projC.height = 360;
-  const projTex = new THREE.CanvasTexture(projC); projTex.colorSpace = THREE.SRGBColorSpace;
+  const projC = makeCanvas(640, 360);
+  const projTex = canvasTexture(projC);
   const screenIdle = flat(C.paper), screenOn = new THREE.MeshBasicMaterial({ map: projTex });
   const screenG = new THREE.Group();
   box(SCR.w + 0.14, SCR.h + 0.14, 0.05, flat(C.olive), 0, 0, 0.025, { cast: false, parent: screenG });

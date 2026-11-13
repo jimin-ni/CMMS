@@ -1,7 +1,7 @@
 // 앨범 책장: 앨범 표지, 앨범 보기, 책장 앞 위치.
 import * as THREE from 'three';
 import { thumbUrl } from './util.js';
-import { el, link } from './dom.js';
+import { el, link, bindOverlay } from './dom.js';
 import { ytUrl } from './format.js';
 
 export function setupShelf(ctx) {
@@ -33,7 +33,7 @@ export function setupShelf(ctx) {
     if (!ctx.shelf) return;
     for (const a of ctx.shelf.albums) {
       const n = [...filed.values()].filter(v => v.album === a.key).length;
-      a.mesh.scale.x = Math.min(0.32, 0.13 + n * 0.008); a.count = n;
+      a.mesh.scale.x = Math.min(0.32, 0.13 + n * 0.008);
       const g = a.lc.getContext('2d');
       g.fillStyle = C.paper; g.fillRect(0, 0, 96, 360);
       g.fillStyle = C.ink; g.textAlign = 'center'; g.textBaseline = 'middle';
@@ -68,7 +68,7 @@ export function setupShelf(ctx) {
     if (!items.length) list.appendChild(el('p', 'note', '아직 비어 있어요.'));
     $('grid').hidden = false;
   }
-  on($('grid-close'), 'click', () => { $('grid').hidden = true; });
+  bindOverlay(ctx, 'grid', 'grid-close');
 
   Object.assign(ctx, { linkShelf, updateAlbums, enterSort, exitSort, albumAction });
 }

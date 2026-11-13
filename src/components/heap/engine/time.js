@@ -2,16 +2,15 @@
 import * as THREE from 'three';
 
 export function setupTime(ctx) {
-  const { layout, scene, renderer, hemi, fill, sun, WIN, WALLS, tA, on, root } = ctx;
+  const { layout, scene, renderer, hemi, fill, sun, WIN, WALLS, on, root } = ctx;
+  const tA = new THREE.Vector3(); // 햇빛 끝점 계산용 임시 벡터
 
-  // ====================================================================================
-  // 4b. Time of day: the room's light follows the hour.
-  //   ?time=       on the page URL wins (demos, testing): a decimal hour 0-24 (?time=6.5), a name, or auto.
-  //   layout.time  in layout.json: "auto", a name, or a number (decimal hour). A missing field means "auto".
-  //   Names: night | dawn | morning | noon | golden | dusk.
-  //   auto = the current hour in Asia/Seoul wherever the viewer is, re-read about once a minute from frame().
-  //   The golden row holds the room's original fixed look: applyTime(17.5) sets exactly the values the scene is built with.
-  // ====================================================================================
+  // 시간대: 방의 빛이 시각을 따라간다.
+  //   ?time=       페이지 주소의 값이 먼저다 (시연, 시험): 0-24 의 소수 시각(?time=6.5), 이름, 또는 auto.
+  //   layout.time  layout.json 의 값: "auto", 이름, 또는 소수 시각. 없으면 "auto" 다.
+  //   이름: night | dawn | morning | noon | golden | dusk.
+  //   auto 는 보는 사람이 어디에 있든 한국 시간의 지금 시각이고, frame() 이 1분에 한 번쯤 다시 읽는다.
+  //   golden 줄이 방의 원래 고정된 모습이다: applyTime(17.5) 는 장면이 지어질 때의 값을 그대로 넣는다.
   const NIGHT = { sun: '#aebfe0', sunI: 0.35, drop: 3.2, sky: ['#2e3350', '#4a4358', '#2e2b24'], hemiSky: '#d6c0aa', hemiGround: '#453a30', hemiI: 0.52, fillI: 0.2, lampI: 4.4, shadeI: 1.3, shaft: '#b9c8e6', shaftO: 0.012, mote: '#d5def0', moteO: 0.06, exposure: 1.26, bg: 0.4 };
   // h: hour · sun, sunI, drop: sun colour, intensity, and how steeply it falls (higher = higher sun) · sky: backdrop gradient top, middle, bottom
   // hemi*, fillI: ambient · lampI, shadeI: lamp light and its shade's glow · shaft*, mote*: light shaft and dust · bg: scale on the backdrop colour

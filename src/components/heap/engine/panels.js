@@ -1,10 +1,10 @@
 // 겹쳐 뜨는 창: 휴대폰, PC, 기념품, 달력, 문 앞 방 목록. 기능 가구를 눌렀을 때 하는 일.
 import { thumbUrl } from './util.js';
-import { el, link, shortUrl } from './dom.js';
+import { el, link, shortUrl, bindOverlay } from './dom.js';
 import { ytUrl, ksDay, seoulDay } from './format.js';
 
 export function setupPanels(ctx) {
-  const { opts, creator, $, on, keepsakeLook, newestReel, cards, toast, sit, pickUp, feed, openMusic, ROOMS, roomId } = ctx;
+  const { opts, creator, $, keepsakeLook, newestReel, cards, toast, sit, pickUp, feed, openMusic, ROOMS, roomId } = ctx;
 
   const safeHref = u => (opts.isSafeLink(u) ? u : null); // the server checks layout links before saving; this is the same check on what the DOM gets
 
@@ -60,8 +60,7 @@ export function setupPanels(ctx) {
     if (!hasPc()) legacyLinks(feedEl);
     $('phone').hidden = false;
   }
-  on($('phone-close'), 'click', () => { $('phone').hidden = true; });
-  on($('phone'), 'click', e => { if (e.target.id === 'phone') $('phone').hidden = true; });
+  bindOverlay(ctx, 'phone', 'phone-close', { backdrop: true });
 
   // PC (a desk, monitor or laptop with fn.kind "pc"): the creator's links. fn.links is the owner's own list; without one the creator.json links stand in.
   function openPc(fn) {
@@ -70,8 +69,7 @@ export function setupPanels(ctx) {
     if (!list.children.length) list.appendChild(el('p', 'note', '아직 링크가 없어요.'));
     $('pc').hidden = false;
   }
-  on($('pc-close'), 'click', () => { $('pc').hidden = true; });
-  on($('pc'), 'click', e => { if (e.target.id === 'pc') $('pc').hidden = true; });
+  bindOverlay(ctx, 'pc', 'pc-close', { backdrop: true });
 
   // keepsake (a wall frame or a shelf-top standee): name, date, caption, and the link to the original
   function openKeepsake(fn) {
@@ -95,8 +93,7 @@ export function setupPanels(ctx) {
     }
     $('keepsake').hidden = false;
   }
-  on($('ks-close'), 'click', () => { $('keepsake').hidden = true; });
-  on($('keepsake'), 'click', e => { if (e.target.id === 'keepsake') $('keepsake').hidden = true; });
+  bindOverlay(ctx, 'keepsake', 'ks-close', { backdrop: true });
   // calendar (the desk calendar): the dates from today on, soonest first, each with how far off it is. Past dates are left out.
   function openCalendar(fn) {
     const body = $('cal-body'); body.replaceChildren();
@@ -112,8 +109,7 @@ export function setupPanels(ctx) {
     if (!up.length) body.appendChild(el('p', 'note', '예정된 날짜가 없어요.'));
     $('calendar').hidden = false;
   }
-  on($('cal-close'), 'click', () => { $('calendar').hidden = true; });
-  on($('calendar'), 'click', e => { if (e.target.id === 'calendar') $('calendar').hidden = true; });
+  bindOverlay(ctx, 'calendar', 'cal-close', { backdrop: true });
 
   // TV (fn "latest"): sit down at the table, pick up the newest reel and feed it to the projector, the same steps as doing it by hand.
   function watchLatest() {
@@ -150,7 +146,7 @@ export function setupPanels(ctx) {
     $('rooms').hidden = true; $('fade').classList.add('on');
     setTimeout(() => { if (!ctx.disposed) opts.onNavigate(id); }, 380);
   }
-  on($('rooms-close'), 'click', () => { $('rooms').hidden = true; });
+  bindOverlay(ctx, 'rooms', 'rooms-close');
 
   Object.assign(ctx, { showPhonePic, openRooms, openPhone, openSlot });
 }

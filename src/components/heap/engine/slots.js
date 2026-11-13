@@ -1,7 +1,7 @@
 // item.fn 기능이 달린 가구의 3D 쪽: 기념품, TV 화면, 달력.
 import * as THREE from 'three';
-import { mulberry32, thumbUrl } from './util.js';
-import { paper, wrap, drawFit, NO_PHOTO, flat, cropToShape } from './draw.js';
+import { mulberry32 } from './util.js';
+import { paper, wrap, drawFit, NO_PHOTO, flat, cropToShape, makeCanvas, canvasTexture } from './draw.js';
 import { ksDay, seoulDay } from './format.js';
 
 export function setupSlots(ctx) {
@@ -62,8 +62,8 @@ export function setupSlots(ctx) {
     const look = keepsakeLook(fn), k = look.tall ? KS.tall : KS.wide, W = k.cw, H = k.ch + k.strip;
     const pw = shape === 'frame' ? (look.tall ? 0.55 : 0.95) : (look.tall ? 0.2 : 0.32), ph = pw * H / W, rim = shape === 'frame' ? 0.045 : 0.03;
     const grp = new THREE.Group(), wood = flat(C.woodDark);
-    const canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H;
-    const tex = new THREE.CanvasTexture(canvas); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+    const canvas = makeCanvas(W, H);
+    const tex = canvasTexture(canvas, 4);
     const frame = box(pw + 2 * rim, ph + 2 * rim, 0.04, wood, 0, 0, 0.02, { cast: shape !== 'frame', parent: grp });
     const pic = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6 })); pic.position.z = 0.042; grp.add(pic);
     if (shape === 'frame') grp.position.set(x, y, z);
@@ -74,13 +74,22 @@ export function setupSlots(ctx) {
     g.add(grp);
     paintKeepsake(canvas, fn, look, null);
     if (!it.fn) return;
-    const slot = { it, fn, started: false, start() { // called once the fonts are ready (or at once after that)
-      if (slot.started || build !== ctx.build) return;
-      slot.started = true; paintKeepsake(canvas, fn, look, null); tex.needsUpdate = true;
+    registerSlot(build, { it, fn }, [frame, pic], () => {
+      paintKeepsake(canvas, fn, look, null); tex.needsUpdate = true;
       if (look.id) ksLoad(build, look, look.tall ? ['hqdefault'] : ['mqdefault'], img => { if (build === ctx.build) { paintKeepsake(canvas, fn, look, img); tex.needsUpdate = true; } });
-    } };
-    for (const m of [frame, pic]) { m.userData.slot = slot; build.slotMeshes.push(m); }
-    build.slots.push(slot);
+    });
+  }
+  // 기능이 달린 가구를 slot 으로 등록한다: 눌리는 메시를 묶고, 글꼴이 준비되면(이미 준비됐으면 바로) run 을 한 번 돌리는 start 를 단다.
+  // 그 사이 가구가 다시 지어졌다면(build 가 바뀌었다면) start 는 아무것도 하지 않는다.
+  function registerSlot(build, slot, meshes, run) {
+    for (const m of meshes) { m.userData.slot = slot; build.slotMeshes.push(m); }
+    if (!build.slots.includes(slot)) build.slots.push(slot);
+    slot.started = false;
+    slot.start = () => {
+      if (slot.started || build !== ctx.build) return;
+      slot.started = true;
+      run();
+    };
     if (ctx.slotsLive) slot.start();
   }
   // a keepsake's own picture: the video's thumbnail, cropped to its shape. A thumbnail that is missing leaves the placeholder.
@@ -90,16 +99,12 @@ export function setupSlots(ctx) {
   function ksLoad(build, look, files, done) {
     const key = `${look.id}:${look.tall ? 't' : 'w'}`;
     if (ksPics.has(key)) return done(ksPics.get(key));
-    const im = new Image(); im.crossOrigin = 'anonymous';
-    const end = ok => {
-      im.onload = im.onerror = null; ctx.inFlight.delete(im); build.loads.delete(im);
-      if (ctx.disposed) return;
-      if (!ok && files.length > 1) return ksLoad(build, look, files.slice(1), done);
-      try { if (ok) { const pic = cropToShape(im, { wide: !look.tall }); ksPics.set(key, pic); done(pic); } } catch (e) { console.error('[heap-room]', e); }
-    };
-    im.onload = () => end(im.naturalWidth > 120); // a missing thumbnail answers 404 with a 120px placeholder that still fires load
-    im.onerror = () => end(false);
-    ctx.inFlight.add(im); build.loads.add(im); im.src = thumbUrl({ id: look.id }, files[0]);
+    ctx.loadThumb(look.id, files, im => {
+      if (!im) return;
+      const pic = cropToShape(im, { wide: !look.tall });
+      ksPics.set(key, pic);
+      done(pic);
+    }, build.loads);
   }
   BUILD.frame = (g, it, build) => { keepsakeObject(g, it, build, 'frame', 0, it.y ?? 1.9, 0); return {}; };
 
@@ -125,19 +130,16 @@ export function setupSlots(ctx) {
     g.fillText(what.label, W * 0.04, H * 0.95);
   }
   function tvScreen(inst, build, slot, s) {
-    const canvas = document.createElement('canvas'); canvas.width = 320; canvas.height = 180;
-    const tex = new THREE.CanvasTexture(canvas); tex.colorSpace = THREE.SRGBColorSpace;
+    const canvas = makeCanvas(320, 180);
+    const tex = canvasTexture(canvas);
     const plane = new THREE.Mesh(new THREE.PlaneGeometry(s.w, s.h), new THREE.MeshBasicMaterial({ map: tex, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
-    plane.position.set(s.x, s.y, s.z); plane.userData.slot = slot; inst.add(plane); build.slotMeshes.push(plane);
+    plane.position.set(s.x, s.y, s.z); inst.add(plane);
     const what = tvContent(slot.fn);
     paintTv(canvas, null, what);
-    slot.started = false;
-    slot.start = () => { // once the fonts are ready (or at once after that)
-      if (slot.started || build !== ctx.build) return;
-      slot.started = true; paintTv(canvas, null, what); tex.needsUpdate = true;
+    registerSlot(build, slot, [plane], () => {
+      paintTv(canvas, null, what); tex.needsUpdate = true;
       if (what.id) ksLoad(build, { id: what.id, tall: what.tall }, what.tall ? ['hqdefault'] : ['mqdefault'], pic => { if (build === ctx.build) { paintTv(canvas, pic, what); tex.needsUpdate = true; } });
-    };
-    if (ctx.slotsLive) slot.start();
+    });
   }
 
   // Desk calendar (type "calendar", fn.kind "calendar"): a small stand with one paper page. The page shows the month of the next upcoming date
@@ -164,8 +166,8 @@ export function setupSlots(ctx) {
   }
   BUILD.calendar = (g, it, build) => {
     const fn = it.fn?.kind === 'calendar' ? it.fn : { kind: 'calendar', entries: [] }; // a calendar with no function yet is an empty one
-    const canvas = document.createElement('canvas'); canvas.width = 192; canvas.height = 192;
-    const tex = new THREE.CanvasTexture(canvas); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+    const canvas = makeCanvas(192, 192);
+    const tex = canvasTexture(canvas, 4);
     const wood = flat(C.woodDark), grp = new THREE.Group(), W = 0.4, H = 0.4;
     box(W + 0.06, 0.03, 0.16, wood, 0, 0.015, 0, { parent: grp });
     const lean = new THREE.Group(); lean.position.set(0, 0.03, -0.03); lean.rotation.x = -0.3; grp.add(lean);
@@ -174,10 +176,7 @@ export function setupSlots(ctx) {
     grp.position.y = it.y || 0; g.add(grp);
     paintCalendar(canvas, fn);
     if (it.fn?.kind !== 'calendar') return {};
-    const slot = { it, fn, started: false, start() { if (slot.started || build !== ctx.build) return; slot.started = true; paintCalendar(canvas, fn); tex.needsUpdate = true; } };
-    for (const m of [back, page]) { m.userData.slot = slot; build.slotMeshes.push(m); }
-    build.slots.push(slot);
-    if (ctx.slotsLive) slot.start();
+    registerSlot(build, { it, fn }, [back, page], () => { paintCalendar(canvas, fn); tex.needsUpdate = true; });
     return {};
   };
   function startSlots() { ctx.slotsLive = true; for (const s of ctx.build.slots) s.start?.(); }
