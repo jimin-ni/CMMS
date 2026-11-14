@@ -9,6 +9,16 @@
   /* 종이 결: 고운 fractalNoise 를 한 장 그려 깔아 둔다 (스크롤마다 필터를 다시 돌리지 않게) */
   --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.36 0 0 0 0 0.28 0 0 0 0 0.17 0 0 0 0.12 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
   --blotch: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='600' height='600'><filter id='b'><feTurbulence type='fractalNoise' baseFrequency='0.012' numOctaves='2' seed='4' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.55 0 0 0 0 0.42 0 0 0 0 0.25 0 0 0 0.07 0'/></filter><rect width='100%' height='100%' filter='url(%23b)'/></svg>");
+  /* 노트 크기: PC 화면 너비의 약 60%, 16:10 */
+  --W: min(60vw, calc((100dvh - 120px) * 1.6));
+  --H: calc(var(--W) / 1.6);
+  --T: calc(var(--W) * 0.12);
+  --bind: calc(var(--H) * 0.17);
+  --strip-h: calc(var(--bind) * 0.62);
+  --pivot: calc(var(--strip-h) * 0.5);
+  --ring-dx: calc(var(--W) * 0.029);
+  /* 덮은 앨범의 천 표지 색. 책장에 꽂힌 3D 앨범이 방 조명에서 보이는 색과 맞춘다 */
+  --cloth: #2b0b02;
   color: var(--ink);
   scrollbar-width: none;
 }
@@ -35,14 +45,6 @@
 }
 .ob-book,
 .ob-book-shadow {
-  /* PC 화면 너비의 약 60%, 16:10 */
-  --W: min(60vw, calc((100dvh - 120px) * 1.6));
-  --H: calc(var(--W) / 1.6);
-  --T: calc(var(--W) * 0.12);
-  --bind: calc(var(--H) * 0.17);
-  --strip-h: calc(var(--bind) * 0.62);
-  --pivot: calc(var(--strip-h) * 0.5);
-  --ring-dx: calc(var(--W) * 0.029);
   position: absolute;
   left: 50%;
   top: 50%;
@@ -193,24 +195,38 @@
   container-type: size;
   display: grid;
   place-items: center;
-  background-color: #9a5634;
-  background-image: var(--grain), repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.03) 0 2px, rgba(0, 0, 0, 0.03) 2px 4px);
-  box-shadow: inset 0 0 0 calc(var(--W) * 0.008) rgba(0, 0, 0, 0.12), inset 0 0 40px rgba(0, 0, 0, 0.35);
+  background-color: var(--cloth);
+  background-image:
+    var(--grain),
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.025) 0 2px, rgba(0, 0, 0, 0.04) 2px 4px),
+    radial-gradient(ellipse 90% 80% at 40% 30%, rgba(255, 200, 160, 0.08), rgba(0, 0, 0, 0.25));
+  box-shadow: inset 0 0 0 calc(var(--W) * 0.008) rgba(0, 0, 0, 0.25), inset 0 0 40px rgba(0, 0, 0, 0.45);
 }
 .ob-cover-back {
-  background-color: #2a2723;
+  background-color: #1e1712;
   background-image: var(--grain);
 }
-.ob-cover-label .oc-paper-body {
+/* 음각: 글자를 표지보다 어둡게 파고, 아래쪽 가장자리에 빛, 위쪽 가장자리에 그림자를 둔다 */
+.ob-engrave {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.2cqw;
-  padding: 3.4cqw 5cqw 2.6cqw;
+  gap: 2cqw;
+  padding: 4cqw 7cqw;
+  border-radius: 1.2cqw;
+  box-shadow:
+    inset 0 2px 3px rgba(0, 0, 0, 0.6),
+    0 1px 0 rgba(255, 210, 180, 0.12);
 }
-.ob-cover-title { font-size: 8cqw; line-height: 1; color: var(--ink); }
-.ob-cover-sub { font-size: 1.8cqw; color: var(--ink-soft); }
-.ob-cover-dot { position: absolute !important; right: 9%; top: 12%; transform: rotate(10deg); }
+.ob-engrave span {
+  color: rgba(10, 2, 0, 0.75);
+  text-shadow:
+    0 1px 0 rgba(255, 200, 170, 0.22),
+    0 -1px 1px rgba(0, 0, 0, 0.7);
+}
+.ob-cover-title { font-size: 9cqw; line-height: 1; letter-spacing: 0.06em; }
+.ob-cover-sub { font-size: 2.2cqw; letter-spacing: 0.04em; }
+.ob-cover-vol { font-size: 1.6cqw; letter-spacing: 0.3em; text-transform: uppercase; }
 
 /* ---------- 덮인 뒤의 두께 (표지가 덮이면서 나타난다) ---------- */
 .ob-face {
@@ -228,10 +244,10 @@
   align-items: center;
   justify-content: center;
   gap: calc(var(--T) * 0.3);
-  background-color: #8c4c2d;
-  background-image: var(--grain), linear-gradient(180deg, rgba(0, 0, 0, 0.25), rgba(255, 255, 255, 0.06) 45%, rgba(0, 0, 0, 0.3));
-  border-top: calc(var(--T) * 0.08) solid #2f2c24;
-  border-bottom: calc(var(--T) * 0.08) solid #2f2c24;
+  background-color: var(--cloth);
+  background-image: var(--grain), linear-gradient(180deg, rgba(0, 0, 0, 0.3), rgba(255, 220, 190, 0.07) 45%, rgba(0, 0, 0, 0.35));
+  border-top: calc(var(--T) * 0.08) solid #150500;
+  border-bottom: calc(var(--T) * 0.08) solid #150500;
   box-sizing: border-box;
   color: #fff8ec;
 }
@@ -269,7 +285,28 @@
   inset: 0;
   border-radius: 6px;
   transform: translateZ(calc(var(--T) / -2));
-  background-color: #2a2723;
+  background-color: var(--cloth);
+}
+
+/* 링에 꽂혀 바인더 아래로 늘어진 종이들: 장마다 조금씩 색과 길이가 달라 여러 장으로 보인다 */
+.ob-filler .ob-back { background-color: var(--filler, #efe5d2); }
+
+/* 스크롤 안내: 노트 오른쪽 바깥 여백. 스크롤을 시작하면 흐려진다 (concept-b.tsx) */
+.ob-scrollhint {
+  position: absolute;
+  top: 50%;
+  left: calc(50% + var(--W) / 2 + (50vw - var(--W) / 2) / 2);
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(250, 242, 228, 0.82);
+  pointer-events: none;
+  will-change: opacity;
 }
 
 /* ---------- 장 안의 콜라주 (cqw = 장 너비의 1%) ---------- */
@@ -404,20 +441,12 @@
   font-size: 1.3cqw;
   color: var(--clay);
 }
-.ob-turn {
-  display: flex;
-  align-items: center;
-  gap: 0.6cqw;
-  font-size: 1.1cqw;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-}
 
 /* 좁은 화면: 노트를 화면 너비에 맞춘다 */
 @media (max-width: 900px) {
-  .ob-book,
-  .ob-book-shadow { --W: calc(100vw - 24px); }
+  .ob-root { --W: calc(100vw - 24px); }
+  /* 오른쪽 여백이 없으니 노트 아래 가운데에 */
+  .ob-scrollhint { left: 50%; top: auto; bottom: 18px; flex-direction: row; transform: translateX(-50%); }
 }
 
 @media (prefers-reduced-motion: reduce) {

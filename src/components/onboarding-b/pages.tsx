@@ -3,7 +3,6 @@
 // 러브쑤 소개에 쓰는 사실은 public/heap/rooms/index.json(blurb)과 lovesoo/creator.json(채널, 앨범)에 있는 것만 쓴다.
 import type { CSSProperties, ReactNode } from "react";
 import { Paper } from "../onboarding-c/paper";
-import { PixelIcon } from "../onboarding-c/icons";
 import { DoodleArrow, DoodleCircle, DoodleHeart, DoodleRoom, DoodleSquiggle, DoodleStar, DoodleUnderline } from "./doodles";
 
 // 자리: top, left (%), 기울기(deg), 너비(%)
@@ -84,10 +83,6 @@ export function PageOne() {
       <Bit spot={{ t: 25, l: 33, r: -8 }} className="ob-hand ob-xs">her shorts</Bit>
       <Bit spot={{ t: 83, l: 33, r: -4 }}><span className="ob-ticket">@lovesoostrong</span></Bit>
       <Bit spot={{ t: 82, l: 55, r: 3 }}><span className="ob-ticket ob-ticket-2">러브쑤의 작은 하루</span></Bit>
-      <Bit spot={{ t: 79, l: 82 }} className="ob-turn">
-        <PixelIcon name="mouse" size={18} />
-        <span>scroll to flip</span>
-      </Bit>
     </>
   );
 }

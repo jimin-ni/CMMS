@@ -10,7 +10,8 @@ import "./onboarding-b.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { HeapRoom, type HeapRoomData } from "@/components/heap/heap-room";
 import { ONBOARDING_ROOM_ID, ramp } from "../onboarding-c/story";
-import { Paper, PaperFilters } from "../onboarding-c/paper";
+import { PaperFilters } from "../onboarding-c/paper";
+import { PixelIcon } from "../onboarding-c/icons";
 import { RoomTour } from "../onboarding-c/room-tour";
 import { PAGES } from "./pages";
 
@@ -36,6 +37,11 @@ const T = {
 const SCROLL_SCREENS = 11;
 const ENTER_MS = 900;
 const PERSPECTIVE = 2400;
+// 넘기기 전의 장이 바인더 아래로 늘어진 각도 (-180° 면 책과 같은 평면). 조금 덜 젖혀 두께가 보이게 한다
+const HANG = -172;
+// 바인더 아래에 늘어진, 넘기지 않는 종이 장 수 (배경)
+const FILLERS = 4;
+const FILLER_TONES = ["#efe5d2", "#ece1cc", "#e8dcc5", "#e4d7be"];
 
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 const easeOut = (t: number) => 1 - (1 - t) ** 3;
@@ -59,6 +65,8 @@ export function ConceptB({
   const shadowRef = useRef<HTMLDivElement>(null);
   const leafRefs = useRef<(HTMLDivElement | null)[]>([]);
   const coverRef = useRef<HTMLDivElement>(null);
+  const fillerRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const hintRef = useRef<HTMLDivElement>(null);
   const shadeRef = useRef<HTMLDivElement>(null);
   const readyRef = useRef<HTMLDivElement>(null);
   const phaseRef = useRef<Phase>("scroll");
@@ -95,27 +103,36 @@ export function ConceptB({
         }
       }
 
-      // 1. 장 넘기기: 아랫장이 링 축(아래 가장자리)을 중심으로 -180° 에서 0° 로 올라와 덮인다
+      const close = easeInOut(ramp(p, ...T.close));
+
+      // 1. 장 넘기기: 아직 넘기지 않은 장은 링에 꽂힌 채 바인더 아래로 늘어져 있다(HANG).
+      //    스크롤하면 링 줄(구멍 가운데)을 축으로 올라와 앞장 위에 덮인다.
+      //    늘어진 동안은 다음에 넘어올 장이 가장 앞, 넘어온 뒤에는 나중 장이 가장 위다.
       leafRefs.current.forEach((leaf, i) => {
         if (!leaf) return;
         const w = i === 0 ? null : T.flips[i - 1];
         const t = w ? easeInOut(ramp(p, w[0], w[1])) : 1;
-        const angle = -180 + 180 * t;
-        leaf.style.visibility = t > 0.001 ? "visible" : "hidden";
-        leaf.style.opacity = String(w ? Math.min(1, ramp(p, w[0], w[1]) * 6) : 1);
-        leaf.style.transform = `translateZ(${i * 0.8}px) rotateX(${angle}deg)`;
+        const rest = HANG - i * 2.5;
+        const angle = rest + (0 - rest) * t;
+        const z = t > 0.5 ? 2 + i * 0.8 : 1.2 - i * 0.3;
+        leaf.style.transform = `translateZ(${z}px) rotateX(${angle}deg)`;
         leaf.dataset.side = angle < -90 ? "back" : "front";
         leaf.style.setProperty("--shade", String(Math.abs(Math.sin((angle * Math.PI) / 180)) * 0.45));
       });
+      // 바인더 아래로 늘어진 나머지 종이들. 표지가 덮일 때 함께 접혀 들어간다
+      fillerRefs.current.forEach((sheet, i) => {
+        if (!sheet) return;
+        const rest = HANG - 6 - i * 3;
+        const angle = rest + (0 - rest) * easeInOut(ramp(close, 0, 0.85));
+        sheet.style.transform = `translateZ(${0.4 - i * 0.3}px) rotateX(${angle}deg)`;
+        sheet.style.setProperty("--shade", String(Math.abs(Math.sin((angle * Math.PI) / 180)) * 0.45));
+      });
 
-      // 2. 표지가 덮인다: 책 아래 가장자리를 축으로 올라와, 책 두께의 앞면(T/2)에 닿는다
-      const close = easeInOut(ramp(p, ...T.close));
+      // 2. 표지가 덮인다: 늘어진 종이들 맨 뒤에서 책 아래 가장자리를 축으로 올라와, 책 두께의 앞면(T/2)에 닿는다
       book.style.setProperty("--close", String(close));
       if (coverRef.current) {
-        const angle = -180 + 180 * close;
-        coverRef.current.style.visibility = close > 0.001 ? "visible" : "hidden";
-        coverRef.current.style.opacity = String(Math.min(1, ramp(p, ...T.close) * 6));
-        coverRef.current.style.transform = `translateZ(calc(var(--T) * ${close / 2} + 4px)) rotateX(${angle}deg)`;
+        const angle = HANG - 14 + (0 - (HANG - 14)) * close;
+        coverRef.current.style.transform = `translateZ(calc(var(--T) * ${close / 2} + ${close > 0.5 ? 4 : -3}px)) rotateX(${angle}deg)`;
         coverRef.current.dataset.side = angle < -90 ? "back" : "front";
       }
 
@@ -141,6 +158,9 @@ export function ConceptB({
       }
       book.style.transform = `translate3d(${tx}px, ${ty}px, 0) scale(${s}) rotateY(${ry}deg) rotateZ(${rz}deg)`;
       book.style.opacity = String(1 - ramp(p, ...T.fade));
+
+      // 스크롤 안내: 스크롤을 시작하면 흐려진다
+      if (hintRef.current) hintRef.current.style.opacity = String(1 - ramp(p, 0.003, 0.03));
 
       // 책상과 책 그림자: 표지가 덮이면서 걷힌다
       const deskT = ramp(p, ...T.desk);
@@ -218,6 +238,22 @@ export function ConceptB({
               <div className="ob-face ob-edge ob-edge-right" />
               <div className="ob-face ob-backboard" />
 
+              {/* 링에 꽂힌 채 바인더 아래로 늘어진 종이들 (처음부터 보이는 배경) */}
+              {Array.from({ length: FILLERS }, (_, i) => (
+                <div
+                  key={`filler-${i}`}
+                  ref={(el) => {
+                    fillerRefs.current[i] = el;
+                  }}
+                  className="ob-leaf ob-filler"
+                  data-side="back"
+                  style={{ "--filler": FILLER_TONES[i % FILLER_TONES.length] } as React.CSSProperties}
+                >
+                  <div className="ob-sheet ob-back" />
+                  <span className="ob-leaf-shade" />
+                </div>
+              ))}
+
               {/* 장: 링 줄(구멍 가운데)을 축으로 돈다 */}
               {PAGES.map((Page, i) => (
                 <div
@@ -276,17 +312,23 @@ export function ConceptB({
               {/* 하드보드 표지: 마지막에 아래에서 올라와 덮인다 */}
               <div ref={coverRef} className="ob-cover" data-side="back">
                 <div className="ob-cover-front">
-                  <Paper className="ob-cover-label ob-tone-cream" tape={["tl", "tr"]}>
+                  {/* 표지에 음각으로 새긴 글자 */}
+                  <div className="ob-engrave">
                     <span className="ob-pixel ob-cover-title">MEMORIES</span>
                     <span className="ob-rounded ob-cover-sub">made by Lovesoo, filled by you</span>
-                  </Paper>
-                  <Paper className="ob-dot ob-tone-blue ob-cover-dot">
-                    <span className="ob-dot-text">vol.<br />01</span>
-                  </Paper>
+                    <span className="ob-rounded ob-cover-vol">vol. 01</span>
+                  </div>
                 </div>
                 <div className="ob-cover-back" />
               </div>
             </div>
+          </div>
+
+          {/* 스크롤 안내: 노트 오른쪽 바깥 여백 */}
+          <div ref={hintRef} className="ob-scrollhint" aria-hidden={phase !== "scroll"}>
+            <PixelIcon name="mouse" size={26} />
+            <span>scroll to flip</span>
+            <PixelIcon name="chevronDown" size={16} className="oc-bob" />
           </div>
 
           <div ref={shadeRef} className="oc-layer oc-shade" style={{ opacity: 0 }} />
