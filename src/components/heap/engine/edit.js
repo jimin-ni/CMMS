@@ -7,10 +7,12 @@
 //                                     lift(dir: 1 | -1, 벽 가구의 높이. PageUp/PageDown 과 같다),
 //                                     name(value: 방 이름, 검사는 room-editor.tsx 와 서버가 한다), load(layout { items, palette, shell?, time? }, name?: 템플릿이나 저장 전 모습을 한 걸음으로 깐다),
 //                                     preview(value: 팔로워로 보기를 켜고 끈다), palhover(palette | null: 팔레트 카드 위에 올린 동안 방에 미리 칠한다. null 이면 되돌린다. 걸음이 아니다),
-//                                     backdrop(value: { mode: 'colour', top, bottom? } | null = 시간 따라). palette 는 brand(브랜드 색 목록 | null)를 함께 줄 수 있다
+//                                     backdrop(value: { mode: 'colour', top, bottom? } | null = 시간 따라). palette 는 brand(브랜드 색 목록 | null)를 함께 줄 수 있다,
+//                                     part(index, part, colour: '#RRGGBB' | null = 팔레트 색으로: 가구 하나의 한 부분을 칠한다, 색 묶음 C2),
+//                                     parthover(index, part, colour | null: 고르는 동안 미리 칠한다. null 이면 되돌린다. 걸음이 아니다)
 //            heap:saved { roomUuid, layout, name? } (editor-bridge.js 와 함께): 저장된 레이아웃과 이름이 새 기준이 된다. 다른 방의 것은 버린다
 //   보내는 것 heap:editstate { items, sel, moving, canUndo, canRedo, dirty, time, notice, palette, backdrop, brand, look, mount, placed, busy, view { plan, fitted },
-//                              shell, name, savedName, preview }  바뀔 때마다
+//                              shell, name, savedName, preview, partColours }  바뀔 때마다 (partColours: 고른 가구의 부분마다 지금 보이는 색, furniture.js)
 //            heap:remount { edit, items, time, palette, backdrop, brand, shell, name, savedName, hist, future, saved, original, baseLayout, plan }  방의 틀이 바뀔 때 (아래 remount)
 // 방의 틀(shell): 방 크기와 고정된 것(창문, 문, 스크린, 방명록, 포스터, 사진 탁자)의 자리. 템플릿을 깔면 바뀌고, 바뀌면 팔레트처럼 다시 마운트한다.
 // 방 이름도 되돌리기 기록에 든다: 이름 하나를 고치는 것이 한 걸음이고, 저장 안 된 변경으로 센다. 화면 왼쪽 위의 이름(hud.js 의 showName)도 바로 바뀐다.
@@ -386,6 +388,7 @@ export function setupEdit(ctx) {
       palette: ed.palette, backdrop: ed.backdrop, brand: ed.brand, look: ctx.look, mount: MOUNT, placed: ed.placed, busy: ed.busy,
       view: { plan: ctx.editCam.plan, fitted: ctx.editCam.fitted() },
       shell: structuredClone(ed.shell), name: ed.name, savedName: ctx.savedName, preview: ed.preview,
+      partColours: ed.sel != null && !ed.move ? ctx.partColours(ed.sel) : null,
     } }));
   }
   // 휠과 끌기는 자주 온다: 구도의 상태(평면도, 맞춘 구도인지)가 바뀔 때만 알린다
@@ -474,6 +477,33 @@ export function setupEdit(ctx) {
     endMove(); pushUndo(); ed.notice = null;
     ed.backdrop = next; ctx.setBackdrop(next);
   }
+  // ---------- 가구 하나만 따로 칠하기 (색 묶음 C2) ----------
+  // item.colors = { 부분: '#RRGGBB' }. 부분은 카탈로그의 parts (palette.js 의 PART_MATS). Kenney 모델만 갖는다: 손으로 만드는 가구는 칠하지 않는다.
+  // 칠한 색은 그 자리에서 재질만 바꾼다 (furniture.js 의 paintItem, 다시 짓지 않는다). 한 번 고른 것이 한 걸음이다.
+  // hex 가 null 이면 그 부분은 팔레트 색으로 돌아간다. 칠한 부분이 하나도 없으면 colors 를 지운다.
+  const partsOf = it => (it?.type === 'model' ? entryOf(it)?.parts ?? [] : []);
+  function setPart(i, part, hex) {
+    const it = ed.items[i];
+    if (!it || !partsOf(it).includes(part) || (hex !== null && !HEXC.test(hex))) return;
+    const want = hex && hex.toUpperCase();
+    if ((it.colors?.[part] ?? null) === want) { previewPart(i, null); return; }
+    endMove(); pushUndo(); ed.notice = null;
+    const colors = { ...(it.colors || {}) };
+    if (want) colors[part] = want; else delete colors[part];
+    const next = { ...it };
+    if (Object.keys(colors).length) next.colors = colors; else delete next.colors;
+    ed.items = ed.items.map((o, j) => (j === i ? next : o));
+    ctx.paintItem(i, next.colors ?? null);
+  }
+  // 색을 고르는 동안: 그 부분을 hex 로 미리 칠한다. 걸음도 저장 상태도 아니다. hex 가 null 이면 지금 값(ed.items)으로 돌아간다.
+  function previewPart(i, part, hex) {
+    const it = ed.items[i];
+    if (!it || ed.move) return;
+    if (hex == null) { ctx.paintItem(i, it.colors ?? null, true); return; }
+    if (!partsOf(it).includes(part) || !HEXC.test(hex)) return;
+    ctx.paintItem(i, { ...(it.colors || {}), [part]: hex }, true);
+  }
+
   function undo() { endMove(); if (!ed.hist.length) return; ed.future.push(snap()); restore(ed.hist.pop()); ed.notice = null; }
   function redo() { endMove(); if (!ed.future.length) return; ed.hist.push(snap()); restore(ed.future.pop()); ed.notice = null; }
 
@@ -788,6 +818,10 @@ export function setupEdit(ctx) {
     const next = { ...it, type: to.type };
     if (to.type === 'model') next.model = to.model; else delete next.model;
     if (next.type === it.type && next.model === it.model) return;
+    if (it.colors) { // 칠한 색은 새 모양도 가진 부분만 남는다 (앨범 책장처럼 손으로 만드는 가구는 칠하지 않는다)
+      const have = partsOf(next), kept = Object.fromEntries(Object.entries(it.colors).filter(([k]) => have.includes(k)));
+      if (Object.keys(kept).length) next.colors = kept; else delete next.colors;
+    }
     const kind = mountOf(it);
     if (kind !== mountOf(next)) return; // 벽·천장 가구는 같은 자리에 거는 것끼리만 바꾼다
     if (kind === 'wall' || kind === 'ceiling') { // 천장: 새 키로 다시 매단다 · 벽: 높이는 두고(범위 안으로) 새 깊이로 벽에 다시 붙인다
@@ -927,6 +961,7 @@ export function setupEdit(ctx) {
     if (!ed.on || !c || typeof c !== 'object') return;
     if (c.op === 'preview') { setPreview(!!c.value); emit(); return; }
     if (c.op === 'palhover') { if (!ed.preview) previewPalette(c.palette ?? null); return; } // 걸음도 상태 알림도 아니다
+    if (c.op === 'parthover') { if (!ed.preview && Number.isInteger(c.index)) previewPart(c.index, c.part, c.colour ?? null); return; }
     if (ed.preview) return; // 팔로워로 보는 동안에는 고치지 않는다
     if (c.op !== 'fn' && c.op !== 'lift') { ed.tag = null; flushFn(); }
     if (c.op === 'lift') flushFn();
@@ -947,6 +982,7 @@ export function setupEdit(ctx) {
       case 'palette': setPalette(c.palette ?? null, c.brand); break;
       case 'backdrop': setBackdrop(c.value ?? null); break;
       case 'swap': if (Number.isInteger(c.index)) swap(c.index, c.to); break;
+      case 'part': if (Number.isInteger(c.index) && typeof c.part === 'string') setPart(c.index, c.part, typeof c.colour === 'string' ? c.colour : null); break;
       case 'plan': setPlan(typeof c.value === 'boolean' ? c.value : !ctx.editCam.plan); break;
       case 'fit': fitView(); break;
       case 'lift': lift(c.dir === -1 ? -1 : 1); break;
