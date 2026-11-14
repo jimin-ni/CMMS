@@ -49,6 +49,10 @@
 <script type="module">
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 // 예시 데이터 (synthetic)
 const cards = [
@@ -64,18 +68,8 @@ const cards = [
   { name: '말랑콩떡', date: '2026-12-08', msg: '우리 가족 👨‍👩‍👧 다 같이 보고 있어요' },
   { name: '귤껍질', date: '2026-12-09', msg: '오늘 방송에서 웃다가 귤 떨어뜨림', reply: '귤 무사한가요 ㅋㅋ' },
   { name: null, date: '2026-12-10', msg: '이름은 비밀이지만 늘 응원하고 있어요.\n무리하지 마세요' },
-  { name: '종이비행기', date: '2026-12-11', msg: '내년에는 오프라인 팬미팅 꼭 해 주세요 ✈' },
-  { name: '솜사탕구름', date: '2026-12-12', msg: '세 번째...\n이제 그만 쓸게요\n(아마도)' },
-  { name: '고양이발', date: '2026-12-13', msg: '야옹' },
-  { name: '새벽세시', date: '2026-12-14', msg: '편집자님한테도 고맙다고 전해 주세요' },
-  { name: '라떼한잔', date: '2026-12-15', msg: '올해 최고의 영상은 단연 캠핑편!\n장작 소리만 한 시간 틀어 놔요', reply: '장작 ASMR 따로 올려 볼게요' },
   { name: '도토리묵', date: '2026-12-16', msg: '진지하게 써 볼게요.\n올해 이사하고 회사도 옮기느라 정신없었는데 퇴근하고 방송 켜 두면 그게 하루 중 제일 편한 시간이었어요. 정말 고마워요!!' },
-  { name: '파란우산', date: '2026-12-17', msg: '눈 오는 날 방송 기다릴게요 ☃' },
-  { name: null, date: '2026-12-18', msg: '메리크리스마스' },
-  { name: '말랑콩떡', date: '2026-12-19', msg: '트리 너무 예쁘다...\n쪽지 걸 자리 남아 있나요?' },
   { name: '고양이발', date: '2026-12-20', msg: '우리 집 고양이도\n방송 소리 나면\n화면 앞에 앉아요', reply: '고양이 시청자님 환영합니다 🐾' },
-  { name: '종이비행기', date: '2026-12-21', msg: '건강하세요!' },
-  { name: '라떼한잔', date: '2026-12-22', msg: '새해에도\n같은 자리에서 봐요' },
 ];
 
 const C = { olive: 0x565344, clay: 0xA6613C, paper: 0xf3e9d6 };
@@ -86,16 +80,16 @@ const canvas = document.getElementById('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.12;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.95;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x2b281f);
 const camera = new THREE.PerspectiveCamera(50, 1, 0.02, 30);
 
-// warm, even room light: app hemi + fill colours (scene.js), a soft warm key instead of the orange sun
-scene.add(new THREE.HemisphereLight(0xfff0dc, 0x8a7458, 1.15));
-const fill = new THREE.DirectionalLight(0xffe2bd, 0.6); fill.position.set(2.5, 2.2, 4); scene.add(fill);
-const sun = new THREE.DirectionalLight(0xffd6a8, 1.25);
-sun.position.set(-2.0, 3.4, 3.0); sun.castShadow = true;
+// a cosy sunset evening: dim warm sky light, a low orange sun from the side, a faint dusk-violet fill
+scene.add(new THREE.HemisphereLight(0xffb98a, 0x3a2a22, 0.55));
+const fill = new THREE.DirectionalLight(0x9a7fb0, 0.3); fill.position.set(2.5, 2.2, 4); scene.add(fill);
+const sun = new THREE.DirectionalLight(0xff8f4a, 1.4);
+sun.position.set(-3.5, 1.5, 2.0); sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.02;
 Object.assign(sun.shadow.camera, { left: -2.5, right: 2.5, top: 2.5, bottom: -2.5, near: 0.5, far: 10 });
 scene.add(sun);
@@ -108,6 +102,13 @@ const floorMat = new THREE.MeshStandardMaterial({ color: 0xa88462, roughness: 0.
 const room = new THREE.Mesh(new THREE.BoxGeometry(9, 3.2, 8), [wallMat, wallMat, ceilMat, floorMat, wallMat, wallMat]);
 room.position.set(0, 1.6, 2.4); room.receiveShadow = true; scene.add(room);
 const TREE_URL = 'assets/tree-decorated.glb';
+
+// glow: only what is brighter than the room (bulbs, the star) bleeds light; OutputPass tone-maps at the end
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.55, 0.6, 0.82);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
 
 // ---------- camera: one fixed first-person view, the front of the tree fills it ----------
 const CAM_DIST = 2.05;
@@ -490,7 +491,8 @@ function recentre(p) {
 // text textures exist only while a packet is open
 function setReading(mat, map) {
   if (mat.userData.own) mat.map.dispose();
-  mat.map = map; mat.emissiveMap = map; mat.emissive.set(0xffffff); mat.emissiveIntensity = 0.32; mat.needsUpdate = true; mat.userData.own = true;
+  // the evening light is dim and orange: the open sheet carries its own light so it reads as paper
+  mat.map = map; mat.emissiveMap = map; mat.emissive.set(0xffffff); mat.emissiveIntensity = 0.6; mat.needsUpdate = true; mat.userData.own = true;
 }
 function setResting(mat, map) {
   if (mat.userData.own) mat.map.dispose();
@@ -518,11 +520,11 @@ function eraseText(p) {
 const KENNEY_BAUBLE = [0.140, 0.140, 0.121];
 const KENNEY_BAUBLES = [[0.145, 0.657, 0.272], [0.193, 1.130, 0.108], [-0.277, 0.750, 0.017], [-0.107, 1.319, 0.078],
   [-0.274, 0.555, 0.155], [0.057, 0.994, 0.239], [0.157, 0.297, 0.381]].map(a => new THREE.Vector3(...a));
-const ORN = 0.11; // ~79% of a Kenney bauble
-const KINDS = ['bauble', 'bell', 'star', 'heart', 'gift', 'mitten', 'snowflake', 'candy'];
-const KIND_KO = { bauble: '방울', bell: '종', star: '별', heart: '하트', gift: '선물상자', mitten: '장갑', snowflake: '눈꽃', candy: '사탕' };
-const MAIN_SWATCHES = [['베리', '#b8394a'], ['솔잎', '#3f6b4a'], ['크림', '#efe4cf'], ['머스터드', '#d4a537'],
-  ['하늘', '#7fb3d9'], ['라일락', '#b39bd6'], ['클레이', '#a6613c'], ['올리브', '#565344']];
+const ORN = 0.088; // 80% of v1.2's 0.11, ~63% of a Kenney bauble
+const KINDS = ['bauble', 'gift', 'mitten'];
+const KIND_KO = { bauble: '방울', gift: '선물상자', mitten: '장갑' };
+// four colours that sit with the room (paper walls, wood floor, clay string) and read on the green tree
+const MAIN_SWATCHES = [['베리', '#b8394a'], ['크림', '#efe4cf'], ['머스터드', '#d4a537'], ['클레이', '#a6613c']];
 const ACCENTS = { gold: '#d9a441', silver: '#c9ccd1', cream: '#f3e9d6' };
 const ACCENT_KO = { gold: '금', silver: '은', cream: '크림' };
 
@@ -544,23 +546,6 @@ function pivotAt(parent, x, y, z) {
   return { pivot, inner };
 }
 const loopGeo = () => new THREE.TorusGeometry(0.0075, 0.0024, 4, 8);
-function starShape(ro, ri) {
-  const s = new THREE.Shape();
-  for (let k = 0; k < 10; k++) { const a = Math.PI / 2 + k * Math.PI / 5, r = k % 2 ? ri : ro; s[k ? 'lineTo' : 'moveTo'](Math.cos(a) * r, Math.sin(a) * r); }
-  return s;
-}
-function halfHeart(sign) {
-  const s = new THREE.Shape(), x = v => v * sign;
-  s.moveTo(0, -0.04);
-  s.bezierCurveTo(x(0.02), -0.022, x(0.05), -0.002, x(0.043), 0.022);
-  s.bezierCurveTo(x(0.037), 0.042, x(0.008), 0.043, 0, 0.026);
-  s.lineTo(0, -0.04);
-  return s;
-}
-const puffy = (shape, depth, bevel) => {
-  const g = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel * 0.8, bevelSegments: 1, curveSegments: 4 });
-  return g;
-};
 
 const BUILD = {
   bauble(g, m) {
@@ -570,36 +555,6 @@ const BUILD = {
     mesh(new THREE.CylinderGeometry(0.011, 0.013, 0.012, 8), m.accent, g, [0, R + 0.004, 0]);
     mesh(loopGeo(), m.accent, g, [0, R + 0.017, 0]);
     return f => { L.pivot.rotation.y = -1.25 * f; Rt.pivot.rotation.y = 1.25 * f; };
-  },
-  bell(g, m) {
-    const pts = [[0.001, 0.036], [0.012, 0.035], [0.019, 0.027], [0.022, 0.012], [0.026, -0.006], [0.033, -0.022], [0.041, -0.031], [0.041, -0.036]]
-      .map(([r, y]) => new THREE.Vector2(r, y));
-    const P = pivotAt(g, 0, 0.036, 0);
-    mesh(new THREE.LatheGeometry(pts, 8), m.main, P.inner);
-    mesh(new THREE.TorusGeometry(0.035, 0.0032, 4, 10), m.accent, P.inner, [0, -0.024, 0], [Math.PI / 2, 0, 0]);
-    mesh(new THREE.SphereGeometry(0.0095, 6, 4), m.accent, P.inner, [0, -0.034, 0]);
-    mesh(loopGeo(), m.accent, g, [0, 0.046, 0]);
-    // tips toward the viewer so its mouth faces out
-    return f => { P.pivot.rotation.x = -1.45 * f; };
-  },
-  star(g, m) {
-    const shape = starShape(0.05, 0.023), D = 0.005, B = 0.005;
-    const back = puffy(shape, D, B); back.translate(0, 0, -D - B);       // z in [-2B-D, 0]
-    const front = puffy(shape, D, B); front.translate(0, 0, B);          // z in [0, D+2B]
-    mesh(back, m.main, g);
-    const F = pivotAt(g, -0.048, 0.0155, 0);
-    mesh(front, m.main, F.inner);
-    mesh(new THREE.SphereGeometry(0.0075, 6, 4), m.accent, F.inner, [0, 0, D + 2 * B]);
-    mesh(loopGeo(), m.accent, g, [0, 0.057, 0]);
-    return f => { F.pivot.rotation.y = -1.9 * f; };
-  },
-  heart(g, m) {
-    const D = 0.012, B = 0.007, mk = sgn => { const h = puffy(halfHeart(sgn), D, B); h.translate(0, 0, -D / 2); return h; };
-    const L = pivotAt(g, 0, 0, -D / 2 - B), Rt = pivotAt(g, 0, 0, -D / 2 - B);
-    mesh(mk(-1), m.main, L.inner); mesh(mk(1), m.main, Rt.inner);
-    mesh(new THREE.SphereGeometry(0.006, 6, 4), m.accent, g, [0, 0.031, 0]);
-    mesh(loopGeo(), m.accent, g, [0, 0.042, 0]);
-    return f => { L.pivot.rotation.y = -1.15 * f; Rt.pivot.rotation.y = 1.15 * f; };
   },
   gift(g, m) {
     mesh(new THREE.BoxGeometry(0.058, 0.05, 0.058), m.main, g, [0, -0.015, 0]);
@@ -622,41 +577,6 @@ const BUILD = {
     const cuff = pivotAt(g, 0, -0.04, 0.012);
     const c = mesh(new THREE.CylinderGeometry(0.026, 0.027, 0.02, 8), m.accent, cuff.inner, [0.002, -0.03, 0], [0, 0, 0], [1, 1, 0.65]);
     return f => { body.pivot.rotation.x = -0.95 * f; cuff.pivot.rotation.x = 0.35 * f; c.scale.set(1 + 0.18 * f, 1, 0.65 + 0.25 * f); };
-  },
-  snowflake(g, m) {
-    const th = 0.008;
-    const layer = (parent, z, mat, centre) => {
-      const L = new THREE.Group(); L.position.z = z; parent.add(L);
-      mesh(new THREE.CylinderGeometry(0.014, 0.014, th, 6), centre, L, [0, 0, 0], [Math.PI / 2, 0, 0]);
-      for (let k = 0; k < 6; k++) {
-        const a = k * Math.PI / 3 + Math.PI / 2, d = new THREE.Vector2(Math.cos(a), Math.sin(a)), q = new THREE.Vector2(-d.y, d.x);
-        mesh(new THREE.BoxGeometry(0.011, 0.046, th), mat, L, [d.x * 0.024, d.y * 0.024, 0], [0, 0, a - Math.PI / 2]);
-        for (const s of [-1, 1]) mesh(new THREE.BoxGeometry(0.006, 0.016, th), mat, L,
-          [d.x * 0.031 + q.x * s * 0.006, d.y * 0.031 + q.y * s * 0.006, 0], [0, 0, a - Math.PI / 2 + s * 0.8]);
-      }
-      return L;
-    };
-    layer(g, -th / 2 - 0.0005, m.main, m.main);
-    const F = pivotAt(g, -0.046, 0, 0);
-    layer(F.inner, th / 2 + 0.0005, m.main, m.accent);
-    mesh(loopGeo(), m.accent, g, [0, 0.054, 0]);
-    return f => { F.pivot.rotation.y = -1.9 * f; };
-  },
-  candy(g, m) {
-    const half = sgn => {
-      const H = new THREE.Group(); g.add(H);
-      mesh(new THREE.SphereGeometry(0.024, 8, 6, sgn < 0 ? -Math.PI / 2 : Math.PI / 2, Math.PI), m.main, H, [0, 0, 0], [0, 0, 0], [1.35, 1, 1]);
-      mesh(new THREE.TorusGeometry(0.0222, 0.0026, 4, 10), m.accent, H, [sgn * 0.013, 0, 0], [0, Math.PI / 2, 0]);
-      mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.01, 6), m.accent, H, [sgn * 0.036, 0, 0], [0, 0, Math.PI / 2]);
-      mesh(new THREE.ConeGeometry(0.018, 0.026, 6), m.main, H, [sgn * 0.052, 0, 0], [0, 0, sgn * Math.PI / 2]);
-      return H;
-    };
-    const L = half(-1), Rt = half(1);
-    mesh(loopGeo(), m.accent, g, [0, 0.03, 0]);
-    return f => {
-      L.position.x = -0.032 * f; Rt.position.x = 0.032 * f;
-      L.rotation.z = 0.25 * f; Rt.rotation.z = -0.25 * f;
-    };
   },
 };
 
@@ -688,7 +608,7 @@ function buildOrnament(kind, colors) {
 const notes = [];
 const raycaster = new THREE.Raycaster();
 let rnd = 11; const rand = () => (rnd = (rnd * 16807) % 2147483647) / 2147483647;
-let tree = null, viewKind = 'mixed';
+let tree = null, lights = null, topStar = null, viewKind = 'mixed';
 const N_FLY = 0.35, N_OPEN_AT = 0.45, N_OPEN = 0.4, N_GAP = 0.05;
 
 function buildNote(data, kind, colors) {
@@ -744,21 +664,20 @@ function visibleFromEye(pt) {
   const v = pt.clone().project(camera);
   return Math.abs(v.x) < 0.9 && Math.abs(v.y) < 0.9;
 }
-// random spots over the front (±75°), all heights; spacing, Kenney baubles and visibility are tested on
-// the ornament's own centre (a hanging one sits below its anchor)
+// random spots over the front (±60°: further round, an ornament hangs on the silhouette and seems to float),
+// above the bottom rim; spacing and visibility are tested on the ornament's own centre (it hangs below its anchor)
 function placeNotes() {
   camera.updateMatrixWorld();
-  const ARC = THREE.MathUtils.degToRad(75), plans = [];
-  let minD = 0.135;
+  const ARC = THREE.MathUtils.degToRad(60), plans = [];
+  let minD = 0.2;
   for (let tries = 1; plans.length < cards.length && tries < 30000; tries++) {
     if (tries % 3000 === 0) minD *= 0.94;
-    const a = (rand() * 2 - 1) * ARC, h = 0.3 + rand() * 1.15;
+    const a = (rand() * 2 - 1) * ARC, h = 0.42 + rand() * 1.0;
     const hit = surfaceHit(a, h);
     if (!hit || hit.r < 0.12) continue;
     if (rand() > hit.r / 0.5) continue; // area weighting: wider parts of the tree get more notes
     const plan = planSpot({ a, h, ...hit });
     if (plans.some(q => q.centre.distanceTo(plan.centre) < minD)) continue;
-    if (KENNEY_BAUBLES.some(k => k.distanceTo(plan.centre) < KENNEY_BAUBLE[0] / 2 + ORN / 2 + 0.015)) continue;
     if (!visibleFromEye(plan.face)) continue; // the camera is fixed: every note must be reachable
     plans.push(plan);
   }
@@ -773,36 +692,56 @@ function placeNotes() {
     hangOnTree(n, plans[i]); notes.push(n);
   });
 }
+// Every ornament hangs on a short clay string from the branch just above it and rests on the slope of the
+// foliage: tilted back by the slope at its height, its back just clear of the needles.
+// Frame: the pivot sits on the anchor, z points out of the tree, y up.
 function planSpot(spot) {
-  const plan = { spot, hang: rand() < 0.6, L: 0.015 + rand() * 0.02, roll: (rand() - 0.5) * 0.3, pivotPos: new THREE.Vector3(), pivotQuat: new THREE.Quaternion() };
+  const plan = { spot, gap: 0.004 + rand() * 0.006, drift: (rand() - 0.5) * 0.01, yaw: (rand() - 0.5) * 0.6,
+    pivotPos: new THREE.Vector3(), pivotQuat: new THREE.Quaternion() };
   plan.pivotQuat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), spot.a);
-  if (plan.hang) {
-    // hangs from a short clay string, clear of the foliage under the anchor
-    plan.pivotPos.copy(spot.point).addScaledVector(spot.out, -0.004);
-    let rMax = spot.r;
-    for (let hh = spot.h - plan.L - ORN; hh <= spot.h - plan.L; hh += 0.008) { const s = surfaceHit(spot.a, hh); if (s) rMax = Math.max(rMax, s.r); }
-    plan.zOut = rMax - spot.r + ORN * 0.42;
-    plan.centreLocal = new THREE.Vector3(0, -plan.L - ORN / 2, plan.zOut);
-  } else {
-    // seated in the branches: the back third sits in the foliage
-    plan.pivotPos.copy(spot.point).addScaledVector(spot.n, ORN * 0.22);
-    plan.centreLocal = new THREE.Vector3();
+  plan.pivotPos.copy(spot.point).addScaledVector(spot.out, -0.004);
+  // how far the foliage reaches out at height y (relative to the anchor)
+  const reach = y => { const s = surfaceHit(spot.a, spot.h + y); return s ? s.r - spot.r : 0; };
+  plan.reach = reach;
+  // tilt = the slope of the foliage where the ornament rests (from the surface normal there)
+  const hc = surfaceHit(spot.a, spot.h - plan.gap - ORN / 2);
+  const nl = hc ? hc.n.clone().applyQuaternion(plan.pivotQuat.clone().invert()) : new THREE.Vector3(0, 0, 1);
+  // leaned back a good deal further than the slope itself: it reads as resting on the branches
+  plan.tilt = THREE.MathUtils.clamp(Math.atan2(nl.y, nl.z) * 1.5, 0.25, 1.15);
+  const up = new THREE.Vector3(0, Math.cos(plan.tilt), -Math.sin(plan.tilt));
+  const fwd = new THREE.Vector3(0, Math.sin(plan.tilt), Math.cos(plan.tilt));
+  // centre: the loop (half an ornament up the slope) hangs `gap` below the anchor; pushed out
+  // just far enough that the ornament's back clears the foliage along its whole height
+  const c = new THREE.Vector3(plan.drift, -plan.gap - up.y * ORN / 2, 0), back = ORN * 0.45;
+  c.z = -Infinity;
+  for (let s = -0.5; s <= 0.5; s += 0.125) {
+    const by = c.y + up.y * s * ORN - fwd.y * back;
+    c.z = Math.max(c.z, reach(by) + 0.003 - up.z * s * ORN + fwd.z * back);
   }
+  Object.assign(plan, { centreLocal: c, up, fwd });
   const toWorld = v => v.clone().applyQuaternion(plan.pivotQuat).add(plan.pivotPos);
-  plan.centre = toWorld(plan.centreLocal);
-  plan.face = toWorld(plan.centreLocal.clone().add(new THREE.Vector3(0, 0, ORN * 0.45)));
+  plan.centre = toWorld(c);
+  plan.face = toWorld(c.clone().addScaledVector(fwd, back));
   return plan;
 }
-// home pose from the plan and the ornament's own height (the string meets its loop)
+const STRING_MAT = new THREE.MeshStandardMaterial({ color: C.clay, roughness: 0.9 });
+// home pose from the plan; the string runs from the anchor to the ornament's loop (which depends on its kind)
 function seatOnPlan(n) {
-  const plan = n.plan, top = n.orn.top;
-  n.home = { p: plan.hang ? new THREE.Vector3(0, -plan.L - top, plan.zOut) : new THREE.Vector3(), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, plan.roll)) };
-  if (n.string) { n.pivot.remove(n.string); n.string.geometry.dispose(); n.string = null; }
-  if (plan.hang) {
-    n.string = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, -plan.L, plan.zOut)]),
-      new THREE.LineBasicMaterial({ color: C.clay }));
-    n.pivot.add(n.string);
+  const plan = n.plan, { centreLocal: c, up, fwd } = plan;
+  n.home = { p: c.clone(), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(-plan.tilt, plan.yaw, 0)) };
+  const loop = c.clone().addScaledVector(up, n.orn.top - 0.002);
+  // hook the string on the branch nearest above the loop, so it stays short
+  let anchor = new THREE.Vector3(), best = loop.length();
+  for (let y = loop.y + 0.008; y <= loop.y + 0.06; y += 0.004) {
+    const a = new THREE.Vector3(loop.x * 0.5, y, plan.reach(y) - 0.002), d = a.distanceTo(loop);
+    if (d < best) { best = d; anchor = a; }
   }
+  const mid = anchor.clone().lerp(loop, 0.5).addScaledVector(fwd, 0.002);
+  const pts = new THREE.CatmullRomCurve3([anchor, mid, loop]).getPoints(12);
+  for (const p of pts) if (p.y < -0.003) p.z = Math.max(p.z, plan.reach(p.y) + 0.002); // never through the foliage
+  if (n.string) { n.pivot.remove(n.string); n.string.geometry.dispose(); }
+  n.string = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 16, 0.0009, 4), STRING_MAT);
+  n.string.castShadow = true; n.string.visible = n !== opened; n.pivot.add(n.string);
   if (n !== opened) { n.root.position.copy(n.home.p); n.root.quaternion.copy(n.home.q); }
 }
 function hangOnTree(n, plan) {
@@ -881,6 +820,7 @@ const setGlow = (n, k) => { n.orn.mats.main.emissiveIntensity = n.orn.mats.accen
 function resize() {
   const cw = canvas.clientWidth, ch = canvas.clientHeight;
   renderer.setSize(cw, ch, false); camera.aspect = cw / ch; camera.updateProjectionMatrix();
+  composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(cw, ch);
   // retarget only while coming out or open, never on the way back
   if (opened && (!anim || anim.dir > 0)) { opened.flight.to = openTarget(); opened.shellDrop = shellDrop(); applyNote(opened, opened.t); }
 }
@@ -902,7 +842,10 @@ function frame() {
     if (anim.dir > 0 && t >= n.total) anim = null;
     else if (anim.dir < 0 && t <= 0) { anim = null; finishClose(n); }
   }
-  renderer.render(scene, camera);
+  lights?.update(clock.elapsedTime); topStar?.update(clock.elapsedTime);
+  // the glow eases off while a note is out, so the sheet stays crisp to read
+  bloom.strength += ((opened ? 0.1 : 0.55) - bloom.strength) * Math.min(1, dt * 6);
+  composer.render();
   requestAnimationFrame(frame);
 }
 
@@ -955,10 +898,11 @@ function buildScaleStrip() {
   const slot = i => new THREE.Vector3(x0 + i * step, y, -D).applyMatrix4(camera.matrixWorld);
   items.forEach((g, i) => { g.position.copy(slot(i)); g.quaternion.copy(camera.quaternion); scene.add(g); });
   // one real Kenney bauble: the tree's triangles that lie wholly inside that bauble's measured box
+  // (taken from the untrimmed source geometry: the tree itself no longer carries its baubles)
   const src = (() => { let m; tree.traverse(o => { if (o.isMesh && !m) m = o; }); return m; })();
   const bc = KENNEY_BAUBLES[0], half = new THREE.Vector3(...KENNEY_BAUBLE).multiplyScalar(0.5).addScalar(0.002);
   const bbox = new THREE.Box3(bc.clone().sub(half), bc.clone().add(half));
-  const geo = src.geometry.index ? src.geometry.toNonIndexed() : src.geometry.clone();
+  const geo = treeSourceGeo.index ? treeSourceGeo.toNonIndexed() : treeSourceGeo.clone();
   const pos = geo.attributes.position, keep = [], v = new THREE.Vector3();
   for (let t = 0; t < pos.count; t += 3) {
     let inside = true;
@@ -977,6 +921,214 @@ function buildScaleStrip() {
   scene.add(kb);
 }
 
+// ---------- tree trim ----------
+// The Kenney tree is one mesh. Split it into its loose parts (vertices welded by position), then
+// drop the baked baubles and the star on top. The three garland bands (bottom, middle, top) are one set;
+// they are rebuilt as three sets of bead strings, each set in one colour. Every string follows its band's
+// centre line (corners cut back 10% along each edge and smoothed), turned about the trunk in 45° steps (so it
+// still fits its octagonal tier), and every bead is pulled in snug against the foliage.
+// Beads are flat-shaded icosahedra; each string has its own bead size, and beads vary a little within it.
+// Returns the untouched source geometry (the scale strip needs it).
+const GARLAND_ROUND = 0.1, BEAD_PITCH = 2.2;
+// bead radius per string, tree units (x0.79 in metres): [set][bottom, middle, top], 5-7.5 mm across
+const BEAD_R = [[0.0085, 0.0072, 0.0064], [0.0078, 0.0092, 0.007], [0.0095, 0.008, 0.0068]];
+// turns = [bottom, middle, top], in 45° steps. Each band keeps its low side toward the viewer (with the
+// high side in front, the camera looks along the band's plane and it reads as a flat bar), and on each tier
+// the three sets dip on different sides.
+const GARLAND_SETS = [
+  { color: '#f3e9d6', metal: 0, turns: [0, 7, 1] },            // beige: dips left, front-right, front-left
+  { color: '#d9a441', metal: 0.25, turns: [2, 4, 4] },         // yellow: front, left, right
+  { color: '#8e3a2e', metal: 0, turns: [4, 5, 3] },            // brown-red: right, front-left, front-right
+];
+// fewer beads per string than a full string, per set (beige, yellow, brown-red): the gaps open up evenly
+const BEAD_CUT = [0.05, 0.07, 0.1];
+function trimTree(root) {
+  let mesh = null; root.traverse(o => { if (o.isMesh && !mesh) mesh = o; });
+  const src = mesh.geometry, geo = src.clone();
+  const pos = geo.attributes.position, idx = geo.index.array, N = pos.count;
+  const par = Int32Array.from({ length: N }, (_, i) => i);
+  const find = x => { while (par[x] !== x) x = par[x] = par[par[x]]; return x; };
+  const join = (a, b) => { a = find(a); b = find(b); if (a !== b) par[a] = b; };
+  const keyOf = i => `${pos.getX(i).toFixed(5)},${pos.getY(i).toFixed(5)},${pos.getZ(i).toFixed(5)}`;
+  const seen = new Map();
+  for (let i = 0; i < N; i++) { const k = keyOf(i); if (seen.has(k)) join(i, seen.get(k)); else seen.set(k, i); }
+  for (let t = 0; t < idx.length; t += 3) { join(idx[t], idx[t + 1]); join(idx[t], idx[t + 2]); }
+  const parts = new Map();
+  for (let i = 0; i < N; i++) {
+    const r = find(i);
+    if (!parts.has(r)) parts.set(r, { verts: [], box: new THREE.Box3() });
+    const p = parts.get(r); p.verts.push(i); p.box.expandByPoint(new THREE.Vector3().fromBufferAttribute(pos, i));
+  }
+  const H = new THREE.Box3().setFromBufferAttribute(pos).max.y, drop = new Set(), bands = [];
+  for (const [r, part] of parts) {
+    const s = part.box.getSize(new THREE.Vector3()), wide = Math.max(s.x, s.z);
+    if (part.box.min.y > H * 0.8 || Math.max(s.x, s.y, s.z) < 0.2) drop.add(r);     // star (+ its stand), baubles
+    else if (s.y < 0.35 && wide > 0.5) { drop.add(r); bands.push({ r, ...part }); } // garland band: rebuilt below
+  }
+  const trisOf = keepIt => { const out = []; for (let t = 0; t < idx.length; t += 3) if (keepIt(find(idx[t]))) out.push(idx[t], idx[t + 1], idx[t + 2]); return out; };
+  const kept = trisOf(r => !drop.has(r));
+  geo.setIndex(kept);
+  geo.computeBoundingBox(); geo.computeBoundingSphere();
+  mesh.geometry = geo;
+  // the bounding box still counts the dropped star's vertices, so the tip is measured from kept triangles
+  let tipY = -Infinity; for (const i of kept) tipY = Math.max(tipY, pos.getY(i));
+  mesh.userData.tip = new THREE.Vector3(0, tipY, 0);
+  bands.sort((a, b) => a.box.min.y - b.box.min.y);
+  const beadGeo = new THREE.IcosahedronGeometry(1, 0), Y = new THREE.Vector3(0, 1, 0);
+  // the trimmed foliage in tree units, to find the surface each bead rests on
+  const leaves = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })), ray = new THREE.Raycaster();
+  const snug = (p, r, lift) => {
+    const out = new THREE.Vector3(p.x, 0, p.z).normalize();
+    ray.set(out.clone().multiplyScalar(2).setY(p.y), out.clone().negate());
+    const hit = ray.intersectObject(leaves)[0];
+    return hit ? out.multiplyScalar(2 - hit.distance + r * 0.6 + lift).setY(p.y) : p;
+  };
+  GARLAND_SETS.forEach((set, si) => {
+    const mat = new THREE.MeshStandardMaterial({ color: set.color, roughness: 0.55, metalness: set.metal, flatShading: true });
+    const beads = [];
+    bands.forEach((band, k) => {
+      const R = BEAD_R[si][k % 3];
+      const turn = new THREE.Quaternion().setFromAxisAngle(Y, set.turns[k % 3] * Math.PI / 4);
+      const path = new THREE.CatmullRomCurve3(bandPath(pos, band.verts, GARLAND_ROUND).map(p => p.applyQuaternion(turn)), true);
+      const n = Math.round(path.getLength() / (R * BEAD_PITCH) * (1 - BEAD_CUT[si]));
+      // each set rests a hair further out, so crossing strings sit on one another instead of merging;
+      // every bead turned at random (the facets catch the light differently) and a little bigger or smaller
+      for (const p of path.getSpacedPoints(n).slice(0, n)) {
+        const r = R * (0.85 + rand() * 0.3);
+        beads.push(new THREE.Matrix4().compose(snug(p, r, si * 0.003),
+          new THREE.Quaternion().setFromEuler(new THREE.Euler(rand() * 6.3, rand() * 6.3, 0)), new THREE.Vector3(r, r, r)));
+      }
+    });
+    const m = new THREE.InstancedMesh(beadGeo, mat, beads.length);
+    beads.forEach((b, i) => m.setMatrixAt(i, b)); m.computeBoundingSphere();
+    m.position.copy(mesh.position); m.quaternion.copy(mesh.quaternion); m.scale.copy(mesh.scale);
+    m.castShadow = m.receiveShadow = true; mesh.parent.add(m);
+  });
+  return src;
+}
+// A band is a ribbon: at each corner a pair of vertices across its width (lower and upper edge).
+// Its centre line runs through the pairs' midpoints in angle order; each corner is replaced by two
+// points `round` of the way along its two edges.
+function bandPath(pos, verts, round) {
+  const uniq = [];
+  for (const i of verts) { const v = new THREE.Vector3().fromBufferAttribute(pos, i); if (!uniq.some(u => u.distanceTo(v) < 1e-5)) uniq.push(v); }
+  const used = new Set(), corners = [];
+  for (const v of uniq) {
+    if (used.has(v)) continue;
+    let best = null, bd = Infinity;
+    for (const u of uniq) if (u !== v && !used.has(u)) { const d = v.distanceTo(u); if (d < bd) { bd = d; best = u; } }
+    used.add(v); used.add(best);
+    const mid = v.clone().add(best).multiplyScalar(0.5);
+    corners.push({ a: Math.atan2(mid.z, mid.x), mid });
+  }
+  corners.sort((p, q) => p.a - q.a);
+  const n = corners.length, out = [];
+  for (let i = 0; i < n; i++) {
+    const c = corners[i].mid, prev = corners[(i + n - 1) % n].mid, next = corners[(i + 1) % n].mid;
+    out.push(c.clone().lerp(prev, round), c.clone().lerp(next, round));
+  }
+  return out;
+}
+
+// ---------- star on top: a low-poly puffy five-point star that shines by itself ----------
+// Steady, never blinking: a warm glow round it, soft sun rays that turn slowly, and a little warm light on
+// the treetop. Only the rays move.
+function sunRaysTexture() {
+  const S = 256, cv = document.createElement('canvas'); cv.width = cv.height = S;
+  const g = cv.getContext('2d'), c = S / 2;
+  g.translate(c, c);
+  for (let k = 0; k < 12; k++) {
+    const len = c * (k % 2 ? 0.62 : 0.95), half = k % 2 ? 0.07 : 0.1;
+    const gr = g.createRadialGradient(0, 0, 0, 0, 0, len);
+    gr.addColorStop(0, 'rgba(255,255,255,.9)'); gr.addColorStop(0.4, 'rgba(255,255,255,.3)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.beginPath(); g.moveTo(0, 0);
+    g.lineTo(Math.cos(-half) * len, Math.sin(-half) * len); g.lineTo(Math.cos(half) * len, Math.sin(half) * len);
+    g.closePath(); g.fill(); g.rotate(Math.PI / 6);
+  }
+  return new THREE.CanvasTexture(cv);
+}
+function buildTopStar(topY) {
+  const s = new THREE.Shape(), ro = 0.06, ri = 0.027;
+  for (let k = 0; k < 10; k++) { const a = Math.PI / 2 + k * Math.PI / 5, r = k % 2 ? ri : ro; s[k ? 'lineTo' : 'moveTo'](Math.cos(a) * r, Math.sin(a) * r); }
+  const geo = new THREE.ExtrudeGeometry(s, { depth: 0.012, bevelEnabled: true, bevelThickness: 0.009, bevelSize: 0.006, bevelSegments: 1, curveSegments: 1 });
+  geo.center();
+  const star = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0xf0c055, roughness: 0.55, flatShading: true, emissive: 0xffc04a, emissiveIntensity: 1.25 }));
+  star.position.set(0, topY + ro * 0.85, 0);
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.009, 0.03, 6), new THREE.MeshStandardMaterial({ color: 0x8a6a2e, roughness: 0.6, flatShading: true }));
+  stem.position.set(0, topY + 0.008, 0);
+  const sprite = (map, size, opacity) => {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map, color: 0xffcf7a, opacity, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
+    s.scale.setScalar(size); s.position.copy(star.position).add(new THREE.Vector3(0, 0, -0.02)); return s;
+  };
+  const glow = sprite(haloTexture(), 0.36, 0.55), rays = sprite(sunRaysTexture(), 0.42, 0.4);
+  const warm = new THREE.PointLight(0xffc070, 0.35, 0.9, 1.5); warm.position.copy(star.position).add(new THREE.Vector3(0, 0, 0.08));
+  scene.add(glow, rays, star, stem, warm);
+  return { update(t) { rays.material.rotation = t * 0.12; } };
+}
+
+// ---------- fairy lights ----------
+// Strings of lights round the tree in the low-poly style: a brown wire draped in shallow scallops just
+// outside the foliage, with small blunt bulbs that fade on and off, each at its own pace.
+// Warm white strings at the bottom, middle and top, golden strings between them; every string tilted its own
+// way (tilt = degrees off level, dir = the side where it is highest).
+const LIGHT_STRINGS = [
+  { h: 0.55, tilt: 6, dir: 1.9, color: 0xEAE5D9 }, { h: 0.9, tilt: 9, dir: 4.4, color: 0xEAE5D9 }, { h: 1.22, tilt: 7.5, dir: 0.3, color: 0xEAE5D9 },
+  { h: 0.7, tilt: 10, dir: 3.6, color: 0xCDAB3D }, { h: 1.06, tilt: 12, dir: 0.8, color: 0xCDAB3D }, { h: 1.34, tilt: 17, dir: 2.2, color: 0xCDAB3D },
+];
+const LIGHT_GAP = 0.075, LIGHT_SAG = 0.014, LIGHT_HOOKS = 8, LIGHT_HALO = 0.085;
+// soft round glow: a bright core that falls off fast, then a long, nearly clear fringe
+function haloTexture() {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+  const g = cv.getContext('2d'), gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.12, 'rgba(255,255,255,.55)');
+  gr.addColorStop(0.35, 'rgba(255,255,255,.14)'); gr.addColorStop(0.7, 'rgba(255,255,255,.03)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(cv);
+}
+function buildFairyLights() {
+  const group = new THREE.Group(), bulbs = [];
+  const wireMat = new THREE.MeshStandardMaterial({ color: 0x6b4428, roughness: 0.9, flatShading: true });
+  const bulbGeo = new THREE.IcosahedronGeometry(0.0075, 0); bulbGeo.scale(1, 1.3, 1);
+  const halo = haloTexture();
+  for (const { h, tilt, dir, color } of LIGHT_STRINGS) {
+    const glass = new THREE.Color(color).multiplyScalar(0.75);
+    // a plane tilted `tilt` degrees: it rises and falls by the tree's radius at this height times tan(tilt)
+    const rise = (surfaceHit(0, h)?.r ?? 0.3) * Math.tan(THREE.MathUtils.degToRad(tilt));
+    // wire: hooked onto the branches LIGHT_HOOKS times round, sagging a little between hooks
+    const S = 96, pts = [];
+    for (let i = 0; i < S; i++) {
+      const a = i / S * Math.PI * 2;
+      const y = h + rise * Math.cos(a - dir) - LIGHT_SAG * Math.sin(Math.PI * ((i / S * LIGHT_HOOKS) % 1));
+      const hit = surfaceHit(a, y);
+      if (hit) pts.push(hit.out.clone().multiplyScalar(hit.r + 0.007).setY(y));
+    }
+    const curve = new THREE.CatmullRomCurve3(pts, true);
+    const wire = new THREE.Mesh(new THREE.TubeGeometry(curve, 160, 0.0012, 4, true), wireMat);
+    wire.castShadow = true; group.add(wire);
+    // bulbs: evenly spaced, hanging just under the wire
+    const n = Math.round(curve.getLength() / LIGHT_GAP);
+    curve.getSpacedPoints(n).slice(0, n).forEach(p => {
+      const mat = new THREE.MeshStandardMaterial({ color: glass, roughness: 0.5, flatShading: true, emissive: color });
+      const b = new THREE.Mesh(bulbGeo, mat); b.position.copy(p).add(new THREE.Vector3(0, -0.007, 0));
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: halo, color, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
+      glow.scale.setScalar(LIGHT_HALO); glow.position.copy(b.position);
+      group.add(b, glow);
+      bulbs.push({ mat, glow, period: 2.4 + rand() * 1.6, phase: rand() });
+    });
+  }
+  scene.add(group);
+  return {
+    // smooth fade: off (dim glass) -> on (glowing) -> off, never a hard blink
+    update(t) {
+      for (const b of bulbs) {
+        const f = 0.5 - 0.5 * Math.cos(2 * Math.PI * (t / b.period + b.phase));
+        b.mat.emissiveIntensity = 0.08 + 1.5 * f;
+        b.glow.material.opacity = 0.85 * f;
+      }
+    },
+  };
+}
+
 // ---------- boot ----------
 resize();
 // load every hand for exactly the characters it will draw (Korean webfonts come in unicode-range subsets)
@@ -991,7 +1143,10 @@ tree = gltf.scene;
 const box = new THREE.Box3().setFromObject(tree);
 tree.scale.setScalar(TREE_H / (box.max.y - box.min.y));
 tree.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+const treeSourceGeo = trimTree(tree);
 scene.add(tree); tree.updateMatrixWorld(true);
+{ let m; tree.traverse(o => { if (o.userData.tip) m = o; }); topStar = buildTopStar(m.localToWorld(m.userData.tip.clone()).y); }
+lights = buildFairyLights();
 placeNotes();
 buildPanel();
 if (new URLSearchParams(location.search).get('scale') === '1') buildScaleStrip();
