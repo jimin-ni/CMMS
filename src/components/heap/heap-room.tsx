@@ -36,7 +36,17 @@ export type HeapRoomData = {
   // changed: 로그인한 사람이 마지막으로 다녀간 뒤 바뀐 방이면 true (문에 붙은 방 목록에 점이 찍힌다). 로그인하지 않았으면 모두 false.
   rooms: { id: string; name: string; blurb: string; changed: boolean }[];
   layout: Record<string, unknown>;
-  reels: { id: string; title: string; channel: string | null; wide: boolean; views: string; published: string | null }[];
+  // platform: heap_reels.platform (유튜브는 썸네일 카드, 인스타그램·틱톡은 제목 카드) · url: 정규 원본 주소
+  reels: {
+    id: string;
+    platform: string;
+    url: string;
+    title: string;
+    channel: string | null;
+    wide: boolean;
+    views: string;
+    published: string | null;
+  }[];
   pieces: { id: string; by: string; date: string; caption: string }[];
   guestbook: { id: string; name: string; createdAt: string }[];
   visits: { today: number; total: number };
@@ -341,7 +351,7 @@ export function HeapRoom({
         </div>
         <div id="player-frame" />
         <p id="player-note" hidden>
-          이 미리보기 화면에는 YouTube 플레이어를 넣을 수 없어요. 아래의 &apos;YouTube에서 보기&apos;로 원본을 열어 주세요.
+          이 미리보기 화면에는 공식 플레이어를 넣을 수 없어요. 아래의 원본 보기 단추로 열어 주세요.
         </p>
       </div>
 

@@ -1,4 +1,5 @@
 // 방 데이터: creator.json, 레이아웃, 팔레트, 앨범 규칙, 카드 목록.
+import { reelKey } from './format.js';
 
 export async function setupData(ctx) {
   const { ac, opts, dataBase, rand } = ctx;
@@ -71,8 +72,8 @@ export async function setupData(ctx) {
   const fanReelOf = (p, i) => ({ ...p, kind: 'fan', wide: false, title: p.caption, channel: p.by, views: '', age: 0.05, seed: 7000 + i * 131 });
   const fanReels = (DATA.pieces || []).map(fanReelOf);
 
-  const filed = new Map(); // reel id → { album }: only cards whose album is certain from the title or channel
-  for (const r of reels) if (r.gold) filed.set(r.id, { album: r.gold });
+  const filed = new Map(); // reelKey → { album }: only cards whose album is certain from the title or channel
+  for (const r of reels) if (r.gold) filed.set(reelKey(r), { album: r.gold });
 
   Object.assign(ctx, {
     C, creator, DATA, layout, ALBUMS, reels, fanReels, fanReelOf, ROOMS, roomId,

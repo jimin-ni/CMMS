@@ -1,6 +1,6 @@
 // 사진 더미: 쌓이는 모양, 떨어지는 움직임, 카드, 벽 포스터.
 import * as THREE from 'three';
-import { viewsNum } from './format.js';
+import { viewsNum, hasThumb } from './format.js';
 import { drawFit, NO_PHOTO, makeCanvas, canvasTexture } from './draw.js';
 import { tone } from './palette.js';
 
@@ -136,7 +136,8 @@ export function setupHeap(ctx) {
   }
   // 포스터 액자에 걸린 텍스처 (만든 순서). 액자는 방이 뜰 때 한 번 짓고, 영상 목록이 바뀌면 그림만 갈아 끼운다 (refreshPosters).
   const posterSlots = [];
-  const topShorts = list => list.filter(c => c.userData.reel.kind !== 'fan' && !c.userData.reel.wide).sort((a, b) => viewsNum(b.userData.reel.views) - viewsNum(a.userData.reel.views)).slice(0, 3);
+  // 포스터는 썸네일이 있는 세로 영상에서만 고른다 (그림 없는 카드를 걸면 액자가 빈다)
+  const topShorts = list => list.filter(c => hasThumb(c.userData.reel) && !c.userData.reel.wide).sort((a, b) => viewsNum(b.userData.reel.views) - viewsNum(a.userData.reel.views)).slice(0, 3);
   // 영상 목록이 바뀐 뒤(live.js 의 replaceReels): 남은 카드에서 다시 고른 쇼츠를 액자에 건다. 고를 카드가 없는 액자는 비운다.
   function refreshPosters() {
     for (const c of cards) delete c.userData.poster;

@@ -1,5 +1,6 @@
 // 썸네일 불러오기: 세 단계로 나눠 천천히 선명해진다.
 import { thumbUrl } from './util.js';
+import { hasThumb } from './format.js';
 import { cropToShape } from './draw.js';
 
 export function setupThumbs(ctx) {
@@ -58,7 +59,8 @@ export function setupThumbs(ctx) {
   // now = true 는 줄을 건너뛴다: 방문자가 방금 집어 든 카드 한 장
   function request(card, tier, now = false) {
     const u = card.userData;
-    if (ctx.disposed || u.reel.kind === 'fan' || u.asked[tier] || u.tier >= tier) return;
+    // 썸네일이 있는 카드만 받는다 (유튜브). 팬 작품과 붙여 넣은 게시물 카드는 자기 그림으로 끝이다.
+    if (ctx.disposed || !hasThumb(u.reel) || u.asked[tier] || u.tier >= tier) return;
     u.asked[tier] = true;
     if (now) { loading++; load(card, tier, thumbFiles(u.reel, tier)); } else { loadQueue.push({ card, tier }); pump(); }
   }

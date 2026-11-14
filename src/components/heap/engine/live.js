@@ -1,6 +1,6 @@
 // 다른 사람이 남긴 것: 방명록, 방문 수, 올라온 팬 작품. 주기적으로 읽어 온다.
 import { el, bindOverlay } from './dom.js';
-import { fmtDay } from './format.js';
+import { fmtDay, reelKey } from './format.js';
 
 export function setupLive(ctx) {
   const {
@@ -15,26 +15,26 @@ export function setupLive(ctx) {
   function replaceReels(list) {
     if (!Array.isArray(list)) return;
     const next = list.filter(r => r && typeof r.id === 'string');
-    const want = new Set(next.map(r => r.id));
+    const want = new Set(next.map(reelKey));
     let changed = false;
     for (const c of [...cards]) {
       const r = c.userData.reel;
-      if (r.kind === 'fan' || want.has(r.id) || c === ctx.held || c === ctx.loaded || c === ctx.dragging) continue;
+      if (r.kind === 'fan' || want.has(reelKey(r)) || c === ctx.held || c === ctx.loaded || c === ctx.dragging) continue;
       cards.splice(cards.indexOf(c), 1);
       for (const m of c.children) { const k = pickables.indexOf(m); if (k >= 0) pickables.splice(k, 1); m.material.map?.dispose(); m.material.dispose(); }
       scene.remove(c); // 지오메트리는 카드끼리 함께 쓴다 (DIMS): 지우지 않는다
       if (ctx.hovered === c) ctx.hovered = null;
       delete c.userData.poster; // 늦게 온 썸네일이 포스터에 그리지 않게
       const i = reels.indexOf(r); if (i >= 0) reels.splice(i, 1);
-      filed.delete(r.id);
+      filed.delete(reelKey(r));
       changed = true;
     }
-    const have = new Set(reels.map(r => r.id)), added = [];
+    const have = new Set(reels.map(reelKey)), added = [];
     next.forEach((raw, i) => {
-      if (have.has(raw.id)) return;
+      if (have.has(reelKey(raw))) return;
       const reel = prepReel(raw, i, next.length);
       reels.push(reel);
-      if (reel.gold) filed.set(reel.id, { album: reel.gold });
+      if (reel.gold) filed.set(reelKey(reel), { album: reel.gold });
       added.push(makeCard(reel));
     });
     if (!changed && !added.length) return;

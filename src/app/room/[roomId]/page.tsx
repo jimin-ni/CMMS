@@ -39,7 +39,7 @@ function formatViews(count: number | null): string {
 }
 
 // DB 스냅샷을 엔진이 읽는 모양으로 바꾼다. 서버에서 클라이언트로 넘기므로 Date는 문자열로 만든다.
-// 엔진은 YouTube 영상만 그릴 수 있어서 다른 플랫폼 영상은 뺀다 (지금 시드는 전부 YouTube).
+// 엔진은 플랫폼마다 다르게 그린다: 유튜브는 썸네일 카드, 붙여 넣은 게시물(인스타그램·틱톡)은 제목 카드다.
 function toRoomData(
   snapshot: HeapRoomSnapshot,
   rooms: { slug: string; name: string; blurb: string }[],
@@ -59,10 +59,11 @@ function toRoomData(
     })),
     // 힙에서 뺀 영상 목록(excludedReels)은 보내지 않는다 (layout.ts 의 publicLayout). 꾸미기의 저장은 이 값 없이 가고 서버가 DB의 목록을 남긴다.
     layout: publicLayout(snapshot.room.layout),
-    reels: snapshot.reels
-      .filter((reel) => reel.platform === "youtube")
-      .map((reel) => ({
+    reels: snapshot.reels.map((reel) => ({
         id: reel.externalId,
+        platform: reel.platform,
+        // 정규 원본 주소. 카드 뒷면, "원본 보기", 공식 임베드가 모두 이 값을 쓴다.
+        url: reel.sourceUrl,
         title: reel.title,
         // 채널을 모르는 영상은 null. 엔진이 방 이름으로 대신한다.
         channel: reel.channelTitle,

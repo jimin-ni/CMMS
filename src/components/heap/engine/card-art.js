@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { mulberry32 } from './util.js';
 import { paper, drawFit, NO_PHOTO, wrap, crayon, ring, makeCanvas } from './draw.js';
-import { ytShort } from './format.js';
+import { srcShort, hasThumb, platformOf, PLATFORM_NAME } from './format.js';
 
 export function setupCardArt(ctx) {
   const { C, creator } = ctx;
@@ -15,6 +15,43 @@ export function setupCardArt(ctx) {
   };
   for (const d of Object.values(DIMS)) { d.CH = d.B + d.PH + d.STRIP; d.w = d.CW * S; d.h = d.CH * S; d.geo = new THREE.PlaneGeometry(d.w, d.h); }
 
+  // 붙여 넣은 게시물 카드(인스타그램·틱톡·X)의 색: 방 팔레트에서 플랫폼마다 하나씩 가져온다.
+  const LINK_TONE = { instagram: 'accent', tiktok: 'olive', x: 'ink' };
+  // 플랫폼 표시. 로고 파일을 쓰지 않고 선 몇 개로 그린다. col 은 선 색이다.
+  function platformMark(g, platform, cx, cy, s, col) {
+    g.save();
+    g.strokeStyle = col; g.fillStyle = col; g.lineWidth = Math.max(2, s * 0.1); g.lineCap = 'round'; g.lineJoin = 'round';
+    if (platform === 'instagram') {
+      const r = s * 0.3;
+      g.beginPath(); g.roundRect(cx - s * 0.75, cy - s * 0.75, s * 1.5, s * 1.5, r); g.stroke();
+      g.beginPath(); g.arc(cx, cy, s * 0.42, 0, Math.PI * 2); g.stroke();
+      g.beginPath(); g.arc(cx + s * 0.46, cy - s * 0.46, s * 0.1, 0, Math.PI * 2); g.fill();
+    } else if (platform === 'tiktok') {
+      g.beginPath(); g.arc(cx - s * 0.3, cy + s * 0.5, s * 0.3, 0, Math.PI * 2); g.stroke();
+      g.beginPath(); g.moveTo(cx, cy + s * 0.5); g.lineTo(cx, cy - s * 0.75); g.stroke();
+      g.beginPath(); g.moveTo(cx, cy - s * 0.75); g.quadraticCurveTo(cx + s * 0.8, cy - s * 0.55, cx + s * 0.55, cy - s * 0.02); g.stroke();
+    } else if (platform === 'x') {
+      g.beginPath(); g.moveTo(cx - s * 0.6, cy - s * 0.6); g.lineTo(cx + s * 0.6, cy + s * 0.6); g.stroke();
+      g.beginPath(); g.moveTo(cx + s * 0.6, cy - s * 0.6); g.lineTo(cx - s * 0.6, cy + s * 0.6); g.stroke();
+    } else {
+      g.beginPath(); g.moveTo(cx - s * 0.4, cy - s * 0.6); g.lineTo(cx + s * 0.65, cy); g.lineTo(cx - s * 0.4, cy + s * 0.6); g.closePath(); g.fill();
+    }
+    g.restore();
+  }
+  // 썸네일이 없는 카드의 사진 자리: 방 색으로 칠하고 플랫폼 표시와 이름을 올린다.
+  function drawLinkFace(g, reel, x0, y0, w, h) {
+    const platform = platformOf(reel);
+    g.fillStyle = C[LINK_TONE[platform] || 'woodB'] || C.olive;
+    g.fillRect(x0, y0, w, h);
+    const ink = C.paper || '#F3EADB';
+    platformMark(g, platform, x0 + w / 2, y0 + h * 0.42, Math.min(w, h) * 0.17, ink);
+    g.save();
+    g.fillStyle = ink; g.globalAlpha = 0.9; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = `600 ${Math.round(Math.min(w, h) * 0.085)}px "IBM Plex Sans KR", system-ui, sans-serif`;
+    g.fillText(PLATFORM_NAME[platform] || platform, x0 + w / 2, y0 + h * 0.68);
+    g.restore();
+  }
+
   // 카드 자신의 캔버스를 넘기면 그 자리에서 다시 그린다. 시드가 같아 틀과 글씨는 그대로이고 사진만 바뀐다.
   function drawCard(reel, img, c = document.createElement('canvas')) {
     const d = reel.wide ? DIMS.wide : DIMS.tall, r = mulberry32(reel.seed), age = reel.age;
@@ -23,17 +60,22 @@ export function setupCardArt(ctx) {
     const g = c.getContext('2d');
     paper(g, W, H, r, age);
     const x0 = d.B * PX, y0 = d.B * PX, w = d.PW * PX, h = d.PH * PX;
+    const link = !hasThumb(reel); // 붙여 넣은 게시물 카드: 썸네일이 없어 플랫폼 표시로 그린다
     g.save(); g.beginPath(); g.rect(x0, y0, w, h); g.clip();
-    if (img) drawFit(g, img, x0, y0, w, h, true); else { g.fillStyle = NO_PHOTO; g.fillRect(x0, y0, w, h); }
+    if (link) drawLinkFace(g, reel, x0, y0, w, h);
+    else if (img) drawFit(g, img, x0, y0, w, h, true);
+    else { g.fillStyle = NO_PHOTO; g.fillRect(x0, y0, w, h); }
     g.fillStyle = `rgba(214, 170, 120, ${0.04 + age * 0.12})`; g.fillRect(x0, y0, w, h);
-    const sh = g.createLinearGradient(0, y0 + h * 0.78, 0, y0 + h);
-    sh.addColorStop(0, 'rgba(0,0,0,0)'); sh.addColorStop(1, 'rgba(0,0,0,0.45)');
-    g.fillStyle = sh; g.fillRect(x0, y0 + h * 0.78, w, h * 0.22);
-    const fs = Math.round(Math.min(w, h * 0.6) * 0.075), tx = x0 + fs * 0.8, ty = y0 + h - fs * 0.8;
-    g.fillStyle = 'rgba(255,255,255,0.95)';
-    g.beginPath(); g.moveTo(tx, ty - fs * 0.8); g.lineTo(tx + fs * 0.62, ty - fs * 0.42); g.lineTo(tx, ty - fs * 0.04); g.closePath(); g.fill();
-    g.font = `600 ${fs}px "IBM Plex Sans KR", system-ui, sans-serif`; g.textBaseline = 'alphabetic';
-    g.fillText(reel.views || '', tx + fs * 0.9, ty);
+    if (!link) {
+      const sh = g.createLinearGradient(0, y0 + h * 0.78, 0, y0 + h);
+      sh.addColorStop(0, 'rgba(0,0,0,0)'); sh.addColorStop(1, 'rgba(0,0,0,0.45)');
+      g.fillStyle = sh; g.fillRect(x0, y0 + h * 0.78, w, h * 0.22);
+      const fs = Math.round(Math.min(w, h * 0.6) * 0.075), tx = x0 + fs * 0.8, ty = y0 + h - fs * 0.8;
+      g.fillStyle = 'rgba(255,255,255,0.95)';
+      g.beginPath(); g.moveTo(tx, ty - fs * 0.8); g.lineTo(tx + fs * 0.62, ty - fs * 0.42); g.lineTo(tx, ty - fs * 0.04); g.closePath(); g.fill();
+      g.font = `600 ${fs}px "IBM Plex Sans KR", system-ui, sans-serif`; g.textBaseline = 'alphabetic';
+      g.fillText(reel.views || '', tx + fs * 0.9, ty);
+    }
     g.restore();
     g.strokeStyle = 'rgba(0,0,0,0.18)'; g.lineWidth = 1; g.strokeRect(x0 + 0.5, y0 + 0.5, w - 1, h - 1);
     const sy = (d.B + d.PH) * PX, maxW = W * 0.84, room = d.STRIP * PX * 0.8;
@@ -67,10 +109,13 @@ export function setupCardArt(ctx) {
     lines.forEach((l, i) => g.fillText(l, pad, y + i * size * 1.05));
     y += lines.length * size * 1.05 + PXB * 0.04;
     g.font = `${Math.round(PXB * 0.08)}px "Nanum Pen Script", cursive`;
-    g.fillText(`조회수 ${reel.views || '-'}${reel.published ? ' · ' + reel.published : ''}`, pad, y);
+    // 조회수가 없는 카드(붙여 넣은 게시물)는 플랫폼 이름을 적는다
+    const meta = hasThumb(reel) ? `조회수 ${reel.views || '-'}` : PLATFORM_NAME[platformOf(reel)] || '';
+    g.fillText(`${meta}${reel.published ? (meta ? ' · ' : '') + reel.published : ''}`, pad, y);
     g.strokeStyle = 'rgba(86, 83, 68, 0.35)'; g.beginPath(); g.moveTo(pad, H - pad * 2.4); g.lineTo(W - pad, H - pad * 2.4); g.stroke();
     g.fillStyle = 'rgba(86, 83, 68, 0.85)'; g.font = `600 ${Math.max(9, Math.round(PXB * 0.042))}px "IBM Plex Sans KR", sans-serif`;
-    ['원본 · ' + ytShort(reel).split('/')[0] + '/', ytShort(reel).split('/').slice(1).join('/')].forEach((l, i) => g.fillText(l, pad, H - pad * 2.1 + i * PXB * 0.05));
+    const shortUrl = srcShort(reel), slash = shortUrl.indexOf('/');
+    ['원본 · ' + (slash < 0 ? shortUrl : shortUrl.slice(0, slash + 1)), slash < 0 ? '' : shortUrl.slice(slash + 1)].forEach((l, i) => g.fillText(l, pad, H - pad * 2.1 + i * PXB * 0.05));
     g.save(); g.translate(W - pad - PXB * 0.09, H - pad * 1.6); g.rotate(-0.25);
     g.strokeStyle = C.accent; g.lineWidth = 2; g.beginPath(); g.arc(0, 0, PXB * 0.075, 0, Math.PI * 2); g.stroke();
     g.fillStyle = C.accent; g.font = `600 ${Math.round(PXB * 0.045)}px "IBM Plex Sans KR", sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
