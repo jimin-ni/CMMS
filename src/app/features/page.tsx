@@ -31,11 +31,19 @@ async function FeaturesContent() {
             </>
           );
           const cardClass = "flex flex-col rounded-2xl bg-white p-6 shadow-sm";
+          const linkClass = `${cardClass} transition hover:-translate-y-0.5 hover:shadow-md`;
+          if (feature.href && feature.staticPage) {
+            return (
+              <a key={feature.title} href={feature.href} className={linkClass}>
+                {body}
+              </a>
+            );
+          }
           return feature.href ? (
             <Link
               key={feature.title}
               href={feature.href}
-              className={`${cardClass} transition hover:-translate-y-0.5 hover:shadow-md`}
+              className={linkClass}
             >
               {body}
             </Link>
