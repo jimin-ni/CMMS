@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getViewer } from "@/lib/session";
 import { loadRoomView } from "@/lib/heap/room-view";
 import { ONBOARDING_CONCEPTS, findOnboardingConcept } from "@/lib/onboarding";
+import { ConceptB } from "@/components/onboarding-b/concept-b";
 import { ConceptC } from "@/components/onboarding-c/concept-c";
 import { ONBOARDING_ROOM_ID } from "@/components/onboarding-c/story";
 import { moneygraphyPixel, moneygraphyRounded, pretendard } from "@/app/fonts/onboarding";
@@ -34,6 +35,11 @@ async function ConceptContent({ params }: OnboardingPageProps) {
   const concept = findOnboardingConcept(id);
   if (!concept) {
     notFound();
+  }
+
+  // 컨셉 B: 책상 위 바인더 노트. 스크롤하면 다음 장이 아래에서 올라와 겹친다. 화면 전체를 덮는다.
+  if (concept.id === "b") {
+    return <ConceptB />;
   }
 
   // 컨셉 C: 실제 2번 방 위에 얹은 온보딩. 화면 전체를 덮으므로 위의 헤더는 가려진다.

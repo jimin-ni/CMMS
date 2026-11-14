@@ -1,0 +1,392 @@
+/* 온보딩 컨셉 B: 책상 위 바인더 노트. .ob-root 아래에만 적용한다. */
+.ob-root {
+  --nb-w: min(1080px, calc(100vw - 32px));
+  --nb-top: 22px;
+  --binder-h: 92px;
+  --page-h: calc(100dvh - var(--nb-top) - var(--binder-h));
+  --cream: #faf2e4;
+  --strip: #f2f2f2;
+  --ink: #2f2c24;
+  --ink-soft: #5a5244;
+  --clay: #a6613c;
+  --olive: #565344;
+  --tape: rgba(226, 205, 160, 0.82);
+  /* 종이 결: 고운 fractalNoise 를 한 장 그려 깔아 둔다 (스크롤마다 필터를 다시 돌리지 않게) */
+  --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.36 0 0 0 0 0.28 0 0 0 0 0.17 0 0 0 0.11 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  --blotch: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='600' height='600'><filter id='b'><feTurbulence type='fractalNoise' baseFrequency='0.012' numOctaves='2' seed='4' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.55 0 0 0 0 0.42 0 0 0 0 0.25 0 0 0 0.07 0'/></filter><rect width='100%' height='100%' filter='url(%23b)'/></svg>");
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: none;
+  scrollbar-width: none;
+  color: var(--ink);
+  font-family: var(--font-oc-body), system-ui, sans-serif;
+  /* 책상: 올리브 갈색 위에 양옆으로 은은한 주황빛 */
+  background:
+    linear-gradient(90deg, rgba(166, 97, 60, 0.38) 0%, rgba(166, 97, 60, 0) 26%, rgba(166, 97, 60, 0) 74%, rgba(166, 97, 60, 0.34) 100%),
+    radial-gradient(ellipse 80% 70% at 50% 45%, #645a47 0%, #565344 55%, #3f382d 100%);
+  background-attachment: fixed;
+}
+.ob-root::-webkit-scrollbar { display: none; }
+.ob-pixel { font-family: var(--font-oc-pixel), var(--font-oc-body), sans-serif; }
+.ob-rounded { font-family: var(--font-oc-rounded), var(--font-oc-body), sans-serif; }
+.ob-hand {
+  font-family: var(--font-oc-rounded), var(--font-oc-body), sans-serif;
+  color: var(--clay);
+  font-size: 15px;
+}
+
+/* 노트 전체가 책상에 드리우는 그림자 (종이와 바인더 뒤) */
+.ob-shadow {
+  position: fixed;
+  top: var(--nb-top);
+  bottom: 0;
+  left: 50%;
+  width: var(--nb-w);
+  transform: translateX(-50%);
+  border-radius: 6px 6px 0 0;
+  box-shadow:
+    0 30px 60px rgba(0, 0, 0, 0.45),
+    -18px 10px 40px rgba(20, 12, 4, 0.35),
+    18px 10px 40px rgba(20, 12, 4, 0.35);
+  pointer-events: none;
+}
+
+/* ---------- 장 (카드 쌓기) ---------- */
+.ob-notebook {
+  position: relative;
+  width: var(--nb-w);
+  margin: 0 auto;
+  padding-top: var(--nb-top);
+  /* 마지막 장도 끝까지 올라와 위에 붙도록 바인더 높이만큼 스크롤을 더 둔다 */
+  padding-bottom: var(--binder-h);
+}
+.ob-page {
+  position: sticky;
+  top: var(--nb-top);
+  height: var(--page-h);
+}
+.ob-sheet {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 5px 5px 0 0;
+  background-color: var(--cream);
+  background-image: var(--grain), var(--blotch);
+  /* 좌·우·위 가장자리는 테두리 없이 질감과 얇은 그림자로만 */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    inset 0 0 0 1px rgba(120, 96, 60, 0.08),
+    inset 0 18px 30px -24px rgba(90, 70, 40, 0.25);
+  padding: 44px 56px 28px;
+  box-sizing: border-box;
+}
+/* 위로 겹쳐 올라오는 장: 앞장과의 경계가 보이도록 위쪽에 종이 그림자 */
+.ob-page + .ob-page .ob-sheet {
+  box-shadow:
+    0 -12px 26px -8px rgba(40, 28, 12, 0.35),
+    0 -2px 4px rgba(40, 28, 12, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    inset 0 0 0 1px rgba(120, 96, 60, 0.08);
+}
+
+.ob-date {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+}
+
+/* 콜라주 조각: 넓은 화면에서는 장 위에 자유롭게 겹쳐 놓는다 */
+.ob-a { position: absolute; }
+
+/* 낙서 */
+.ob-doodle { display: block; color: var(--clay); overflow: visible; }
+.ob-draw path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+.ob-page.in .ob-draw path {
+  animation: ob-draw 1.2s ease-out forwards;
+  animation-delay: 0.25s;
+}
+@keyframes ob-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+/* 테이프 (컨셉 C의 .oc-tape 모양을 쓴다) */
+.ob-tape { width: 84px; height: 24px; }
+.ob-tape-top { top: -12px; left: 50%; transform: translateX(-50%) rotate(-3deg); }
+.ob-tape-left { top: 50%; left: -30px; transform: translateY(-50%) rotate(-80deg); }
+
+/* 폴라로이드 */
+.ob-polaroid {
+  margin: 0;
+  padding: 10px 10px 34px;
+  background: #fffdf8;
+  box-shadow: 0 6px 14px rgba(40, 30, 15, 0.22), 0 1px 2px rgba(40, 30, 15, 0.2);
+  display: inline-flex;
+  flex-direction: column;
+  position: relative;
+}
+.ob-photo {
+  display: block;
+  width: 150px;
+  height: 150px;
+  background-image: var(--grain) !important;
+  background-blend-mode: multiply;
+  box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.25);
+}
+.ob-polaroid figcaption {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 8px;
+  text-align: center;
+  font-family: var(--font-oc-rounded), var(--font-oc-body), sans-serif;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+/* 포스트잇 */
+.ob-note {
+  position: relative;
+  padding: 22px 22px 18px;
+  box-shadow: 0 8px 16px rgba(40, 30, 15, 0.18), 0 1px 2px rgba(40, 30, 15, 0.15);
+  background-image: var(--grain);
+  font-size: 15px;
+  line-height: 1.6;
+}
+.ob-note ul { margin: 0; padding-left: 18px; }
+.ob-note p { margin: 4px 0 0; }
+.ob-note b { font-size: 18px; font-weight: normal; }
+.ob-yellow { background-color: #f9e7a6; }
+.ob-pink { background-color: #f6d3cc; }
+.ob-blue { background-color: #d6e3ee; }
+.ob-tilt-0 { transform: rotate(-3deg); }
+.ob-tilt-1 { transform: rotate(2.5deg); }
+.ob-tilt-2 { transform: rotate(-1.5deg); }
+
+/* 형광펜 */
+.ob-mark {
+  background: linear-gradient(transparent 55%, rgba(166, 97, 60, 0.3) 55%, rgba(166, 97, 60, 0.3) 90%, transparent 90%);
+  padding: 0 4px;
+}
+.ob-mark-2 { background: linear-gradient(transparent 55%, rgba(143, 176, 207, 0.45) 55%, rgba(143, 176, 207, 0.45) 90%, transparent 90%); }
+
+/* 티켓 꼬리표 */
+.ob-ticket {
+  display: inline-block;
+  padding: 8px 16px;
+  margin-right: 10px;
+  font-size: 14px;
+  color: #fff8ec;
+  background: var(--olive);
+  transform: rotate(-4deg);
+  clip-path: polygon(0 0, 100% 0, 96% 50%, 100% 100%, 0 100%, 4% 50%);
+}
+.ob-ticket-2 { background: var(--clay); transform: rotate(3deg); }
+
+/* ---------- 1장 ---------- */
+.ob-title-1 { top: 70px; left: 56px; }
+.ob-kicker { display: block; font-size: 28px; color: var(--ink-soft); margin-bottom: 4px; }
+.ob-name {
+  position: relative;
+  margin: 0;
+  font-size: clamp(56px, 7vw, 96px);
+  font-weight: normal;
+  line-height: 1;
+  color: var(--ink);
+}
+.ob-name-circle { position: absolute; left: -24px; top: -18px; width: calc(100% + 56px); height: calc(100% + 40px); }
+.ob-p1-note { top: 250px; left: 64px; width: 280px; transform: rotate(-2deg); }
+.ob-note-line { width: 180px; margin-top: 6px; }
+.ob-p1-photos { top: 70px; right: 40px; display: flex; gap: 6px; }
+.ob-photo-slot { position: relative; }
+.ob-photo-slot:nth-child(2) { margin-top: 70px; }
+.ob-photo-slot:nth-child(3) { margin-top: 18px; }
+.ob-photo-note { position: absolute; bottom: -26px; left: 50%; transform: translateX(-50%) rotate(-3deg); white-space: nowrap; }
+.ob-p1-tags { top: 420px; right: 120px; }
+.ob-p1-arrow { top: 400px; left: 380px; display: flex; flex-direction: column; align-items: flex-start; }
+.ob-arrow-1 { width: 130px; margin-left: 60px; transform: rotate(-12deg); }
+.ob-strong { font-size: 20px; margin-left: 120px; }
+.ob-star-1 { top: 56px; left: 470px; width: 40px; color: #c9a46a; }
+.ob-turn {
+  position: absolute;
+  right: 40px;
+  bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+/* ---------- 2장 ---------- */
+.ob-head-2, .ob-head-3 {
+  margin: 0;
+  font-size: clamp(36px, 4.4vw, 56px);
+  font-weight: normal;
+  line-height: 1.15;
+}
+.ob-head-2 { top: 70px; left: 56px; }
+.ob-head-line { width: 260px; margin-top: 2px; }
+.ob-pile { top: 90px; right: 70px; width: 420px; height: 380px; }
+.ob-pile .ob-polaroid { position: absolute; }
+.ob-pile .ob-photo { width: 130px; height: 130px; }
+.ob-pile-0 { left: 40px; top: 30px; transform: rotate(-14deg); }
+.ob-pile-1 { left: 150px; top: 10px; transform: rotate(8deg); }
+.ob-pile-2 { left: 90px; top: 120px; transform: rotate(-4deg); }
+.ob-pile-3 { left: 230px; top: 110px; transform: rotate(16deg); }
+.ob-pile-4 { left: 160px; top: 170px; transform: rotate(-9deg); }
+.ob-pile-note { position: absolute; left: 70px; bottom: 0; transform: rotate(-2deg); }
+.ob-steps {
+  top: 280px;
+  left: 64px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 19px;
+  line-height: 2.3;
+}
+.ob-steps b {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin-right: 10px;
+  border: 2px solid var(--clay);
+  border-radius: 50% 46% 52% 48%;
+  font-weight: normal;
+  color: var(--clay);
+}
+.ob-room-sketch { bottom: 40px; left: 420px; display: flex; align-items: flex-end; gap: 6px; }
+.ob-room-svg { width: 200px; color: var(--olive); }
+.ob-arrow-2 { bottom: 120px; left: 300px; width: 110px; transform: rotate(150deg); }
+.ob-strip-note {
+  bottom: 60px;
+  right: 80px;
+  width: 260px;
+  padding: 16px 18px;
+  background: #fffdf8;
+  background-image: var(--grain);
+  box-shadow: 0 6px 12px rgba(40, 30, 15, 0.18);
+  transform: rotate(2deg);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+/* ---------- 3장 ---------- */
+.ob-head-3 { top: 70px; left: 56px; }
+.ob-heart { display: inline-block; width: 44px; margin-left: 8px; vertical-align: middle; color: #d98b8b; }
+.ob-notes { top: 270px; left: 64px; display: flex; gap: 28px; }
+.ob-notes .ob-note { width: 200px; }
+.ob-circle-note { top: 120px; right: 110px; }
+.ob-small-circle { position: absolute; inset: -22px -30px; width: calc(100% + 60px); height: calc(100% + 44px); }
+.ob-star-2 { top: 230px; right: 260px; width: 36px; color: #c9a46a; }
+.ob-cta {
+  right: 80px;
+  bottom: 60px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px;
+  font-size: 20px;
+  color: #fff8ec;
+  background: var(--clay);
+  background-image: var(--grain);
+  text-decoration: none;
+  box-shadow: 0 8px 16px rgba(40, 30, 15, 0.25);
+  transform: rotate(-2deg);
+  transition: transform 0.25s;
+}
+.ob-cta:hover, .ob-cta:focus-visible { transform: rotate(0deg) translateY(-2px); }
+.ob-cta:focus-visible { outline: 2px dashed var(--olive); outline-offset: 4px; }
+
+/* ---------- 아래 바인더 ---------- */
+.ob-binder {
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  z-index: 10;
+  width: var(--nb-w);
+  height: var(--binder-h);
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+}
+.ob-strip {
+  position: relative;
+  height: 58px;
+  background-color: var(--strip);
+  background-image: var(--grain);
+  /* 크림 종이와의 얇은 단차 */
+  box-shadow:
+    0 -3px 5px rgba(40, 28, 12, 0.22),
+    inset 0 2px 2px rgba(0, 0, 0, 0.08);
+}
+.ob-holes {
+  position: absolute;
+  top: 50%;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  transform: translate(-50%, -50%);
+}
+.ob-hole-pill,
+.ob-hole-round {
+  display: block;
+  background: radial-gradient(ellipse at 50% 30%, #1a1712 0%, #3b352b 100%);
+  box-shadow: inset 0 3px 4px rgba(0, 0, 0, 0.7), 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+.ob-hole-pill { width: 36px; height: 12px; border-radius: 999px; }
+.ob-hole-round { position: relative; width: 16px; height: 16px; border-radius: 50%; }
+.ob-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 30px;
+  height: 140px;
+  transform: translateX(-50%);
+  overflow: visible;
+}
+/* 겹친 종이 두께 */
+.ob-layers {
+  height: 10px;
+  background: repeating-linear-gradient(180deg, #eae6dc 0, #eae6dc 1px, #d9d3c5 1px, #d9d3c5 2px);
+  box-shadow: inset 0 3px 3px -2px rgba(0, 0, 0, 0.25);
+}
+.ob-cover {
+  flex: 1;
+  background: linear-gradient(180deg, #2c2c2c 0%, #222222 40%, #151515 100%);
+  border-radius: 0 0 4px 4px;
+  box-shadow: inset 0 2px 3px rgba(255, 255, 255, 0.06);
+}
+
+/* ---------- 좁은 화면: 콜라주를 위에서 아래로 쌓는다 ---------- */
+@media (max-width: 900px) {
+  .ob-root { --binder-h: 76px; }
+  .ob-sheet { padding: 28px 22px 20px; display: flex; flex-direction: column; gap: 22px; }
+  .ob-a { position: relative; inset: auto !important; }
+  .ob-name { font-size: 54px; }
+  .ob-p1-photos { justify-content: center; transform: scale(0.62); transform-origin: top center; margin-bottom: -150px; }
+  .ob-p1-arrow, .ob-star-1, .ob-star-2, .ob-arrow-2, .ob-room-sketch, .ob-circle-note { display: none; }
+  .ob-pile { width: 100%; height: 240px; transform: scale(0.7); transform-origin: top left; }
+  .ob-notes { flex-direction: column; gap: 18px; }
+  .ob-notes .ob-note { width: auto; }
+  .ob-strip { height: 46px; }
+  .ob-holes { gap: 8px; }
+  .ob-hole-pill { width: 22px; height: 9px; }
+  .ob-hole-round { width: 12px; height: 12px; }
+  .ob-turn { position: static; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ob-draw path { stroke-dashoffset: 0; }
+  .ob-page.in .ob-draw path { animation: none; }
+}
