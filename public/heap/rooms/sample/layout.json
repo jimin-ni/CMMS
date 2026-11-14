@@ -1,0 +1,24 @@
+{
+  "_note": "가구 모델 시험용. 가구는 전부 type: model 이에요. 앨범 책장(type: shelf)이 없어서 앨범 보기는 없어요.",
+  "room": { "w": 10, "d": 7 },
+  "palette": { "wall": "#E6DCC8", "trim": "#565344", "accent": "#A6613C" },
+  "window": { "wall": "back", "at": -2.8, "w": 1.6, "h": 1.2, "y": 2.55 },
+  "door": { "wall": "left", "at": 2.4 },
+  "screen": { "wall": "back", "at": 0.9 },
+  "posters": { "wall": "left", "at": [-1.95, -1.0, -0.05] },
+  "table": { "x": 0.8, "z": 0.7, "projector": "left" },
+  "items": [
+    { "type": "model", "model": "pottedPlant", "x": -4.5, "z": -3.0, "rot": 0 },
+    { "type": "model", "model": "desk", "x": -2.8, "z": -3.08, "rot": 0 },
+    { "type": "model", "model": "chairDesk", "x": -2.8, "z": -2.3, "rot": 180 },
+    { "type": "model", "model": "laptop", "x": -2.8, "z": -3.05, "rot": 0, "y": 0.77 },
+    { "type": "model", "model": "bookcaseOpen", "x": -1.2, "z": -3.22, "rot": 0 },
+    { "type": "model", "model": "cabinetTelevision", "x": 0.9, "z": -3.22, "rot": 0 },
+    { "type": "model", "model": "televisionModern", "x": 0.9, "z": -3.22, "rot": 0, "y": 0.62 },
+    { "type": "model", "model": "lampRoundFloor", "x": 2.4, "z": -3.1, "rot": 0 },
+    { "type": "model", "model": "bedDouble", "x": 3.95, "z": -2.35, "rot": 0 },
+    { "type": "model", "model": "loungeSofa", "x": -4.56, "z": -1.0, "rot": 90 },
+    { "type": "model", "model": "rugRound", "x": -3.3, "z": -1.0, "rot": 0 },
+    { "type": "model", "model": "pottedPlant", "x": -4.6, "z": 0.55, "rot": 0 }
+  ]
+}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
+import { trackEvent } from "@/lib/analytics";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -26,6 +27,7 @@ export default function LoginPage() {
       setErrorMessage(result.error.message ?? "로그인에 실패했습니다.");
       return;
     }
+    trackEvent({ event: "login", method: "email", user_role: toUserRole(result.data.user.role) });
     router.push("/");
     router.refresh();
   }
@@ -59,4 +61,9 @@ export default function LoginPage() {
       </form>
     </main>
   );
+}
+
+// 세션의 role 값을 GA에 보낼 정해진 값으로 좁힌다. 모르는 값은 "unknown"으로 보낸다.
+function toUserRole(role: string | null | undefined) {
+  return role === "admin" || role === "creator" || role === "public" ? role : "unknown";
 }

@@ -1,0 +1,28 @@
+{
+  "room": { "w": 9, "d": 8 },
+  "time": "auto",
+  "palette": {
+    "wall": "#B9895B",
+    "trim": "#4B3322",
+    "accent": "#8C3B2E",
+    "floor": ["#8B5E3C", "#7D5232", "#936646", "#85583A"]
+  },
+  "window": { "wall": "back", "at": 3.0, "w": 1.2, "h": 1.2, "y": 2.55 },
+  "door": { "wall": "left", "at": 3.0 },
+  "screen": { "wall": "back", "at": 0.2 },
+  "table": { "x": 2.0, "z": 1.8, "projector": "right" },
+  "items": [
+    { "type": "model", "model": "kitchenStove", "x": -2.6, "z": -3.55, "rot": 0 },
+    { "type": "model", "model": "hoodModern", "x": -2.6, "z": -3.71, "y": 1.55, "rot": 0 },
+    { "type": "model", "model": "rugRectangle", "x": -2.6, "z": -1.9, "rot": 0 },
+    { "type": "model", "model": "loungeSofa", "x": -2.6, "z": -0.6, "rot": 180 },
+    { "type": "model", "model": "desk", "x": 0.4, "z": -3.5, "rot": 0 },
+    { "type": "model", "model": "laptop", "x": 0.4, "z": -3.5, "y": 0.77, "rot": 0 },
+    { "type": "model", "model": "chairDesk", "x": 0.4, "z": -2.5, "rot": 180 },
+    { "type": "model", "model": "bedDouble", "x": 3.45, "z": -2.85, "rot": 0 },
+    { "type": "model", "model": "lampRoundFloor", "x": 4.1, "z": -1.3, "rot": 0 },
+    { "type": "shelf", "x": -4.25, "z": 1.0, "rot": 90 },
+    { "type": "model", "model": "pottedPlant", "x": -4.1, "z": -3.6, "rot": 0 },
+    { "type": "model", "model": "pottedPlant", "x": 4.0, "z": 3.4, "rot": 0 }
+  ]
+}

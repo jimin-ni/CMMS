@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
+import { trackEvent } from "@/lib/analytics";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -50,6 +51,7 @@ export default function SignupPage() {
     }
 
     setPending(false);
+    trackEvent({ event: "sign_up", method: "email", user_role: isCreator ? "creator" : "public" });
     // 예를 고른 경우 크리에이터 페이지로 이동한다.
     router.push(isCreator ? "/creator" : "/");
     router.refresh();

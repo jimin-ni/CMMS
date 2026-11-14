@@ -1,0 +1,121 @@
+// 시간대: 시각에 따라 햇빛, 조명, 하늘, 램프를 바꾼다.
+import * as THREE from 'three';
+import { makeCanvas, canvasTexture } from './draw.js';
+
+export function setupTime(ctx) {
+  const { layout, scene, renderer, hemi, fill, sun, WIN, WALLS, on, root, onDispose } = ctx;
+  const tA = new THREE.Vector3(); // 햇빛 끝점 계산용 임시 벡터
+
+  // 시간대: 방의 빛이 시각을 따라간다.
+  //   ?time=       페이지 주소의 값이 먼저다 (시연, 시험): 0-24 의 소수 시각(?time=6.5), 이름, 또는 auto.
+  //   layout.time  layout.json 의 값: "auto", 이름, 또는 소수 시각. 없으면 "auto" 다.
+  //   이름: night | dawn | morning | noon | golden | dusk.
+  //   auto 는 보는 사람이 어디에 있든 한국 시간의 지금 시각이고, frame() 이 1분에 한 번쯤 다시 읽는다.
+  //   golden 줄이 방의 원래 고정된 모습이다: applyTime(17.5) 는 장면이 지어질 때의 값을 그대로 넣는다.
+  const NIGHT = { sun: '#aebfe0', sunI: 0.35, drop: 3.2, sky: ['#2e3350', '#4a4358', '#2e2b24'], hemiSky: '#d6c0aa', hemiGround: '#453a30', hemiI: 0.52, fillI: 0.2, lampI: 4.4, shadeI: 1.3, shaft: '#b9c8e6', shaftO: 0.012, mote: '#d5def0', moteO: 0.06, exposure: 1.26, bd: ['#121833', '#2a3157'] };
+  // h: hour · sun, sunI, drop: sun colour, intensity, and how steeply it falls (higher = higher sun) · sky: backdrop gradient top, middle, bottom
+  // hemi*, fillI: ambient · lampI, shadeI: lamp light and its shade's glow · shaft*, mote*: light shaft and dust
+  // bd: 방 뒤 배경의 위, 아래 색 (판정 J14: 밤은 짙은 파랑, 새벽은 복숭아, 낮은 옅은 하늘, 해 질 녘은 호박색). 배경은 빛을 내지 않는다: 방의 빛은 해, 하늘빛, 램프다
+  const TIMES = [
+    { h: 4.5, ...NIGHT },
+    { h: 6, sun: '#ffb38a', sunI: 1.4, drop: 1.9, sky: ['#e9c3b4', '#f4c9a0', '#7d7458'], hemiSky: '#f3d6c2', hemiGround: '#54463a', hemiI: 0.55, fillI: 0.26, lampI: 1.2, shadeI: 0.5, shaft: '#ffc9a8', shaftO: 0.05, mote: '#ffe0c8', moteO: 0.4, exposure: 1.14, bd: ['#c7a2b8', '#f4c7a2'] },
+    { h: 9, sun: '#ffe2b8', sunI: 2.6, drop: 3.4, sky: ['#cfe0dc', '#f3e3c4', '#8c8558'], hemiSky: '#fff0d8', hemiGround: '#62523e', hemiI: 0.9, fillI: 0.45, lampI: 0, shadeI: 0.12, shaft: '#ffe6bf', shaftO: 0.045, mote: '#fff0d4', moteO: 0.45, exposure: 1.08, bd: ['#b4cfde', '#eee4cb'] },
+    { h: 13, sun: '#fff1d6', sunI: 2.6, drop: 6, sky: ['#bcd6dc', '#e6e6d2', '#8f8c62'], hemiSky: '#fff3e0', hemiGround: '#6a5a46', hemiI: 1.0, fillI: 0.5, lampI: 0, shadeI: 0.12, shaft: '#fff0d0', shaftO: 0.025, mote: '#fff4dc', moteO: 0.25, exposure: 1.05, bd: ['#a6cbe2', '#e6f0f1'] },
+    { h: 17.5, sun: '#ffb066', sunI: 3.0, drop: 2.55, sky: ['#f2c48f', '#e9a46b', '#8a7a55'], hemiSky: '#ffe6c4', hemiGround: '#5a4a38', hemiI: 0.7, fillI: 0.35, lampI: 3.2, shadeI: 0.9, shaft: '#ffc98a', shaftO: 0.07, mote: '#ffe0b0', moteO: 0.7, exposure: 1.12, bd: ['#de8f4c', '#f6d08e'] },
+    { h: 19.5, sun: '#e8875a', sunI: 0.9, drop: 1.7, sky: ['#a98a9a', '#e08f62', '#5f5744'], hemiSky: '#e8c4a8', hemiGround: '#4e4034', hemiI: 0.48, fillI: 0.22, lampI: 4.0, shadeI: 1.15, shaft: '#f0a57c', shaftO: 0.035, mote: '#f6c9a4', moteO: 0.3, exposure: 1.15, bd: ['#4b416c', '#d68a62'] },
+    { h: 21.5, ...NIGHT },
+  ].map(k => Object.fromEntries(Object.entries(k).map(([key, v]) => [key, toRGB(v)])));
+  const TIME_NAMES = { night: 1, dawn: 6, morning: 9, noon: 13, golden: 17.5, dusk: 19.5 };
+  function toRGB(v) { return typeof v === 'string' ? [1, 3, 5].map(i => parseInt(v.slice(i, i + 2), 16)) : Array.isArray(v) ? v.map(toRGB) : v; }
+  const mix = (a, b, t) => Array.isArray(a) ? a.map((x, i) => mix(x, b[i], t)) : a + (b - a) * t;
+  function timeAt(hour) { // 이웃한 두 줄을 부드럽게 섞는다. 줄 자신의 시각에서는 그 줄 그대로다
+    let i = TIMES.length - 1;
+    TIMES.forEach((k, n) => { if (k.h <= hour) i = n; });
+    const a = TIMES[i], b = TIMES[(i + 1) % TIMES.length];
+    const t = ((hour - a.h + 24) % 24) / ((b.h - a.h + 24) % 24 || 24), s = t * t * (3 - 2 * t);
+    return Object.fromEntries(Object.keys(a).map(key => [key, mix(a[key], b[key], s)]));
+  }
+  function parseTime(v) { // → an hour in [0, 24), 'auto', or null when it says nothing usable
+    const s = typeof v === 'string' ? v.trim().toLowerCase() : v;
+    if (s === 'auto') return 'auto';
+    if (typeof s === 'string' && s in TIME_NAMES) return TIME_NAMES[s];
+    const n = typeof s === 'number' ? s : typeof s === 'string' && s ? Number(s) : NaN;
+    return Number.isFinite(n) ? ((n % 24) + 24) % 24 : null;
+  }
+  let timeSpec = parseTime(new URLSearchParams(location.search).get('time')) ?? parseTime(layout.time) ?? 'auto';
+  ctx.timeChoice = parseTime(layout.time) == null ? 'auto' : layout.time; // 방 자신의 선택을 준 그대로. ?time= 은 이것을 바꾸지 않는다. heap:get 이 이것을 알려 준다.
+  const seoulFmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  function seoulHour() {
+    const part = Object.fromEntries(seoulFmt.formatToParts(new Date()).map(p => [p.type, Number(p.value)]));
+    return (part.hour % 24) + part.minute / 60;
+  }
+  // ---------- 방 뒤의 배경 ----------
+  // layout.backdrop: 없거나 { mode: 'time' } 이면 시간 따라 바뀌는 그라데이션(위 bd), { mode: 'colour', top, bottom? } 이면 주인이 고른 색
+  // (bottom 이 없으면 한 색). 주인이 고른 색은 시간과 상관없이 그 색 그대로다. 검사는 서버(layout.ts 의 backdrop)가 한다.
+  // 세로로 긴 작은 캔버스를 화면 전체에 펴서 그린다 (sRGB 텍스처라 톤 매핑을 받지 않아 고른 색이 그대로 보인다). 공유 그림에도 들어간다.
+  const bdCanvas = makeCanvas(2, 256), bdTex = canvasTexture(bdCanvas);
+  scene.background = bdTex;
+  onDispose(() => bdTex.dispose());
+  const HEXB = /^#[0-9a-fA-F]{6}$/;
+  const normBackdrop = b => (b && b.mode === 'colour' && HEXB.test(b.top) ? { mode: 'colour', top: b.top, bottom: HEXB.test(b.bottom) ? b.bottom : b.top } : { mode: 'time' });
+  ctx.backdrop = normBackdrop(layout.backdrop);
+  let lastK = null;
+  function paintBackdrop() {
+    const b = ctx.backdrop;
+    const [top, bottom] = b.mode === 'colour' ? [b.top, b.bottom] : lastK ? lastK.bd.map(css) : ['#565344', '#565344'];
+    const g = bdCanvas.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 256);
+    gr.addColorStop(0, top); gr.addColorStop(1, bottom); g.fillStyle = gr; g.fillRect(0, 0, 2, 256);
+    bdTex.needsUpdate = true;
+  }
+  // 꾸미기(edit.js)가 배경을 바꾼다. null 은 시간 따라
+  function setBackdrop(b) {
+    ctx.backdrop = normBackdrop(b);
+    if (b && ctx.backdrop.mode === 'colour') layout.backdrop = structuredClone(b); else delete layout.backdrop;
+    paintBackdrop();
+  }
+  const setCol = (c, [r, g, b]) => c.setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace);
+  const css = c => `rgb(${c.map(Math.round).join(',')})`;
+  ctx.lampBase = 3.2; ctx.readGlow = 0; let nextClock = 0;
+  function applyTime(hour) {
+    const k = timeAt(hour);
+    renderer.toneMappingExposure = k.exposure;
+    lastK = k; paintBackdrop();
+    setCol(hemi.color, k.hemiSky); setCol(hemi.groundColor, k.hemiGround); hemi.intensity = k.hemiI;
+    fill.intensity = k.fillI;
+    ctx.readGlow = Math.min(0.4, Math.max(0, (1.6 - k.sunI) * 0.3)); // 손에 든 카드는 방이 어두우면 스스로 빛난다. 아침부터 해 질 녘까지는 0
+    setCol(sun.color, k.sun); sun.intensity = k.sunI;
+    ctx.sunDir.copy(ctx.sunHeading).setY(-k.drop).normalize();
+    if (WIN) sun.target.position.copy(WALLS[WIN.wall].point(WIN.at, WIN.y, 0)).addScaledVector(ctx.sunDir, WIN.y / -ctx.sunDir.y);
+    sun.position.copy(sun.target.position).addScaledVector(ctx.sunDir, -11);
+    if (ctx.shaftGeo) { // 빛줄기의 바닥 끝과 먼지가 해의 새 높이를 따른다
+      const pos = ctx.shaftGeo.attributes.position;
+      ctx.shaftCorners.forEach((p, i) => { tA.copy(p).addScaledVector(ctx.sunDir, p.y / -ctx.sunDir.y); pos.setXYZ(4 + i, tA.x, tA.y, tA.z); });
+      pos.needsUpdate = true; ctx.shaftGeo.computeBoundingSphere(); ctx.moteGeo.boundingSphere = null;
+      setCol(ctx.shaftMat.color, k.shaft); ctx.shaftMat.opacity = k.shaftO;
+      setCol(ctx.moteMat.color, k.mote); ctx.moteMat.opacity = k.moteO;
+    }
+    if (ctx.skyTex) {
+      const sg = ctx.skyTex.image.getContext('2d'), gr = sg.createLinearGradient(0, 0, 0, 128);
+      gr.addColorStop(0, css(k.sky[0])); gr.addColorStop(0.55, css(k.sky[1])); gr.addColorStop(1, css(k.sky[2])); sg.fillStyle = gr; sg.fillRect(0, 0, 4, 128);
+      ctx.skyTex.needsUpdate = true;
+    }
+    ctx.lampBase = k.lampI; // frame() 이 이 값을 모든 램프의 불빛에 준다
+    ctx.shadeNow = k.shadeI;
+    for (const l of ctx.build.lamps) for (const s of l.shades) s.emissiveIntensity = l.off ? 0 : ctx.shadeNow;
+  }
+  function tickClock() { // auto 만: frame() 이 부르므로 rAF 루프와 함께 dispose 에서 멈춘다 (자기 타이머는 없다)
+    if (timeSpec !== 'auto' || Date.now() < nextClock) return;
+    nextClock = Date.now() + 60000;
+    applyTime(seoulHour());
+  }
+  if (timeSpec === 'auto') tickClock(); else applyTime(timeSpec);
+  // 다시 불러오지 않고 바꾸기: root.dispatchEvent(new CustomEvent('heap:time', { detail: 'dusk' | 6.5 | 'auto' }))
+  on(root, 'heap:time', e => {
+    const spec = parseTime(e.detail);
+    if (spec == null) return;
+    timeSpec = spec; ctx.timeChoice = e.detail; nextClock = 0;
+    if (timeSpec === 'auto') tickClock(); else applyTime(timeSpec);
+  });
+
+  Object.assign(ctx, { tickClock, setBackdrop });
+}
