@@ -1,13 +1,30 @@
 "use client";
 
-// 온보딩 컨셉 C: 어두운 화면 → 창문 빛과 빈 방 → 스크롤로 가구가 하나씩 쌓임 → "Ready to Start?" → 방 안으로 확대
-// → 아래 안내 팝업과 둘러보기 진행 표시 → 3개를 둘러보면 내비게이션 바 → 아이콘을 누르면 로그인 팝업.
+// 온보딩 컨셉 C. 방은 실제 2번 방이다: /room/dname 과 같은 HeapRoom(힙 엔진)을 띄우고, 그 위에 온보딩을 얹는다.
+// 어두운 화면 → 창문 빛과 빈 방 → 스크롤마다 글과 가구가 번갈아 쌓임 → "Ready to Start?" → 방이 화면 가득 확대
+// → 아래 안내 팝업과 둘러보기 진행 → 3곳을 둘러보면 내비게이션 바 → 아이콘을 누르면 로그인 팝업.
+// 엔진에는 heap:intro 이벤트(engine/intro.js)로 가구와 사진 더미, 카메라 거리만 알려 준다. 둘러보기는 엔진의 모드와 창을 읽어서 센다.
 import "./onboarding-c.css";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { authClient } from "@/lib/auth-client";
-import { RoomScene } from "./room-scene";
-import { NAV_AFTER, SCROLL_SCREENS, STORY, TIMELINE, itemWindow, ramp, type ItemId } from "./story";
+import { useRouter } from "next/navigation";
+import { HeapRoom, type HeapRoomData } from "@/components/heap/heap-room";
+import {
+  MODE_SPOT,
+  NAV_AFTER,
+  ONBOARDING_ROOM_ID,
+  PANEL_IDS,
+  PANEL_SPOT,
+  SCROLL_SCREENS,
+  SPOTS,
+  STEPS,
+  TIMELINE,
+  ramp,
+  spotsFor,
+  stepOfItems,
+  stepWindow,
+  type SpotId,
+} from "./story";
 import { Paper, PaperFilters } from "./paper";
 import { PixelIcon } from "./icons";
 import { LoginPopup } from "./login-popup";
@@ -24,91 +41,155 @@ const LOGIN_REASON: Record<NavAction, string> = {
 const NOTE_TREE_HREF = "/tree-mock/index.html";
 const PLAN_HREF = "/plan";
 
-const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+// 스크롤하는 동안 방은 화면의 약 50%: 방 카메라를 이만큼 뒤로 물린다. 방 안에서는 1(보통 구도).
+const FAR = 1.95;
+// 스크롤하는 동안 방이 천천히 도는 각도 (시작, 끝)
+const TURN: [number, number] = [-0.4, 0.12];
+const ZOOM_MS = 2800;
 
-export function ConceptC() {
+const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
+export function ConceptC({
+  data,
+  viewerName,
+  signedIn,
+}: {
+  data: HeapRoomData;
+  viewerName: string | null;
+  signedIn: boolean;
+}) {
+  const router = useRouter();
   const rootRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const sceneRef = useRef<RoomScene | null>(null);
+  const hostRef = useRef<HTMLDivElement>(null);
   const introRef = useRef<HTMLDivElement>(null);
+  const shadeRef = useRef<HTMLDivElement>(null);
+  const vignetteRef = useRef<HTMLDivElement>(null);
   const readyRef = useRef<HTMLDivElement>(null);
-  const tipRef = useRef<HTMLDivElement>(null);
   const captionRefs = useRef<(HTMLDivElement | null)[]>([]);
   const phaseRef = useRef<Phase>("scroll");
   const progressRef = useRef(0);
   const zoomStartRef = useRef(-1);
-  const hoverRef = useRef<ItemId | null>(null);
 
   const [phase, setPhase] = useState<Phase>("scroll");
+  const [engineMode, setEngineMode] = useState("room");
+  const [panelOpen, setPanelOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
-  const [found, setFound] = useState<ItemId[]>([]);
-  const [active, setActive] = useState<ItemId | null>(null);
-  const [hover, setHover] = useState<ItemId | null>(null);
+  const [found, setFound] = useState<SpotId[]>([]);
+  const [active, setActive] = useState<SpotId | null>(null);
   const [loginFor, setLoginFor] = useState<NavAction | null>(null);
-  const { data: session } = authClient.useSession();
 
-  // 3D 장면과 매 프레임 갱신. 스크롤에 따라 바뀌는 글은 다시 그리지 않고 스타일만 바꾼다.
+  const itemSteps = useMemo(() => stepOfItems(data.layout.items), [data.layout.items]);
+  const spots = useMemo(() => spotsFor(data.layout.items), [data.layout.items]);
+
+  // 매 프레임: 스크롤을 부드럽게 따라가고, 엔진에 연출 값을 보내고, 글의 투명도를 바꾼다 (React 는 다시 그리지 않는다)
   useEffect(() => {
-    const root = rootRef.current, canvas = canvasRef.current;
-    if (!root || !canvas) return;
-    const scene = new RoomScene(canvas);
-    sceneRef.current = scene;
+    const root = rootRef.current;
+    if (!root) return;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const zoomMs = reduce ? 500 : 2800;
-    const resize = new ResizeObserver(() => scene.resize());
-    resize.observe(canvas);
+    const zoomMs = reduce ? 500 : ZOOM_MS;
+    const pileStep = STEPS.findIndex((s) => s.pile);
+    let last = performance.now(), raf = 0, sentNull = false;
 
-    let last = performance.now(), raf = 0;
     const loop = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       const max = root.scrollHeight - root.clientHeight;
       const target = max > 0 ? root.scrollTop / max : 0;
-      // 스크롤을 그대로 쓰지 않고 따라가게 해서 움직임이 끊기지 않는다
       progressRef.current += (target - progressRef.current) * (reduce ? 1 : 1 - Math.exp(-dt * 5));
       const p = progressRef.current;
+      const roomEl = hostRef.current?.querySelector(".heap-room");
 
-      let zoom = 0, dark = ramp(p, TIMELINE.dark[0], TIMELINE.dark[1]), readyFade = 1;
+      let zoom = 0;
       if (phaseRef.current !== "scroll") {
-        const z = Math.min(1, (now - zoomStartRef.current) / zoomMs);
-        zoom = z;
-        dark = 1 - 0.7 * easeInOut(z);
-        readyFade = Math.max(0, 1 - z * 4);
-        if (z >= 1 && phaseRef.current === "zoom") {
+        zoom = Math.min(1, (now - zoomStartRef.current) / zoomMs);
+        if (zoom >= 1 && phaseRef.current === "zoom") {
           phaseRef.current = "room";
           setPhase("room");
         }
       }
-      scene.frame(dt, { progress: p, zoom, dark, room: phaseRef.current === "room" });
+      const z = easeInOut(zoom);
+      const reveal = ramp(p, ...TIMELINE.reveal);
+      const dark = ramp(p, ...TIMELINE.dark);
 
+      if (phaseRef.current === "room") {
+        // 연출 끝: 가구, 사진, 카메라를 보통 방으로 돌린다
+        if (!sentNull) roomEl?.dispatchEvent(new CustomEvent("heap:intro", { detail: null }));
+        sentNull = true;
+      } else {
+        sentNull = false;
+        const turnScroll = lerp(TURN[0], TURN[1], p);
+        roomEl?.dispatchEvent(
+          new CustomEvent("heap:intro", {
+            detail: {
+              items: itemSteps.map((s) => (phaseRef.current === "zoom" ? 1 : ramp(p, ...stepWindow(s).drop))),
+              pile: phaseRef.current === "zoom" ? 1 : ramp(p, ...stepWindow(pileStep).drop),
+              dist: lerp(FAR, 1, z),
+              turn: lerp(turnScroll, 0, z),
+            },
+          }),
+        );
+      }
+
+      const scrollShade = Math.max(1 - reveal, 0.72 * dark);
+      if (shadeRef.current) shadeRef.current.style.opacity = String(phaseRef.current === "scroll" ? scrollShade : 0.72 * (1 - z));
+      if (vignetteRef.current) vignetteRef.current.style.opacity = String(1 - z);
       if (introRef.current) introRef.current.style.opacity = String(1 - ramp(p, ...TIMELINE.introOut));
-      STORY.forEach((_, i) => {
+      STEPS.forEach((_, i) => {
         const el = captionRefs.current[i];
         if (!el) return;
-        const w = itemWindow(i);
+        const w = stepWindow(i);
         const enter = ramp(p, ...w.textIn), leave = ramp(p, ...w.textOut);
         el.style.opacity = String(enter * (1 - leave));
         el.style.setProperty("--oc-shift", `${(1 - enter) * 28 - leave * 28}px`);
       });
       if (readyRef.current) {
-        const r = ramp(p, ...TIMELINE.ready) * readyFade;
+        const r = ramp(p, ...TIMELINE.ready) * Math.max(0, 1 - zoom * 4);
         readyRef.current.style.opacity = String(r);
         readyRef.current.style.visibility = r > 0.01 ? "visible" : "hidden";
       }
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
-    return () => {
-      cancelAnimationFrame(raf);
-      resize.disconnect();
-      scene.dispose();
-      sceneRef.current = null;
-    };
+    return () => cancelAnimationFrame(raf);
+  }, [itemSteps]);
+
+  const markFound = useCallback((id: SpotId) => {
+    if (phaseRef.current !== "room") return;
+    setActive(id);
+    setFound((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    setGuideOpen(true);
   }, []);
 
+  // 둘러보기: 엔진의 모드(앉기, 상영, 책장)와 열린 창(휴대폰, 방명록, 문 …)을 읽는다
   useEffect(() => {
-    sceneRef.current?.setFound(found);
-  }, [found]);
+    const roomEl = hostRef.current?.querySelector<HTMLElement>(".heap-room");
+    if (!roomEl) return;
+    const onMode = (e: Event) => {
+      const mode = (e as CustomEvent<string>).detail;
+      setEngineMode(mode);
+      const spot = MODE_SPOT[mode];
+      if (spot) markFound(spot);
+    };
+    const check = () => {
+      let open = false;
+      for (const id of PANEL_IDS) {
+        const el = roomEl.querySelector<HTMLElement>(`#${id}`);
+        if (!el || el.hidden) continue;
+        open = true;
+        const spot = PANEL_SPOT[id];
+        if (spot) markFound(spot);
+      }
+      setPanelOpen(open);
+    };
+    const watch = new MutationObserver(check);
+    watch.observe(roomEl, { subtree: true, attributes: true, attributeFilter: ["hidden"] });
+    roomEl.addEventListener("heap:mode", onMode);
+    return () => {
+      watch.disconnect();
+      roomEl.removeEventListener("heap:mode", onMode);
+    };
+  }, [markFound]);
 
   // "Ready to Start?"가 보일 때 클릭이나 키를 누르면 방 안으로 들어간다
   const enterRoom = useCallback(() => {
@@ -141,85 +222,47 @@ export function ConceptC() {
     };
   }, [phase, guideOpen]);
 
-  const interact = useCallback((id: ItemId) => {
-    sceneRef.current?.interact(id);
-    setActive(id);
-    setFound((prev) => (prev.includes(id) ? prev : [...prev, id]));
-    setGuideOpen(true);
-  }, []);
-
-  function toNdc(event: React.PointerEvent | React.MouseEvent) {
-    const rect = event.currentTarget.getBoundingClientRect();
-    return {
-      nx: ((event.clientX - rect.left) / rect.width) * 2 - 1,
-      ny: -((event.clientY - rect.top) / rect.height) * 2 + 1,
-    };
-  }
-
-  function onPointerMove(event: React.PointerEvent<HTMLCanvasElement>) {
-    const scene = sceneRef.current;
-    if (!scene || phaseRef.current !== "room") return;
-    const { nx, ny } = toNdc(event);
-    scene.setPointer(nx, ny);
-    const id = event.pointerType === "mouse" ? scene.pick(nx, ny) : null;
-    if (id !== hoverRef.current) {
-      hoverRef.current = id;
-      scene.setHover(id);
-      setHover(id);
-    }
-    if (tipRef.current) tipRef.current.style.transform = `translate(${event.clientX + 16}px, ${event.clientY + 14}px)`;
-  }
-
-  function onCanvasClick(event: React.MouseEvent<HTMLCanvasElement>) {
-    const scene = sceneRef.current;
-    if (!scene) return;
-    if (phaseRef.current === "scroll") {
-      enterRoom();
-      return;
-    }
-    if (phaseRef.current !== "room") return;
-    const { nx, ny } = toNdc(event);
-    const id = scene.pick(nx, ny);
-    if (id) interact(id);
-  }
-
   // 로그인 전에는 어느 아이콘이든 로그인 팝업을 띄운다. 로그인 뒤에는 결제 안내와 쪽지 트리로 가는 링크가 된다.
   function onNav(event: React.MouseEvent, action: NavAction) {
-    if (session) return;
+    if (signedIn) return;
     event.preventDefault();
     setLoginFor(action);
   }
 
   const closeLogin = useCallback(() => setLoginFor(null), []);
+  // 로그인하면 서버가 닉네임과 로그인 상태를 다시 읽는다 (방명록 쓰기도 켜진다)
+  const onSignedIn = useCallback(() => {
+    setLoginFor(null);
+    router.refresh();
+  }, [router]);
 
-  const activeStory = STORY.find((s) => s.id === active);
-  const hoverStory = STORY.find((s) => s.id === hover);
-  const navOpen = found.length >= NAV_AFTER;
+  const countFound = found.filter((id) => spots.includes(id)).length;
+  const navOpen = countFound >= NAV_AFTER;
+  const activeSpot = active ? SPOTS[active] : null;
+  // 앉기, 상영, 책장, 열린 창에서는 엔진의 단추와 창을 쓰므로 안내 팝업을 잠시 내린다
+  const guideShown = phase === "room" && guideOpen && engineMode === "room" && !panelOpen;
   const progressNote =
-    found.length === STORY.length
+    countFound >= spots.length
       ? "You found every story here."
       : navOpen
         ? "A menu just opened at the top."
-        : `${found.length} of ${STORY.length} found`;
+        : `${countFound} of ${spots.length} found`;
+
+  const rootClass = ["oc-root", phase !== "scroll" && "oc-locked", phase === "room" && "oc-live", `oc-engine-${engineMode}`]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <div ref={rootRef} className={`oc-root${phase === "scroll" ? "" : " oc-locked"}`}>
+    <div ref={rootRef} className={rootClass}>
       <PaperFilters />
       <div style={{ height: `${SCROLL_SCREENS * 100}vh` }}>
-        <div className="oc-stage">
-          <canvas
-            ref={canvasRef}
-            className="oc-canvas"
-            aria-hidden="true"
-            onPointerMove={onPointerMove}
-            onPointerLeave={() => {
-              hoverRef.current = null;
-              sceneRef.current?.setHover(null);
-              setHover(null);
-            }}
-            onClick={onCanvasClick}
-            style={{ cursor: hover ? "pointer" : "default" }}
-          />
+        <div className="oc-stage" onClick={() => phaseRef.current === "scroll" && enterRoom()}>
+          {/* 실제 2번 방. 스크롤하는 동안에는 누를 수 없고, 방 안에 들어오면 /room/dname 과 똑같이 움직인다. */}
+          <div ref={hostRef} className="oc-room-host">
+            <HeapRoom roomId={ONBOARDING_ROOM_ID} data={data} viewerName={viewerName} signedIn={signedIn} />
+          </div>
+          <div ref={vignetteRef} className="oc-layer oc-vignette" />
+          <div ref={shadeRef} className="oc-layer oc-shade" />
 
           {/* 1. 첫 화면 */}
           <div ref={introRef} className="oc-layer oc-intro">
@@ -233,9 +276,9 @@ export function ConceptC() {
           </div>
 
           {/* 2. 가구와 함께 나오는 글 */}
-          {STORY.map((item, i) => (
+          {STEPS.map((step, i) => (
             <div
-              key={item.id}
+              key={step.title}
               ref={(el) => {
                 captionRefs.current[i] = el;
               }}
@@ -243,8 +286,8 @@ export function ConceptC() {
               style={{ opacity: 0 }}
             >
               <span className="oc-index oc-pixel">0{i + 1}</span>
-              <h2 className="oc-rounded">{item.title}</h2>
-              <p>{item.line}</p>
+              <h2 className="oc-rounded">{step.title}</h2>
+              <p>{step.line}</p>
             </div>
           ))}
 
@@ -256,48 +299,28 @@ export function ConceptC() {
             <span>Click anywhere to step inside</span>
           </div>
 
-          {/* 마우스를 올린 가구 이름 */}
-          <div
-            ref={tipRef}
-            className="oc-tip oc-rounded"
-            style={{ opacity: phase === "room" && hoverStory ? 1 : 0 }}
-            aria-hidden="true"
-          >
-            {hoverStory?.name}
-          </div>
-
           {/* 4·5. 아래 안내 팝업과 둘러보기 진행 */}
           {phase === "room" && (
-            <div className={`oc-guide${guideOpen ? " open" : ""}`} aria-live="polite">
+            <div className={`oc-guide${guideShown ? " open" : ""}`} aria-live="polite" aria-hidden={!guideShown}>
               <Paper tape={["top"]}>
                 <div key={active ?? "welcome"} className="oc-swap">
-                  <h3 className="oc-rounded">{activeStory ? activeStory.name : "Welcome in."}</h3>
+                  <h3 className="oc-rounded">{activeSpot ? activeSpot.name : "Welcome in."}</h3>
                   <p>
-                    {activeStory
-                      ? activeStory.story
-                      : "Everything in this room holds a little story. Click whatever catches your eye."}
+                    {activeSpot
+                      ? activeSpot.story
+                      : "Click the floor to walk around. Sit at the table to dig through the polaroids, and look for the phone, the door and the guestbook."}
                   </p>
                 </div>
                 <div className="oc-progress">
-                  <span className="oc-dots" role="img" aria-label={`${found.length} of ${STORY.length} explored`}>
-                    {STORY.map((s) => (
-                      <span key={s.id} className={found.includes(s.id) ? "on" : ""}>
-                        {found.includes(s.id) ? "●" : "○"}
+                  <span className="oc-dots" role="img" aria-label={`${countFound} of ${spots.length} explored`}>
+                    {spots.map((id) => (
+                      <span key={id} className={found.includes(id) ? "on" : ""}>
+                        {found.includes(id) ? "●" : "○"}
                       </span>
                     ))}
                   </span>
                   <span>{progressNote}</span>
                 </div>
-                {/* 키보드와 화면 낭독기로도 둘러볼 수 있게 */}
-                <ul className="oc-sr">
-                  {STORY.map((s) => (
-                    <li key={s.id}>
-                      <button type="button" onClick={() => interact(s.id)}>
-                        {s.name}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
               </Paper>
             </div>
           )}
@@ -307,10 +330,10 @@ export function ConceptC() {
             <nav className={`oc-nav${navOpen ? " open" : ""}`} aria-label="Menu" aria-hidden={!navOpen}>
               <Paper tape={["tl"]}>
                 <span className="oc-brand oc-pixel">Memories</span>
-                {session ? (
+                {signedIn ? (
                   <span className="oc-nav-btn oc-nav-name">
                     <PixelIcon name="user" size={20} />
-                    <span>{session.user.name}</span>
+                    <span>{viewerName}</span>
                   </span>
                 ) : (
                   <button
@@ -349,7 +372,7 @@ export function ConceptC() {
           )}
 
           {/* 7. 로그인 팝업 */}
-          {loginFor && <LoginPopup reason={LOGIN_REASON[loginFor]} onClose={closeLogin} />}
+          {loginFor && <LoginPopup reason={LOGIN_REASON[loginFor]} onClose={closeLogin} onSignedIn={onSignedIn} />}
         </div>
       </div>
     </div>

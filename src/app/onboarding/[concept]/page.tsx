@@ -1,31 +1,47 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
+import { getViewer } from "@/lib/session";
+import { loadRoomView } from "@/lib/heap/room-view";
 import { ONBOARDING_CONCEPTS, findOnboardingConcept } from "@/lib/onboarding";
 import { ConceptC } from "@/components/onboarding-c/concept-c";
+import { ONBOARDING_ROOM_ID } from "@/components/onboarding-c/story";
 import { moneygraphyPixel, moneygraphyRounded, pretendard } from "@/app/fonts/onboarding";
 
 type OnboardingPageProps = {
   params: Promise<{ concept: string }>;
 };
 
+// 컨셉 C가 띄우는 실제 2번 방. /room/dname 과 같은 값을 읽는다 (꾸미기는 열지 않는다).
+// 세션과 DB 읽기는 요청 시점 값이라 Suspense 안에서 읽는다 (cacheComponents).
+async function ConceptCRoom() {
+  const viewer = await getViewer();
+  const view = await loadRoomView(ONBOARDING_ROOM_ID, viewer, { withOwner: false });
+  if (!view) {
+    notFound();
+  }
+  return <ConceptC data={view.data} viewerName={viewer?.name ?? null} signedIn={viewer !== null} />;
+}
+
 // 시안 3개만 미리 만든다. 목록에 없는 주소는 404.
 export function generateStaticParams() {
   return ONBOARDING_CONCEPTS.map((concept) => ({ concept: concept.id }));
 }
 
-export default async function OnboardingConceptPage({ params }: OnboardingPageProps) {
+// 주소(params)는 요청 시점 값이라 Suspense 안에서 읽는다 (cacheComponents). 글꼴 변수는 바깥에 둔다.
+async function ConceptContent({ params }: OnboardingPageProps) {
   const { concept: id } = await params;
   const concept = findOnboardingConcept(id);
   if (!concept) {
     notFound();
   }
 
-  // 컨셉 C: 스크롤로 방이 채워지는 온보딩. 화면 전체를 덮으므로 위의 헤더는 가려진다.
+  // 컨셉 C: 실제 2번 방 위에 얹은 온보딩. 화면 전체를 덮으므로 위의 헤더는 가려진다.
   if (concept.id === "c") {
     return (
-      <div className={`${moneygraphyPixel.variable} ${moneygraphyRounded.variable} ${pretendard.variable}`}>
-        <ConceptC />
-      </div>
+      <Suspense fallback={<div className="fixed inset-0 z-[60] bg-[#0c0a08]" />}>
+        <ConceptCRoom />
+      </Suspense>
     );
   }
 
@@ -45,5 +61,15 @@ export default async function OnboardingConceptPage({ params }: OnboardingPagePr
         </Link>
       </section>
     </main>
+  );
+}
+
+export default function OnboardingConceptPage({ params }: OnboardingPageProps) {
+  return (
+    <div className={`${moneygraphyPixel.variable} ${moneygraphyRounded.variable} ${pretendard.variable}`}>
+      <Suspense fallback={null}>
+        <ConceptContent params={params} />
+      </Suspense>
+    </div>
   );
 }

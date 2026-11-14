@@ -48,7 +48,11 @@ export function setupLoop(ctx) {
   // 방 카메라로 다가간다: 팔로워가 보는 구도
   function roomCam(a) {
     const fit = Math.max(1, 1.25 / camera.aspect) * roomFit(camera.aspect);
-    roomGoal.copy(ROOM_CAM.target).addScaledVector(ROOM_CAM.pos.clone().sub(ROOM_CAM.target), fit);
+    // 온보딩 연출(intro.js)은 거리를 늘리고 방을 살짝 돌린다. 보내지 않으면 dist 1, turn 0 이라 전과 같다
+    const iv = ctx.introView;
+    roomGoal.copy(ROOM_CAM.pos).sub(ROOM_CAM.target);
+    if (iv?.turn) roomGoal.applyAxisAngle(Yv, iv.turn);
+    roomGoal.multiplyScalar(fit * (iv?.dist ?? 1)).add(ROOM_CAM.target);
     camera.position.lerp(roomGoal, a); controls.target.lerp(ROOM_CAM.target, a);
     // 평면도에서 나오면 카메라의 위 방향이 아직 기울어 있다: 위치와 함께 Y 로 돌아오고, 다 오면 정확히 Y 가 된다
     if (!camera.up.equals(Yv)) { camera.up.lerp(Yv, a).normalize(); if (camera.up.y > 0.99999) camera.up.copy(Yv); }

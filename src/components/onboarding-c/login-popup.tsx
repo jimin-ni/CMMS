@@ -8,7 +8,16 @@ import { Paper } from "./paper";
 import { PixelIcon } from "./icons";
 
 // 내비게이션 바의 아이콘을 누르면 뜨는 로그인 팝업. 로그인 처리는 /login 페이지와 같다.
-export function LoginPopup({ reason, onClose }: { reason: string; onClose: () => void }) {
+// onSignedIn: 로그인에 성공하면 부른다 (팝업을 닫고 서버 값을 다시 읽는다)
+export function LoginPopup({
+  reason,
+  onClose,
+  onSignedIn,
+}: {
+  reason: string;
+  onClose: () => void;
+  onSignedIn: () => void;
+}) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -40,7 +49,7 @@ export function LoginPopup({ reason, onClose }: { reason: string; onClose: () =>
       method: "email",
       user_role: role === "admin" || role === "creator" || role === "public" ? role : "unknown",
     });
-    onClose();
+    onSignedIn();
   }
 
   return (
