@@ -1,0 +1,452 @@
+/* 온보딩 컨셉 C. .oc-root 아래에만 적용한다. */
+.oc-root {
+  --oc-paper: #f3eadb;
+  --oc-cream: #fff8ec;
+  --oc-ink: #2f2c24;
+  --oc-ink-soft: #5a5244;
+  --oc-clay: #a6613c;
+  --oc-olive: #565344;
+  --oc-tape: rgba(226, 205, 160, 0.82);
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: #0c0a08;
+  color: var(--oc-paper);
+  font-family: var(--font-oc-body), system-ui, sans-serif;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: none;
+}
+.oc-root.oc-locked {
+  overflow-y: hidden;
+}
+.oc-pixel {
+  font-family: var(--font-oc-pixel), var(--font-oc-body), sans-serif;
+}
+.oc-rounded {
+  font-family: var(--font-oc-rounded), var(--font-oc-body), sans-serif;
+}
+
+.oc-stage {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+}
+.oc-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: pan-y;
+}
+.oc-root.oc-locked .oc-canvas {
+  touch-action: none;
+}
+.oc-layer {
+  position: absolute;
+  pointer-events: none;
+  will-change: opacity, transform;
+}
+
+/* 1. 첫 화면 */
+.oc-intro {
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+.oc-intro h1 {
+  font-size: clamp(44px, 8vw, 104px);
+  letter-spacing: 0.04em;
+  color: #f7ecd8;
+  text-shadow: 0 0 24px rgba(255, 207, 148, 0.25);
+  margin: 0;
+}
+.oc-intro p {
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  color: rgba(243, 234, 219, 0.7);
+  margin: 0;
+}
+.oc-scroll-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 40px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgba(243, 234, 219, 0.72);
+}
+.oc-scroll-hint .oc-bob {
+  animation: oc-bob 1.6s ease-in-out infinite;
+}
+@keyframes oc-bob {
+  0%, 100% { transform: translateY(0); opacity: 0.6; }
+  50% { transform: translateY(6px); opacity: 1; }
+}
+
+/* 2. 가구와 함께 나오는 글 */
+.oc-caption {
+  --oc-shift: 0px;
+  top: 50%;
+  width: min(30vw, 340px);
+  transform: translateY(calc(-50% + var(--oc-shift)));
+}
+.oc-caption.left { left: max(4vw, 24px); text-align: left; }
+.oc-caption.right { right: max(4vw, 24px); text-align: left; }
+.oc-caption .oc-index {
+  display: block;
+  font-size: 13px;
+  color: var(--oc-clay);
+  margin-bottom: 8px;
+}
+.oc-caption h2 {
+  margin: 0 0 10px;
+  font-size: clamp(26px, 2.6vw, 38px);
+  line-height: 1.15;
+  color: #f7ecd8;
+}
+.oc-caption p {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.55;
+  color: rgba(243, 234, 219, 0.78);
+}
+
+/* 3. Ready to Start? */
+.oc-ready {
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+.oc-ready button {
+  pointer-events: auto;
+  background: none;
+  border: 0;
+  color: #f7ecd8;
+  font-size: clamp(34px, 5vw, 64px);
+  cursor: pointer;
+  text-shadow: 0 0 30px rgba(255, 183, 103, 0.35);
+}
+.oc-ready button:focus-visible {
+  outline: 2px dashed var(--oc-paper);
+  outline-offset: 8px;
+}
+.oc-ready span {
+  font-size: 13px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(243, 234, 219, 0.6);
+  animation: oc-pulse 2s ease-in-out infinite;
+}
+@keyframes oc-pulse {
+  50% { opacity: 0.35; }
+}
+
+/* 종이 판 */
+.oc-paper {
+  position: relative;
+  color: var(--oc-ink);
+  isolation: isolate;
+}
+.oc-paper-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(170deg, #fbf3e4 0%, var(--oc-paper) 55%, #ecdfc8 100%);
+  border-radius: 6px;
+  filter: url(#oc-paper) drop-shadow(0 10px 18px rgba(0, 0, 0, 0.35)) drop-shadow(0 2px 3px rgba(0, 0, 0, 0.25));
+}
+.oc-paper-body {
+  position: relative;
+}
+.oc-tape {
+  position: absolute;
+  z-index: 2;
+  width: 92px;
+  height: 26px;
+  background: var(--oc-tape);
+  filter: url(#oc-tape);
+  /* 손으로 찢은 끝 */
+  clip-path: polygon(0 8%, 4% 0, 8% 10%, 12% 2%, 88% 0, 92% 9%, 96% 1%, 100% 10%, 100% 92%, 96% 100%, 92% 90%, 88% 98%, 12% 100%, 8% 91%, 4% 99%, 0 90%);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+.oc-tape-tl { top: -12px; left: -18px; transform: rotate(-32deg); }
+.oc-tape-tr { top: -12px; right: -18px; transform: rotate(28deg); }
+.oc-tape-top { top: -13px; left: 50%; transform: translateX(-50%) rotate(-2deg); }
+
+/* 4·5. 아래에서 올라오는 안내 팝업 */
+.oc-guide {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  width: min(520px, calc(100vw - 32px));
+  transform: translate(-50%, calc(100% + 60px));
+  transition: transform 0.8s cubic-bezier(0.2, 0.9, 0.25, 1.15);
+}
+.oc-guide.open {
+  transform: translate(-50%, 0) rotate(-0.6deg);
+}
+.oc-guide .oc-paper-body {
+  padding: 22px 26px 18px;
+}
+.oc-guide h3 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  color: var(--oc-ink);
+}
+.oc-guide p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--oc-ink-soft);
+}
+.oc-guide .oc-swap {
+  animation: oc-swap 0.45s ease both;
+}
+@keyframes oc-swap {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.oc-progress {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 14px;
+  padding-top: 12px;
+  gap: 6px 12px;
+  flex-wrap: wrap;
+  border-top: 1px dashed rgba(47, 44, 36, 0.25);
+  font-size: 13px;
+  color: var(--oc-ink-soft);
+}
+.oc-dots {
+  display: flex;
+  gap: 7px;
+  font-size: 15px;
+  letter-spacing: 0;
+  color: var(--oc-clay);
+}
+.oc-dots .on {
+  animation: oc-pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) both;
+}
+@keyframes oc-pop {
+  from { transform: scale(0.3); }
+  to { transform: scale(1); }
+}
+
+/* 마우스를 올린 가구 이름 */
+.oc-tip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  padding: 5px 10px;
+  font-size: 13px;
+  white-space: nowrap;
+  color: var(--oc-ink);
+  background: var(--oc-cream);
+  border-radius: 3px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  transition: opacity 0.2s;
+}
+
+/* 6. 내비게이션 바 */
+.oc-nav {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translate(-50%, -140%);
+  transition: transform 0.9s cubic-bezier(0.2, 0.9, 0.25, 1.2);
+}
+.oc-nav.open {
+  transform: translate(-50%, 0) rotate(0.4deg);
+}
+.oc-nav .oc-paper-body {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+}
+.oc-nav .oc-brand {
+  font-size: 18px;
+  padding: 0 12px 0 6px;
+  margin-right: 4px;
+  border-right: 1px dashed rgba(47, 44, 36, 0.3);
+}
+.oc-nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--oc-ink);
+  font: inherit;
+  font-size: 14px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s;
+}
+.oc-nav-btn:hover,
+.oc-nav-btn:focus-visible {
+  background: rgba(166, 97, 60, 0.12);
+  transform: translateY(-1px);
+}
+.oc-nav-btn:focus-visible {
+  outline: 2px dashed var(--oc-clay);
+  outline-offset: 1px;
+}
+.oc-nav-name {
+  color: var(--oc-clay);
+  cursor: default;
+}
+.oc-nav-name:hover {
+  background: transparent;
+  transform: none;
+}
+
+/* 7. 로그인 팝업 */
+.oc-modal {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(8, 6, 4, 0.55);
+  animation: oc-fade 0.35s ease both;
+}
+@keyframes oc-fade {
+  from { opacity: 0; }
+}
+.oc-modal-card {
+  width: min(380px, 100%);
+  animation: oc-rise 0.6s cubic-bezier(0.2, 0.9, 0.25, 1.15) both;
+}
+@keyframes oc-rise {
+  from { transform: translateY(40px) rotate(-3deg); opacity: 0; }
+  to { transform: translateY(0) rotate(-0.8deg); opacity: 1; }
+}
+.oc-modal .oc-paper-body {
+  padding: 30px 28px 24px;
+}
+.oc-modal h3 {
+  margin: 0 0 4px;
+  font-size: 26px;
+}
+.oc-modal .oc-sub {
+  margin: 0 0 18px;
+  font-size: 14px;
+  color: var(--oc-ink-soft);
+}
+.oc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  color: var(--oc-ink-soft);
+}
+.oc-field input {
+  padding: 8px 2px;
+  border: 0;
+  border-bottom: 1.5px solid rgba(47, 44, 36, 0.35);
+  background: transparent;
+  font: inherit;
+  font-size: 15px;
+  color: var(--oc-ink);
+}
+.oc-field input:focus {
+  outline: none;
+  border-bottom-color: var(--oc-clay);
+}
+.oc-error {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: #a23a2a;
+}
+.oc-primary {
+  width: 100%;
+  margin-top: 4px;
+  padding: 11px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--oc-clay);
+  color: var(--oc-cream);
+  font-size: 15px;
+  cursor: pointer;
+}
+.oc-primary:disabled {
+  opacity: 0.6;
+}
+.oc-primary:focus-visible {
+  outline: 2px dashed var(--oc-olive);
+  outline-offset: 3px;
+}
+.oc-modal .oc-foot {
+  margin: 14px 0 0;
+  font-size: 13px;
+  color: var(--oc-ink-soft);
+  text-align: center;
+}
+.oc-modal .oc-foot a {
+  color: var(--oc-clay);
+  font-weight: 600;
+}
+.oc-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 4px;
+  border: 0;
+  background: none;
+  color: var(--oc-ink-soft);
+  cursor: pointer;
+}
+
+.oc-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* 좁은 화면: 글은 방 위쪽에 */
+@media (max-width: 760px) {
+  .oc-caption,
+  .oc-caption.left,
+  .oc-caption.right {
+    top: 9vh;
+    left: 20px;
+    right: 20px;
+    width: auto;
+    text-align: center;
+    transform: translateY(var(--oc-shift));
+  }
+  .oc-nav .oc-brand { display: none; }
+  .oc-nav-btn .oc-label { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .oc-scroll-hint .oc-bob,
+  .oc-ready span { animation: none; }
+  .oc-guide, .oc-nav { transition-duration: 0.01s; }
+}

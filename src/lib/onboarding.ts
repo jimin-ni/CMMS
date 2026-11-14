@@ -10,7 +10,7 @@ export type OnboardingConcept = {
 export const ONBOARDING_CONCEPTS: OnboardingConcept[] = [
   { id: "a", title: "온보딩 컨셉 A", description: "최초 접속 온보딩 시안 A", status: "준비 중" },
   { id: "b", title: "온보딩 컨셉 B", description: "최초 접속 온보딩 시안 B", status: "준비 중" },
-  { id: "c", title: "온보딩 컨셉 C", description: "최초 접속 온보딩 시안 C", status: "준비 중" },
+  { id: "c", title: "온보딩 컨셉 C", description: "스크롤하면 빈 방에 가구가 하나씩 쌓이고, 방 안을 둘러보게 하는 시안", status: "시안" },
 ];
 
 export function findOnboardingConcept(id: string): OnboardingConcept | undefined {

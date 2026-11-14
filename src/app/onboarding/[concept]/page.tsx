@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ONBOARDING_CONCEPTS, findOnboardingConcept } from "@/lib/onboarding";
+import { ConceptC } from "@/components/onboarding-c/concept-c";
+import { moneygraphyPixel, moneygraphyRounded, pretendard } from "@/app/fonts/onboarding";
 
 type OnboardingPageProps = {
   params: Promise<{ concept: string }>;
@@ -16,6 +18,15 @@ export default async function OnboardingConceptPage({ params }: OnboardingPagePr
   const concept = findOnboardingConcept(id);
   if (!concept) {
     notFound();
+  }
+
+  // 컨셉 C: 스크롤로 방이 채워지는 온보딩. 화면 전체를 덮으므로 위의 헤더는 가려진다.
+  if (concept.id === "c") {
+    return (
+      <div className={`${moneygraphyPixel.variable} ${moneygraphyRounded.variable} ${pretendard.variable}`}>
+        <ConceptC />
+      </div>
+    );
   }
 
   return (
