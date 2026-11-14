@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import type { ActionResult } from "@/lib/bubble/actions";
 import { BUBBLE_POLICY } from "@/lib/bubble/policy";
+import { trackEvent } from "@/lib/analytics";
 import type { PreviewResult } from "@/lib/bubble/ai-preview";
 import { ReactionView } from "./reaction-view";
 
@@ -32,6 +33,11 @@ export function Composer({
   async function submitAction(prev: ActionResult | null, formData: FormData) {
     const result = await sendAction(prev, formData);
     if (result.ok) {
+      // 버블 방은 roomId, 크리에이터 톡은 chatId로 보낸다.
+      trackEvent({
+        event: "chat_message_send",
+        chat_type: target.name === "chatId" ? "creator_talk" : "bubble_room",
+      });
       setDraft("");
       setPreview(null);
       onSent();
