@@ -32,6 +32,7 @@ export function setupLoop(ctx) {
   // 프레임 루프
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const clock = new THREE.Clock(), dir = new THREE.Vector3(), want = new THREE.Vector3(), wantQ = new THREE.Quaternion();
+  const focusGoal = new THREE.Vector3(), focusLook = new THREE.Vector3(); // 온보딩 연출의 책장 줌 (intro.js)
   const roomGoal = new THREE.Vector3(), FLIP = new THREE.Quaternion().setFromAxisAngle(Yv, Math.PI);
   // The canvas is sized by CSS: the whole room area, or what the 꾸미기 panel leaves of it. The observer catches both that and a window resize.
   function resize() {
@@ -53,7 +54,14 @@ export function setupLoop(ctx) {
     roomGoal.copy(ROOM_CAM.pos).sub(ROOM_CAM.target);
     if (iv?.turn) roomGoal.applyAxisAngle(Yv, iv.turn);
     roomGoal.multiplyScalar(fit * (iv?.dist ?? 1)).add(ROOM_CAM.target);
-    camera.position.lerp(roomGoal, a); controls.target.lerp(ROOM_CAM.target, a);
+    // focus 가 있으면 같은 방향에서 focusPoint 로 다가간다 (온보딩 B: 책장으로 줌인했다가 돌아온다)
+    let lookAt = ROOM_CAM.target;
+    if (iv?.focus > 0 && iv.focusPoint) {
+      focusGoal.copy(ROOM_CAM.pos).sub(ROOM_CAM.target).normalize().multiplyScalar(iv.focusDist).add(iv.focusPoint);
+      roomGoal.lerp(focusGoal, iv.focus);
+      lookAt = focusLook.copy(ROOM_CAM.target).lerp(iv.focusPoint, iv.focus);
+    }
+    camera.position.lerp(roomGoal, a); controls.target.lerp(lookAt, a);
     // 평면도에서 나오면 카메라의 위 방향이 아직 기울어 있다: 위치와 함께 Y 로 돌아오고, 다 오면 정확히 Y 가 된다
     if (!camera.up.equals(Yv)) { camera.up.lerp(Yv, a).normalize(); if (camera.up.y > 0.99999) camera.up.copy(Yv); }
     camera.lookAt(controls.target);

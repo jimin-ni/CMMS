@@ -47,14 +47,14 @@
   flex-direction: column;
   pointer-events: none;
 }
-.oc-root.oc-live .oc-room-host {
+.oc-room-host.live {
   pointer-events: auto;
 }
 /* 온보딩에서는 엔진의 불러오는 글과 공유 단추, 방 안내 알약을 감춘다. 앉기·상영·책장의 단추는 그대로 쓴다. */
-.oc-root .heap-room #status { display: none; }
-.oc-root:not(.oc-live) .heap-room .hud,
-.oc-root:not(.oc-live) .heap-room #toast { visibility: hidden; }
-.oc-root.oc-engine-room .heap-room .hud .bottom { display: none; }
+.oc-room-host .heap-room #status { display: none; }
+.oc-room-host:not(.live) .heap-room .hud,
+.oc-room-host:not(.live) .heap-room #toast { visibility: hidden; }
+.oc-room-host[data-mode="room"] .heap-room .hud .bottom { display: none; }
 /* 방 둘레를 어둡게: 방은 가운데에서 밝고 가장자리는 밤처럼 */
 .oc-vignette {
   inset: 0;

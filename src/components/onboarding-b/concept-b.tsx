@@ -1,222 +1,313 @@
 "use client";
 
-// 온보딩 컨셉 B: 책상 위에 놓인 바인더 노트. 링은 아래에 있고, 스크롤하면 다음 장이 아래에서 올라와 앞장 위에 겹친다.
-// 종이 판, 테이프, 아이콘, 글꼴은 컨셉 C와 같은 것을 쓴다 (onboarding-c/paper.tsx, icons.tsx, app/fonts/onboarding.ts).
+// 온보딩 컨셉 B: 책상 위 바인더 노트(링이 아래) → 스크롤하면 아랫장이 링을 지나 위로 넘어와 앞장 위에 덮인다(3D)
+// → 마지막 장 뒤에 하드보드 표지가 덮여 앨범 한 권이 되고, 책 등이 보이게 세워진다
+// → 책상이 걷히며 2번 방이 보이고, 카메라가 책장으로 다가가 앨범이 꽂힌 뒤 다시 물러난다
+// → "Ready to Start?" → 방 안 둘러보기 (컨셉 C와 같은 room-tour.tsx).
+// 2번 방은 /room/dname 과 같은 HeapRoom 이다. 엔진에는 heap:intro(카메라 줌, 꽂힌 앨범)와 heap:introquery(앨범 자리의 화면 좌표)만 쓴다.
 import "../onboarding-c/onboarding-c.css";
 import "./onboarding-b.css";
-import { useEffect, useRef } from "react";
-import Link from "next/link";
-import { PaperFilters } from "../onboarding-c/paper";
-import { PixelIcon } from "../onboarding-c/icons";
-import { DoodleArrow, DoodleCircle, DoodleHeart, DoodleRoom, DoodleStar, DoodleUnderline } from "./doodles";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { HeapRoom, type HeapRoomData } from "@/components/heap/heap-room";
+import { ONBOARDING_ROOM_ID, ramp } from "../onboarding-c/story";
+import { Paper, PaperFilters } from "../onboarding-c/paper";
+import { RoomTour } from "../onboarding-c/room-tour";
+import { PAGES } from "./pages";
 
-// 러브쑤 소개에 쓰는 사실은 public/heap/rooms/index.json(blurb)과 lovesoo/creator.json(채널, 앨범)에 있는 것만 쓴다.
-const ALBUMS = [
-  { name: "Mukbang", color: "#A6613C", note: "first bites" },
-  { name: "Cooking", color: "#565344", note: "home recipes" },
-  { name: "Daily vlog", color: "#c9a46a", note: "little days" },
-];
-const PILE = ["#A6613C", "#c9a46a", "#565344", "#8fb0cf", "#d98b8b"];
+type Phase = "scroll" | "enter" | "room";
 
-function Polaroid({ color, caption, className = "" }: { color: string; caption: string; className?: string }) {
-  return (
-    <figure className={`ob-polaroid ${className}`}>
-      <span className="ob-photo" style={{ background: color }} />
-      <figcaption>{caption}</figcaption>
-    </figure>
-  );
-}
+// 스크롤 진행도(0~1) 시간표
+const T = {
+  flips: [
+    [0.05, 0.2],
+    [0.24, 0.39],
+  ] as [number, number][], // 2장, 3장이 넘어오는 구간
+  close: [0.44, 0.54] as const, // 표지가 덮인다
+  desk: [0.44, 0.52] as const, // 책상이 걷히고 방이 보인다
+  turn: [0.55, 0.64] as const, // 책 등이 보이게 세운다
+  focusIn: [0.62, 0.72] as const, // 카메라가 책장으로
+  fly: [0.64, 0.78] as const, // 책이 책장의 빈 칸으로
+  insert: 0.78, // 이때부터 3D 앨범이 꽂혀 있다
+  fade: [0.775, 0.79] as const, // 화면 위의 책이 사라진다
+  focusOut: [0.81, 0.89] as const, // 카메라가 방 전체로
+  dark: [0.89, 0.94] as const,
+  ready: [0.92, 0.96] as const,
+};
+const SCROLL_SCREENS = 11;
+const ENTER_MS = 900;
+const PERSPECTIVE = 2400;
 
-function Tape({ className = "" }: { className?: string }) {
-  return <span className={`oc-tape ob-tape ${className}`} aria-hidden="true" />;
-}
+const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+const easeOut = (t: number) => 1 - (1 - t) ** 3;
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-export function ConceptB() {
+type Slot = { x: number; y: number; h: number } | null;
+
+export function ConceptB({
+  data,
+  viewerName,
+  signedIn,
+}: {
+  data: HeapRoomData;
+  viewerName: string | null;
+  signedIn: boolean;
+}) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const hostRef = useRef<HTMLDivElement>(null);
+  const deskRef = useRef<HTMLDivElement>(null);
+  const bookRef = useRef<HTMLDivElement>(null);
+  const shadowRef = useRef<HTMLDivElement>(null);
+  const leafRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const coverRef = useRef<HTMLDivElement>(null);
+  const shadeRef = useRef<HTMLDivElement>(null);
+  const readyRef = useRef<HTMLDivElement>(null);
+  const phaseRef = useRef<Phase>("scroll");
+  const progressRef = useRef(0);
+  const enterStartRef = useRef(0);
+  const [phase, setPhase] = useState<Phase>("scroll");
 
-  // 장이 화면에 들어오면 낙서 선이 그려진다
   useEffect(() => {
-    const root = rootRef.current;
-    if (!root) return;
-    const seen = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) if (entry.isIntersecting) entry.target.classList.add("in");
-      },
-      { root, threshold: 0.35 },
-    );
-    root.querySelectorAll(".ob-page").forEach((page) => seen.observe(page));
-    return () => seen.disconnect();
+    const root = rootRef.current, book = bookRef.current;
+    if (!root || !book) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let last = performance.now(), raf = 0, sentNull = false;
+    let slot: Slot = null;
+    const take = (s: Slot) => {
+      slot = s;
+    };
+
+    const loop = (now: number) => {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      const max = root.scrollHeight - root.clientHeight;
+      const target = max > 0 ? root.scrollTop / max : 0;
+      progressRef.current += (target - progressRef.current) * (reduce ? 1 : 1 - Math.exp(-dt * 6));
+      const p = progressRef.current;
+      const roomEl = hostRef.current?.querySelector(".heap-room");
+
+      // 방 안으로 들어가는 짧은 전환 (Ready 를 누른 뒤)
+      let enter = 0;
+      if (phaseRef.current !== "scroll") {
+        enter = Math.min(1, (now - enterStartRef.current) / (reduce ? 1 : ENTER_MS));
+        if (enter >= 1 && phaseRef.current === "enter") {
+          phaseRef.current = "room";
+          setPhase("room");
+        }
+      }
+
+      // 1. 장 넘기기: 아랫장이 링 축(아래 가장자리)을 중심으로 -180° 에서 0° 로 올라와 덮인다
+      leafRefs.current.forEach((leaf, i) => {
+        if (!leaf) return;
+        const w = i === 0 ? null : T.flips[i - 1];
+        const t = w ? easeInOut(ramp(p, w[0], w[1])) : 1;
+        const angle = -180 + 180 * t;
+        leaf.style.visibility = t > 0.001 ? "visible" : "hidden";
+        leaf.style.opacity = String(w ? Math.min(1, ramp(p, w[0], w[1]) * 6) : 1);
+        leaf.style.transform = `translateZ(${i * 0.8}px) rotateX(${angle}deg)`;
+        leaf.dataset.side = angle < -90 ? "back" : "front";
+        leaf.style.setProperty("--shade", String(Math.abs(Math.sin((angle * Math.PI) / 180)) * 0.45));
+      });
+
+      // 2. 표지가 덮인다: 책 아래 가장자리를 축으로 올라와, 책 두께의 앞면(T/2)에 닿는다
+      const close = easeInOut(ramp(p, ...T.close));
+      book.style.setProperty("--close", String(close));
+      if (coverRef.current) {
+        const angle = -180 + 180 * close;
+        coverRef.current.style.visibility = close > 0.001 ? "visible" : "hidden";
+        coverRef.current.style.opacity = String(Math.min(1, ramp(p, ...T.close) * 6));
+        coverRef.current.style.transform = `translateZ(calc(var(--T) * ${close / 2} + 4px)) rotateX(${angle}deg)`;
+        coverRef.current.dataset.side = angle < -90 ? "back" : "front";
+      }
+
+      // 3. 세우기: 시계 방향으로 90° 눕혀 책 등을 왼쪽으로 보낸 뒤, Y 축으로 90° 돌려 책 등을 본다
+      const turnT = ramp(p, ...T.turn);
+      const rz = 90 * easeInOut(ramp(turnT, 0, 0.6));
+      const ry = 90 * easeInOut(ramp(turnT, 0.4, 1));
+      const sTurn = lerp(1, 0.72, easeInOut(turnT));
+
+      // 4. 책장으로: 엔진이 알려 주는 앨범 자리(화면 좌표)로 옮기며 줄인다
+      const flyT = ramp(p, ...T.fly);
+      if (flyT > 0) roomEl?.dispatchEvent(new CustomEvent("heap:introquery", { detail: take }));
+      let tx = 0, ty = 0, s = sTurn;
+      if (flyT > 0 && slot) {
+        const W = book.offsetWidth, H = book.offsetHeight;
+        const vw = window.innerWidth, vh = window.innerHeight;
+        // 책 등은 책 가운데보다 H/2 만큼 앞에 있어 원근으로 커 보인다. 그만큼 덜 키운다
+        const sTarget = slot.h / W / (PERSPECTIVE / (PERSPECTIVE - (H / 2) * (slot.h / W)));
+        const e = easeInOut(flyT);
+        tx = (slot.x - vw / 2) * e;
+        ty = (slot.y - vh / 2) * e - Math.sin(flyT * Math.PI) * vh * 0.08;
+        s = lerp(sTurn, sTarget, easeOut(flyT));
+      }
+      book.style.transform = `translate3d(${tx}px, ${ty}px, 0) scale(${s}) rotateY(${ry}deg) rotateZ(${rz}deg)`;
+      book.style.opacity = String(1 - ramp(p, ...T.fade));
+
+      // 책상과 책 그림자: 표지가 덮이면서 걷힌다
+      const deskT = ramp(p, ...T.desk);
+      if (deskRef.current) deskRef.current.style.opacity = String(1 - deskT);
+      if (shadowRef.current) shadowRef.current.style.opacity = String(1 - deskT);
+
+      // 5. 방 카메라: 기본 구도 → 책장으로 줌인 → 꽂은 뒤 줌아웃
+      const focus = easeInOut(ramp(p, ...T.focusIn)) * (1 - easeInOut(ramp(p, ...T.focusOut)));
+      if (phaseRef.current === "room") {
+        if (!sentNull) roomEl?.dispatchEvent(new CustomEvent("heap:intro", { detail: null }));
+        sentNull = true;
+      } else {
+        sentNull = false;
+        roomEl?.dispatchEvent(new CustomEvent("heap:intro", { detail: { focus, album: p >= T.insert } }));
+      }
+
+      // 6. 어두워지고 Ready to Start?
+      const dark = ramp(p, ...T.dark);
+      if (shadeRef.current) shadeRef.current.style.opacity = String(0.72 * dark * (1 - easeInOut(enter)));
+      if (readyRef.current) {
+        const r = ramp(p, ...T.ready) * Math.max(0, 1 - enter * 3);
+        readyRef.current.style.opacity = String(r);
+        readyRef.current.style.visibility = r > 0.01 ? "visible" : "hidden";
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
   }, []);
 
+  const enterRoom = useCallback(() => {
+    if (phaseRef.current !== "scroll" || progressRef.current < T.ready[0]) return;
+    phaseRef.current = "enter";
+    enterStartRef.current = performance.now();
+    setPhase("enter");
+  }, []);
+
+  useEffect(() => {
+    if (phase !== "scroll") return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Enter" || event.key === " ") enterRoom();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [phase, enterRoom]);
+
   return (
-    <div ref={rootRef} className="ob-root">
+    <div ref={rootRef} className={phase === "scroll" ? "oc-root ob-root" : "oc-root ob-root oc-locked"}>
       <PaperFilters />
-      <div className="ob-shadow" aria-hidden="true" />
+      {/* 낙서 선을 펜 자국처럼 거칠게 */}
+      <svg width="0" height="0" aria-hidden="true" style={{ position: "absolute" }}>
+        <filter id="ob-rough" x="-5%" y="-5%" width="110%" height="110%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="11" result="n" />
+          <feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+      </svg>
+      <div style={{ height: `${SCROLL_SCREENS * 100}vh` }}>
+        <div className="oc-stage" onClick={() => phaseRef.current === "scroll" && enterRoom()}>
+          {/* 실제 2번 방. 책상 아래에 깔려 있다가 표지가 덮일 때부터 보인다. */}
+          <div ref={hostRef} className={phase === "room" ? "oc-room-host live" : "oc-room-host"}>
+            <HeapRoom roomId={ONBOARDING_ROOM_ID} data={data} viewerName={viewerName} signedIn={signedIn} />
+          </div>
+          <div ref={deskRef} className="oc-layer ob-desk" />
 
-      <main className="ob-notebook">
-        {/* 1장: 러브쑤 소개 */}
-        <section className="ob-page" style={{ zIndex: 1 }} aria-labelledby="ob-p1">
-          <div className="ob-sheet">
-            <p className="ob-date ob-rounded">p.01 · our little room</p>
-            <div className="ob-a ob-title-1">
-              <span className="ob-rounded ob-kicker">Meet</span>
-              <h1 id="ob-p1" className="ob-pixel ob-name">
-                Lovesoo
-                <DoodleCircle className="ob-name-circle" />
-              </h1>
-            </div>
+          <div className="ob-stage3d" aria-hidden={phase !== "scroll"}>
+            <div ref={shadowRef} className="ob-book-shadow" />
+            <div ref={bookRef} className="ob-book">
+              {/* 덮인 뒤의 두께: 책 등(아래), 위·왼쪽·오른쪽 종이 단면, 뒤표지 */}
+              <div className="ob-face ob-spine">
+                <span className="ob-pixel">MEMORIES</span>
+                <small className="ob-rounded">vol.01 · Lovesoo &amp; you</small>
+              </div>
+              <div className="ob-face ob-edge ob-edge-top" />
+              <div className="ob-face ob-edge ob-edge-left" />
+              <div className="ob-face ob-edge ob-edge-right" />
+              <div className="ob-face ob-backboard" />
 
-            <div className="ob-a ob-note ob-yellow ob-p1-note">
-              <Tape className="ob-tape-top" />
-              <ul>
-                <li>In her 50s, living in the U.S.</li>
-                <li>Mukbang &amp; Korean home food</li>
-                <li>Small, warm, everyday moments</li>
-              </ul>
-              <DoodleUnderline className="ob-note-line" />
-            </div>
-
-            <div className="ob-a ob-p1-photos">
-              {ALBUMS.map((album, i) => (
-                <div key={album.name} className={`ob-photo-slot ob-tilt-${i}`}>
-                  <Tape className="ob-tape-top" />
-                  <Polaroid color={album.color} caption={album.name} />
-                  <span className="ob-hand ob-photo-note">{album.note}</span>
+              {/* 장: 링 줄(구멍 가운데)을 축으로 돈다 */}
+              {PAGES.map((Page, i) => (
+                <div
+                  key={i}
+                  ref={(el) => {
+                    leafRefs.current[i] = el;
+                  }}
+                  className="ob-leaf"
+                  data-side={i === 0 ? "front" : "back"}
+                >
+                  <section className="ob-sheet ob-front" aria-label={`Page ${i + 1}`}>
+                    <Page />
+                  </section>
+                  <div className="ob-sheet ob-back">
+                    <span className="ob-pixel">Memories</span>
+                  </div>
+                  <span className="ob-leaf-shade" />
                 </div>
               ))}
-            </div>
 
-            <div className="ob-a ob-p1-tags">
-              <span className="ob-ticket">@lovesoostrong</span>
-              <span className="ob-ticket ob-ticket-2">러브쑤의 작은 하루</span>
-            </div>
-
-            <div className="ob-a ob-p1-arrow">
-              <span className="ob-hand">every short she made…</span>
-              <DoodleArrow className="ob-arrow-1" />
-              <span className="ob-hand ob-strong">kept right here</span>
-            </div>
-            <DoodleStar className="ob-a ob-star-1" />
-
-            <div className="ob-turn">
-              <PixelIcon name="mouse" size={22} />
-              <span>Scroll to turn the page</span>
-            </div>
-          </div>
-        </section>
-
-        {/* 2장: 쇼츠가 폴라로이드로 쌓인 방 */}
-        <section className="ob-page" style={{ zIndex: 2 }} aria-labelledby="ob-p2">
-          <div className="ob-sheet">
-            <p className="ob-date ob-rounded">p.02 · the pile</p>
-            <h2 id="ob-p2" className="ob-a ob-rounded ob-head-2">
-              Every short,
-              <br />a <span className="ob-mark">polaroid</span>
-              <DoodleUnderline className="ob-head-line" />
-            </h2>
-
-            <div className="ob-a ob-pile">
-              {PILE.map((color, i) => (
-                <Polaroid key={color} color={color} caption="" className={`ob-pile-${i}`} />
-              ))}
-              <span className="ob-hand ob-pile-note">her shorts, stacked like old photos</span>
-            </div>
-
-            <ol className="ob-a ob-steps">
-              <li>
-                <b className="ob-pixel">1</b> Dig through the pile
-              </li>
-              <li>
-                <b className="ob-pixel">2</b> Find the one you loved
-              </li>
-              <li>
-                <b className="ob-pixel">3</b> Press play, again
-              </li>
-            </ol>
-
-            <div className="ob-a ob-room-sketch">
-              <DoodleRoom className="ob-room-svg" />
-              <span className="ob-hand">her room ♡</span>
-            </div>
-            <DoodleArrow className="ob-a ob-arrow-2" flip />
-
-            <div className="ob-a ob-strip-note">
-              <Tape className="ob-tape-left" />
-              No feed to scroll past. Just a pile of memories to dig through.
-            </div>
-          </div>
-        </section>
-
-        {/* 3장: 구독자와 함께 만드는 방 */}
-        <section className="ob-page" style={{ zIndex: 3 }} aria-labelledby="ob-p3">
-          <div className="ob-sheet">
-            <p className="ob-date ob-rounded">p.03 · together</p>
-            <h2 id="ob-p3" className="ob-a ob-rounded ob-head-3">
-              Made by Lovesoo,
-              <br />
-              <span className="ob-mark ob-mark-2">filled by you.</span>
-              <DoodleHeart className="ob-heart" />
-            </h2>
-
-            <div className="ob-a ob-notes">
-              <div className="ob-note ob-yellow ob-tilt-0">
-                <Tape className="ob-tape-top" />
-                <b className="ob-rounded">Hang a note</b>
-                <p>Leave a message on the note tree. She reads them.</p>
+              {/* 아래 바인더: 흰 종이 띠의 펀칭 구멍 4쌍, 원형 구멍에 꽂힌 은색 링, 겹친 종이와 바인더 받침 */}
+              <div className="ob-binder">
+                <div className="ob-strip">
+                  {[0, 1, 2, 3].map((i) => (
+                    <span key={i} className="ob-holes" style={{ left: `${12.5 + i * 25}%` }}>
+                      <span className="ob-hole-pill" />
+                      <span className="ob-hole-round" />
+                    </span>
+                  ))}
+                </div>
+                <div className="ob-layers" />
+                <div className="ob-base" />
+                {[0, 1, 2, 3].map((i) => (
+                  <svg
+                    key={i}
+                    className="ob-ring"
+                    style={{ left: `calc(${12.5 + i * 25}% + var(--ring-dx))` }}
+                    viewBox="0 0 30 140"
+                    preserveAspectRatio="none"
+                  >
+                    <defs>
+                      <linearGradient id={`ob-metal-${i}`} x1="0" x2="1" y1="0" y2="0">
+                        <stop offset="0" stopColor="#6c7178" />
+                        <stop offset="0.35" stopColor="#f4f6f8" />
+                        <stop offset="0.55" stopColor="#b9bec4" />
+                        <stop offset="1" stopColor="#5d6168" />
+                      </linearGradient>
+                    </defs>
+                    <path d="M15 4 C15 40 22 70 20 140" fill="none" stroke="rgba(0,0,0,0.35)" strokeWidth="9" strokeLinecap="round" transform="translate(2 3)" />
+                    <path d="M15 4 C15 40 22 70 20 140" fill="none" stroke={`url(#ob-metal-${i})`} strokeWidth="8" strokeLinecap="round" />
+                    <path d="M13.5 8 C13.5 40 20 70 18.5 140" fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="1.6" strokeLinecap="round" />
+                  </svg>
+                ))}
               </div>
-              <div className="ob-note ob-pink ob-tilt-1">
-                <Tape className="ob-tape-top" />
-                <b className="ob-rounded">Sign the guestbook</b>
-                <p>Your name stays in the room. Today counts too.</p>
-              </div>
-              <div className="ob-note ob-blue ob-tilt-2">
-                <Tape className="ob-tape-top" />
-                <b className="ob-rounded">Come back</b>
-                <p>Every visit leaves the room a little more alive.</p>
+
+              {/* 하드보드 표지: 마지막에 아래에서 올라와 덮인다 */}
+              <div ref={coverRef} className="ob-cover" data-side="back">
+                <div className="ob-cover-front">
+                  <Paper className="ob-cover-label ob-tone-cream" tape={["tl", "tr"]}>
+                    <span className="ob-pixel ob-cover-title">MEMORIES</span>
+                    <span className="ob-rounded ob-cover-sub">made by Lovesoo, filled by you</span>
+                  </Paper>
+                  <Paper className="ob-dot ob-tone-blue ob-cover-dot">
+                    <span className="ob-dot-text">vol.<br />01</span>
+                  </Paper>
+                </div>
+                <div className="ob-cover-back" />
               </div>
             </div>
-
-            <div className="ob-a ob-circle-note">
-              <span className="ob-hand">your note could be here</span>
-              <DoodleCircle className="ob-small-circle" />
-            </div>
-            <DoodleStar className="ob-a ob-star-2" />
-
-            <Link href="/room/lovesoo" className="ob-a ob-cta">
-              <Tape className="ob-tape-top" />
-              <span className="ob-rounded">Visit Lovesoo&apos;s room</span>
-              <PixelIcon name="home" size={22} />
-            </Link>
           </div>
-        </section>
-      </main>
 
-      {/* 아래 바인더: 흰 종이 띠의 펀칭 구멍 4쌍, 원형 구멍에 꽂힌 은색 링, 겹친 종이와 바인더 커버 */}
-      <div className="ob-binder" aria-hidden="true">
-        <div className="ob-strip">
-          {[0, 1, 2, 3].map((i) => (
-            <span key={i} className="ob-holes" style={{ left: `${12.5 + i * 25}%` }}>
-              <span className="ob-hole-pill" />
-              <span className="ob-hole-round">
-                <svg className="ob-ring" viewBox="0 0 30 140" preserveAspectRatio="none">
-                  <defs>
-                    <linearGradient id={`ob-metal-${i}`} x1="0" x2="1" y1="0" y2="0">
-                      <stop offset="0" stopColor="#6c7178" />
-                      <stop offset="0.35" stopColor="#f4f6f8" />
-                      <stop offset="0.55" stopColor="#b9bec4" />
-                      <stop offset="1" stopColor="#5d6168" />
-                    </linearGradient>
-                  </defs>
-                  <path d="M15 4 C15 40 22 70 20 140" fill="none" stroke="rgba(0,0,0,0.35)" strokeWidth="9" strokeLinecap="round" transform="translate(2 3)" />
-                  <path d="M15 4 C15 40 22 70 20 140" fill="none" stroke={`url(#ob-metal-${i})`} strokeWidth="8" strokeLinecap="round" />
-                  <path d="M13.5 8 C13.5 40 20 70 18.5 140" fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="1.6" strokeLinecap="round" />
-                </svg>
-              </span>
-            </span>
-          ))}
+          <div ref={shadeRef} className="oc-layer oc-shade" style={{ opacity: 0 }} />
+
+          {/* Ready to Start? */}
+          <div ref={readyRef} className="oc-layer oc-ready" style={{ opacity: 0, visibility: "hidden" }}>
+            <button type="button" className="oc-pixel" onClick={enterRoom} tabIndex={phase === "scroll" ? 0 : -1}>
+              Ready to Start?
+            </button>
+            <span>Click anywhere to step inside</span>
+          </div>
+
+          {/* 방 안 둘러보기: 안내 팝업, 진행 점, 내비게이션 바, 로그인 팝업 (컨셉 C와 같다) */}
+          <RoomTour
+            hostRef={hostRef}
+            live={phase === "room"}
+            layoutItems={data.layout.items}
+            viewerName={viewerName}
+            signedIn={signedIn}
+          />
         </div>
-        <div className="ob-layers" />
-        <div className="ob-cover" />
       </div>
     </div>
   );

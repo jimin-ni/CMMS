@@ -13,15 +13,17 @@ type OnboardingPageProps = {
   params: Promise<{ concept: string }>;
 };
 
-// 컨셉 C가 띄우는 실제 2번 방. /room/dname 과 같은 값을 읽는다 (꾸미기는 열지 않는다).
+// 컨셉 B, C가 띄우는 실제 2번 방. /room/dname 과 같은 값을 읽는다 (꾸미기는 열지 않는다).
 // 세션과 DB 읽기는 요청 시점 값이라 Suspense 안에서 읽는다 (cacheComponents).
-async function ConceptCRoom() {
+// 컨셉 B는 마지막에 이 방의 책장에 앨범을 꽂고, C는 이 방에 가구를 쌓는다.
+async function OnboardingRoom({ concept }: { concept: "b" | "c" }) {
   const viewer = await getViewer();
   const view = await loadRoomView(ONBOARDING_ROOM_ID, viewer, { withOwner: false });
   if (!view) {
     notFound();
   }
-  return <ConceptC data={view.data} viewerName={viewer?.name ?? null} signedIn={viewer !== null} />;
+  const Concept = concept === "b" ? ConceptB : ConceptC;
+  return <Concept data={view.data} viewerName={viewer?.name ?? null} signedIn={viewer !== null} />;
 }
 
 // 시안 3개만 미리 만든다. 목록에 없는 주소는 404.
@@ -37,16 +39,12 @@ async function ConceptContent({ params }: OnboardingPageProps) {
     notFound();
   }
 
-  // 컨셉 B: 책상 위 바인더 노트. 스크롤하면 다음 장이 아래에서 올라와 겹친다. 화면 전체를 덮는다.
-  if (concept.id === "b") {
-    return <ConceptB />;
-  }
-
-  // 컨셉 C: 실제 2번 방 위에 얹은 온보딩. 화면 전체를 덮으므로 위의 헤더는 가려진다.
-  if (concept.id === "c") {
+  // 컨셉 B: 바인더 노트를 넘기다 앨범으로 접어 2번 방 책장에 꽂는 온보딩.
+  // 컨셉 C: 실제 2번 방 위에 얹은 온보딩. 둘 다 화면 전체를 덮으므로 위의 헤더는 가려진다.
+  if (concept.id === "b" || concept.id === "c") {
     return (
       <Suspense fallback={<div className="fixed inset-0 z-[60] bg-[#0c0a08]" />}>
-        <ConceptCRoom />
+        <OnboardingRoom concept={concept.id} />
       </Suspense>
     );
   }
