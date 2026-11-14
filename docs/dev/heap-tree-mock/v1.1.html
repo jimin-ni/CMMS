@@ -1,0 +1,693 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>트리 목업 v1.1</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&family=Gaegu&family=Hi+Melody&family=Gamja+Flower&family=Cute+Font&family=Single+Day&family=Yeon+Sung&family=East+Sea+Dokdo&display=block" rel="stylesheet">
+<style>
+  html, body { margin: 0; height: 100%; background: #2b281f; overflow: hidden; }
+  canvas#c { display: block; width: 100vw; height: 100vh; touch-action: none; }
+  canvas#c.hover { cursor: pointer; }
+  #label { position: fixed; left: 12px; bottom: 10px; font: 12px/1 system-ui, sans-serif;
+    color: rgba(60, 50, 35, .6); pointer-events: none; letter-spacing: .02em; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="label">트리 목업 v1.1</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+// 예시 데이터 (synthetic)
+const cards = [
+  { name: '솜사탕구름', date: '2026-12-01', msg: '메리 크리스마스!\n올해도 방송 덕분에 버텼어요', reply: '구름님 올해도 고마워요\n내년에도 같이 놀아요' },
+  { name: '밤하늘고래', date: '2026-12-02', msg: '첫 방송 때부터 봤어요.\n그때 그 노래 또 불러 주세요!!' },
+  { name: null, date: '2026-12-02', msg: '힘내요' },
+  { name: '귤껍질', date: '2026-12-03', msg: '겨울엔 귤이죠 🍊 귤 먹으면서 방송 보는 게 제 낙이에요' },
+  { name: '솜사탕구름', date: '2026-12-04', msg: '또 왔어요 ㅎㅎ\n한 장으로는 모자라서' },
+  { name: '새벽세시', date: '2026-12-04', msg: '새벽 방송 너무 좋아요. 시험 기간에 같이 깨어 있는 기분이라 덜 외로웠어요', reply: '시험 잘 봤어요?\n새벽 방송 계속할게요' },
+  { name: '도토리묵', date: '2026-12-05', msg: 'ㅋㅋㅋㅋㅋㅋㅋ' },
+  { name: '파란우산', date: '2026-12-06', msg: '작년 겨울 합방\n다시 보고 싶어요' },
+  { name: '밤하늘고래', date: '2026-12-07', msg: '두 번째 쪽지!\n감기 조심하세요\n목 아끼시고요' },
+  { name: '말랑콩떡', date: '2026-12-08', msg: '우리 가족 👨‍👩‍👧 다 같이 보고 있어요' },
+  { name: '귤껍질', date: '2026-12-09', msg: '오늘 방송에서 웃다가 귤 떨어뜨림', reply: '귤 무사한가요 ㅋㅋ' },
+  { name: null, date: '2026-12-10', msg: '이름은 비밀이지만 늘 응원하고 있어요.\n무리하지 마세요' },
+  { name: '종이비행기', date: '2026-12-11', msg: '내년에는 오프라인 팬미팅 꼭 해 주세요 ✈' },
+  { name: '솜사탕구름', date: '2026-12-12', msg: '세 번째...\n이제 그만 쓸게요\n(아마도)' },
+  { name: '고양이발', date: '2026-12-13', msg: '야옹' },
+  { name: '새벽세시', date: '2026-12-14', msg: '편집자님한테도 고맙다고 전해 주세요' },
+  { name: '라떼한잔', date: '2026-12-15', msg: '올해 최고의 영상은 단연 캠핑편!\n장작 소리만 한 시간 틀어 놔요', reply: '장작 ASMR 따로 올려 볼게요' },
+  { name: '도토리묵', date: '2026-12-16', msg: '진지하게 써 볼게요.\n올해 이사하고 회사도 옮기느라 정신없었는데 퇴근하고 방송 켜 두면 그게 하루 중 제일 편한 시간이었어요. 정말 고마워요!!' },
+  { name: '파란우산', date: '2026-12-17', msg: '눈 오는 날 방송 기다릴게요 ☃' },
+  { name: null, date: '2026-12-18', msg: '메리크리스마스' },
+  { name: '말랑콩떡', date: '2026-12-19', msg: '트리 너무 예쁘다...\n쪽지 걸 자리 남아 있나요?' },
+  { name: '고양이발', date: '2026-12-20', msg: '우리 집 고양이도\n방송 소리 나면\n화면 앞에 앉아요', reply: '고양이 시청자님 환영합니다 🐾' },
+  { name: '종이비행기', date: '2026-12-21', msg: '건강하세요!' },
+  { name: '라떼한잔', date: '2026-12-22', msg: '새해에도\n같은 자리에서 봐요' },
+];
+
+const C = { olive: 0x565344, clay: 0xA6613C, paper: 0xf3e9d6 };
+const TREE_H = 1.8, EYE = 1.6, LOOK_Y = 0.92;
+
+// ---------- renderer / scene ----------
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.12;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x2b281f);
+const camera = new THREE.PerspectiveCamera(50, 1, 0.02, 30);
+
+// warm, even room light: app hemi + fill colours (scene.js), a soft warm key instead of the orange sun
+scene.add(new THREE.HemisphereLight(0xfff0dc, 0x8a7458, 1.15));
+const fill = new THREE.DirectionalLight(0xffe2bd, 0.6); fill.position.set(2.5, 2.2, 4); scene.add(fill);
+const sun = new THREE.DirectionalLight(0xffd6a8, 1.25);
+sun.position.set(-2.0, 3.4, 3.0); sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.02;
+Object.assign(sun.shadow.camera, { left: -2.5, right: 2.5, top: 2.5, bottom: -2.5, near: 0.5, far: 10 });
+scene.add(sun);
+
+// closed room around the tree: paper walls, warm wood floor
+// box faces: +x, -x, +y (ceiling), -y (floor), +z, -z
+const wallMat = new THREE.MeshStandardMaterial({ color: C.paper, roughness: 0.95, side: THREE.BackSide });
+const ceilMat = new THREE.MeshStandardMaterial({ color: 0xe6d9c2, roughness: 1, side: THREE.BackSide });
+const floorMat = new THREE.MeshStandardMaterial({ color: 0xa88462, roughness: 0.85, side: THREE.BackSide });
+const room = new THREE.Mesh(new THREE.BoxGeometry(9, 3.2, 8), [wallMat, wallMat, ceilMat, floorMat, wallMat, wallMat]);
+room.position.set(0, 1.6, 2.4); room.receiveShadow = true; scene.add(room);
+const TREE_URL = 'assets/tree-decorated.glb';
+
+// ---------- camera: one fixed first-person view, the front of the tree fills it ----------
+const CAM_DIST = 2.05;
+camera.position.set(0, EYE, CAM_DIST);
+camera.lookAt(0, LOOK_Y, 0);
+
+// =====================================================================
+// 쪽지 (folded note)
+//
+// The classroom knot (Yoon's reference, refs/jjokji-steps.png). Closing order; opening plays it backwards:
+//   0  portrait sheet folded in half lengthwise, then in half again -> long strip (4 layers)
+//   1  strip lying horizontal
+//   2  the left end folds down on a 45° crease: a short tip hangs down (mirrored ㄱ)
+//   3  the long part folds down on the other diagonal, beside the tip: two tails and a peaked roof
+//   4  the long end folds on 45° to the left, in front of the tip: one tail left, one tail down
+// Finished: a diamond head with a + of creases, a band running left, a tail running down.
+//
+// Geometry: the sheet is cut into strip segments along the creases, each segment into its
+// 4 lengthwise columns (crease positions mirror from column to column, as on a real unfolded 쪽지).
+// Every crease is a hinge: a group at a point on the crease, rotated about the crease line.
+// The roof triangle is the root and never moves, so the writing side always faces the viewer.
+//
+// buildPacket(data) makes one packet from { name, date, msg, reply? } and knows nothing about the
+// tree, so a writing flow can reuse it.
+// =====================================================================
+const KW = 0.036;                             // strip width = sheet width / 4
+const STRIP_L = 6.5 * KW;                     // strip length = sheet height
+const SHEET = { W: 4 * KW, H: STRIP_L };      // 0.144 x 0.234 m
+const LD = 0.00008;                           // one paper layer of separation
+const REPLY = { W: 0.064, H: 0.08, COLS: 2, ROWS: [0.5, 0.5], DZ: 0.00003 };
+const FAN_FONTS = ['Nanum Pen Script', 'Gaegu', 'Hi Melody', 'Gamja Flower', 'Cute Font', 'Single Day', 'Yeon Sung'];
+const REPLY_FONT = 'East Sea Dokdo';
+// some hands draw small for their px size; scale them so every hand reads at a similar size
+const FONT_SCALE = { 'Nanum Pen Script': 1.3, 'Gaegu': 1.0, 'Hi Melody': 1.15, 'Gamja Flower': 1.0, 'Cute Font': 1.3, 'Single Day': 0.95, 'Yeon Sung': 1.0, 'East Sea Dokdo': 1.3 };
+const NOTE_TINTS = ['#fbf7ee', '#f6efdf', '#f9f4ea', '#f2eadb', '#fdf9f2'];
+const REPLY_TINT = '#f3d5bf';
+const FRONT_PX = [1200, 1950], REPLY_PX = [720, 900], BACK_PX = [400, 650];
+
+const hashStr = s => { let h = 2166136261; for (const ch of s) h = Math.imul(h ^ ch.codePointAt(0), 16777619); return h >>> 0; };
+const fontFor = data => FAN_FONTS[hashStr(data.name ?? ('익명:' + data.msg)) % FAN_FONTS.length];
+const tintFor = data => NOTE_TINTS[hashStr(data.msg) % NOTE_TINTS.length];
+
+// --- crease layout ---
+// Designed in "strip coords" (X along the strip, lying horizontal as in the reference, Y across, 0..w),
+// then turned 90° into sheet coords (x right 0..W, y up 0..H) for column 0: (X, Y) -> (w - Y, X).
+const w = KW, TIP = 1.8 * w, L = STRIP_L;
+const toSheet = ([X, Y]) => [w - Y, X];
+const dirToSheet = ([dX, dY]) => [-dY, dX];
+const SEGS_STRIP = {
+  ROOF: [[TIP, 0], [TIP + w, w], [TIP + 2 * w, 0]],                    // root: the roof triangle, never moves
+  TIP:  [[0, 0], [TIP, 0], [TIP + w, w], [0, w]],                      // short end, hangs down (step 2)
+  TAIL: [[TIP + w, w], [TIP + 3 * w, w], [TIP + 2 * w, 0]],            // folds down beside the tip (step 3)
+  BAND: [[TIP + 2 * w, 0], [TIP + 3 * w, w], [L, w], [L, 0]],          // long end, turns left in front (step 4)
+};
+const SEGS = Object.fromEntries(Object.entries(SEGS_STRIP).map(([k, pts]) => [k, pts.map(toSheet)]));
+// [child, parent, point on crease, crease direction, a point inside the child, hinge height] (strip coords)
+// hinge heights put each layer on its own level: tip behind the roof, tail in front, band in front of all
+const CREASES_STRIP = [
+  ['TIP', 'ROOF', [TIP, 0], [1, 1], [TIP * 0.5, 0.5 * w], -0.5 * LD],
+  ['TAIL', 'ROOF', [TIP + w, w], [1, -1], [TIP + 2 * w, 0.7 * w], 11 * LD],
+  ['BAND', 'TAIL', [TIP + 2 * w, 0], [1, 1], [TIP + 4 * w, 0.5 * w], -1 * LD],
+];
+const CREASES = CREASES_STRIP.map(([c, p, pt, d, ins, h]) => [c, p, toSheet(pt), dirToSheet(d), toSheet(ins), h]);
+// lengthwise folds: column hinges at x = w, 2w, 3w. Half then half again: middle first, then both others.
+// strip layers land at 0, 2, 4, 10 LD (col 0, 3, 2, 1): the gap under the top layer holds a folded reply
+const COL_HEIGHT = [0, 5 * LD, 3 * LD, -1 * LD];
+const COL_MAP = [x => x, x => 2 * w - x, x => 2 * w + x, x => 4 * w - x];
+
+// --- hinge: a group on the crease; content inside is back in the parent's coordinates ---
+function makeHinge(parent, px, py, height, dir, inside) {
+  const axis = new THREE.Vector3(dir[0], dir[1], 0).normalize();
+  const P = new THREE.Vector3(px, py, height);
+  const rel = new THREE.Vector3(inside[0] - px, inside[1] - py, 0);
+  const side = rel.sub(axis.clone().multiplyScalar(rel.dot(axis))).normalize();
+  // swing toward the side the panel lands on (sign of the hinge height)
+  const sgn = Math.sign(height || 1) * Math.sign(new THREE.Vector3().crossVectors(axis, side).z || 1);
+  const group = new THREE.Group(); group.position.copy(P); parent.add(group);
+  const content = new THREE.Group(); content.position.copy(P).negate(); group.add(content);
+  return { group, content, axis, fold: sgn * Math.PI };
+}
+const setHinge = (h, f) => h.group.quaternion.setFromAxisAngle(h.axis, f * h.fold);
+
+function polyGeometry(pts) {
+  const geo = new THREE.ShapeGeometry(new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y))));
+  const pos = geo.attributes.position, uv = geo.attributes.uv;
+  for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i) / SHEET.W, pos.getY(i) / SHEET.H);
+  return geo;
+}
+
+function buildKnot(front, back) {
+  const root = new THREE.Group(), segs = {}, cols = [[], [], [], []], fronts = [];
+  function segment(name, content) {
+    let parent = content; const cells = [];
+    for (let c = 0; c < 4; c++) {
+      let cell = content;
+      if (c > 0) { const h = makeHinge(parent, c * w, 0, COL_HEIGHT[c], [0, 1], [c * w + 0.01, 0]); cols[c].push(h); cell = h.content; }
+      const geo = polyGeometry(SEGS[name].map(([x, y]) => [COL_MAP[c](x), y]));
+      const fm = new THREE.Mesh(geo, front), bm = new THREE.Mesh(geo, back);
+      fm.castShadow = bm.castShadow = true; cell.add(fm, bm); fronts.push(fm);
+      cells.push(cell); parent = cell;
+    }
+    segs[name] = { content, cells };
+  }
+  segment('ROOF', root);
+  const hinges = {};
+  for (const [child, parent, [px, py], dir, inside, height] of CREASES) {
+    const h = makeHinge(segs[parent].content, px, py, height, dir, inside);
+    hinges[child] = h; segment(child, h.content);
+  }
+  return { root, hinges, cols, fronts, segs };
+}
+
+// --- reply: a small sheet folded 2 x 3, accordion style (as v1) ---
+function buildAccordion(spec, front, back) {
+  const { W, H, COLS, ROWS, DZ } = spec;
+  const cw = W / COLS, rh = ROWS.map(f => f * H);
+  const offC = DZ, offR = 2 * DZ * (COLS - 1) + 3 * DZ;
+  const root = new THREE.Group(), rowHinges = [], colHinges = [];
+  let parentRow = root, yTop = 0;
+  for (let r = 0; r < ROWS.length; r++) {
+    let rowContent = new THREE.Group();
+    if (r === 0) root.add(rowContent);
+    else {
+      const s = r % 2 ? 1 : -1, g = new THREE.Group();
+      g.position.set(0, -rh[r - 1], s * offR); rowContent.position.z = -s * offR;
+      g.add(rowContent); parentRow.add(g);
+      rowHinges.push({ group: g, axis: new THREE.Vector3(1, 0, 0), fold: -s * Math.PI });
+    }
+    let parentCell = rowContent;
+    for (let c = 0; c < COLS; c++) {
+      let cell = new THREE.Group();
+      if (c === 0) rowContent.add(cell);
+      else {
+        const t = c % 2 ? 1 : -1, g = new THREE.Group();
+        g.position.set(cw, 0, t * offC); cell.position.z = -t * offC;
+        g.add(cell); parentCell.add(g);
+        (colHinges[c - 1] ||= []).push({ group: g, axis: new THREE.Vector3(0, 1, 0), fold: -t * Math.PI });
+      }
+      const geo = new THREE.PlaneGeometry(cw, rh[r]); geo.translate(cw / 2, -rh[r] / 2, 0);
+      const uv = geo.attributes.uv, u0 = c / COLS, u1 = (c + 1) / COLS, vT = 1 - yTop / H, vB = 1 - (yTop + rh[r]) / H;
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, u0 + uv.getX(i) * (u1 - u0), vB + uv.getY(i) * (vT - vB));
+      const fm = new THREE.Mesh(geo, front), bm = new THREE.Mesh(geo, back);
+      fm.castShadow = bm.castShadow = true; cell.add(fm, bm);
+      parentCell = cell;
+    }
+    parentRow = rowContent; yTop += rh[r];
+  }
+  return { root, rowHinges, colHinges, cw, rh };
+}
+
+// --- text: grapheme- and word-aware wrapping ---
+const segWord = new Intl.Segmenter('ko', { granularity: 'word' });
+const segGraph = new Intl.Segmenter('ko', { granularity: 'grapheme' });
+const graphemes = s => Array.from(segGraph.segment(s), x => x.segment);
+const CLOSERS = new Set(['.', ',', '!', '?', ')', '」', '』', '…', '~', ':', ';', ']', '}', '’', '”', '%', '·', '。', '、']);
+
+// a line never starts with closing punctuation: it hangs on the line before instead
+function wrap(g, text, maxW) {
+  const out = [];
+  const fits = s => g.measureText(s).width <= maxW;
+  for (const para of text.split('\n')) {
+    let line = '';
+    const flush = () => { out.push(line.trimEnd()); line = ''; };
+    for (const { segment } of segWord.segment(para)) {
+      if (fits((line + segment).trimEnd())) { line += segment; continue; }
+      if (!segment.trim()) { if (line.trim()) flush(); continue; }         // break at a space, drop it
+      const gs = graphemes(segment);
+      if (line.trim() && !CLOSERS.has(gs[0]) && fits(segment)) { flush(); line = segment; continue; }
+      for (const gp of gs) {
+        if (line.trim() && !fits(line + gp) && !CLOSERS.has(gp)) flush();
+        line += gp;
+      }
+    }
+    out.push(line.trimEnd());
+  }
+  return out.map(l => l.trimStart());
+}
+function ellipsize(g, s, maxW) {
+  let gs = graphemes(s);
+  while (gs.length && g.measureText(gs.join('') + '…').width > maxW) gs.pop();
+  return gs.join('') + '…';
+}
+// largest size whose wrapped text fits the box; short notes come out big, long notes small, never under minPx
+function fitText(g, text, font, boxW, boxH, maxPx, minPx) {
+  let fit;
+  // a closer hung onto a full line can overshoot boxW, so widths are checked too
+  const widthOk = lines => lines.every(l => g.measureText(l).width <= boxW);
+  for (let px = maxPx; px >= minPx; px -= 4) {
+    g.font = `${px}px "${font}"`; const lines = wrap(g, text, boxW), lh = px * 1.22;
+    fit = { px, lines, lh };
+    if (lines.length * lh <= boxH && widthOk(lines)) return fit;
+  }
+  // smallest size: wrap narrower so hung punctuation stays inside the box
+  if (!widthOk(fit.lines)) fit.lines = wrap(g, text, boxW - g.measureText('……').width);
+  const keep = Math.max(1, Math.floor(boxH / fit.lh));
+  if (fit.lines.length > keep) { fit.lines = fit.lines.slice(0, keep); fit.lines[keep - 1] = ellipsize(g, fit.lines[keep - 1], boxW); }
+  return fit;
+}
+// one line: shrink to fit, then cut with an ellipsis
+function fitLine(g, text, family, maxPx, minPx, maxW, weight = '') {
+  let px = maxPx;
+  for (; px > minPx; px -= 2) { g.font = `${weight}${px}px ${family}`; if (g.measureText(text).width <= maxW) return { px, text }; }
+  g.font = `${weight}${minPx}px ${family}`;
+  return { px: minPx, text: g.measureText(text).width <= maxW ? text : ellipsize(g, text, maxW) };
+}
+function drawBlock(g, fit, font, x, y, boxW, boxH, color, center) {
+  g.font = `${fit.px}px "${font}"`; g.fillStyle = color; g.textBaseline = 'alphabetic';
+  const total = fit.lines.length * fit.lh, y0 = y + Math.max(0, (boxH - total) * 0.4);
+  fit.lines.forEach((ln, i) => {
+    const lx = center ? x + (boxW - g.measureText(ln).width) / 2 : x;
+    g.fillText(ln, lx, y0 + fit.lh * (i + 0.8));
+  });
+}
+
+// --- paper textures (canvas y runs down; sheet y runs up) ---
+function drawPaper(g, cw, ch, tint, { ruled, knot }) {
+  g.fillStyle = tint; g.fillRect(0, 0, cw, ch);
+  const k = cw / 1200, X = x => x / SHEET.W * cw, Y = y => ch - y / SHEET.H * ch;
+  if (ruled) {
+    g.strokeStyle = 'rgba(105,140,180,.30)'; g.lineWidth = Math.max(1, 3 * k);
+    for (let y = ch * 0.1; y < ch - 20 * k; y += 84 * k) { g.beginPath(); g.moveTo(0, y); g.lineTo(cw, y); g.stroke(); }
+    g.strokeStyle = 'rgba(205,110,100,.35)'; g.beginPath(); g.moveTo(cw * 0.11, 0); g.lineTo(cw * 0.11, ch); g.stroke();
+  }
+  const crease = (x0, y0, x1, y1) => {
+    g.lineWidth = Math.max(1, 4 * k);
+    g.strokeStyle = 'rgba(90,70,45,.15)'; g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
+    g.strokeStyle = 'rgba(255,255,255,.32)'; g.beginPath(); g.moveTo(x0 + 3 * k, y0 + 3 * k); g.lineTo(x1 + 3 * k, y1 + 3 * k); g.stroke();
+  };
+  if (knot) {
+    for (let c = 1; c < 4; c++) crease(X(c * w), 0, X(c * w), ch);
+    const lines = [[[TIP, 0], [TIP + w, w]], [[TIP + w, w], [TIP + 2 * w, 0]], [[TIP + 2 * w, 0], [TIP + 3 * w, w]]];
+    for (let c = 0; c < 4; c++) for (const [a, b] of lines) {
+      const [ax, ay] = toSheet(a), [bx, by] = toSheet(b), m = COL_MAP[c];
+      crease(X(m(ax)), Y(ay), X(m(bx)), Y(by));
+    }
+  } else {
+    crease(cw / 2, 0, cw / 2, ch); crease(0, ch / 2, cw, ch / 2);
+  }
+}
+function texFrom(cv) {
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = renderer.capabilities.getMaxAnisotropy(); return t;
+}
+const backCache = new Map();
+function backTexture(tint, knot) {
+  const key = tint + knot;
+  if (!backCache.has(key)) {
+    const cv = document.createElement('canvas'); [cv.width, cv.height] = knot ? BACK_PX : [280, 360];
+    drawPaper(cv.getContext('2d'), cv.width, cv.height, tint, { ruled: knot, knot }); backCache.set(key, texFrom(cv));
+  }
+  return backCache.get(key);
+}
+function frontTexture(data, hasReply) {
+  const [cw, ch] = FRONT_PX, cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+  const g = cv.getContext('2d'); drawPaper(g, cw, ch, tintFor(data), { ruled: true, knot: true });
+  const font = fontFor(data), s = FONT_SCALE[font];
+  const x = cw * 0.11 + 50, boxW = cw - x - 70, top = 130;
+  // with a reply laid on top, the fan's text keeps to the upper half
+  const boxH = (hasReply ? ch * 0.45 : ch * 0.78) - top;
+  const fit = fitText(g, data.msg, font, boxW, boxH, Math.round(290 * s), Math.round(62 * s));
+  drawBlock(g, fit, font, x, top, boxW, boxH, '#2e2a24', fit.lines.length === 1);
+  // name and date sit bottom-left; with a reply they must stay left of it
+  const metaW = hasReply ? cw * 0.47 - x - 20 : boxW;
+  const nm = fitLine(g, '- ' + (data.name ?? '익명'), `"${font}"`, Math.round(84 * s), Math.round(40 * s), metaW);
+  g.font = `${nm.px}px "${font}"`; g.fillStyle = '#4a4034'; g.fillText(nm.text, x, ch * 0.875);
+  const dt = fitLine(g, String(data.date ?? ''), 'system-ui, sans-serif', 40, 24, metaW);
+  g.font = `${dt.px}px system-ui, sans-serif`; g.fillStyle = 'rgba(80,70,55,.7)'; g.fillText(dt.text, x, ch * 0.875 + 62);
+  return texFrom(cv);
+}
+function replyTexture(text) {
+  const [cw, ch] = REPLY_PX, cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+  const g = cv.getContext('2d'); drawPaper(g, cw, ch, REPLY_TINT, { ruled: false, knot: false });
+  const hd = fitLine(g, '크리에이터의 답장', 'system-ui, sans-serif', 38, 24, cw - 112, '600 ');
+  g.font = `600 ${hd.px}px system-ui, sans-serif`; g.fillStyle = '#a6613c'; g.textBaseline = 'alphabetic';
+  g.fillText(hd.text, 56, 88);
+  const s = FONT_SCALE[REPLY_FONT], boxW = cw - 112, boxH = ch - 180;
+  const fit = fitText(g, text, REPLY_FONT, boxW, boxH, Math.round(130 * s), Math.round(52 * s));
+  drawBlock(g, fit, REPLY_FONT, 56, 130, boxW, boxH, '#6e3418', false);
+  return texFrom(cv);
+}
+
+// --- the packet ---
+function buildPacket(data) {
+  const tint = tintFor(data);
+  const paperMat = (map, side) => new THREE.MeshStandardMaterial({ map, side, roughness: 0.95, emissive: 0xffc070, emissiveIntensity: 0 });
+  // the writing side is inside the knot; it gets its text texture only while open
+  const fanBack = backTexture(tint, true);
+  const fanFront = paperMat(fanBack, THREE.FrontSide), fanBackMat = paperMat(fanBack, THREE.BackSide);
+  const knot = buildKnot(fanFront, fanBackMat);
+  // root -> centerer (keeps the visible paper centred) -> spin -> sheet
+  // spin turns the packet a quarter in its own plane: on the tree the strip lies as in the reference,
+  // open the sheet stands upright. It turns during the flight, face always toward the viewer.
+  const root = new THREE.Group(), centerer = new THREE.Group(), spin = new THREE.Group();
+  root.add(centerer); centerer.add(spin); spin.add(knot.root);
+  const p = { data, root, centerer, spin, knot, mats: [fanFront, fanBackMat], fanFront, t: 0, reply: null, textOn: false };
+
+  if (data.reply) {
+    const rBack = backTexture(REPLY_TINT, false);
+    const rFront = paperMat(rBack, THREE.FrontSide), rBackMat = paperMat(rBack, THREE.BackSide);
+    const sheet = buildAccordion(REPLY, rFront, rBackMat);
+    // tucked: folded small inside the strip (between its top two layers) in the long end,
+    // so no fold shows it; it appears when the sheet opens to full width
+    knot.segs.BAND.cells[1].add(sheet.root);
+    const fw = sheet.cw, fh = sheet.rh[0], bandMid = (TIP + 3 * w + L) / 2;
+    const tuck = { p: new THREE.Vector3(1.5 * w - fw / 2, bandMid + fh / 2, 0.00004), rz: 0 };
+    // shown: laid over the lower right of the opened sheet
+    const show = { p: new THREE.Vector3(SHEET.W * 0.47, SHEET.H * 0.52, 0.004), rz: -0.06 };
+    sheet.root.position.copy(tuck.p);
+    p.reply = { sheet, front: rFront, tuck, show };
+    p.mats.push(rFront, rBackMat);
+  }
+
+  // opening timeline = the closing steps in reverse
+  // each beat is one rotation about one crease, with a short rest between beats
+  const H = knot.hinges, REST = 0.12;
+  const segs = [
+    { k: 'fly', d: 0.7 },
+    { k: 'h', d: 0.5, hs: [H.BAND] },                                  // 1 the long end comes out: tails parallel
+    { k: 'h', d: 0.55, hs: [H.TAIL] },                                 // 2 the diagonal unfolds: back to the L
+    { k: 'h', d: 0.5, hs: [H.TIP] },                                   // 3 the 45° tip unfolds: a straight strip
+    { k: 'h', d: 0.5, hs: [...knot.cols[1], ...knot.cols[3]] },        // 4 strip -> half width
+    { k: 'h', d: 0.5, hs: knot.cols[2] },                              //   half -> full sheet
+  ];
+  if (p.reply) {
+    segs.push({ k: 'lift', d: 0.5 });
+    segs.push({ k: 'h', d: 0.45, hs: [...p.reply.sheet.rowHinges, ...p.reply.sheet.colHinges.flat()] });
+  }
+  let s0 = 0; for (const s of segs) { s.s = s0; s0 += s.d + REST; }
+  s0 -= REST;
+  p.segs = segs; p.total = s0;
+  applyPose(p, 0);
+  root.traverse(o => { o.userData.packet = p; });
+
+  // font-ready path: once this note's hands are really loaded, redraw if it is open
+  const loads = [document.fonts.load(`40px "${fontFor(data)}"`, data.msg + (data.name ?? '익명') + '- ')];
+  if (data.reply) loads.push(document.fonts.load(`40px "${REPLY_FONT}"`, data.reply));
+  p.fontsReady = Promise.allSettled(loads).then(() => { if (p.textOn) writeText(p); });
+  return p;
+}
+
+const ease = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+// pose at time t on the open timeline (0 = knotted on the tree, total = fully open)
+function applyPose(p, t) {
+  p.t = t;
+  for (const s of p.segs) {
+    const f = ease(THREE.MathUtils.clamp((t - s.s) / s.d, 0, 1));
+    if (s.k === 'h') s.hs.forEach(h => setHinge(h, 1 - f));
+    else if (s.k === 'fly') {
+      p.spin.rotation.z = -Math.PI / 2 * (1 - f);
+      if (p.flight) {
+        p.root.position.lerpVectors(p.flight.from.p, p.flight.to.p, f);
+        p.root.quaternion.slerpQuaternions(p.flight.from.q, p.flight.to.q, f);
+      }
+    } else if (s.k === 'lift') liftReply(p.reply, f);
+  }
+  recentre(p);
+}
+// the folded reply, found lying on the opened sheet, lifts in an arc and settles on the lower right
+function liftReply(r, f) {
+  const { tuck, show, sheet } = r;
+  sheet.root.position.lerpVectors(tuck.p, show.p, f);
+  sheet.root.position.z += Math.sin(Math.PI * f) * 0.03;
+  sheet.root.rotation.z = THREE.MathUtils.lerp(tuck.rz, show.rz, f);
+}
+// keep the visible paper's bounding box centred on the root (and so on the camera axis)
+const _v = new THREE.Vector3(), _inv = new THREE.Matrix4(), _box = new THREE.Box3();
+function recentre(p) {
+  p.centerer.position.set(0, 0, 0);
+  p.root.updateMatrixWorld(true);
+  _inv.copy(p.centerer.matrixWorld).invert(); _box.makeEmpty();
+  for (const m of p.knot.fronts) {
+    const pos = m.geometry.attributes.position;
+    for (let i = 0; i < pos.count; i++) _box.expandByPoint(_v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld).applyMatrix4(_inv));
+  }
+  _box.getCenter(_v); p.centerer.position.copy(_v).negate();
+  p.root.updateMatrixWorld(true);
+}
+
+// text textures exist only while a packet is open
+function setReading(mat, map) {
+  if (mat.userData.own) mat.map.dispose();
+  mat.map = map; mat.emissiveMap = map; mat.emissive.set(0xffffff); mat.emissiveIntensity = 0.32; mat.needsUpdate = true; mat.userData.own = true;
+}
+function setResting(mat, map) {
+  if (mat.userData.own) mat.map.dispose();
+  mat.map = map; mat.emissiveMap = null; mat.emissive.set(0xffc070); mat.emissiveIntensity = 0; mat.needsUpdate = true; mat.userData.own = false;
+}
+function writeText(p) {
+  setReading(p.fanFront, frontTexture(p.data, !!p.reply));
+  if (p.reply) setReading(p.reply.front, replyTexture(p.data.reply));
+  p.textOn = true;
+}
+function eraseText(p) {
+  setResting(p.fanFront, backTexture(tintFor(p.data), true));
+  if (p.reply) setResting(p.reply.front, backTexture(REPLY_TINT, false));
+  p.textOn = false;
+}
+// =====================================================================
+
+// ---------- tree placement ----------
+const packets = [];
+const raycaster = new THREE.Raycaster();
+let rnd = 11; const rand = () => (rnd = (rnd * 16807) % 2147483647) / 2147483647;
+let tree = null;
+
+function surfaceHit(a, h) {
+  const R = 1.5, out = new THREE.Vector3(Math.sin(a), 0, Math.cos(a));
+  raycaster.set(new THREE.Vector3(out.x * R, h, out.z * R), out.clone().negate()); raycaster.far = R;
+  const hit = raycaster.intersectObject(tree, true)[0];
+  if (!hit) return null;
+  const n = hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
+  if (n.dot(out) < 0) n.negate();
+  return { point: hit.point, n, r: R - hit.distance, out };
+}
+function visibleFromEye(pt) {
+  const dir = pt.clone().sub(camera.position), d = dir.length();
+  raycaster.set(camera.position, dir.normalize()); raycaster.far = d + 0.05;
+  const hit = raycaster.intersectObject(tree, true)[0];
+  if (!hit || hit.distance < d - 0.02) return false;
+  const v = pt.clone().project(camera);
+  return Math.abs(v.x) < 0.9 && Math.abs(v.y) < 0.9;
+}
+// random spots over the front of the tree (±75°), all heights; spacing and visibility are
+// tested on the packet's final centre, since a hanging packet sits below its anchor
+function placePackets() {
+  camera.updateMatrixWorld();
+  const ARC = THREE.MathUtils.degToRad(75), plans = [];
+  let minD = 0.1;
+  for (let tries = 1; plans.length < cards.length && tries < 20000; tries++) {
+    if (tries % 2000 === 0) minD *= 0.92;
+    const a = (rand() * 2 - 1) * ARC, h = 0.32 + rand() * 1.1;
+    const hit = surfaceHit(a, h);
+    if (!hit || hit.r < 0.1) continue;
+    if (rand() > hit.r / 0.5) continue; // area weighting: wider parts of the tree get more notes
+    const plan = planSpot({ a, h, ...hit });
+    if (plans.some(q => q.centre.distanceTo(plan.centre) < minD)) continue;
+    if (!visibleFromEye(plan.face)) continue; // the camera is fixed: every note must be reachable
+    plans.push(plan);
+  }
+  cards.forEach((data, i) => { const p = buildPacket(data); p.i = i; placeOnTree(p, plans[i]); packets.push(p); });
+}
+function planSpot(spot) {
+  const up = new THREE.Vector3(0, 1, 0);
+  const plan = { pivotPos: new THREE.Vector3(), pivotQuat: new THREE.Quaternion(), string: null };
+  if (rand() >= 0.35) {
+    // tucked: lies on the foliage, sunk a little into the branches
+    const z = spot.n, y = up.clone().addScaledVector(z, -z.dot(up)).normalize(), x = new THREE.Vector3().crossVectors(y, z);
+    plan.pivotQuat.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
+    plan.pivotQuat.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), (rand() - 0.5) * 1.1));
+    plan.pivotPos.copy(spot.point).addScaledVector(z, 0.001);
+    plan.home = { p: new THREE.Vector3(), q: new THREE.Quaternion() };
+  } else {
+    // hangs on a very short string, clear of the foliage below the anchor
+    plan.pivotPos.copy(spot.point).addScaledVector(spot.out, -0.004);
+    plan.pivotQuat.setFromAxisAngle(up, spot.a);
+    const L = 0.01 + rand() * 0.012, ph = 0.1;
+    let rMax = spot.r;
+    for (let hh = spot.h - L - ph; hh <= spot.h - L; hh += 0.006) { const s = surfaceHit(spot.a, hh); if (s) rMax = Math.max(rMax, s.r); }
+    const zOut = rMax - spot.r + 0.008;
+    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.05, (rand() - 0.5) * 0.4, (rand() - 0.5) * 0.35));
+    plan.home = { p: new THREE.Vector3(0, -L - ph / 2, zOut), q };
+    plan.string = new THREE.Vector3(0, -L, zOut);
+  }
+  const toWorld = v => v.applyQuaternion(plan.pivotQuat).add(plan.pivotPos);
+  plan.centre = toWorld(plan.home.p.clone());
+  plan.face = toWorld(plan.home.p.clone().add(new THREE.Vector3(0, 0, 0.006)));
+  return plan;
+}
+function placeOnTree(p, plan) {
+  const pivot = new THREE.Group();
+  pivot.position.copy(plan.pivotPos); pivot.quaternion.copy(plan.pivotQuat);
+  p.home = plan.home; p.string = null;
+  if (plan.string) {
+    p.string = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), plan.string]),
+      new THREE.LineBasicMaterial({ color: C.clay }));
+    pivot.add(p.string);
+  }
+  p.root.position.copy(p.home.p); p.root.quaternion.copy(p.home.q);
+  pivot.add(p.root); scene.add(pivot);
+  p.pivot = pivot; p.lift = 0;
+}
+
+// ---------- interaction: pick, bring, read, put back ----------
+const ptr = new THREE.Vector2(); let hovered = null, press = null, opened = null, anim = null;
+
+function pick(e) {
+  if (!tree) return null; // still loading
+  ptr.set((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  raycaster.setFromCamera(ptr, camera); raycaster.far = 20;
+  const hit = raycaster.intersectObjects([tree, ...packets.map(p => p.root)], true)[0];
+  return hit?.object.userData.packet ?? null;
+}
+canvas.addEventListener('pointerdown', e => { press = { x: e.clientX, y: e.clientY, id: e.pointerId }; });
+canvas.addEventListener('pointermove', e => { if (!opened && e.pointerType === 'mouse') setHover(pick(e)); });
+canvas.addEventListener('pointerup', e => {
+  const wasClick = press && press.id === e.pointerId && Math.hypot(e.clientX - press.x, e.clientY - press.y) <= 6;
+  press = null;
+  if (!wasClick) return;
+  const p = pick(e);
+  // while a note is out (flying, unfolding or open), a click anywhere else puts it back
+  if (opened) { if (p !== opened) closePacket(); return; }
+  if (p) openPacket(p);
+});
+canvas.addEventListener('pointercancel', () => { press = null; });
+addEventListener('keydown', e => { if (e.key === 'Escape') closePacket(); });
+function setHover(p) { if (p === hovered) return; hovered = p; canvas.classList.toggle('hover', !!p); }
+
+function openPacket(p) {
+  if (opened || anim) return false; // one note out at a time
+  setHover(null);
+  p.lift = 0; p.root.scale.setScalar(1); p.mats.forEach(m => m.emissiveIntensity = 0);
+  p.root.position.copy(p.home.p); p.root.quaternion.copy(p.home.q);
+  scene.attach(p.root);
+  p.flight = { from: { p: p.root.position.clone(), q: p.root.quaternion.clone() }, to: openTarget() };
+  if (p.string) p.string.visible = false;
+  writeText(p);
+  opened = p; anim = { p, dir: 1, speed: 1.15 };
+  return true;
+}
+// works from any point of the way out: the unfold runs backwards from where it is
+function closePacket() {
+  if (!opened || (anim && anim.dir < 0)) return;
+  anim = { p: opened, dir: -1, speed: 1.6 };
+}
+function finishClose(p) {
+  p.pivot.attach(p.root);
+  p.root.position.copy(p.home.p); p.root.quaternion.copy(p.home.q);
+  if (p.string) p.string.visible = true;
+  eraseText(p); p.flight = null; opened = null;
+}
+// the packet is kept centred on its root, so the root sits on the camera axis
+function openTarget() {
+  const tanH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  const dist = Math.max((SHEET.H + 0.012) / (0.88 * 2 * tanH), (SHEET.W + 0.012) / (0.9 * 2 * tanH * camera.aspect));
+  const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
+  return { p: camera.position.clone().addScaledVector(dir, dist), q: camera.quaternion.clone() };
+}
+
+// ---------- loop ----------
+function resize() {
+  renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  // retarget only while coming out or open, never on the way back
+  if (opened && (!anim || anim.dir > 0)) { opened.flight.to = openTarget(); applyPose(opened, opened.t); }
+}
+addEventListener('resize', resize);
+const clock = new THREE.Clock();
+function frame() {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  for (const p of packets) {
+    if (p === opened) continue;
+    const target = p === hovered ? 1 : 0;
+    p.lift += (target - p.lift) * Math.min(1, dt * 12);
+    p.root.position.copy(p.home.p); p.root.position.z += 0.015 * p.lift;
+    p.root.scale.setScalar(1 + 0.08 * p.lift);
+    p.mats.forEach(m => m.emissiveIntensity = 0.3 * p.lift);
+  }
+  if (anim) {
+    const p = anim.p, t = THREE.MathUtils.clamp(p.t + anim.dir * anim.speed * dt, 0, p.total);
+    applyPose(p, t);
+    if (anim.dir > 0 && t >= p.total) anim = null;
+    else if (anim.dir < 0 && t <= 0) { anim = null; finishClose(p); }
+  }
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+
+// ---------- boot ----------
+resize();
+// load every hand for exactly the characters it will draw (Korean webfonts come in unicode-range subsets)
+const fontLoads = [];
+for (const d of cards) {
+  fontLoads.push(document.fonts.load(`40px "${fontFor(d)}"`, d.msg + (d.name ?? '익명') + '- '));
+  if (d.reply) fontLoads.push(document.fonts.load(`40px "${REPLY_FONT}"`, d.reply));
+}
+await Promise.race([Promise.allSettled(fontLoads), new Promise(r => setTimeout(r, 8000))]);
+const gltf = await new GLTFLoader().loadAsync(TREE_URL);
+tree = gltf.scene;
+const box = new THREE.Box3().setFromObject(tree);
+tree.scale.setScalar(TREE_H / (box.max.y - box.min.y));
+tree.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+scene.add(tree); tree.updateMatrixWorld(true);
+placePackets();
+// test hooks
+const _m = document.createElement('canvas').getContext('2d');
+window.__mock = {
+  cardCount: packets.length,
+  screenOf: i => { const v = packets[i].root.localToWorld(new THREE.Vector3(0, 0, 0.006)).project(camera); return { x: (v.x + 1) / 2 * innerWidth, y: (1 - v.y) / 2 * innerHeight }; },
+  worldOf: i => { packets[i].root.updateWorldMatrix(true, false); return [...packets[i].root.matrixWorld.elements]; },
+  isOpen: () => !!opened && !anim, isBusy: () => !!anim, openIndex: () => opened ? opened.i : -1,
+  t: () => opened ? [opened.t, opened.total, anim ? anim.dir : 0] : null,
+  tryOpen: i => openPacket(packets[i]),
+  // test only: hold the open packet at timeline time t; asTree keeps the tree orientation (for the closed shot)
+  hold: (t, asTree) => { if (!opened) return; anim = null; applyPose(opened, t); if (asTree) { opened.spin.rotation.z = -Math.PI / 2; recentre(opened); } },
+  release: () => { if (opened) anim = { p: opened, dir: -1, speed: 1.6 }; },
+  hasReply: i => !!cards[i].reply, msgLen: i => [...cards[i].msg].length,
+  // screen position of the visible paper's bounding-box centre
+  centre: () => { if (!opened) return null; const v = opened.root.getWorldPosition(new THREE.Vector3()).project(camera); return { x: (v.x + 1) / 2 * innerWidth, y: (1 - v.y) / 2 * innerHeight }; },
+  wrapTest: (text, px, maxW) => { _m.font = `${px}px sans-serif`; return wrap(_m, text, maxW); },
+};
+frame();
+</script>
+</body>
+</html>
