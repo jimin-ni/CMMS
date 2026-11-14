@@ -1,16 +1,17 @@
 // 걷는 사람: 모양, 이동, 앉기, 걸음 움직임.
 import * as THREE from 'three';
 import { flat } from './draw.js';
+import { tone } from './palette.js';
 
 export function setupWalk(ctx) {
   const { C, WALLS, DOOR, scene, toast, setHint, syncUI, SEAT, enterSort } = ctx;
 
   // ---------- 걷는 사람 ----------
   const me = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.25, 0.45, 7), flat(C.accent)); body.position.y = 0.5;
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.25, 0.45, 7), tone(C, 'accent')); body.position.y = 0.5;
   const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.26, 1), flat('#f2cfb3')); head.position.y = 0.95;
   const hair = new THREE.Mesh(new THREE.SphereGeometry(0.28, 7, 4, 0, Math.PI * 2, 0, Math.PI / 2), flat('#3a2a22')); hair.position.set(0, 0.98, -0.02);
-  const legL = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.3, 5), flat(C.olive)), legR = legL.clone();
+  const legL = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.3, 5), tone(C, 'olive')), legR = legL.clone();
   legL.geometry.translate(0, -0.15, 0); legL.position.set(-0.09, 0.3, 0); legR.position.set(0.09, 0.3, 0);
   const eyeGeo = new THREE.SphereGeometry(0.035, 5, 4), eyeMat = flat('#2a2230');
   const eyeL = new THREE.Mesh(eyeGeo, eyeMat), eyeR = new THREE.Mesh(eyeGeo, eyeMat);

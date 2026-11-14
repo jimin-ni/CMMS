@@ -1,7 +1,8 @@
 // item.fn 기능이 달린 가구의 3D 쪽: 기념품, TV 화면, 달력.
 import * as THREE from 'three';
 import { mulberry32 } from './util.js';
-import { paper, wrap, drawFit, NO_PHOTO, flat, cropToShape, makeCanvas, canvasTexture } from './draw.js';
+import { paper, wrap, drawFit, NO_PHOTO, cropToShape, makeCanvas, canvasTexture } from './draw.js';
+import { tone } from './palette.js';
 import { ksDay, seoulDay } from './format.js';
 
 export function setupSlots(ctx) {
@@ -61,7 +62,7 @@ export function setupSlots(ctx) {
     const fn = it.fn?.kind === 'keepsake' ? it.fn : { kind: 'keepsake', name: '' }; // 기념품이 아직 없는 액자는 빈 액자다
     const look = keepsakeLook(fn), k = look.tall ? KS.tall : KS.wide, W = k.cw, H = k.ch + k.strip;
     const pw = shape === 'frame' ? (look.tall ? 0.55 : 0.95) : (look.tall ? 0.2 : 0.32), ph = pw * H / W, rim = shape === 'frame' ? 0.045 : 0.03;
-    const grp = new THREE.Group(), wood = flat(C.woodDark);
+    const grp = new THREE.Group(), wood = tone(C, 'woodDark');
     const canvas = makeCanvas(W, H);
     const tex = canvasTexture(canvas, 4);
     const frame = box(pw + 2 * rim, ph + 2 * rim, 0.04, wood, 0, 0, 0.02, { cast: shape !== 'frame', parent: grp });
@@ -134,13 +135,24 @@ export function setupSlots(ctx) {
     const tex = canvasTexture(canvas);
     const plane = new THREE.Mesh(new THREE.PlaneGeometry(s.w, s.h), new THREE.MeshBasicMaterial({ map: tex, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
     plane.position.set(s.x, s.y, s.z); inst.add(plane);
-    const what = tvContent(slot.fn);
+    let what = tvContent(slot.fn);
     paintTv(canvas, null, what);
-    registerSlot(build, slot, [plane], () => {
-      paintTv(canvas, null, what); tex.needsUpdate = true;
-      if (what.id) ksLoad(build, { id: what.id, tall: what.tall }, what.tall ? ['hqdefault'] : ['mqdefault'], pic => { if (build === ctx.build) { paintTv(canvas, pic, what); tex.needsUpdate = true; } });
-    });
+    const show = () => {
+      const shown = what;
+      paintTv(canvas, null, shown); tex.needsUpdate = true;
+      if (shown.id) ksLoad(build, { id: shown.id, tall: shown.tall }, shown.tall ? ['hqdefault'] : ['mqdefault'], pic => { if (build === ctx.build && what === shown) { paintTv(canvas, pic, shown); tex.needsUpdate = true; } });
+    };
+    registerSlot(build, slot, [plane], show);
+    // 최신 영상 TV: 영상 목록이 바뀌면(live.js 의 replaceReels) 가장 최근 영상을 다시 골라 그린다. 같은 영상이면 그대로 둔다.
+    slot.refresh = () => {
+      if (slot.fn.kind !== 'latest' || build !== ctx.build) return;
+      const next = tvContent(slot.fn);
+      if (next.id === what.id) return;
+      what = next;
+      if (slot.started) show(); else { paintTv(canvas, null, what); tex.needsUpdate = true; }
+    };
   }
+  function refreshLatestTv() { for (const s of ctx.build.slots) s.refresh?.(); }
 
   // 책상 위 달력(type "calendar", fn.kind "calendar"): 종이 한 장이 달린 작은 스탠드. 쪽은 다음 날짜가 있는 달(없으면 이번 달)을 보여 주고
   // 항목이 있는 날에 동그라미를 친다. 손으로 만든다: 키트에 달력이 없다.
@@ -168,11 +180,12 @@ export function setupSlots(ctx) {
     const fn = it.fn?.kind === 'calendar' ? it.fn : { kind: 'calendar', entries: [] }; // 기능이 아직 없는 달력은 빈 달력이다
     const canvas = makeCanvas(192, 192);
     const tex = canvasTexture(canvas, 4);
-    const wood = flat(C.woodDark), grp = new THREE.Group(), W = 0.4, H = 0.4;
+    const wood = tone(C, 'woodDark'), grp = new THREE.Group(), W = 0.4, H = 0.4;
     box(W + 0.06, 0.03, 0.16, wood, 0, 0.015, 0, { parent: grp });
     const lean = new THREE.Group(); lean.position.set(0, 0.03, -0.03); lean.rotation.x = -0.3; grp.add(lean);
     const back = box(W + 0.04, H + 0.04, 0.02, wood, 0, H / 2, 0, { parent: lean });
     const page = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 })); page.position.set(0, H / 2, 0.012); page.castShadow = true; lean.add(page);
+    page.material.userData.repaint = () => { paintCalendar(canvas, fn); tex.needsUpdate = true; }; // 머리띠와 동그라미는 포인트 색이다
     grp.position.y = it.y || 0; g.add(grp);
     paintCalendar(canvas, fn);
     if (it.fn?.kind !== 'calendar') return {};
@@ -181,5 +194,5 @@ export function setupSlots(ctx) {
   };
   function startSlots() { ctx.slotsLive = true; for (const s of ctx.build.slots) s.start?.(); }
 
-  Object.assign(ctx, { keepsakeObject, tvScreen, startSlots, keepsakeLook, newestReel });
+  Object.assign(ctx, { keepsakeObject, tvScreen, startSlots, keepsakeLook, newestReel, refreshLatestTv });
 }

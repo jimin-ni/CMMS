@@ -33,6 +33,7 @@ import { setupPath } from './path.js';
 import { setupEdit } from './edit.js';
 import { setupDockThumbs } from './dock-thumbs.js';
 import { setupEditCamera } from './edit-camera.js';
+import { setupRecolour } from './recolour.js';
 
 // heap-room.tsx 가 그리고 엔진이 채우거나 보이게 하는 노드의 id. dispose 가 첫 렌더 상태로 되돌린다.
 const LISTS = ['albumrow', 'player-frame', 'music-frame', 'phone-feed', 'pc-list', 'ks-body', 'cal-body', 'grid-list', 'gb-list', 'roomlist'];
@@ -41,9 +42,9 @@ const HIDDEN = ['visit', 'albumrow', 'stand', 'flip', 'srclink', 'eject', 'ytlin
 /**
  * 방을 `root`(heap-room.tsx 가 그린 요소)에 올리고 dispose 함수를 돌려준다.
  * 라이브 훅은 `root` 에 보내는 CustomEvent 다: `heap:time`(time.js), `heap:items`, `heap:get`, `heap:saved`, `heap:edit`(editor-bridge.js),
- * `heap:editcmd`(edit.js), `heap:thumb`(dock-thumbs.js).
- * 꾸미기가 팔레트나 방의 틀(템플릿)을 바꾸면 엔진은 `heap:remount`(detail: 편집 상태)를 보낸다. heap-room.tsx 가 그 상태를 opts.resume 으로 넘겨 다시 마운트한다:
- * resume { edit, items, time, palette, shell, name, savedName, hist, future, saved, original, baseLayout } (edit.js 의 remount 참고).
+ * `heap:editcmd`(edit.js), `heap:thumb`(dock-thumbs.js), `heap:reels`(live.js: 새 영상 목록으로 더미를 맞춘다), `heap:capture`(loop.js: 지금 구도를 한 장 그려 준다).
+ * 팔레트와 배경은 그 자리에서 다시 칠한다 (recolour.js, time.js 의 setBackdrop). 꾸미기가 방의 틀(템플릿)을 바꾸면 엔진은 `heap:remount`(detail: 편집 상태)를 보낸다. heap-room.tsx 가 그 상태를 opts.resume 으로 넘겨 다시 마운트한다:
+ * resume { edit, items, time, palette, backdrop, brand, shell, name, savedName, hist, future, saved, original, baseLayout } (edit.js 의 remount 참고).
  * 엔진이 `root` 에 직접 보내는 것은 둘이다. `heap:mode`(detail: 'room' | 'sit' | 'watch' | 'sort')는 모드가 정해질 때마다,
  * `heap:ready` 는 방이 화면에 뜬 뒤에 한 번.
  * `modelBase` 는 가구 모델과 catalogue.json 이 있는 폴더다. 없으면 `dataBase` 옆의 "models/" 다.
@@ -112,6 +113,7 @@ async function run(ctx) {
   setupPath(ctx);
   setupDockThumbs(ctx); // 꾸미기 가구 목록의 그림 (heap:thumb)
   setupEditCamera(ctx); // 꾸미기의 카메라: 맞춤, 확대, 이동, 평면도 (loop.js 의 ROOM_CAM 을 쓴다)
+  setupRecolour(ctx); // 팔레트를 다시 마운트하지 않고 바꾼다 (ctx.recolour, edit.js 가 쓴다)
   setupEdit(ctx); // 꾸미기. 포인터를 방 루트의 capture 단계에서 먼저 받으므로 input.js 뒤에 세워도 된다
 
   await fontsReady(); // 썸네일은 기다리지 않는다: buildHeap() 이 줄을 세우고 카드는 그림이 오는 대로 채워진다

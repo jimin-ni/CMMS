@@ -37,7 +37,7 @@ export function setupEditorBridge(ctx) {
     const l = e.detail.layout;
     if (!l || typeof l !== 'object' || !Array.isArray(l.items)) return;
     ctx.baseLayout = structuredClone(l);
-    ctx.original = { items: l.items.map(it => ({ ...it })), time: l.time ?? 'auto', palette: l.palette ?? null };
+    ctx.original = { items: l.items.map(it => ({ ...it })), time: l.time ?? 'auto', palette: l.palette ?? null, backdrop: l.backdrop?.mode === 'colour' ? l.backdrop : null, brand: l.brand ?? null };
     if (typeof e.detail.name === 'string') ctx.savedName = e.detail.name;
   });
   on(root, 'heap:get', e => {

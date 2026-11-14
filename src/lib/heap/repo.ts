@@ -1284,6 +1284,42 @@ export async function setReelExcluded(
   });
 }
 
+export type HeapOwnerReel = {
+  id: string;
+  platform: HeapChannelPlatform;
+  externalId: string;
+  title: string;
+  sourceUrl: string;
+  wide: boolean | null;
+  publishedAt: Date | null;
+  channelId: string | null;
+  // 힙에서 뺀 영상이면 true (방 layout의 excludedReels에 있다)
+  excluded: boolean;
+};
+
+// 꾸미기의 채널 탭이 읽는 이 방의 영상 전부: 힙에 보이는 것과 뺀 것을 함께, 최근 순으로. 방 주인 화면에서만 부른다 (page.tsx가 주인인지 먼저 본다).
+// 상한은 방이 보여 줄 수 있는 수와 뺄 수 있는 수의 합이다.
+export async function listOwnerReels(roomId: string, layout: HeapLayout): Promise<HeapOwnerReel[]> {
+  if (!isUuid(roomId)) return [];
+  const excluded = new Set(excludedReelKeys(layout));
+  const rows = await db
+    .select({
+      id: heapReels.id,
+      platform: heapReels.platform,
+      externalId: heapReels.externalId,
+      title: heapReels.title,
+      sourceUrl: heapReels.sourceUrl,
+      wide: heapReels.wide,
+      publishedAt: heapReels.publishedAt,
+      channelId: heapReels.channelId,
+    })
+    .from(heapReels)
+    .where(eq(heapReels.roomId, roomId))
+    .orderBy(sql`${heapReels.publishedAt} desc nulls last`, desc(heapReels.createdAt), asc(heapReels.id))
+    .limit(HEAP_POLICY.snapshotReelsMax + HEAP_FUNNEL_POLICY.excludedReelsMax);
+  return rows.map((row) => ({ ...row, excluded: excluded.has(`${row.platform}:${row.externalId}`) }));
+}
+
 export type HeapExcludedReel = { id: string; platform: HeapChannelPlatform; title: string; sourceUrl: string };
 
 // 힙에서 뺀 영상 목록 (되돌리기 화면용). 이 크리에이터 방의 것만, 최근 순으로 돌려준다.

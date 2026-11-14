@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { disposeScene, mulberry32 } from './util.js';
 import { flat, makeCanvas, canvasTexture } from './draw.js';
+import { tone, mark } from './palette.js';
 
 export function setupFurniture(ctx) {
   const { rand, C, box, ALBUMS, scene } = ctx;
@@ -30,11 +31,11 @@ export function setupFurniture(ctx) {
     const rank = it.type === 'lamp' ? hand.indexOf(it) : hand.length + build.items.filter(o => isLampModel(o) && isLit(o)).indexOf(it);
     return rank < MAX_LAMP_LIGHTS ? new THREE.PointLight(0xffb86b, 3.2, 9, 1.2) : null;
   }
-  const bookCols = [C.accent, C.olive, '#c9a46a', '#7d8a5a', '#d8c7a8', '#8a4f33'];
+  // 책 색: 포인트, 올리브, 고정된 넷 (palette.js 의 'book:i')
   function pottedPlant(parent, x, z, y, s) {
-    box(0.36 * s, 0.34 * s, 0.36 * s, flat(C.accent), x, y + 0.17 * s, z, { parent });
+    box(0.36 * s, 0.34 * s, 0.36 * s, tone(C, 'accent'), x, y + 0.17 * s, z, { parent });
     for (let i = 0; i < 5; i++) {
-      const leaf = new THREE.Mesh(new THREE.IcosahedronGeometry(0.22 * s, 0), flat([C.leaf, C.leaf2, C.leafDark][i % 3]));
+      const leaf = new THREE.Mesh(new THREE.IcosahedronGeometry(0.22 * s, 0), tone(C, ['leaf', 'leaf2', 'leafDark'][i % 3]));
       const a = i * 1.26;
       leaf.position.set(x + Math.cos(a) * 0.14 * s, y + (0.45 + ctx.irand() * 0.25) * s, z + Math.sin(a) * 0.14 * s);
       leaf.scale.set(1, 1.5, 0.6); leaf.rotation.set(ctx.irand(), a, ctx.irand() * 0.5); leaf.castShadow = true; parent.add(leaf);
@@ -42,20 +43,20 @@ export function setupFurniture(ctx) {
   }
   const BUILD = {
     bed(g) {
-      box(2.8, 0.3, 1.4, flat(C.woodB), 0, 0.15, 0, { parent: g });
-      box(2.7, 0.18, 1.3, flat(C.paper), 0, 0.39, 0, { parent: g });
-      box(1.6, 0.06, 1.36, flat(C.accent), 0.45, 0.5, 0, { parent: g });
+      box(2.8, 0.3, 1.4, tone(C, 'woodB'), 0, 0.15, 0, { parent: g });
+      box(2.7, 0.18, 1.3, tone(C, 'paper'), 0, 0.39, 0, { parent: g });
+      box(1.6, 0.06, 1.36, tone(C, 'accent'), 0.45, 0.5, 0, { parent: g });
       box(0.6, 0.16, 0.45, flat('#f7f1e6'), -1.0, 0.56, 0, { parent: g });
       return { hw: 1.6, hd: 0.95 };
     },
     shelf(g, it, build) {
-      const wood = flat(C.woodDark), add = m => { shelfParts.push(m); return m; };
+      const wood = tone(C, 'woodDark'), add = m => { shelfParts.push(m); return m; };
       add(box(1.6, 2.2, 0.12, wood, 0, 1.1, -0.22, { parent: g }));
       for (const sx of [-0.77, 0.77]) add(box(0.06, 2.2, 0.5, wood, sx, 1.1, 0, { parent: g }));
       for (let s = 0; s < 3; s++) {
         add(box(1.6, 0.05, 0.5, wood, 0, 0.27 + s * 0.7, 0, { parent: g }));
         if (s === 1) continue;
-        for (let b = 0; b < 6; b++) { const h = 0.35 + ctx.irand() * 0.15; add(box(0.16, h, 0.3, flat(bookCols[(s * 6 + b) % bookCols.length]), 0.6 - b * 0.22, 0.3 + s * 0.7 + h / 2, 0.02, { parent: g })); }
+        for (let b = 0; b < 6; b++) { const h = 0.35 + ctx.irand() * 0.15; add(box(0.16, h, 0.3, tone(C, `book:${s * 6 + b}`), 0.6 - b * 0.22, 0.3 + s * 0.7 + h / 2, 0.02, { parent: g })); }
       }
       add(box(1.6, 0.05, 0.5, wood, 0, 2.2, 0, { parent: g }));
       pottedPlant(g, 0, 0, 2.22, 0.7);
@@ -68,6 +69,7 @@ export function setupFurniture(ctx) {
         const lc = makeCanvas(96, 360);
         const lt = canvasTexture(lc);
         const label = new THREE.Mesh(new THREE.PlaneGeometry(0.11, 0.41), new THREE.MeshStandardMaterial({ map: lt, roughness: 0.9 }));
+        label.material.userData.repaint = () => ctx.updateAlbums(); // 이름표는 종이, 잉크, 포인트 색으로 그린다 (shelf.js)
         label.position.set(lx, 0.995 + 0.26, 0.181); label.userData.album = a.key;
         g.add(m, label); add(m); add(label);
         ctx.shelf.albums.push({ ...a, mesh: m, label, lc, lt });
@@ -76,13 +78,13 @@ export function setupFurniture(ctx) {
     },
     plant(g, it) { const s = it.size || 1; pottedPlant(g, 0, 0, 0, s); return { hw: 0.44 * s, hd: 0.44 * s }; },
     snake(g) {
-      box(0.34, 0.4, 0.34, flat(C.olive), 0, 0.2, 0, { parent: g });
-      for (let i = 0; i < 6; i++) { const b = box(0.07, 0.8 + ctx.irand() * 0.5, 0.03, flat([C.leaf, C.leafDark][i % 2]), (ctx.irand() - 0.5) * 0.2, 0.75, (ctx.irand() - 0.5) * 0.2, { parent: g }); b.rotation.set((ctx.irand() - 0.5) * 0.3, ctx.irand() * 3, (ctx.irand() - 0.5) * 0.3); }
+      box(0.34, 0.4, 0.34, tone(C, 'olive'), 0, 0.2, 0, { parent: g });
+      for (let i = 0; i < 6; i++) { const b = box(0.07, 0.8 + ctx.irand() * 0.5, 0.03, tone(C, ['leaf', 'leafDark'][i % 2]), (ctx.irand() - 0.5) * 0.2, 0.75, (ctx.irand() - 0.5) * 0.2, { parent: g }); b.rotation.set((ctx.irand() - 0.5) * 0.3, ctx.irand() * 3, (ctx.irand() - 0.5) * 0.3); }
       return { hw: 0.4, hd: 0.4 };
     },
     lamp(g, it, build) {
-      box(0.3, 0.04, 0.3, flat(C.olive), 0, 0.02, 0, { parent: g });
-      box(0.04, 1.7, 0.04, flat(C.olive), 0, 0.87, 0, { parent: g });
+      box(0.3, 0.04, 0.3, tone(C, 'olive'), 0, 0.02, 0, { parent: g });
+      box(0.04, 1.7, 0.04, tone(C, 'olive'), 0, 0.87, 0, { parent: g });
       const shade = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.26, 0.3, 8, 1, true), new THREE.MeshStandardMaterial({ color: '#f6dcb2', emissive: LAMP_GLOW, emissiveIntensity: isLit(it) ? ctx.shadeNow : 0, side: THREE.DoubleSide, flatShading: true }));
       shade.position.y = 1.8; g.add(shade);
       const light = lampLight(build, it);
@@ -91,7 +93,7 @@ export function setupFurniture(ctx) {
       return { hw: 0.35, hd: 0.35 };
     },
     books(g) {
-      for (let i = 0; i < 4; i++) { const b = box(0.42, 0.08, 0.3, flat(bookCols[(i + 2) % bookCols.length]), 0, 0.04 + i * 0.08, 0, { parent: g }); b.rotation.y = (ctx.irand() - 0.5) * 0.5; }
+      for (let i = 0; i < 4; i++) { const b = box(0.42, 0.08, 0.3, tone(C, `book:${i + 2}`), 0, 0.04 + i * 0.08, 0, { parent: g }); b.rotation.y = (ctx.irand() - 0.5) * 0.5; }
       return { hw: 0.45, hd: 0.4 };
     },
   };
@@ -106,7 +108,7 @@ export function setupFurniture(ctx) {
         if (col || glow) { // 이 가구만의 재질 복사본: 물들이고 (램프 갓은) 빛나게 한다. 캐시에 있는 원본은 파일 그대로 둔다
           if (!own.has(o.material)) {
             const c = o.material.clone();
-            if (col) c.color.set(col);
+            if (col) { c.color.set(col); mark(c, 'tint:' + o.material.name); } // 팔레트가 바뀌면 recolour.js 가 이름으로 다시 칠한다
             if (glow) { c.emissive.set(LAMP_GLOW); c.emissiveIntensity = isLit(it) ? ctx.shadeNow : 0; }
             own.set(o.material, c);
           }

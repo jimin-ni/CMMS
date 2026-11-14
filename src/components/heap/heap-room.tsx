@@ -10,8 +10,11 @@ import { HEAP_POLICY } from "@/lib/heap/policy";
 import { parsePieceUrl } from "@/lib/heap/platform";
 import { isEmailAddress, isSafeLink, isWebLink, parseMusicUrl } from "@/lib/heap/slots";
 import { SHELL_KEYS } from "@/lib/heap/template-move";
+import type { HeapChannelPlatform } from "@/lib/heap/platform";
+import type { ReelClass } from "@/lib/heap/caps";
 import { RoomEditor } from "./room-editor";
 import { SetupChecklist, setupFlags, type ChecklistAction } from "./setup-checklist";
+import { ShareButton } from "./share-button";
 import "./heap-room.css";
 
 // 크리에이터 정보(creator.json)는 public/heap/rooms/ 아래의 정적 파일이다. 나머지 방 데이터는 서버가 DB에서 읽어 data로 넘긴다.
@@ -40,13 +43,34 @@ export type HeapRoomData = {
   creatorVisit: string | null;
 };
 
-// 꾸미기가 팔레트나 방의 틀을 바꿀 때 엔진이 보내는 편집 상태 (engine/edit.js 의 remount). 다음 마운트에 opts.resume 으로 그대로 넘긴다.
+// 방 주인에게만 넘기는 값 (page.tsx). 체크리스트와 꾸미기의 채널 탭이 읽는다. 주소(url)는 https 만, 아니면 null.
+export type HeapOwnerData = {
+  // 방 이름을 지었는지 견주는 닉네임
+  nickname: string;
+  channels: { id: string; platform: HeapChannelPlatform; title: string; url: string | null }[];
+  // 이 방의 영상 전부 (힙에서 뺀 것 포함, 최근 순). id 는 heap_reels.id (빼기·되돌리기 액션이 받는 값)
+  reels: {
+    id: string;
+    platform: HeapChannelPlatform;
+    title: string;
+    url: string | null;
+    kind: ReelClass;
+    channelId: string | null;
+    published: string | null;
+    excluded: boolean;
+  }[];
+};
+
+// 꾸미기가 방의 틀을 바꿀 때 엔진이 보내는 편집 상태 (engine/edit.js 의 remount). 다음 마운트에 opts.resume 으로 그대로 넘긴다.
 // shell: 방 크기와 고정된 것의 자리 (템플릿을 깔면 바뀐다) · name: 꾸미는 중인 방 이름 · savedName: 저장된 방 이름
 type EditResume = {
   edit: boolean;
   items: unknown[];
   time: string | number;
   palette: Record<string, unknown> | null;
+  // 방 뒤의 배경(null = 시간 따라)과 주인이 넣은 브랜드 색(null = 없음). 팔레트처럼 레이아웃에 얹는다
+  backdrop?: Record<string, unknown> | null;
+  brand?: string[] | null;
   shell?: Record<string, unknown>;
   name?: string;
   savedName?: string;
@@ -74,8 +98,8 @@ export function HeapRoom({
   viewerName: string | null;
   signedIn: boolean;
   canEdit?: boolean;
-  // 방 주인에게만: 체크리스트가 읽는 닉네임과 연결한 채널 수
-  owner?: { nickname: string; channels: number } | null;
+  // 방 주인에게만: 체크리스트가 읽는 닉네임, 채널 탭이 읽는 채널과 영상
+  owner?: HeapOwnerData | null;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -122,8 +146,18 @@ export function HeapRoom({
       setLive(null);
     };
   }, [editing, owner]);
-  // 팔레트를 바꾸며 다시 마운트할 때의 편집 상태. 이 data로 띄운 방에만 쓴다 (방을 옮기거나 data가 새로 오면 버려진다).
-  const [resume, setResume] = useState<{ data: HeapRoomData; state: EditResume } | null>(null);
+  // 팔레트를 바꾸며 다시 마운트할 때의 편집 상태. 이 방에만 쓴다 (방을 옮기면 버려진다).
+  const [resume, setResume] = useState<EditResume | null>(null);
+  // 엔진은 가장 최근의 data 로 뜬다. 같은 방의 새 스냅샷(router.refresh: 채널 탭)은 엔진을 다시 띄우지 않는다:
+  // 새 영상 목록만 heap:reels 로 보내고(engine/live.js), 다음에 다시 마운트하면(팔레트) 이 값으로 뜬다.
+  const latest = useRef(data);
+  const engineData = useRef(data);
+  useEffect(() => {
+    latest.current = data;
+    if (engineData.current === data) return;
+    engineData.current = data;
+    rootRef.current?.dispatchEvent(new CustomEvent("heap:reels", { detail: data.reels }));
+  }, [data]);
   // 방을 옮기면 꾸미기를 닫고 이어 붙일 편집 상태도 버린다 (렌더 중에 앞의 방과 견준다). 앞 방의 편집이 새 방으로 새지 않게.
   const [shownRoom, setShownRoom] = useState(data.roomUuid);
   if (shownRoom !== data.roomUuid) {
@@ -142,14 +176,25 @@ export function HeapRoom({
     if (!root) return;
     let cancelled = false;
     let dispose: (() => void) | null = null;
-    const onReady = () => setReady(true);
+    const data = latest.current;
+    engineData.current = data;
+    // 엔진이 뜨는 동안(dynamic import, setupLive 전) 새 스냅샷이 오면 그 heap:reels 는 듣는 이가 없다. 뜬 뒤에 최신 목록을 한 번 더 보낸다.
+    const onReady = () => {
+      setReady(true);
+      const now = latest.current;
+      // 엔진이 뜬 data 와 다르면 보낸다. 이미 받은 목록이면 엔진에서 아무 일도 없다.
+      if (now !== data) {
+        engineData.current = now;
+        root.dispatchEvent(new CustomEvent("heap:reels", { detail: now.reels }));
+      }
+    };
     const onMode = (e: Event) => setMode((e as CustomEvent<string>).detail);
-    const onRemount = (e: Event) => setResume({ data, state: (e as CustomEvent<EditResume>).detail });
+    const onRemount = (e: Event) => setResume((e as CustomEvent<EditResume>).detail);
     root.addEventListener("heap:ready", onReady);
     root.addEventListener("heap:mode", onMode);
     root.addEventListener("heap:remount", onRemount);
     // 다시 마운트할 때는 편집 중인 가구, 시간, 팔레트를 저장된 레이아웃 위에 얹어 띄운다. palette가 null이면 기본 색이다.
-    const r = resume && resume.data === data ? resume.state : null;
+    const r = resume;
     let mountData = data;
     // 방의 틀(shell)이 있으면 저장된 틀 대신 그것을 쓴다 (템플릿을 깔았거나 저장 전 모습을 불러왔다). 이름도 꾸미는 중인 이름으로 띄운다.
     if (r) {
@@ -160,6 +205,10 @@ export function HeapRoom({
       }
       if (r.palette) layout.palette = r.palette;
       else delete layout.palette;
+      if (r.backdrop) layout.backdrop = r.backdrop;
+      else delete layout.backdrop;
+      if (r.brand) layout.brand = r.brand;
+      else delete layout.brand;
       mountData = { ...data, layout, name: typeof r.name === "string" ? r.name : data.name };
     }
     import("./engine").then(({ mountRoom }) => {
@@ -203,7 +252,7 @@ export function HeapRoom({
       root.removeEventListener("heap:remount", onRemount);
       dispose?.();
     };
-  }, [roomId, data, viewerName, signedIn, router, resume]);
+  }, [roomId, viewerName, signedIn, router, resume]);
 
   // 체크리스트: 방 주인에게, 방이 뜬 뒤, 걸어 다니는 방이나 꾸미기(팔로워로 보기 빼고)에서
   const showChecklist = !!owner && ready && (editing ? !preview : mode === "room");
@@ -248,6 +297,7 @@ export function HeapRoom({
                 꾸미기
               </button>
             )}
+            {ready && !editing && <ShareButton rootRef={rootRef} roomId={roomId} roomUuid={data.roomUuid} />}
           </div>
           <p className="hint" id="hint" />
         </div>
@@ -265,6 +315,7 @@ export function HeapRoom({
           action={action}
           beforeSave={beforeSave}
           onSaved={onSaved}
+          owner={owner}
         />
       )}
       {showChecklist && owner && (
@@ -272,7 +323,7 @@ export function HeapRoom({
           roomId={roomId}
           roomUuid={data.roomUuid}
           nickname={owner.nickname}
-          channels={owner.channels}
+          channels={owner.channels.length}
           name={editing && live ? live.name : saved.name}
           flags={editing && live ? live : setupFlags(saved.layout.items)}
           savedLayout={saved.layout}

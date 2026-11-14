@@ -38,8 +38,17 @@ const PALETTE_KEYS = new Set([
 ]);
 const HEX = /^#[0-9a-fA-F]{6}$/;
 const FLOOR_BOARDS_MAX = 6;
+const BRAND_MAX = 3;
 // 영상 하나를 가리키는 키: 플랫폼 이름 + ":" + 플랫폼 안의 ID (heap_reels.platform, external_id)
 export const REEL_KEY = /^(youtube|chzzk|twitch|soop|instagram|tiktok):[A-Za-z0-9_:.-]{1,255}$/;
+
+// 방 화면(누구나 보는 페이지)에 넘기는 layout. 힙에서 뺀 영상 목록(excludedReels)은 뺀다: 방문자에게 뺀 영상의 ID가 드러난다.
+// 엔진과 꾸미기는 이 값을 쓰지 않는다. 방 주인의 채널 탭은 repo.ts 의 listOwnerReels 로 읽는다.
+export function publicLayout(layout: Record<string, unknown>): Record<string, unknown> {
+  const { excludedReels: _hidden, ...rest } = layout;
+  void _hidden;
+  return rest;
+}
 
 function isObj(value: unknown): value is Obj {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
@@ -280,6 +289,36 @@ export function validateLayout(input: unknown): LayoutCheck {
           palette[name] = color;
         }
         out.palette = palette;
+        break;
+      }
+      case "backdrop": {
+        // 방 뒤의 배경. { mode: "time" }(시간 따라, 없을 때와 같다) 또는 { mode: "colour", top, bottom? } (bottom이 있으면 위에서 아래로 그라데이션)
+        if (!isObj(value) || typeof value.mode !== "string") return fail("backdrop: 형식이 올바르지 않아요.");
+        if (value.mode === "time") {
+          if (unknownKey(value, ["mode"])) return fail("backdrop: 형식이 올바르지 않아요.");
+          // 시간 따라는 배경이 없는 것과 같다. 저장하지 않아서 꾸미기가 한 가지 모양(색 배경 | 없음)만 다루게 한다 (codex)
+          break;
+        }
+        if (value.mode !== "colour" || unknownKey(value, ["mode", "top", "bottom"])) return fail("backdrop: 형식이 올바르지 않아요.");
+        if (typeof value.top !== "string" || !HEX.test(value.top)) return fail("backdrop.top: #RRGGBB 형식이어야 해요.");
+        const backdrop: Obj = { mode: "colour", top: value.top };
+        if (value.bottom !== undefined) {
+          if (typeof value.bottom !== "string" || !HEX.test(value.bottom)) return fail("backdrop.bottom: #RRGGBB 형식이어야 해요.");
+          backdrop.bottom = value.bottom;
+        }
+        out.backdrop = backdrop;
+        break;
+      }
+      case "brand": {
+        // 주인이 넣은 브랜드 색 1~3개. 내 색 팔레트(brand-palette.ts)를 만든 재료이고 배경 색 칩으로도 쓴다
+        // every 는 빈 칸(new Array(1))을 건너뛰므로 번호마다 직접 본다 (codex)
+        let ok = Array.isArray(value) && value.length >= 1 && value.length <= BRAND_MAX;
+        if (ok) for (let i = 0; i < (value as unknown[]).length; i++) {
+          const c = (value as unknown[])[i];
+          if (!(i in (value as unknown[])) || typeof c !== "string" || !HEX.test(c)) { ok = false; break; }
+        }
+        if (!ok) return fail("brand: #RRGGBB 1~3개여야 해요.");
+        out.brand = [...(value as string[])];
         break;
       }
       case "window": {

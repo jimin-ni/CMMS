@@ -7,16 +7,18 @@ import { checkFn, slotKindsFor, type PcLink, type SlotFn, type SlotKind } from "
 import { charCount, checkRoomName } from "@/lib/heap/slug";
 import { HEAP_TEMPLATES, type HeapTemplate } from "@/lib/heap/templates";
 import { moveFunctions, shellOf, SHELL_KEYS, type MoveItem } from "@/lib/heap/template-move";
-import type { SavedRoom } from "./heap-room";
+import type { HeapOwnerData, SavedRoom } from "./heap-room";
+import { ChannelTab } from "./channel-tab";
 import type { ChecklistAction } from "./setup-checklist";
 import { FnForm, canCarryFn, isLamp, itemLabel, newFn, type Item, type Model } from "./fn-form";
-import { PRESETS, WELLS, effectivePalette, samePalette, swatches, wellValue, withWell, type Palette, type Well } from "./palettes";
+import { ColourPane, type Backdrop } from "./colour-pane";
 
 // 꾸미기 화면. 방 주인이 방 안에서 가구를 놓고 옮긴 뒤 저장한다 (design/editor.md, B1~B9).
 // B8: 방 이름 고치기(위 막대의 이름을 누른다, 저장 한 번에 레이아웃과 함께 간다), 팔로워로 보기(V), 저장 안 된 채 창을 닫을 때의 브라우저 경고,
 //     저장 전으로(이번 방문에서 저장하기 바로 전의 모습을 다시 깐다, 되돌릴 수 있다). B9: 템플릿 탭, 체크리스트(setup-checklist.tsx)의 단추.
 // 가구를 집고 끌고 돌리는 일, 팔레트, 모양 바꾸기, 되돌리기 기록은 엔진(engine/edit.js)이 한다. 이 컴포넌트는 그 위의 단추들이다:
-// 위 막대(되돌리기, 시간, 위에서 보기, 맞추기, 저장, 나가기), 아래 독(가구 · 기능 · 색·무늬 탭), 고른 가구 위의 막대, 가구 아래의 기능 말풍선, 기능 표, 알림.
+// 위 막대(되돌리기, 위에서 보기, 맞추기, ⋯ 메뉴(시간, 처음으로, 저장 전으로, 팔로워로 보기), 저장, 나가기), 아래 독(가구 · 기능 · 색·무늬 · 템플릿 · 채널 탭),
+// 고른 가구 위의 막대, 가구 아래의 기능 말풍선, 기능 표, 알림.
 // 엔진과는 방 루트 요소의 이벤트로만 이야기한다: heap:get 으로 한 번 읽고, heap:editcmd 로 시키고, heap:editstate 로 듣고,
 // heap:thumb 으로 가구 그림을 받는다 (engine/dock-thumbs.js). 말풍선과 기능 표의 자리는 엔진이 프레임마다 정한다.
 
@@ -44,11 +46,14 @@ type EditState = {
   notice: { text: string; undo: boolean; seq: number } | null;
   // layout.palette (null이면 기본 올리브 오후) · look: 이 마운트가 칠한 색 (그림 캐시의 열쇠) · mount: 엔진 마운트 번호
   palette: Record<string, unknown> | null;
+  // layout.backdrop (null이면 시간 따라) · layout.brand (주인이 넣은 브랜드 색, null이면 없음)
+  backdrop: Backdrop;
+  brand: string[] | null;
   look: string;
   mount: number;
   // 방금 내려놓은 새 가구. 기능을 달 수 있으면 말풍선을 연다.
   placed: { index: number; seq: number } | null;
-  // 팔레트를 칠하느라 방을 다시 띄우는 중
+  // 방의 틀(템플릿)을 바꾸느라 방을 다시 띄우는 중. 팔레트와 배경은 다시 띄우지 않고 칠한다
   busy: boolean;
   // 카메라 (engine/edit-camera.js): plan 은 위에서 보기, fitted 는 확대나 이동 없이 맞춘 구도인지
   view: { plan: boolean; fitted: boolean };
@@ -188,25 +193,6 @@ function Tile({ m, pic, pressed, disabled, onPick }: { m: Model; pic: string | n
   );
 }
 
-// 직접 고르는 색 한 칸. 고르는 동안은 칸만 바뀌고, 고르기를 마치면(change) 방에 칠한다.
-function ColorWell({ label, value, onCommit, disabled }: { label: string; value: string; onCommit: (v: string) => void; disabled: boolean }) {
-  const ref = useRef<HTMLInputElement>(null);
-  const [v, setV] = useState(value);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const h = () => onCommit(el.value);
-    el.addEventListener("change", h);
-    return () => el.removeEventListener("change", h);
-  }, [onCommit]);
-  return (
-    <label className="ed-well">
-      <span>{label}</span>
-      <input ref={ref} type="color" value={v} disabled={disabled} onChange={(e) => setV(e.target.value)} aria-label={`${label} 색`} />
-    </label>
-  );
-}
-
 export function RoomEditor({
   rootRef,
   roomUuid,
@@ -217,6 +203,7 @@ export function RoomEditor({
   action,
   beforeSave,
   onSaved,
+  owner,
 }: {
   rootRef: RefObject<HTMLDivElement | null>;
   roomUuid: string;
@@ -230,10 +217,15 @@ export function RoomEditor({
   // 이번 방문에서 마지막으로 저장하기 바로 전의 모습 (저장 전으로). 없으면 null.
   beforeSave: SavedRoom | null;
   onSaved: (prev: SavedRoom, next: SavedRoom) => void;
+  // 방 주인의 채널과 영상 (채널 탭)
+  owner: HeapOwnerData | null;
 }) {
   const [room, setRoom] = useState<RoomState | null>(null);
   const [st, setSt] = useState<EditState | null>(null);
-  const [tab, setTab] = useState<"furn" | "fn" | "pal" | "tpl">("furn");
+  const [tab, setTab] = useState<"furn" | "fn" | "pal" | "tpl" | "ch">("furn");
+  // 위 막대의 ⋯ 메뉴 (시간, 처음으로, 저장 전으로, 팔로워로 보기). left 는 메뉴를 펼칠 자리(방 루트 기준 px)
+  const [menu, setMenu] = useState<{ left: number } | null>(null);
+  const menuBtn = useRef<HTMLButtonElement>(null);
   // 위 막대에서 고치는 중인 방 이름 (null 이면 고치지 않는다)과 그 이름이 왜 안 되는지
   const [nameDraft, setNameDraft] = useState<string | null>(null);
   const [nameErr, setNameErr] = useState("");
@@ -391,18 +383,24 @@ export function RoomEditor({
     };
   });
 
-  // 서버에는 layout 전체를 보낸다. DB의 기존 layout(excludedReels 등)에 편집한 items, time, palette 와 방의 틀(방 크기, 창문, 문 …)을 덮어 쓴다.
+  // 서버에는 layout 전체를 보낸다. DB의 기존 layout에 편집한 items, time, palette 와 방의 틀(방 크기, 창문, 문 …)을 덮어 쓴다.
+  // 힙에서 뺀 영상 목록(excludedReels)은 보내지 않는다: 채널 탭이 이 방문 중에 바꿨을 수 있고, 서버(saveRoomLayout)가 DB의 목록을 그대로 남긴다.
   // 방 이름을 고쳤으면 같은 저장에 이름을 실어 보낸다: 서버는 레이아웃과 이름을 한 번에 저장하거나 둘 다 저장하지 않는다.
   const save = useCallback(async (): Promise<boolean> => {
     if (saving || !room || !st || st.busy) return false;
     setSaving(true);
     setSaveNote("");
     const layout: Record<string, unknown> = { ...room.layout, items: st.items, time: st.time };
+    delete layout.excludedReels;
     for (const key of SHELL_KEYS) delete layout[key];
     Object.assign(layout, st.shell);
     if (!layout.room) layout.room = { w: room.room.w, d: room.room.d };
     if (st.palette) layout.palette = st.palette;
     else delete layout.palette;
+    if (st.backdrop) layout.backdrop = st.backdrop;
+    else delete layout.backdrop;
+    if (st.brand) layout.brand = st.brand;
+    else delete layout.brand;
     const name = st.name !== st.savedName ? st.name : undefined;
     const prev: SavedRoom = { layout: room.layout, name: st.savedName };
     try {
@@ -478,6 +476,28 @@ export function RoomEditor({
     window.addEventListener("keydown", onKey, { capture: preview });
     return () => window.removeEventListener("keydown", onKey, { capture: preview });
   }, [preview, setPreview, st?.busy]);
+
+  // ⋯ 메뉴는 바깥을 누르거나 Esc, 창 크기가 바뀌면 닫는다
+  useEffect(() => {
+    if (!menu) return;
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.closest(".ed-menu") || t.closest(".ed-more"))) return;
+      setMenu(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenu(null);
+    };
+    const onResize = () => setMenu(null);
+    window.addEventListener("pointerdown", onDown, true);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("pointerdown", onDown, true);
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [menu]);
 
   const leave = () => {
     if (st?.dirty) setLeaving(true);
@@ -605,7 +625,14 @@ export function RoomEditor({
     const l = beforeSave.layout;
     cmd({
       op: "load",
-      layout: { items: Array.isArray(l.items) ? l.items : [], palette: l.palette ?? null, shell: shellOf(l), time: l.time ?? "auto" },
+      layout: {
+        items: Array.isArray(l.items) ? l.items : [],
+        palette: l.palette ?? null,
+        shell: shellOf(l),
+        time: l.time ?? "auto",
+        backdrop: l.backdrop ?? null,
+        brand: l.brand ?? null,
+      },
       name: beforeSave.name,
     });
     setBubbleFor(null);
@@ -622,6 +649,7 @@ export function RoomEditor({
     runAction.current = (k) => {
       if (k === "name") startName();
       else if (k === "palette") setTab("pal");
+      else if (k === "channel") setTab("ch");
       else if (k === "pc") {
         setTab("fn");
         fnAct("pc", "desk"); // 판정 J4: PC 기능을 단 책상
@@ -644,22 +672,11 @@ export function RoomEditor({
   ];
   const thumb = useThumbs(rootRef, look, st?.mount ?? 0, thumbIds);
 
-  // ---------- 팔레트 ----------
-  const pal = effectivePalette(st?.palette);
-  const activePreset = PRESETS.find((p) => samePalette(p.palette, pal))?.id ?? null;
-  const applyPalette = (p: Palette) => {
-    if (samePalette(p, pal)) return;
-    cmd({ op: "palette", palette: p });
-  };
-  const commitWell = (key: Well) => (v: string) => {
-    if (/^#[0-9a-fA-F]{6}$/.test(v)) applyPalette(effectivePalette(withWell(pal, key, v)));
-  };
-
   const time = st?.time ?? "auto";
   const timeLabel = TIMES.find(([key]) => key === time)?.[1] ?? `${time}시`;
   const nextTime = () => cmd({ op: "time", value: TIMES[(TIMES.findIndex(([key]) => key === time) + 1) % TIMES.length][0] });
   const saveState = busy
-    ? "색을 칠하는 중…"
+    ? "방을 다시 짓는 중…"
     : saving
       ? "저장하는 중…"
       : saveNote
@@ -743,12 +760,6 @@ export function RoomEditor({
         <button className="btn ghost small" type="button" disabled={!st?.canRedo || busy} onClick={() => cmd({ op: "redo" })} title="Ctrl+Shift+Z">
           다시 하기
         </button>
-        <button className="btn ghost small" type="button" disabled={busy} onClick={nextTime}>
-          시간 · {timeLabel}
-        </button>
-        <button className="btn ghost small" type="button" disabled={!st?.dirty || busy} onClick={() => cmd({ op: "reset" })} title="마지막으로 저장한 모습으로">
-          처음으로
-        </button>
         <button className="btn ghost small" type="button" aria-pressed={!!st?.view?.plan} disabled={busy} onClick={() => cmd({ op: "plan" })} title="위에서 보기 (T)">
           위에서
         </button>
@@ -758,13 +769,23 @@ export function RoomEditor({
             맞추기
           </button>
         )}
-        {beforeSave && (
-          <button className="btn ghost small" type="button" disabled={busy} onClick={loadBeforeSave} title="이번에 저장하기 바로 전의 모습을 다시 깔아요 · 되돌릴 수 있어요">
-            저장 전으로
-          </button>
-        )}
-        <button className="btn ghost small" type="button" disabled={busy} onClick={() => setPreview(true)} title="팔로워에게 보이는 모습 (V)">
-          팔로워로 보기
+        <button
+          ref={menuBtn}
+          className="btn ghost small ed-more"
+          type="button"
+          aria-haspopup="menu"
+          aria-expanded={!!menu}
+          disabled={busy}
+          onClick={() => {
+            if (menu) return setMenu(null);
+            const b = menuBtn.current?.getBoundingClientRect();
+            const r = rootRef.current?.getBoundingClientRect();
+            setMenu({ left: b && r ? Math.max(8, Math.min(b.left - r.left, r.width - 228)) : 8 });
+          }}
+          title="시간, 처음으로, 저장 전으로, 팔로워로 보기"
+          aria-label="더 보기"
+        >
+          ⋯
         </button>
         <span className="ed-sp" />
         <span className={st?.dirty && !saveNote ? "ed-save dirty" : "ed-save"} role="status">
@@ -777,6 +798,53 @@ export function RoomEditor({
           나가기
         </button>
       </div>
+
+      {menu && (
+        <div className="ed-menu" role="menu" aria-label="더 보기" style={{ left: menu.left }}>
+          {/* 시간은 누를 때마다 다음 시간으로 간다. 메뉴는 열어 둔다 */}
+          <button type="button" role="menuitem" disabled={busy} onClick={nextTime}>
+            시간 · {timeLabel}
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!st?.dirty || busy}
+            onClick={() => {
+              cmd({ op: "reset" });
+              setMenu(null);
+            }}
+            title="마지막으로 저장한 모습으로"
+          >
+            처음으로
+          </button>
+          {beforeSave && (
+            <button
+              type="button"
+              role="menuitem"
+              disabled={busy}
+              onClick={() => {
+                loadBeforeSave();
+                setMenu(null);
+              }}
+              title="이번에 저장하기 바로 전의 모습을 다시 깔아요 · 되돌릴 수 있어요"
+            >
+              저장 전으로
+            </button>
+          )}
+          <button
+            type="button"
+            role="menuitem"
+            disabled={busy}
+            onClick={() => {
+              setMenu(null);
+              setPreview(true);
+            }}
+            title="팔로워에게 보이는 모습 (V)"
+          >
+            팔로워로 보기 <kbd>V</kbd>
+          </button>
+        </div>
+      )}
 
       {leaving && (
         <div className="ed-leave panel" role="dialog" aria-label="저장하지 않은 변경">
@@ -881,6 +949,8 @@ export function RoomEditor({
         </div>
       )}
       <div id="ed-why" className="ed-why" hidden />
+      {/* 안내와 알림은 한 줄기로 쌓는다: 알림이 길어 줄이 바뀌어도 안내 위에 겹치지 않는다 */}
+      <div className="ed-float">
       {!bubbleOpen && <p className="ed-hint">{hint}</p>}
       {shownNotice && (
         <div className="ed-toast" role="status">
@@ -899,6 +969,7 @@ export function RoomEditor({
           )}
         </div>
       )}
+      </div>
 
       {bubbleOpen && shownItem && selItem && sel != null && (
         <div
@@ -940,7 +1011,7 @@ export function RoomEditor({
         </div>
       )}
 
-      {busy && <p className="ed-busy" role="status">색을 칠하는 중…</p>}
+      {busy && <p className="ed-busy" role="status">방을 다시 짓는 중…</p>}
 
       <div className="ed-dock">
         <div className="ed-tabs" role="tablist" aria-label="꾸미기 독">
@@ -950,6 +1021,7 @@ export function RoomEditor({
               ["fn", "기능"],
               ["pal", "색·무늬"],
               ["tpl", "템플릿"],
+              ["ch", "채널"],
             ] as const
           ).map(([k, label]) => (
             <button key={k} type="button" role="tab" className="ed-tab" aria-selected={tab === k} onClick={() => setTab(k)}>
@@ -1050,40 +1122,10 @@ export function RoomEditor({
           </div>
         )}
 
+        {tab === "ch" && <ChannelTab owner={owner} />}
+
         {tab === "pal" && (
-          <div className="ed-pane">
-            <div className="ed-strip">
-              {PRESETS.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  className="ed-palcard"
-                  aria-pressed={activePreset === p.id}
-                  disabled={busy}
-                  onClick={() => applyPalette(p.palette)}
-                >
-                  <span className="ed-sw" aria-hidden="true">
-                    {swatches(p.palette).map((c, i) => (
-                      <i key={i} style={{ background: c }} />
-                    ))}
-                  </span>
-                  {p.name}
-                </button>
-              ))}
-            </div>
-            <div className="ed-wells" aria-label="직접 고르기">
-              <span className="ed-wells-h">직접</span>
-              {WELLS.map((w) => (
-                <ColorWell
-                  key={`${w.key}:${wellValue(pal, w.key)}`}
-                  label={w.label}
-                  value={wellValue(pal, w.key)}
-                  disabled={busy}
-                  onCommit={commitWell(w.key)}
-                />
-              ))}
-            </div>
-          </div>
+          <ColourPane palette={st?.palette ?? null} brand={st?.brand ?? null} backdrop={st?.backdrop ?? null} busy={busy} cmd={cmd} />
         )}
       </div>
     </>

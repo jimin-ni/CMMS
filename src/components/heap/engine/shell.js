@@ -1,13 +1,14 @@
 // 방의 껍데기: 벽, 창, 햇빛, 먼지, 문.
 import * as THREE from 'three';
 import { flat, makeCanvas, canvasTexture } from './draw.js';
+import { tone } from './palette.js';
 
 export function setupShell(ctx) {
   const { layout, C, WALLS, box, WALL_H, onWall, RX, RZ, scene, rand } = ctx;
 
   const WIN = layout.window && { ...layout.window, u0: layout.window.at - layout.window.w / 2, u1: layout.window.at + layout.window.w / 2, y0: layout.window.y - layout.window.h / 2, y1: layout.window.y + layout.window.h / 2 };
   const DOOR = layout.door && { ...layout.door, u0: layout.door.at - 0.5, u1: layout.door.at + 0.5, y0: 0, y1: 2.15 };
-  const wallMat = flat(C.wall), trimMat = flat(C.trim);
+  const wallMat = tone(C, 'wall'), trimMat = tone(C, 'trim');
   function buildWall(wall) {
     const openings = [WIN, DOOR].filter(o => o && o.wall === wall).sort((a, b) => a.u0 - b.u0);
     const slab = (u0, u1, y0, y1) => {
@@ -34,7 +35,7 @@ export function setupShell(ctx) {
   buildWall('back'); buildWall('left');
 
   // 창: 틀, 유리, 해 질 녘 배경, 바깥의 나무. 햇빛이 창으로 들어온다
-  const frameMat = flat(C.paper);
+  const frameMat = tone(C, 'paper');
   ctx.sunDir = new THREE.Vector3(1.6, -2.55, 3.5).normalize(); ctx.shaftCorners = null;
   ctx.sunHeading = new THREE.Vector3(1.6, 0, 3.5); ctx.skyTex = null; // sunHeading: 해의 수평 방향(창에 묶인다). 높이는 applyTime 이 정한다
   if (WIN) {
@@ -55,9 +56,9 @@ export function setupShell(ctx) {
     const out = new THREE.Mesh(new THREE.PlaneGeometry(2 * W.half, 3.4), flat('#6b6a4a')); out.rotation.x = -Math.PI / 2;
     const og = new THREE.Group(); og.add(out); out.position.set(0, -0.12, 0); onWall(WIN.wall, WIN.at, 0, -1.9, og);
     const tree = new THREE.Group();
-    box(0.18, 1.6, 0.18, flat(C.woodDark), 0, 0.7, 0, { parent: tree });
+    box(0.18, 1.6, 0.18, tone(C, 'woodDark'), 0, 0.7, 0, { parent: tree });
     for (const [x, y, z, s] of [[0, 1.9, 0, 0.75], [-0.5, 1.6, 0.2, 0.55], [0.5, 1.7, -0.1, 0.6]]) {
-      const c = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 0), flat(C.leaf)); c.position.set(x, y, z); c.castShadow = true; tree.add(c);
+      const c = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 0), tone(C, 'leaf')); c.position.set(x, y, z); c.castShadow = true; tree.add(c);
     }
     onWall(WIN.wall, WIN.at + 0.5, 0, -2.2, tree);
     const toCentre = Math.sign(-WIN.at) || 1;
@@ -103,14 +104,20 @@ export function setupShell(ctx) {
   ctx.doorSpot = null;
   if (DOOR) {
     const g = new THREE.Group();
-    const panel = box(0.92, 2.1, 0.06, flat(C.accent), 0, 1.05, -0.1, { parent: g });
+    const panel = box(0.92, 2.1, 0.06, tone(C, 'accent'), 0, 1.05, -0.1, { parent: g });
     for (const sx of [-0.52, 0.52]) box(0.08, 2.2, 0.24, frameMat, sx, 1.1, -0.06, { parent: g });
     box(1.12, 0.1, 0.24, frameMat, 0, 2.2, -0.06, { parent: g });
     const knob = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), flat('#d8b27a', { metalness: 0.4, roughness: 0.4 })); knob.position.set(0.34, 1.0, -0.04); g.add(knob);
     const sign = makeCanvas(256, 96);
-    { const sgc = sign.getContext('2d'); sgc.fillStyle = C.paper; sgc.fillRect(0, 0, 256, 96); sgc.fillStyle = C.ink; sgc.font = '44px "Nanum Pen Script", cursive'; sgc.textAlign = 'center'; sgc.textBaseline = 'middle'; sgc.fillText('다른 방', 128, 50); }
     const st = canvasTexture(sign);
+    // 문패: 종이 색 바탕에 잉크 색 글씨. 팔레트가 바뀌면 recolour.js 가 다시 그린다
+    const paintSign = () => {
+      const sgc = sign.getContext('2d'); sgc.fillStyle = C.paper; sgc.fillRect(0, 0, 256, 96); sgc.fillStyle = C.ink; sgc.font = '44px "Nanum Pen Script", cursive'; sgc.textAlign = 'center'; sgc.textBaseline = 'middle'; sgc.fillText('다른 방', 128, 50);
+      st.needsUpdate = true;
+    };
+    paintSign();
     const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.16), new THREE.MeshStandardMaterial({ map: st })); plate.position.set(0, 1.62, -0.065); g.add(plate);
+    plate.material.userData.repaint = paintSign;
     onWall(DOOR.wall, DOOR.at, 0, 0, g);
     doorParts.push(panel, knob, plate);
     ctx.doorSpot = WALLS[DOOR.wall].point(DOOR.at, 0, 0.85);

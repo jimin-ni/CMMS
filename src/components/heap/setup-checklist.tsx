@@ -1,15 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { HEAP_TEMPLATES } from "@/lib/heap/templates";
 
 // 첫 방 열기 체크리스트 (DECISIONS A8, 판정 J4). 방 주인에게만, 방에서도 꾸미기에서도 왼쪽 카드로 보인다.
 // 일곱 줄이 모두 차면 사라지고, 접으면 진행 알약이 되고, 숨기기를 누르면 이 브라우저에서는 다시 나오지 않는다 (localStorage).
 // 줄은 실제 상태로 찬다: 방 이름(닉네임과 다른가), 연결한 채널 수, 가구에 달린 기능(꾸미기 중이면 저장 전 것), 저장한 레이아웃이 템플릿 그대로인가.
-// 링크 공유하기만 이 브라우저의 기록(주소를 복사했는지)으로 찬다.
+// 링크 공유하기만 이 브라우저의 기록(주소를 복사했거나 방 HUD의 공유를 썼는지)으로 찬다.
 // 이 컴포넌트는 엔진이 뜬 뒤(heap:ready)에만 그려진다: 서버 렌더에 없으니 localStorage를 첫 렌더에서 읽어도 어긋나지 않는다.
 
-export type ChecklistAction = "name" | "pc" | "keepsake" | "palette";
+export type ChecklistAction = "name" | "pc" | "keepsake" | "palette" | "channel";
 
 type FnItem = { type?: unknown; model?: unknown; x?: unknown; z?: unknown; rot?: unknown; fn?: { kind?: unknown; links?: unknown } };
 
@@ -35,6 +35,8 @@ const TEMPLATE_SIGS = new Set(HEAP_TEMPLATES.map((t) => signature(t.layout)));
 
 const HIDE_KEY = "heap-setup-hidden:";
 const SHARE_KEY = "heap-setup-shared:";
+// 공유했다는 알림. 방 HUD의 공유 단추(share-button.tsx)가 보내고, 열려 있는 체크리스트가 듣는다. detail 은 방의 roomUuid.
+const SHARED_EVENT = "heap:setup-shared";
 function readFlag(key: string): boolean {
   try {
     return window.localStorage.getItem(key) === "1";
@@ -48,6 +50,12 @@ function writeFlag(key: string) {
   } catch {
     /* 저장소를 못 쓰는 창: 이 화면에서만 기억한다 */
   }
+}
+
+// 이 방을 공유했다고 적는다 (링크 공유하기 줄이 찬다). 방 HUD의 공유 단추가 부른다.
+export function markShared(roomUuid: string) {
+  writeFlag(SHARE_KEY + roomUuid);
+  window.dispatchEvent(new CustomEvent(SHARED_EVENT, { detail: roomUuid }));
 }
 
 export function SetupChecklist({
@@ -75,6 +83,13 @@ export function SetupChecklist({
   const [shared, setShared] = useState(() => readFlag(SHARE_KEY + roomUuid));
   const [open, setOpen] = useState(true);
   const [note, setNote] = useState("");
+  useEffect(() => {
+    const onShared = (e: Event) => {
+      if ((e as CustomEvent<string>).detail === roomUuid) setShared(true);
+    };
+    window.addEventListener(SHARED_EVENT, onShared);
+    return () => window.removeEventListener(SHARED_EVENT, onShared);
+  }, [roomUuid]);
 
   const url = `/room/${encodeURIComponent(roomId)}`;
   const share = async () => {
@@ -94,7 +109,7 @@ export function SetupChecklist({
   const rows: [string, boolean, string | null, (() => void) | null][] = [
     ["URL 정하기", true, null, null],
     ["방 이름 짓기", name !== nickname, "하기", () => onAction("name")],
-    ["채널 연결", channels > 0, null, null],
+    ["채널 연결", channels > 0, "하기", () => onAction("channel")],
     ["링크 놓기", flags.pc, "하기", () => onAction("pc")],
     ["기념품 놓기", flags.keepsake, "하기", () => onAction("keepsake")],
     ["방 꾸미고 저장하기", decorated, "하기", () => onAction("palette")],
@@ -143,7 +158,6 @@ export function SetupChecklist({
               {label}
               {label === "URL 정하기" && <small>{url}</small>}
             </span>
-            {label === "채널 연결" && !ok && <small className="setup-soon" title="채널 연결 화면은 다음 단계에서 열려요">준비 중</small>}
             {/* 링크 공유하기는 찬 뒤에도 다시 복사할 수 있다 */}
             {act && run && (!ok || label === "링크 공유하기") && (
               <button type="button" onClick={run}>

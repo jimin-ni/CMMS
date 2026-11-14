@@ -6,7 +6,51 @@ export function setupLive(ctx) {
   const {
     makeCard, TABLE, Xv, clampPlace, gauss, settle, startAnim, toast, DATA, $, creator,
     root, on, opts, ac, renderMeta, renderCreatorVisit, fanReels, fanReelOf, onDispose,
+    cards, pickables, scene, reels, filed, prepReel, request, FAR, updateAlbums,
   } = ctx;
+
+  // 크리에이터의 영상 목록이 바뀌었다 (꾸미기의 채널 탭: 채널 연결, 빼기, 되돌리기). heap-room.tsx 가 새 스냅샷의 reels 를 heap:reels 로 보낸다.
+  // 목록에서 빠진 영상의 카드는 더미에서 치우고, 새로 온 영상은 탁자 위에서 떨어뜨린다. 남은 카드는 자리를 지킨다.
+  // 손에 들었거나 영사기에 걸린 카드는 치우지 않는다 (다음 방문에 빠진다).
+  function replaceReels(list) {
+    if (!Array.isArray(list)) return;
+    const next = list.filter(r => r && typeof r.id === 'string');
+    const want = new Set(next.map(r => r.id));
+    let changed = false;
+    for (const c of [...cards]) {
+      const r = c.userData.reel;
+      if (r.kind === 'fan' || want.has(r.id) || c === ctx.held || c === ctx.loaded || c === ctx.dragging) continue;
+      cards.splice(cards.indexOf(c), 1);
+      for (const m of c.children) { const k = pickables.indexOf(m); if (k >= 0) pickables.splice(k, 1); m.material.map?.dispose(); m.material.dispose(); }
+      scene.remove(c); // 지오메트리는 카드끼리 함께 쓴다 (DIMS): 지우지 않는다
+      if (ctx.hovered === c) ctx.hovered = null;
+      delete c.userData.poster; // 늦게 온 썸네일이 포스터에 그리지 않게
+      const i = reels.indexOf(r); if (i >= 0) reels.splice(i, 1);
+      filed.delete(r.id);
+      changed = true;
+    }
+    const have = new Set(reels.map(r => r.id)), added = [];
+    next.forEach((raw, i) => {
+      if (have.has(raw.id)) return;
+      const reel = prepReel(raw, i, next.length);
+      reels.push(reel);
+      if (reel.gold) filed.set(reel.id, { album: reel.gold });
+      added.push(makeCard(reel));
+    });
+    if (!changed && !added.length) return;
+    settle(); // 한 번에 다시 쌓는다 (카드마다 부르면 느리다). 새 카드는 여기서 제자리를 얻는다
+    // 새 카드는 제자리 위에서 시작해 떨어진다
+    added.forEach((c, k) => {
+      const home = c.userData.home.pos;
+      c.position.set(home.x, TABLE.top + 0.9 + k * 0.01, home.z);
+      c.quaternion.setFromAxisAngle(Xv, -Math.PI / 2);
+      startAnim(c, 'drop'); Object.assign(c.userData.anim, { dur: 0.9, arc: 0.25 });
+      request(c, FAR);
+    });
+    renderMeta(); updateAlbums();
+    ctx.refreshPosters(); ctx.refreshLatestTv(); // 벽 포스터와 최신 영상 TV 도 남은 영상으로 다시 고른다
+  }
+  on(root, 'heap:reels', e => replaceReels(e.detail));
 
   // 팬 작품: 방문자가 방에 있는 동안 올라온 것은 탁자 위에서 더미 꼭대기로 떨어진다
   function landPiece(p) {

@@ -32,6 +32,7 @@ export async function setupData(ctx) {
   };
   const C = { ...DEFAULT_PALETTE, ...(layout.palette || {}) };
   ctx.DEFAULT_PALETTE = DEFAULT_PALETTE;
+  ctx.look = JSON.stringify(C); // 지금 칠한 색 (가구 목록 그림의 캐시 열쇠). recolour.js 가 바꾼다
 
   const ALBUMS = creator.albums.map(a => ({ ...a, re: a.match ? new RegExp(a.match, 'i') : null }));
   const albumName = k => ALBUMS.find(a => a.key === k)?.name ?? k;
@@ -49,17 +50,23 @@ export async function setupData(ctx) {
   ctx.baseLayout = structuredClone(R?.baseLayout ?? DATA.layout);
   // 마지막으로 저장한 방 이름. 꾸미기가 이름을 고쳐 저장하면 heap:saved 로 바뀐다 (editor-bridge.js). 화면의 이름(DATA.name)은 고친 이름일 수 있다.
   ctx.savedName = typeof R?.savedName === 'string' ? R.savedName : DATA.name;
+  // backdrop: 방 뒤의 배경 (없으면 null = 시간 따라) · brand: 주인이 넣은 브랜드 색 (없으면 null). 둘 다 꾸미기의 되돌리기와 저장에 든다
   ctx.original = R?.original
-    ? { items: R.original.items.map(it => ({ ...it })), time: R.original.time, palette: R.original.palette ?? null }
-    : { items: (layout.items || []).map(it => ({ ...it })), time: layout.time ?? 'auto', palette: layout.palette ?? null };
+    ? { items: R.original.items.map(it => ({ ...it })), time: R.original.time, palette: R.original.palette ?? null, backdrop: R.original.backdrop ?? null, brand: R.original.brand ?? null }
+    : { items: (layout.items || []).map(it => ({ ...it })), time: layout.time ?? 'auto', palette: layout.palette ?? null, backdrop: layout.backdrop?.mode === 'colour' ? layout.backdrop : null, brand: layout.brand ?? null };
 
   // ---------- 카드 목록 ----------
   // 영상은 연결된 채널의 제목(heap_creator_channels)을 가진다. 카드 뒷면에 보이고 `channel` 앨범 규칙이 이것으로 맞춘다.
   // 채널이 연결되지 않은 영상은 크리에이터 이름으로 대신한다. 그래서 `channel` 앨범 규칙은 그런 영상을 찾지 못한다 (제목 규칙은 그대로 통한다).
+  // prepReel: 서버의 영상 한 줄을 카드가 쓰는 모양으로. i, n 은 최신순 목록에서의 자리와 길이다 (age: 오래될수록 1).
+  // 채널 탭이 영상을 넣고 빼면 live.js 의 replaceReels 가 새로 온 영상에도 이것을 쓴다.
+  const prepReel = (r, i, n) => {
+    const reel = { ...r, channel: r.channel || creator.name };
+    reel.age = n > 1 ? 1 - i / (n - 1) : 0; reel.seed = Math.floor(rand() * 1e9); reel.gold = goldOf(reel);
+    return reel;
+  };
   const raw = DATA.reels;
-  const reels = raw.map(r => ({ ...r, channel: r.channel || creator.name }));
-  reels.forEach((r, i) => { r.age = reels.length > 1 ? 1 - i / (reels.length - 1) : 0; r.seed = Math.floor(rand() * 1e9); r.gold = goldOf(r); });
-  const nShorts = raw.filter(r => !r.wide).length, nWide = raw.length - nShorts;
+  const reels = raw.map((r, i) => prepReel(r, i, raw.length));
 
   const fanReelOf = (p, i) => ({ ...p, kind: 'fan', wide: false, title: p.caption, channel: p.by, views: '', age: 0.05, seed: 7000 + i * 131 });
   const fanReels = (DATA.pieces || []).map(fanReelOf);
@@ -68,7 +75,7 @@ export async function setupData(ctx) {
   for (const r of reels) if (r.gold) filed.set(r.id, { album: r.gold });
 
   Object.assign(ctx, {
-    C, creator, DATA, nWide, nShorts, layout, ALBUMS, reels, fanReels, fanReelOf, ROOMS, roomId,
-    filed, albumName,
+    C, creator, DATA, layout, ALBUMS, reels, fanReels, fanReelOf, ROOMS, roomId,
+    filed, albumName, prepReel,
   });
 }

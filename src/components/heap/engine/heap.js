@@ -1,7 +1,8 @@
 // 사진 더미: 쌓이는 모양, 떨어지는 움직임, 카드, 벽 포스터.
 import * as THREE from 'three';
 import { viewsNum } from './format.js';
-import { flat, drawFit, NO_PHOTO, makeCanvas, canvasTexture } from './draw.js';
+import { drawFit, NO_PHOTO, makeCanvas, canvasTexture } from './draw.js';
+import { tone } from './palette.js';
 
 export function setupHeap(ctx) {
   const {
@@ -120,16 +121,30 @@ export function setupHeap(ctx) {
     settle(true);
     ctx.requestPile(ctx.FAR);
     // 포스터: 가장 많이 본 쇼츠 셋. 각각 자기 카드의 그림으로 그려서, 그 카드의 단계가 오는 대로 채워지고 선명해진다.
-    const top3 = made.filter(c => !c.userData.reel.wide).sort((a, b) => viewsNum(b.userData.reel.views) - viewsNum(a.userData.reel.views)).slice(0, 3);
+    const top3 = topShorts(made);
     (layout.posters?.at || []).forEach((u, k) => {
       const card = top3[k];
       if (!card) return;
       const t = card.userData.poster = canvasTexture(makeCanvas(202, 360)); // 202 x 360 은 가까운 단계 그림의 크기
+      posterSlots.push(t);
       paintPoster(card); ctx.request(card, ctx.NEAR);
       const g = new THREE.Group();
-      box(0.74, 1.2, 0.05, flat(C.woodDark), 0, 0, 0.025, { cast: false, parent: g });
+      box(0.74, 1.2, 0.05, tone(C, 'woodDark'), 0, 0, 0.025, { cast: false, parent: g });
       const p = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 1.07), new THREE.MeshStandardMaterial({ map: t, roughness: 0.6 })); p.position.z = 0.055; g.add(p);
       onWall(layout.posters.wall, u, 2.5, 0, g);
+    });
+  }
+  // 포스터 액자에 걸린 텍스처 (만든 순서). 액자는 방이 뜰 때 한 번 짓고, 영상 목록이 바뀌면 그림만 갈아 끼운다 (refreshPosters).
+  const posterSlots = [];
+  const topShorts = list => list.filter(c => c.userData.reel.kind !== 'fan' && !c.userData.reel.wide).sort((a, b) => viewsNum(b.userData.reel.views) - viewsNum(a.userData.reel.views)).slice(0, 3);
+  // 영상 목록이 바뀐 뒤(live.js 의 replaceReels): 남은 카드에서 다시 고른 쇼츠를 액자에 건다. 고를 카드가 없는 액자는 비운다.
+  function refreshPosters() {
+    for (const c of cards) delete c.userData.poster;
+    const top = topShorts(cards);
+    posterSlots.forEach((t, k) => {
+      const card = top[k];
+      if (card) { card.userData.poster = t; paintPoster(card); ctx.request(card, ctx.NEAR); return; }
+      const g = t.image.getContext('2d'); g.fillStyle = NO_PHOTO; g.fillRect(0, 0, t.image.width, t.image.height); t.needsUpdate = true;
     });
   }
   function paintPoster(card) {
@@ -140,6 +155,6 @@ export function setupHeap(ctx) {
 
   Object.assign(ctx, {
     paintPoster, cards, settle, clampPlace, toTop, startAnim, makeCard, pickables, inPile, supportAt,
-    restPose, stepAnim, buildHeap,
+    restPose, stepAnim, buildHeap, refreshPosters,
   });
 }

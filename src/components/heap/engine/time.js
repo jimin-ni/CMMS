@@ -1,8 +1,9 @@
 // 시간대: 시각에 따라 햇빛, 조명, 하늘, 램프를 바꾼다.
 import * as THREE from 'three';
+import { makeCanvas, canvasTexture } from './draw.js';
 
 export function setupTime(ctx) {
-  const { layout, scene, renderer, hemi, fill, sun, WIN, WALLS, on, root } = ctx;
+  const { layout, scene, renderer, hemi, fill, sun, WIN, WALLS, on, root, onDispose } = ctx;
   const tA = new THREE.Vector3(); // 햇빛 끝점 계산용 임시 벡터
 
   // 시간대: 방의 빛이 시각을 따라간다.
@@ -11,16 +12,17 @@ export function setupTime(ctx) {
   //   이름: night | dawn | morning | noon | golden | dusk.
   //   auto 는 보는 사람이 어디에 있든 한국 시간의 지금 시각이고, frame() 이 1분에 한 번쯤 다시 읽는다.
   //   golden 줄이 방의 원래 고정된 모습이다: applyTime(17.5) 는 장면이 지어질 때의 값을 그대로 넣는다.
-  const NIGHT = { sun: '#aebfe0', sunI: 0.35, drop: 3.2, sky: ['#2e3350', '#4a4358', '#2e2b24'], hemiSky: '#d6c0aa', hemiGround: '#453a30', hemiI: 0.52, fillI: 0.2, lampI: 4.4, shadeI: 1.3, shaft: '#b9c8e6', shaftO: 0.012, mote: '#d5def0', moteO: 0.06, exposure: 1.26, bg: 0.4 };
+  const NIGHT = { sun: '#aebfe0', sunI: 0.35, drop: 3.2, sky: ['#2e3350', '#4a4358', '#2e2b24'], hemiSky: '#d6c0aa', hemiGround: '#453a30', hemiI: 0.52, fillI: 0.2, lampI: 4.4, shadeI: 1.3, shaft: '#b9c8e6', shaftO: 0.012, mote: '#d5def0', moteO: 0.06, exposure: 1.26, bd: ['#121833', '#2a3157'] };
   // h: hour · sun, sunI, drop: sun colour, intensity, and how steeply it falls (higher = higher sun) · sky: backdrop gradient top, middle, bottom
-  // hemi*, fillI: ambient · lampI, shadeI: lamp light and its shade's glow · shaft*, mote*: light shaft and dust · bg: scale on the backdrop colour
+  // hemi*, fillI: ambient · lampI, shadeI: lamp light and its shade's glow · shaft*, mote*: light shaft and dust
+  // bd: 방 뒤 배경의 위, 아래 색 (판정 J14: 밤은 짙은 파랑, 새벽은 복숭아, 낮은 옅은 하늘, 해 질 녘은 호박색). 배경은 빛을 내지 않는다: 방의 빛은 해, 하늘빛, 램프다
   const TIMES = [
     { h: 4.5, ...NIGHT },
-    { h: 6, sun: '#ffb38a', sunI: 1.4, drop: 1.9, sky: ['#e9c3b4', '#f4c9a0', '#7d7458'], hemiSky: '#f3d6c2', hemiGround: '#54463a', hemiI: 0.55, fillI: 0.26, lampI: 1.2, shadeI: 0.5, shaft: '#ffc9a8', shaftO: 0.05, mote: '#ffe0c8', moteO: 0.4, exposure: 1.14, bg: 0.75 },
-    { h: 9, sun: '#ffe2b8', sunI: 2.6, drop: 3.4, sky: ['#cfe0dc', '#f3e3c4', '#8c8558'], hemiSky: '#fff0d8', hemiGround: '#62523e', hemiI: 0.9, fillI: 0.45, lampI: 0, shadeI: 0.12, shaft: '#ffe6bf', shaftO: 0.045, mote: '#fff0d4', moteO: 0.45, exposure: 1.08, bg: 1 },
-    { h: 13, sun: '#fff1d6', sunI: 2.6, drop: 6, sky: ['#bcd6dc', '#e6e6d2', '#8f8c62'], hemiSky: '#fff3e0', hemiGround: '#6a5a46', hemiI: 1.0, fillI: 0.5, lampI: 0, shadeI: 0.12, shaft: '#fff0d0', shaftO: 0.025, mote: '#fff4dc', moteO: 0.25, exposure: 1.05, bg: 1 },
-    { h: 17.5, sun: '#ffb066', sunI: 3.0, drop: 2.55, sky: ['#f2c48f', '#e9a46b', '#8a7a55'], hemiSky: '#ffe6c4', hemiGround: '#5a4a38', hemiI: 0.7, fillI: 0.35, lampI: 3.2, shadeI: 0.9, shaft: '#ffc98a', shaftO: 0.07, mote: '#ffe0b0', moteO: 0.7, exposure: 1.12, bg: 1 },
-    { h: 19.5, sun: '#e8875a', sunI: 0.9, drop: 1.7, sky: ['#a98a9a', '#e08f62', '#5f5744'], hemiSky: '#e8c4a8', hemiGround: '#4e4034', hemiI: 0.48, fillI: 0.22, lampI: 4.0, shadeI: 1.15, shaft: '#f0a57c', shaftO: 0.035, mote: '#f6c9a4', moteO: 0.3, exposure: 1.15, bg: 0.75 },
+    { h: 6, sun: '#ffb38a', sunI: 1.4, drop: 1.9, sky: ['#e9c3b4', '#f4c9a0', '#7d7458'], hemiSky: '#f3d6c2', hemiGround: '#54463a', hemiI: 0.55, fillI: 0.26, lampI: 1.2, shadeI: 0.5, shaft: '#ffc9a8', shaftO: 0.05, mote: '#ffe0c8', moteO: 0.4, exposure: 1.14, bd: ['#c7a2b8', '#f4c7a2'] },
+    { h: 9, sun: '#ffe2b8', sunI: 2.6, drop: 3.4, sky: ['#cfe0dc', '#f3e3c4', '#8c8558'], hemiSky: '#fff0d8', hemiGround: '#62523e', hemiI: 0.9, fillI: 0.45, lampI: 0, shadeI: 0.12, shaft: '#ffe6bf', shaftO: 0.045, mote: '#fff0d4', moteO: 0.45, exposure: 1.08, bd: ['#b4cfde', '#eee4cb'] },
+    { h: 13, sun: '#fff1d6', sunI: 2.6, drop: 6, sky: ['#bcd6dc', '#e6e6d2', '#8f8c62'], hemiSky: '#fff3e0', hemiGround: '#6a5a46', hemiI: 1.0, fillI: 0.5, lampI: 0, shadeI: 0.12, shaft: '#fff0d0', shaftO: 0.025, mote: '#fff4dc', moteO: 0.25, exposure: 1.05, bd: ['#a6cbe2', '#e6f0f1'] },
+    { h: 17.5, sun: '#ffb066', sunI: 3.0, drop: 2.55, sky: ['#f2c48f', '#e9a46b', '#8a7a55'], hemiSky: '#ffe6c4', hemiGround: '#5a4a38', hemiI: 0.7, fillI: 0.35, lampI: 3.2, shadeI: 0.9, shaft: '#ffc98a', shaftO: 0.07, mote: '#ffe0b0', moteO: 0.7, exposure: 1.12, bd: ['#de8f4c', '#f6d08e'] },
+    { h: 19.5, sun: '#e8875a', sunI: 0.9, drop: 1.7, sky: ['#a98a9a', '#e08f62', '#5f5744'], hemiSky: '#e8c4a8', hemiGround: '#4e4034', hemiI: 0.48, fillI: 0.22, lampI: 4.0, shadeI: 1.15, shaft: '#f0a57c', shaftO: 0.035, mote: '#f6c9a4', moteO: 0.3, exposure: 1.15, bd: ['#4b416c', '#d68a62'] },
     { h: 21.5, ...NIGHT },
   ].map(k => Object.fromEntries(Object.entries(k).map(([key, v]) => [key, toRGB(v)])));
   const TIME_NAMES = { night: 1, dawn: 6, morning: 9, noon: 13, golden: 17.5, dusk: 19.5 };
@@ -47,14 +49,37 @@ export function setupTime(ctx) {
     const part = Object.fromEntries(seoulFmt.formatToParts(new Date()).map(p => [p.type, Number(p.value)]));
     return (part.hour % 24) + part.minute / 60;
   }
-  const bgBase = scene.background.clone();
+  // ---------- 방 뒤의 배경 ----------
+  // layout.backdrop: 없거나 { mode: 'time' } 이면 시간 따라 바뀌는 그라데이션(위 bd), { mode: 'colour', top, bottom? } 이면 주인이 고른 색
+  // (bottom 이 없으면 한 색). 주인이 고른 색은 시간과 상관없이 그 색 그대로다. 검사는 서버(layout.ts 의 backdrop)가 한다.
+  // 세로로 긴 작은 캔버스를 화면 전체에 펴서 그린다 (sRGB 텍스처라 톤 매핑을 받지 않아 고른 색이 그대로 보인다). 공유 그림에도 들어간다.
+  const bdCanvas = makeCanvas(2, 256), bdTex = canvasTexture(bdCanvas);
+  scene.background = bdTex;
+  onDispose(() => bdTex.dispose());
+  const HEXB = /^#[0-9a-fA-F]{6}$/;
+  const normBackdrop = b => (b && b.mode === 'colour' && HEXB.test(b.top) ? { mode: 'colour', top: b.top, bottom: HEXB.test(b.bottom) ? b.bottom : b.top } : { mode: 'time' });
+  ctx.backdrop = normBackdrop(layout.backdrop);
+  let lastK = null;
+  function paintBackdrop() {
+    const b = ctx.backdrop;
+    const [top, bottom] = b.mode === 'colour' ? [b.top, b.bottom] : lastK ? lastK.bd.map(css) : ['#565344', '#565344'];
+    const g = bdCanvas.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 256);
+    gr.addColorStop(0, top); gr.addColorStop(1, bottom); g.fillStyle = gr; g.fillRect(0, 0, 2, 256);
+    bdTex.needsUpdate = true;
+  }
+  // 꾸미기(edit.js)가 배경을 바꾼다. null 은 시간 따라
+  function setBackdrop(b) {
+    ctx.backdrop = normBackdrop(b);
+    if (b && ctx.backdrop.mode === 'colour') layout.backdrop = structuredClone(b); else delete layout.backdrop;
+    paintBackdrop();
+  }
   const setCol = (c, [r, g, b]) => c.setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace);
   const css = c => `rgb(${c.map(Math.round).join(',')})`;
   ctx.lampBase = 3.2; ctx.readGlow = 0; let nextClock = 0;
   function applyTime(hour) {
     const k = timeAt(hour);
     renderer.toneMappingExposure = k.exposure;
-    scene.background.copy(bgBase).multiplyScalar(k.bg);
+    lastK = k; paintBackdrop();
     setCol(hemi.color, k.hemiSky); setCol(hemi.groundColor, k.hemiGround); hemi.intensity = k.hemiI;
     fill.intensity = k.fillI;
     ctx.readGlow = Math.min(0.4, Math.max(0, (1.6 - k.sunI) * 0.3)); // 손에 든 카드는 방이 어두우면 스스로 빛난다. 아침부터 해 질 녘까지는 0
@@ -92,5 +117,5 @@ export function setupTime(ctx) {
     if (timeSpec === 'auto') tickClock(); else applyTime(timeSpec);
   });
 
-  Object.assign(ctx, { tickClock });
+  Object.assign(ctx, { tickClock, setBackdrop });
 }

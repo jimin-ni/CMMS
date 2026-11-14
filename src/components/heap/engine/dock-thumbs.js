@@ -4,7 +4,7 @@
 //   받는 것  heap:thumb { id, cb, token? }  id 는 카탈로그 모델 id. cb(dataURL | null) 은 그림이 나오면 한 번 불린다 (모르는 모델이나 실패는 null).
 //            token.live 가 false 가 되면 그 부탁은 그리지 않고 cb 도 부르지 않는다 (room-editor.tsx 가 정리할 때 끈다).
 //            heap:edit false (꾸미기를 닫음): 줄을 비우고 렌더러와 그림을 버린다. 다시 열면 처음부터 그린다.
-// 그림은 이 마운트 안에서 id 로 기억한다. 팔레트가 바뀌면 방이 다시 마운트되므로(edit.js 의 remount) 캐시도 새로 시작한다.
+// 그림은 이 마운트 안에서 (칠한 색, id) 로 기억한다. 팔레트는 다시 마운트하지 않고 바뀌므로(recolour.js) 색마다 따로 둔다: 되돌리기로 돌아온 색은 다시 그리지 않는다.
 import * as THREE from 'three';
 
 const W = 152, H = 112; // 칸의 그림 76 x 56 의 두 배
@@ -12,7 +12,8 @@ const VIEW = new THREE.Vector3(9.4, 8.6, 9.4).normalize(); // 방 카메라(loop
 
 export function setupDockThumbs(ctx) {
   const { root, on, onDispose } = ctx;
-  const done = new Map(); // id → dataURL | null
+  const done = new Map(); // `${look}|${id}` → dataURL | null (look 은 그릴 때의 ctx.look)
+  const keyOf = id => `${ctx.look}|${id}`;
   let r = null, queue = Promise.resolve(), gen = 0;
 
   function rig() {
@@ -34,13 +35,14 @@ export function setupDockThumbs(ctx) {
 
   // 모델 하나를 그린다. 재질은 furniture.js 처럼 이름으로 물들인 복사본을 쓰고, 그린 뒤 버린다 (기하는 캐시의 것이라 두고 간다).
   async function draw(id) {
+    const tint = { ...ctx.TINT }; // 부탁을 꺼낸 때의 색 (모델을 읽는 동안 미리보기가 색을 바꿔도 캐시 열쇠와 맞는다)
     const m = await ctx.loadModel(id);
     if (!m || ctx.disposed) return null;
     const { renderer, scene, camera, canvas } = rig();
     const inst = m.root.clone(), own = new Map();
     inst.traverse(o => {
       if (!o.isMesh) return;
-      const col = ctx.TINT[o.material.name];
+      const col = tint[o.material.name];
       if (!col) return;
       if (!own.has(o.material)) { const c = o.material.clone(); c.color.set(col); own.set(o.material, c); }
       o.material = own.get(o.material);
@@ -64,17 +66,19 @@ export function setupDockThumbs(ctx) {
     const d = e.detail;
     if (!d || typeof d.id !== 'string' || typeof d.cb !== 'function') return;
     const g = gen, live = () => !ctx.disposed && g === gen && d.token?.live !== false;
-    if (done.has(d.id)) { d.cb(done.get(d.id)); return; }
+    if (done.has(keyOf(d.id))) { d.cb(done.get(keyOf(d.id))); return; }
     // 한 번에 하나씩 그린다. 같은 id 가 줄에 두 번 서도 두 번째는 캐시에서 나간다. 꺼진 부탁은 건너뛴다
     queue = queue.then(async () => {
       if (!live()) return;
-      if (!done.has(d.id)) {
+      let key = keyOf(d.id);
+      if (!done.has(key)) {
         let url = null;
+        key = keyOf(d.id); // 그리기 시작할 때의 색 (draw 는 기다리는 동안 ctx.TINT 를 읽는다)
         try { url = await draw(d.id); } catch (err) { if (!ctx.disposed) console.error('[heap-room] thumb', d.id, err); }
         if (ctx.disposed || g !== gen) return;
-        done.set(d.id, url);
+        done.set(key, url);
       }
-      if (live()) d.cb(done.get(d.id));
+      if (live()) d.cb(done.get(key));
     });
   });
 }

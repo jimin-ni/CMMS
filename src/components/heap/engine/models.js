@@ -1,6 +1,7 @@
 // 가구 모델: 카탈로그, GLB 읽기, 방 색으로 물들이기.
 import * as THREE from 'three';
 import { disposeScene } from './util.js';
+import { tintOf } from './palette.js';
 
 export function setupModels(ctx) {
   const { opts, dataBase, C, onDispose, ac } = ctx;
@@ -16,14 +17,9 @@ export function setupModels(ctx) {
   const MODEL_BASE = opts.modelBase ?? dataBase.replace(/[^/]+\/$/, 'models/');
   const MODEL_SCALE = 2.0; // 키트는 타일 하나에 단위 1쯤으로 만들어져, 이 방의 절반 크기다
   const scaleOf = entry => MODEL_SCALE * (entry.scale ?? 1); // 카탈로그 항목의 scale(예: 크리스마스 키트 0.4~0.64)을 곱한 실제 배율
-  const darkAccent = '#' + new THREE.Color(C.accent).multiplyScalar(0.55).getHexString();
-  // material name → colour. A name that is missing here (glass) is left alone. This is the base look of every model.
-  // 나무는 손으로 만든 탁자의 두 갈색(상판과 다리)을 받아, 나무 틀이 천과 구분되어 보인다. 천은 강조색이다.
-  // 평범한 객체 하나로 두었으니 크리에이터별 테마가 나중에 이것을 바꿀 수 있다.
-  const TINT = {
-    wood: C.woodB, woodDark: C.woodDark, carpet: C.accent, carpetDarker: darkAccent, carpetBlue: C.olive, carpetWhite: C.paper, _defaultMat: C.paper,
-    plant: C.leaf, lamp: '#f6dcb2', fur: C.woodB, metal: '#a39d90', metalLight: '#c9c3b6', metalMedium: '#8f8a7e', metalDark: '#4a463e',
-  };
+  // material name → colour (palette.js 의 tintOf). 모든 모델의 바탕 모습이다.
+  // 한 객체를 끝까지 쓴다: 팔레트가 바뀌면 recolour.js 가 이 객체의 값을 바꾸고, dock-thumbs.js 는 그릴 때마다 이것을 읽는다.
+  const TINT = tintOf(C);
   // MODELS: catalogue id → Promise of { root, entry, size } or null · KEPT: geometries and materials the cache owns · modelRoots: the parsed scenes
   const MODELS = new Map(), KEPT = new Set(), modelRoots = [];
   // SIZES: 읽은 모델의 실제 크기 (배율을 곱한 경계 상자, Vector3). 꾸미기(edit.js)가 벽·천장 가구의 높이를 이것으로 정한다
