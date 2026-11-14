@@ -3,6 +3,28 @@ import { Suspense } from "react";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { roleLabel } from "@/lib/access";
+import { ONBOARDING_CONCEPTS } from "@/lib/onboarding";
+
+// 로그인 여부와 상관없이 보이는 블록. 세션을 읽지 않으므로 Suspense 밖에 둔다.
+function OnboardingConceptBlocks() {
+  return (
+    <section className="mt-8 grid gap-6 md:grid-cols-3">
+      {ONBOARDING_CONCEPTS.map((concept) => (
+        <Link
+          key={concept.id}
+          href={`/onboarding/${concept.id}`}
+          className="flex flex-col rounded-2xl bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+        >
+          <span className="w-fit rounded-full bg-key-mist px-2.5 py-0.5 text-xs text-key-brown">
+            {concept.status}
+          </span>
+          <h2 className="mt-3 text-lg font-semibold text-key-brown">{concept.title}</h2>
+          <p className="mt-2 flex-1 text-sm text-key-stone">{concept.description}</p>
+        </Link>
+      ))}
+    </section>
+  );
+}
 
 async function HomeContent() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -47,6 +69,7 @@ export default function HomePage() {
       <Suspense fallback={<div className="h-48 rounded-2xl bg-white/60" />}>
         <HomeContent />
       </Suspense>
+      <OnboardingConceptBlocks />
     </main>
   );
 }
