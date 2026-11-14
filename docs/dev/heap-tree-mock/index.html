@@ -1,0 +1,1176 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>트리 목업 v1.2</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&family=Gaegu&family=Hi+Melody&family=Gamja+Flower&family=Cute+Font&family=Single+Day&family=Yeon+Sung&family=East+Sea+Dokdo&display=block" rel="stylesheet">
+<style>
+  html, body { margin: 0; height: 100%; background: #e9dfcb; overflow: hidden; }
+  body { display: flex; flex-direction: column; }
+  canvas#c { display: block; width: 100%; flex: 1 1 auto; min-height: 0; touch-action: none; }
+  canvas#c.hover { cursor: pointer; }
+  #label { position: fixed; left: 12px; bottom: 10px; font: 12px/1 system-ui, sans-serif;
+    color: rgba(60, 50, 35, .6); pointer-events: none; letter-spacing: .02em; }
+  #panel { flex: none; align-self: center; margin: 8px 16px 10px; max-width: calc(100vw - 32px); box-sizing: border-box;
+    background: rgba(243, 233, 214, .92); color: #3a3428; border-radius: 10px; padding: 8px 10px;
+    font: 12px/1.2 system-ui, sans-serif; box-shadow: 0 2px 10px rgba(40, 30, 15, .18); transition: opacity .25s; }
+  body.reading #panel { visibility: hidden; }
+  #panel .row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  #panel .row + .row { margin-top: 6px; }
+  #panel .lab { color: #6b5a45; min-width: 64px; }
+  #panel .chips { display: flex; gap: 4px; flex-wrap: wrap; }
+  #panel .chip { font: inherit; border: 1px solid #c9b896; background: #fbf7ee; color: #3a3428; border-radius: 999px; padding: 3px 9px; cursor: pointer; }
+  #panel .chip.on { background: #565344; border-color: #565344; color: #fbf7ee; }
+  #panel .swatch { width: 20px; height: 20px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, .2); cursor: pointer; padding: 0; }
+  #panel input[type=color] { width: 26px; height: 22px; border: none; padding: 0; background: none; cursor: pointer; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="label">트리 목업 v1.2</div>
+<div id="panel" aria-label="장식 색 시험 (목업 전용)">
+  <div class="row"><span class="lab">종류</span><div id="kinds" class="chips"></div></div>
+  <div class="row"><span class="lab">색 바꿀 장식</span><div id="targets" class="chips"></div></div>
+  <div class="row"><span class="lab">색</span><div id="swatches" class="chips"></div>
+    <input type="color" id="free" value="#b8394a" title="직접 고르기">
+    <span class="lab">포인트</span><div id="accents" class="chips"></div></div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+// 예시 데이터 (synthetic)
+const cards = [
+  { name: '솜사탕구름', date: '2026-12-01', msg: '메리 크리스마스!\n올해도 방송 덕분에 버텼어요', reply: '구름님 올해도 고마워요\n내년에도 같이 놀아요' },
+  { name: '밤하늘고래', date: '2026-12-02', msg: '첫 방송 때부터 봤어요.\n그때 그 노래 또 불러 주세요!!' },
+  { name: null, date: '2026-12-02', msg: '힘내요' },
+  { name: '귤껍질', date: '2026-12-03', msg: '겨울엔 귤이죠 🍊 귤 먹으면서 방송 보는 게 제 낙이에요' },
+  { name: '솜사탕구름', date: '2026-12-04', msg: '또 왔어요 ㅎㅎ\n한 장으로는 모자라서' },
+  { name: '새벽세시', date: '2026-12-04', msg: '새벽 방송 너무 좋아요. 시험 기간에 같이 깨어 있는 기분이라 덜 외로웠어요', reply: '시험 잘 봤어요?\n새벽 방송 계속할게요' },
+  { name: '도토리묵', date: '2026-12-05', msg: 'ㅋㅋㅋㅋㅋㅋㅋ' },
+  { name: '파란우산', date: '2026-12-06', msg: '작년 겨울 합방\n다시 보고 싶어요' },
+  { name: '밤하늘고래', date: '2026-12-07', msg: '두 번째 쪽지!\n감기 조심하세요\n목 아끼시고요' },
+  { name: '말랑콩떡', date: '2026-12-08', msg: '우리 가족 👨‍👩‍👧 다 같이 보고 있어요' },
+  { name: '귤껍질', date: '2026-12-09', msg: '오늘 방송에서 웃다가 귤 떨어뜨림', reply: '귤 무사한가요 ㅋㅋ' },
+  { name: null, date: '2026-12-10', msg: '이름은 비밀이지만 늘 응원하고 있어요.\n무리하지 마세요' },
+  { name: '도토리묵', date: '2026-12-16', msg: '진지하게 써 볼게요.\n올해 이사하고 회사도 옮기느라 정신없었는데 퇴근하고 방송 켜 두면 그게 하루 중 제일 편한 시간이었어요. 정말 고마워요!!' },
+  { name: '고양이발', date: '2026-12-20', msg: '우리 집 고양이도\n방송 소리 나면\n화면 앞에 앉아요', reply: '고양이 시청자님 환영합니다 🐾' },
+];
+
+const C = { olive: 0x565344, clay: 0xA6613C, paper: 0xf3e9d6 };
+const TREE_H = 1.8, EYE = 1.6, LOOK_Y = 0.92;
+
+// ---------- renderer / scene ----------
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.95;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x2b281f);
+const camera = new THREE.PerspectiveCamera(50, 1, 0.02, 30);
+
+// a cosy sunset evening: dim warm sky light, a low orange sun from the side, a faint dusk-violet fill
+scene.add(new THREE.HemisphereLight(0xffb98a, 0x3a2a22, 0.55));
+const fill = new THREE.DirectionalLight(0x9a7fb0, 0.3); fill.position.set(2.5, 2.2, 4); scene.add(fill);
+const sun = new THREE.DirectionalLight(0xff8f4a, 1.4);
+sun.position.set(-3.5, 1.5, 2.0); sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0005; sun.shadow.normalBias = 0.02;
+Object.assign(sun.shadow.camera, { left: -2.5, right: 2.5, top: 2.5, bottom: -2.5, near: 0.5, far: 10 });
+scene.add(sun);
+
+// closed room around the tree: paper walls, warm wood floor
+// box faces: +x, -x, +y (ceiling), -y (floor), +z, -z
+const wallMat = new THREE.MeshStandardMaterial({ color: C.paper, roughness: 0.95, side: THREE.BackSide });
+const ceilMat = new THREE.MeshStandardMaterial({ color: 0xe6d9c2, roughness: 1, side: THREE.BackSide });
+const floorMat = new THREE.MeshStandardMaterial({ color: 0xa88462, roughness: 0.85, side: THREE.BackSide });
+const room = new THREE.Mesh(new THREE.BoxGeometry(9, 3.2, 8), [wallMat, wallMat, ceilMat, floorMat, wallMat, wallMat]);
+room.position.set(0, 1.6, 2.4); room.receiveShadow = true; scene.add(room);
+const TREE_URL = 'assets/tree-decorated.glb';
+
+// glow: only what is brighter than the room (bulbs, the star) bleeds light; OutputPass tone-maps at the end
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.55, 0.6, 0.82);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+// ---------- camera: one fixed first-person view, the front of the tree fills it ----------
+const CAM_DIST = 2.05;
+camera.position.set(0, EYE, CAM_DIST);
+camera.lookAt(0, LOOK_Y, 0);
+
+// =====================================================================
+// 쪽지 (folded note)
+//
+// The classroom knot (Yoon's reference, refs/jjokji-steps.png). Closing order; opening plays it backwards:
+//   0  portrait sheet folded in half lengthwise, then in half again -> long strip (4 layers)
+//   1  strip lying horizontal
+//   2  the left end folds down on a 45° crease: a short tip hangs down (mirrored ㄱ)
+//   3  the long part folds down on the other diagonal, beside the tip: two tails and a peaked roof
+//   4  the long end folds on 45° to the left, in front of the tip: one tail left, one tail down
+// Finished: a diamond head with a + of creases, a band running left, a tail running down.
+//
+// Geometry: the sheet is cut into strip segments along the creases, each segment into its
+// 4 lengthwise columns (crease positions mirror from column to column, as on a real unfolded 쪽지).
+// Every crease is a hinge: a group at a point on the crease, rotated about the crease line.
+// The roof triangle is the root and never moves, so the writing side always faces the viewer.
+//
+// buildPacket(data) makes one packet from { name, date, msg, reply? } and knows nothing about the
+// tree, so a writing flow can reuse it.
+// =====================================================================
+const KW = 0.036;                             // strip width = sheet width / 4
+const STRIP_L = 6.5 * KW;                     // strip length = sheet height
+const SHEET = { W: 4 * KW, H: STRIP_L };      // 0.144 x 0.234 m
+const LD = 0.00008;                           // one paper layer of separation
+const INSIDE_SCALE = 0.35;                    // a closed packet inside its ornament
+const REPLY = { W: 0.064, H: 0.08, COLS: 2, ROWS: [0.5, 0.5], DZ: 0.00003 };
+const FAN_FONTS = ['Nanum Pen Script', 'Gaegu', 'Hi Melody', 'Gamja Flower', 'Cute Font', 'Single Day', 'Yeon Sung'];
+const REPLY_FONT = 'East Sea Dokdo';
+// some hands draw small for their px size; scale them so every hand reads at a similar size
+const FONT_SCALE = { 'Nanum Pen Script': 1.3, 'Gaegu': 1.0, 'Hi Melody': 1.15, 'Gamja Flower': 1.0, 'Cute Font': 1.3, 'Single Day': 0.95, 'Yeon Sung': 1.0, 'East Sea Dokdo': 1.3 };
+const NOTE_TINTS = ['#fbf7ee', '#f6efdf', '#f9f4ea', '#f2eadb', '#fdf9f2'];
+const REPLY_TINT = '#f3d5bf';
+const FRONT_PX = [1200, 1950], REPLY_PX = [720, 900], BACK_PX = [400, 650];
+
+const hashStr = s => { let h = 2166136261; for (const ch of s) h = Math.imul(h ^ ch.codePointAt(0), 16777619); return h >>> 0; };
+const fontFor = data => FAN_FONTS[hashStr(data.name ?? ('익명:' + data.msg)) % FAN_FONTS.length];
+const tintFor = data => NOTE_TINTS[hashStr(data.msg) % NOTE_TINTS.length];
+
+// --- crease layout ---
+// Designed in "strip coords" (X along the strip, lying horizontal as in the reference, Y across, 0..w),
+// then turned 90° into sheet coords (x right 0..W, y up 0..H) for column 0: (X, Y) -> (w - Y, X).
+const w = KW, TIP = 1.8 * w, L = STRIP_L;
+const toSheet = ([X, Y]) => [w - Y, X];
+const dirToSheet = ([dX, dY]) => [-dY, dX];
+const SEGS_STRIP = {
+  ROOF: [[TIP, 0], [TIP + w, w], [TIP + 2 * w, 0]],                    // root: the roof triangle, never moves
+  TIP:  [[0, 0], [TIP, 0], [TIP + w, w], [0, w]],                      // short end, hangs down (step 2)
+  TAIL: [[TIP + w, w], [TIP + 3 * w, w], [TIP + 2 * w, 0]],            // folds down beside the tip (step 3)
+  BAND: [[TIP + 2 * w, 0], [TIP + 3 * w, w], [L, w], [L, 0]],          // long end, turns left in front (step 4)
+};
+const SEGS = Object.fromEntries(Object.entries(SEGS_STRIP).map(([k, pts]) => [k, pts.map(toSheet)]));
+// [child, parent, point on crease, crease direction, a point inside the child, hinge height] (strip coords)
+// hinge heights put each layer on its own level: tip behind the roof, tail in front, band in front of all
+const CREASES_STRIP = [
+  ['TIP', 'ROOF', [TIP, 0], [1, 1], [TIP * 0.5, 0.5 * w], -0.5 * LD],
+  ['TAIL', 'ROOF', [TIP + w, w], [1, -1], [TIP + 2 * w, 0.7 * w], 11 * LD],
+  ['BAND', 'TAIL', [TIP + 2 * w, 0], [1, 1], [TIP + 4 * w, 0.5 * w], -1 * LD],
+];
+const CREASES = CREASES_STRIP.map(([c, p, pt, d, ins, h]) => [c, p, toSheet(pt), dirToSheet(d), toSheet(ins), h]);
+// lengthwise folds: column hinges at x = w, 2w, 3w. Half then half again: middle first, then both others.
+// strip layers land at 0, 2, 4, 10 LD (col 0, 3, 2, 1): the gap under the top layer holds a folded reply
+const COL_HEIGHT = [0, 5 * LD, 3 * LD, -1 * LD];
+const COL_MAP = [x => x, x => 2 * w - x, x => 2 * w + x, x => 4 * w - x];
+
+// --- hinge: a group on the crease; content inside is back in the parent's coordinates ---
+function makeHinge(parent, px, py, height, dir, inside) {
+  const axis = new THREE.Vector3(dir[0], dir[1], 0).normalize();
+  const P = new THREE.Vector3(px, py, height);
+  const rel = new THREE.Vector3(inside[0] - px, inside[1] - py, 0);
+  const side = rel.sub(axis.clone().multiplyScalar(rel.dot(axis))).normalize();
+  // swing toward the side the panel lands on (sign of the hinge height)
+  const sgn = Math.sign(height || 1) * Math.sign(new THREE.Vector3().crossVectors(axis, side).z || 1);
+  const group = new THREE.Group(); group.position.copy(P); parent.add(group);
+  const content = new THREE.Group(); content.position.copy(P).negate(); group.add(content);
+  return { group, content, axis, fold: sgn * Math.PI };
+}
+const setHinge = (h, f) => h.group.quaternion.setFromAxisAngle(h.axis, f * h.fold);
+
+function polyGeometry(pts) {
+  const geo = new THREE.ShapeGeometry(new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y))));
+  const pos = geo.attributes.position, uv = geo.attributes.uv;
+  for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i) / SHEET.W, pos.getY(i) / SHEET.H);
+  return geo;
+}
+
+function buildKnot(front, back) {
+  const root = new THREE.Group(), segs = {}, cols = [[], [], [], []], fronts = [];
+  function segment(name, content) {
+    let parent = content; const cells = [];
+    for (let c = 0; c < 4; c++) {
+      let cell = content;
+      if (c > 0) { const h = makeHinge(parent, c * w, 0, COL_HEIGHT[c], [0, 1], [c * w + 0.01, 0]); cols[c].push(h); cell = h.content; }
+      const geo = polyGeometry(SEGS[name].map(([x, y]) => [COL_MAP[c](x), y]));
+      const fm = new THREE.Mesh(geo, front), bm = new THREE.Mesh(geo, back);
+      fm.castShadow = bm.castShadow = true; cell.add(fm, bm); fronts.push(fm);
+      cells.push(cell); parent = cell;
+    }
+    segs[name] = { content, cells };
+  }
+  segment('ROOF', root);
+  const hinges = {};
+  for (const [child, parent, [px, py], dir, inside, height] of CREASES) {
+    const h = makeHinge(segs[parent].content, px, py, height, dir, inside);
+    hinges[child] = h; segment(child, h.content);
+  }
+  return { root, hinges, cols, fronts, segs };
+}
+
+// --- reply: a small sheet folded 2 x 3, accordion style (as v1) ---
+function buildAccordion(spec, front, back) {
+  const { W, H, COLS, ROWS, DZ } = spec;
+  const cw = W / COLS, rh = ROWS.map(f => f * H);
+  const offC = DZ, offR = 2 * DZ * (COLS - 1) + 3 * DZ;
+  const root = new THREE.Group(), rowHinges = [], colHinges = [];
+  let parentRow = root, yTop = 0;
+  for (let r = 0; r < ROWS.length; r++) {
+    let rowContent = new THREE.Group();
+    if (r === 0) root.add(rowContent);
+    else {
+      const s = r % 2 ? 1 : -1, g = new THREE.Group();
+      g.position.set(0, -rh[r - 1], s * offR); rowContent.position.z = -s * offR;
+      g.add(rowContent); parentRow.add(g);
+      rowHinges.push({ group: g, axis: new THREE.Vector3(1, 0, 0), fold: -s * Math.PI });
+    }
+    let parentCell = rowContent;
+    for (let c = 0; c < COLS; c++) {
+      let cell = new THREE.Group();
+      if (c === 0) rowContent.add(cell);
+      else {
+        const t = c % 2 ? 1 : -1, g = new THREE.Group();
+        g.position.set(cw, 0, t * offC); cell.position.z = -t * offC;
+        g.add(cell); parentCell.add(g);
+        (colHinges[c - 1] ||= []).push({ group: g, axis: new THREE.Vector3(0, 1, 0), fold: -t * Math.PI });
+      }
+      const geo = new THREE.PlaneGeometry(cw, rh[r]); geo.translate(cw / 2, -rh[r] / 2, 0);
+      const uv = geo.attributes.uv, u0 = c / COLS, u1 = (c + 1) / COLS, vT = 1 - yTop / H, vB = 1 - (yTop + rh[r]) / H;
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, u0 + uv.getX(i) * (u1 - u0), vB + uv.getY(i) * (vT - vB));
+      const fm = new THREE.Mesh(geo, front), bm = new THREE.Mesh(geo, back);
+      fm.castShadow = bm.castShadow = true; cell.add(fm, bm);
+      parentCell = cell;
+    }
+    parentRow = rowContent; yTop += rh[r];
+  }
+  return { root, rowHinges, colHinges, cw, rh };
+}
+
+// --- text: grapheme- and word-aware wrapping ---
+const segWord = new Intl.Segmenter('ko', { granularity: 'word' });
+const segGraph = new Intl.Segmenter('ko', { granularity: 'grapheme' });
+const graphemes = s => Array.from(segGraph.segment(s), x => x.segment);
+const CLOSERS = new Set(['.', ',', '!', '?', ')', '」', '』', '…', '~', ':', ';', ']', '}', '’', '”', '%', '·', '。', '、']);
+
+// a line never starts with closing punctuation: it hangs on the line before instead
+function wrap(g, text, maxW) {
+  const out = [];
+  const fits = s => g.measureText(s).width <= maxW;
+  for (const para of text.split('\n')) {
+    let line = '';
+    const flush = () => { out.push(line.trimEnd()); line = ''; };
+    for (const { segment } of segWord.segment(para)) {
+      if (fits((line + segment).trimEnd())) { line += segment; continue; }
+      if (!segment.trim()) { if (line.trim()) flush(); continue; }         // break at a space, drop it
+      const gs = graphemes(segment);
+      if (line.trim() && !CLOSERS.has(gs[0]) && fits(segment)) { flush(); line = segment; continue; }
+      for (const gp of gs) {
+        if (line.trim() && !fits(line + gp) && !CLOSERS.has(gp)) flush();
+        line += gp;
+      }
+    }
+    out.push(line.trimEnd());
+  }
+  return out.map(l => l.trimStart());
+}
+function ellipsize(g, s, maxW) {
+  let gs = graphemes(s);
+  while (gs.length && g.measureText(gs.join('') + '…').width > maxW) gs.pop();
+  return gs.join('') + '…';
+}
+// largest size whose wrapped text fits the box; short notes come out big, long notes small, never under minPx
+function fitText(g, text, font, boxW, boxH, maxPx, minPx) {
+  let fit;
+  // a closer hung onto a full line can overshoot boxW, so widths are checked too
+  const widthOk = lines => lines.every(l => g.measureText(l).width <= boxW);
+  for (let px = maxPx; px >= minPx; px -= 4) {
+    g.font = `${px}px "${font}"`; const lines = wrap(g, text, boxW), lh = px * 1.22;
+    fit = { px, lines, lh };
+    if (lines.length * lh <= boxH && widthOk(lines)) return fit;
+  }
+  // smallest size: wrap narrower so hung punctuation stays inside the box
+  if (!widthOk(fit.lines)) fit.lines = wrap(g, text, boxW - g.measureText('……').width);
+  const keep = Math.max(1, Math.floor(boxH / fit.lh));
+  if (fit.lines.length > keep) { fit.lines = fit.lines.slice(0, keep); fit.lines[keep - 1] = ellipsize(g, fit.lines[keep - 1], boxW); }
+  return fit;
+}
+// one line: shrink to fit, then cut with an ellipsis
+function fitLine(g, text, family, maxPx, minPx, maxW, weight = '') {
+  let px = maxPx;
+  for (; px > minPx; px -= 2) { g.font = `${weight}${px}px ${family}`; if (g.measureText(text).width <= maxW) return { px, text }; }
+  g.font = `${weight}${minPx}px ${family}`;
+  return { px: minPx, text: g.measureText(text).width <= maxW ? text : ellipsize(g, text, maxW) };
+}
+function drawBlock(g, fit, font, x, y, boxW, boxH, color, center) {
+  g.font = `${fit.px}px "${font}"`; g.fillStyle = color; g.textBaseline = 'alphabetic';
+  const total = fit.lines.length * fit.lh, y0 = y + Math.max(0, (boxH - total) * 0.4);
+  fit.lines.forEach((ln, i) => {
+    const lx = center ? x + (boxW - g.measureText(ln).width) / 2 : x;
+    g.fillText(ln, lx, y0 + fit.lh * (i + 0.8));
+  });
+}
+
+// --- paper textures (canvas y runs down; sheet y runs up) ---
+function drawPaper(g, cw, ch, tint, { ruled, knot }) {
+  g.fillStyle = tint; g.fillRect(0, 0, cw, ch);
+  const k = cw / 1200, X = x => x / SHEET.W * cw, Y = y => ch - y / SHEET.H * ch;
+  if (ruled) {
+    g.strokeStyle = 'rgba(105,140,180,.30)'; g.lineWidth = Math.max(1, 3 * k);
+    for (let y = ch * 0.1; y < ch - 20 * k; y += 84 * k) { g.beginPath(); g.moveTo(0, y); g.lineTo(cw, y); g.stroke(); }
+    g.strokeStyle = 'rgba(205,110,100,.35)'; g.beginPath(); g.moveTo(cw * 0.11, 0); g.lineTo(cw * 0.11, ch); g.stroke();
+  }
+  const crease = (x0, y0, x1, y1) => {
+    g.lineWidth = Math.max(1, 4 * k);
+    g.strokeStyle = 'rgba(90,70,45,.15)'; g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
+    g.strokeStyle = 'rgba(255,255,255,.32)'; g.beginPath(); g.moveTo(x0 + 3 * k, y0 + 3 * k); g.lineTo(x1 + 3 * k, y1 + 3 * k); g.stroke();
+  };
+  if (knot) {
+    for (let c = 1; c < 4; c++) crease(X(c * w), 0, X(c * w), ch);
+    const lines = [[[TIP, 0], [TIP + w, w]], [[TIP + w, w], [TIP + 2 * w, 0]], [[TIP + 2 * w, 0], [TIP + 3 * w, w]]];
+    for (let c = 0; c < 4; c++) for (const [a, b] of lines) {
+      const [ax, ay] = toSheet(a), [bx, by] = toSheet(b), m = COL_MAP[c];
+      crease(X(m(ax)), Y(ay), X(m(bx)), Y(by));
+    }
+  } else {
+    crease(cw / 2, 0, cw / 2, ch); crease(0, ch / 2, cw, ch / 2);
+  }
+}
+function texFrom(cv) {
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = renderer.capabilities.getMaxAnisotropy(); return t;
+}
+const backCache = new Map();
+function backTexture(tint, knot) {
+  const key = tint + knot;
+  if (!backCache.has(key)) {
+    const cv = document.createElement('canvas'); [cv.width, cv.height] = knot ? BACK_PX : [280, 360];
+    drawPaper(cv.getContext('2d'), cv.width, cv.height, tint, { ruled: knot, knot }); backCache.set(key, texFrom(cv));
+  }
+  return backCache.get(key);
+}
+function frontTexture(data, hasReply) {
+  const [cw, ch] = FRONT_PX, cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+  const g = cv.getContext('2d'); drawPaper(g, cw, ch, tintFor(data), { ruled: true, knot: true });
+  const font = fontFor(data), s = FONT_SCALE[font];
+  const x = cw * 0.11 + 50, boxW = cw - x - 70, top = 130;
+  // with a reply laid on top, the fan's text keeps to the upper half
+  const boxH = (hasReply ? ch * 0.45 : ch * 0.78) - top;
+  const fit = fitText(g, data.msg, font, boxW, boxH, Math.round(290 * s), Math.round(62 * s));
+  drawBlock(g, fit, font, x, top, boxW, boxH, '#2e2a24', fit.lines.length === 1);
+  // name and date sit bottom-left; with a reply they must stay left of it
+  const metaW = hasReply ? cw * 0.47 - x - 20 : boxW;
+  const nm = fitLine(g, '- ' + (data.name ?? '익명'), `"${font}"`, Math.round(84 * s), Math.round(40 * s), metaW);
+  g.font = `${nm.px}px "${font}"`; g.fillStyle = '#4a4034'; g.fillText(nm.text, x, ch * 0.875);
+  const dt = fitLine(g, String(data.date ?? ''), 'system-ui, sans-serif', 40, 24, metaW);
+  g.font = `${dt.px}px system-ui, sans-serif`; g.fillStyle = 'rgba(80,70,55,.7)'; g.fillText(dt.text, x, ch * 0.875 + 62);
+  return texFrom(cv);
+}
+function replyTexture(text) {
+  const [cw, ch] = REPLY_PX, cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+  const g = cv.getContext('2d'); drawPaper(g, cw, ch, REPLY_TINT, { ruled: false, knot: false });
+  const hd = fitLine(g, '크리에이터의 답장', 'system-ui, sans-serif', 38, 24, cw - 112, '600 ');
+  g.font = `600 ${hd.px}px system-ui, sans-serif`; g.fillStyle = '#a6613c'; g.textBaseline = 'alphabetic';
+  g.fillText(hd.text, 56, 88);
+  const s = FONT_SCALE[REPLY_FONT], boxW = cw - 112, boxH = ch - 180;
+  const fit = fitText(g, text, REPLY_FONT, boxW, boxH, Math.round(130 * s), Math.round(52 * s));
+  drawBlock(g, fit, REPLY_FONT, 56, 130, boxW, boxH, '#6e3418', false);
+  return texFrom(cv);
+}
+
+// --- the packet ---
+function buildPacket(data) {
+  const tint = tintFor(data);
+  const paperMat = (map, side) => new THREE.MeshStandardMaterial({ map, side, roughness: 0.95, emissive: 0xffc070, emissiveIntensity: 0 });
+  // the writing side is inside the knot; it gets its text texture only while open
+  const fanBack = backTexture(tint, true);
+  const fanFront = paperMat(fanBack, THREE.FrontSide), fanBackMat = paperMat(fanBack, THREE.BackSide);
+  const knot = buildKnot(fanFront, fanBackMat);
+  // root -> centerer (keeps the visible paper centred) -> spin -> sheet
+  // spin turns the packet a quarter in its own plane: on the tree the strip lies as in the reference,
+  // open the sheet stands upright. It turns during the flight, face always toward the viewer.
+  const root = new THREE.Group(), centerer = new THREE.Group(), spin = new THREE.Group();
+  root.add(centerer); centerer.add(spin); spin.add(knot.root);
+  const p = { data, root, centerer, spin, knot, mats: [fanFront, fanBackMat], fanFront, t: 0, reply: null, textOn: false };
+
+  if (data.reply) {
+    const rBack = backTexture(REPLY_TINT, false);
+    const rFront = paperMat(rBack, THREE.FrontSide), rBackMat = paperMat(rBack, THREE.BackSide);
+    const sheet = buildAccordion(REPLY, rFront, rBackMat);
+    // tucked: folded small inside the strip (between its top two layers) in the long end,
+    // so no fold shows it; it appears when the sheet opens to full width
+    knot.segs.BAND.cells[1].add(sheet.root);
+    const fw = sheet.cw, fh = sheet.rh[0], bandMid = (TIP + 3 * w + L) / 2;
+    const tuck = { p: new THREE.Vector3(1.5 * w - fw / 2, bandMid + fh / 2, 0.00004), rz: 0 };
+    // shown: laid over the lower right of the opened sheet
+    const show = { p: new THREE.Vector3(SHEET.W * 0.47, SHEET.H * 0.52, 0.004), rz: -0.06 };
+    sheet.root.position.copy(tuck.p);
+    p.reply = { sheet, front: rFront, tuck, show };
+    p.mats.push(rFront, rBackMat);
+  }
+
+  // opening timeline = the closing steps in reverse
+  // each beat is one rotation about one crease, with a short rest between beats
+  const H = knot.hinges, REST = 0.12;
+  const segs = [
+    { k: 'rise', d: 0.45 },                                            // 0 rises out of its ornament
+    { k: 'h', d: 0.5, hs: [H.BAND] },                                  // 1 the long end comes out: tails parallel
+    { k: 'h', d: 0.55, hs: [H.TAIL] },                                 // 2 the diagonal unfolds: back to the L
+    { k: 'h', d: 0.5, hs: [H.TIP] },                                   // 3 the 45° tip unfolds: a straight strip
+    { k: 'h', d: 0.5, hs: [...knot.cols[1], ...knot.cols[3]] },        // 4 strip -> half width
+    { k: 'h', d: 0.5, hs: knot.cols[2] },                              //   half -> full sheet
+  ];
+  if (p.reply) {
+    segs.push({ k: 'lift', d: 0.5 });
+    segs.push({ k: 'h', d: 0.45, hs: [...p.reply.sheet.rowHinges, ...p.reply.sheet.colHinges.flat()] });
+  }
+  let s0 = 0; for (const s of segs) { s.s = s0; s0 += s.d + REST; }
+  s0 -= REST;
+  p.segs = segs; p.total = s0;
+  applyPose(p, 0);
+  root.traverse(o => { o.userData.packet = p; });
+
+  // font-ready path: once this note's hands are really loaded, redraw if it is open
+  const loads = [document.fonts.load(`40px "${fontFor(data)}"`, data.msg + (data.name ?? '익명') + '- ')];
+  if (data.reply) loads.push(document.fonts.load(`40px "${REPLY_FONT}"`, data.reply));
+  p.fontsReady = Promise.allSettled(loads).then(() => { if (p.textOn) writeText(p); });
+  return p;
+}
+
+const ease = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+// pose at time t on the open timeline (0 = knotted on the tree, total = fully open)
+function applyPose(p, t) {
+  p.t = t;
+  for (const s of p.segs) {
+    const f = ease(THREE.MathUtils.clamp((t - s.s) / s.d, 0, 1));
+    if (s.k === 'h') s.hs.forEach(h => setHinge(h, 1 - f));
+    else if (s.k === 'rise') {
+      // hidden inside its ornament until it rises; grows and turns upright on the way out
+      p.root.visible = t > s.s;
+      p.spin.rotation.z = -Math.PI / 2 * (1 - f);
+      p.root.scale.setScalar(THREE.MathUtils.lerp(INSIDE_SCALE, 1, f));
+      p.root.position.set(0, Math.sin(Math.PI * f) * 0.03, 0.012 * f);
+    } else if (s.k === 'lift') liftReply(p.reply, f);
+  }
+  recentre(p);
+}
+// the folded reply, found lying on the opened sheet, lifts in an arc and settles on the lower right
+function liftReply(r, f) {
+  const { tuck, show, sheet } = r;
+  sheet.root.position.lerpVectors(tuck.p, show.p, f);
+  sheet.root.position.z += Math.sin(Math.PI * f) * 0.03;
+  sheet.root.rotation.z = THREE.MathUtils.lerp(tuck.rz, show.rz, f);
+}
+// keep the visible paper's bounding box centred on the root (and so on the camera axis)
+const _v = new THREE.Vector3(), _inv = new THREE.Matrix4(), _box = new THREE.Box3();
+function recentre(p) {
+  p.centerer.position.set(0, 0, 0);
+  p.root.updateMatrixWorld(true);
+  _inv.copy(p.centerer.matrixWorld).invert(); _box.makeEmpty();
+  for (const m of p.knot.fronts) {
+    const pos = m.geometry.attributes.position;
+    for (let i = 0; i < pos.count; i++) _box.expandByPoint(_v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld).applyMatrix4(_inv));
+  }
+  _box.getCenter(_v); p.centerer.position.copy(_v).negate();
+  p.root.updateMatrixWorld(true);
+}
+
+// text textures exist only while a packet is open
+function setReading(mat, map) {
+  if (mat.userData.own) mat.map.dispose();
+  // the evening light is dim and orange: the open sheet carries its own light so it reads as paper
+  mat.map = map; mat.emissiveMap = map; mat.emissive.set(0xffffff); mat.emissiveIntensity = 0.6; mat.needsUpdate = true; mat.userData.own = true;
+}
+function setResting(mat, map) {
+  if (mat.userData.own) mat.map.dispose();
+  mat.map = map; mat.emissiveMap = null; mat.emissive.set(0xffc070); mat.emissiveIntensity = 0; mat.needsUpdate = true; mat.userData.own = false;
+}
+function writeText(p) {
+  setReading(p.fanFront, frontTexture(p.data, !!p.reply));
+  if (p.reply) setReading(p.reply.front, replyTexture(p.data.reply));
+  p.textOn = true;
+}
+function eraseText(p) {
+  setResting(p.fanFront, backTexture(tintFor(p.data), true));
+  if (p.reply) setResting(p.reply.front, backTexture(REPLY_TINT, false));
+  p.textOn = false;
+}
+// =====================================================================
+
+// =====================================================================
+// Ornaments
+// buildOrnament(kind, { main, accent }) -> { group, kind, mats, top, setOpen(f), setDim(k), setColors(c) }
+// Low-poly, flat-shaded and matte, in the tree's Kenney style. Built from primitives only.
+// Every kind is scaled so its largest extent is ORN, so the set reads as one size.
+// =====================================================================
+// Kenney baubles on tree-decorated.glb, measured at our 1.8 m tree scale: 0.140 x 0.140 x 0.121 m.
+const KENNEY_BAUBLE = [0.140, 0.140, 0.121];
+const KENNEY_BAUBLES = [[0.145, 0.657, 0.272], [0.193, 1.130, 0.108], [-0.277, 0.750, 0.017], [-0.107, 1.319, 0.078],
+  [-0.274, 0.555, 0.155], [0.057, 0.994, 0.239], [0.157, 0.297, 0.381]].map(a => new THREE.Vector3(...a));
+const ORN = 0.088; // 80% of v1.2's 0.11, ~63% of a Kenney bauble
+const KINDS = ['bauble', 'gift', 'mitten'];
+const KIND_KO = { bauble: '방울', gift: '선물상자', mitten: '장갑' };
+// four colours that sit with the room (paper walls, wood floor, clay string) and read on the green tree
+const MAIN_SWATCHES = [['베리', '#b8394a'], ['크림', '#efe4cf'], ['머스터드', '#d4a537'], ['클레이', '#a6613c']];
+const ACCENTS = { gold: '#d9a441', silver: '#c9ccd1', cream: '#f3e9d6' };
+const ACCENT_KO = { gold: '금', silver: '은', cream: '크림' };
+
+const _c = new THREE.Color();
+function ornMats() {
+  const main = new THREE.MeshStandardMaterial({ roughness: 0.8, flatShading: true, side: THREE.DoubleSide, emissive: 0xffc070, emissiveIntensity: 0 });
+  const accent = new THREE.MeshStandardMaterial({ roughness: 0.55, flatShading: true, emissive: 0xffc070, emissiveIntensity: 0 });
+  return { main, accent };
+}
+function mesh(geo, mat, parent, [x, y, z] = [0, 0, 0], [rx, ry, rz] = [0, 0, 0], s) {
+  const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz);
+  if (s) m.scale.set(...s);
+  m.castShadow = true; parent.add(m); return m;
+}
+// a hinge: a group at point P, with an inner group whose coordinates are the parent's again
+function pivotAt(parent, x, y, z) {
+  const pivot = new THREE.Group(); pivot.position.set(x, y, z); parent.add(pivot);
+  const inner = new THREE.Group(); inner.position.set(-x, -y, -z); pivot.add(inner);
+  return { pivot, inner };
+}
+const loopGeo = () => new THREE.TorusGeometry(0.0075, 0.0024, 4, 8);
+
+const BUILD = {
+  bauble(g, m) {
+    const R = 0.042, L = pivotAt(g, 0, 0, -R), Rt = pivotAt(g, 0, 0, -R);
+    mesh(new THREE.SphereGeometry(R, 8, 6, -Math.PI / 2, Math.PI), m.main, L.inner);
+    mesh(new THREE.SphereGeometry(R, 8, 6, Math.PI / 2, Math.PI), m.main, Rt.inner);
+    mesh(new THREE.CylinderGeometry(0.011, 0.013, 0.012, 8), m.accent, g, [0, R + 0.004, 0]);
+    mesh(loopGeo(), m.accent, g, [0, R + 0.017, 0]);
+    return f => { L.pivot.rotation.y = -1.25 * f; Rt.pivot.rotation.y = 1.25 * f; };
+  },
+  gift(g, m) {
+    mesh(new THREE.BoxGeometry(0.058, 0.05, 0.058), m.main, g, [0, -0.015, 0]);
+    mesh(new THREE.BoxGeometry(0.012, 0.051, 0.0595), m.accent, g, [0, -0.015, 0]);
+    mesh(new THREE.BoxGeometry(0.0595, 0.051, 0.012), m.accent, g, [0, -0.015, 0]);
+    const lid = pivotAt(g, 0, 0.01, -0.032), li = lid.inner;
+    mesh(new THREE.BoxGeometry(0.065, 0.014, 0.065), m.main, li, [0, 0.017, 0]);
+    mesh(new THREE.BoxGeometry(0.013, 0.015, 0.066), m.accent, li, [0, 0.017, 0]);
+    mesh(new THREE.BoxGeometry(0.066, 0.015, 0.013), m.accent, li, [0, 0.017, 0]);
+    mesh(new THREE.TorusGeometry(0.011, 0.0045, 4, 8), m.accent, li, [-0.011, 0.033, 0], [0, 0, 0.55]);
+    mesh(new THREE.TorusGeometry(0.011, 0.0045, 4, 8), m.accent, li, [0.011, 0.033, 0], [0, 0, -0.55]);
+    mesh(new THREE.SphereGeometry(0.0065, 6, 4), m.accent, li, [0, 0.028, 0]);
+    return f => { lid.pivot.rotation.x = -1.6 * f; lid.pivot.position.y = 0.01 + 0.008 * f; };
+  },
+  mitten(g, m) {
+    const body = pivotAt(g, 0, -0.018, -0.012), bi = body.inner;
+    mesh(new THREE.SphereGeometry(1, 7, 5), m.main, bi, [0.004, 0.012, 0], [0, 0, 0], [0.027, 0.034, 0.016]);
+    mesh(new THREE.SphereGeometry(1, 6, 4), m.main, bi, [-0.025, 0.0, 0], [0, 0, 0.55], [0.009, 0.016, 0.011]);
+    mesh(loopGeo(), m.accent, bi, [0.004, 0.05, 0]);
+    const cuff = pivotAt(g, 0, -0.04, 0.012);
+    const c = mesh(new THREE.CylinderGeometry(0.026, 0.027, 0.02, 8), m.accent, cuff.inner, [0.002, -0.03, 0], [0, 0, 0], [1, 1, 0.65]);
+    return f => { body.pivot.rotation.x = -0.95 * f; cuff.pivot.rotation.x = 0.35 * f; c.scale.set(1 + 0.18 * f, 1, 0.65 + 0.25 * f); };
+  },
+};
+
+function buildOrnament(kind, colors) {
+  const group = new THREE.Group(), body = new THREE.Group(); group.add(body);
+  const mats = ornMats();
+  const setOpenRaw = BUILD[kind](body, mats);
+  // one size for every kind: the largest extent is ORN
+  setOpenRaw(0); body.updateMatrixWorld(true);
+  const bb = new THREE.Box3().setFromObject(body), size = bb.getSize(new THREE.Vector3()), mid = bb.getCenter(new THREE.Vector3());
+  const k = ORN / Math.max(size.x, size.y, size.z);
+  body.scale.setScalar(k); body.position.copy(mid).multiplyScalar(-k);
+  const o = { group, kind, mats, top: size.y * k / 2, colors: { ...colors }, dim: 1 };
+  o.setOpen = f => setOpenRaw(f);
+  o.setColors = c => { Object.assign(o.colors, c); o.setDim(o.dim); };
+  o.setDim = d => {
+    o.dim = d;
+    mats.main.color.set(o.colors.main).multiplyScalar(d);
+    mats.accent.color.set(ACCENTS[o.colors.accent] ?? o.colors.accent).multiplyScalar(d);
+    mats.accent.metalness = o.colors.accent === 'cream' ? 0 : 0.2;
+  };
+  o.setDim(1);
+  o.dispose = () => { group.traverse(x => { if (x.isMesh) x.geometry.dispose(); }); mats.main.dispose(); mats.accent.dispose(); };
+  return o;
+}
+// =====================================================================
+
+// ---------- notes: an ornament carrying a folded 쪽지 ----------
+const notes = [];
+const raycaster = new THREE.Raycaster();
+let rnd = 11; const rand = () => (rnd = (rnd * 16807) % 2147483647) / 2147483647;
+let tree = null, lights = null, topStar = null, viewKind = 'mixed';
+const N_FLY = 0.35, N_OPEN_AT = 0.45, N_OPEN = 0.4, N_GAP = 0.05;
+
+function buildNote(data, kind, colors) {
+  const root = new THREE.Group(), pk = buildPacket(data);
+  root.add(pk.root);
+  const n = { data, baseKind: kind, kind, colors: { ...colors }, root, pk, orn: null, t: 0, lift: 0, shellDrop: 0.1 };
+  n.offset = N_OPEN_AT + N_OPEN + N_GAP;
+  n.total = n.offset + pk.total;
+  setNoteKind(n, kind);
+  return n;
+}
+function setNoteKind(n, kind) {
+  if (n.orn) { n.root.remove(n.orn.group); n.orn.dispose(); }
+  n.orn = buildOrnament(kind, n.colors); n.kind = kind;
+  n.root.add(n.orn.group);
+  n.root.traverse(o => { o.userData.note = n; });
+  if (n.plan) seatOnPlan(n);
+  applyNote(n, n.t);
+}
+// pose at time t: fly in, open the shell, then the packet's own timeline (rise, unfold, reply)
+function applyNote(n, t) {
+  n.t = t;
+  const clamp01 = v => THREE.MathUtils.clamp(v, 0, 1);
+  const fFly = ease(clamp01(t / N_FLY));
+  if (n.flight) {
+    n.root.position.lerpVectors(n.flight.from.p, n.flight.to.p, fFly);
+    n.root.quaternion.slerpQuaternions(n.flight.from.q, n.flight.to.q, fFly);
+  }
+  n.orn.setOpen(ease(clamp01((t - N_OPEN_AT) / N_OPEN)));
+  const tp = t - n.offset, rise = n.pk.segs[0], fR = ease(clamp01((tp - rise.s) / rise.d));
+  // the shell eases down toward the bottom edge, dimmed, as the packet rises out of it
+  n.orn.group.position.set(0, -n.shellDrop * fR, -0.03 * fR);
+  n.orn.group.scale.setScalar(1 - 0.25 * fR);
+  n.orn.setDim(1 - 0.45 * fR);
+  applyPose(n.pk, Math.max(0, tp));
+}
+
+// ---------- tree placement ----------
+function surfaceHit(a, h) {
+  const R = 1.5, out = new THREE.Vector3(Math.sin(a), 0, Math.cos(a));
+  raycaster.set(new THREE.Vector3(out.x * R, h, out.z * R), out.clone().negate()); raycaster.far = R;
+  const hit = raycaster.intersectObject(tree, true)[0];
+  if (!hit) return null;
+  const n = hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
+  if (n.dot(out) < 0) n.negate();
+  return { point: hit.point, n, r: R - hit.distance, out };
+}
+function visibleFromEye(pt) {
+  const dir = pt.clone().sub(camera.position), d = dir.length();
+  raycaster.set(camera.position, dir.normalize()); raycaster.far = d + 0.05;
+  const hit = raycaster.intersectObject(tree, true)[0];
+  if (hit && hit.distance < d - 0.02) return false;
+  const v = pt.clone().project(camera);
+  return Math.abs(v.x) < 0.9 && Math.abs(v.y) < 0.9;
+}
+// random spots over the front (±60°: further round, an ornament hangs on the silhouette and seems to float),
+// above the bottom rim; spacing and visibility are tested on the ornament's own centre (it hangs below its anchor)
+function placeNotes() {
+  camera.updateMatrixWorld();
+  const ARC = THREE.MathUtils.degToRad(60), plans = [];
+  let minD = 0.2;
+  for (let tries = 1; plans.length < cards.length && tries < 30000; tries++) {
+    if (tries % 3000 === 0) minD *= 0.94;
+    const a = (rand() * 2 - 1) * ARC, h = 0.42 + rand() * 1.0;
+    const hit = surfaceHit(a, h);
+    if (!hit || hit.r < 0.12) continue;
+    if (rand() > hit.r / 0.5) continue; // area weighting: wider parts of the tree get more notes
+    const plan = planSpot({ a, h, ...hit });
+    if (plans.some(q => q.centre.distanceTo(plan.centre) < minD)) continue;
+    if (!visibleFromEye(plan.face)) continue; // the camera is fixed: every note must be reachable
+    plans.push(plan);
+  }
+  // every kind appears: deal them from a shuffled deck of whole sets
+  const deck = cards.map((_, i) => KINDS[i % KINDS.length]);
+  for (let i = deck.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [deck[i], deck[j]] = [deck[j], deck[i]]; }
+  cards.forEach((data, i) => {
+    const kind = deck[i];
+    const main = MAIN_SWATCHES[Math.floor(rand() * MAIN_SWATCHES.length)][1];
+    const accent = Object.keys(ACCENTS)[Math.floor(rand() * 3)];
+    const n = buildNote(data, kind, { main, accent }); n.i = i;
+    hangOnTree(n, plans[i]); notes.push(n);
+  });
+}
+// Every ornament hangs on a short clay string from the branch just above it and rests on the slope of the
+// foliage: tilted back by the slope at its height, its back just clear of the needles.
+// Frame: the pivot sits on the anchor, z points out of the tree, y up.
+function planSpot(spot) {
+  const plan = { spot, gap: 0.004 + rand() * 0.006, drift: (rand() - 0.5) * 0.01, yaw: (rand() - 0.5) * 0.6,
+    pivotPos: new THREE.Vector3(), pivotQuat: new THREE.Quaternion() };
+  plan.pivotQuat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), spot.a);
+  plan.pivotPos.copy(spot.point).addScaledVector(spot.out, -0.004);
+  // how far the foliage reaches out at height y (relative to the anchor)
+  const reach = y => { const s = surfaceHit(spot.a, spot.h + y); return s ? s.r - spot.r : 0; };
+  plan.reach = reach;
+  // tilt = the slope of the foliage where the ornament rests (from the surface normal there)
+  const hc = surfaceHit(spot.a, spot.h - plan.gap - ORN / 2);
+  const nl = hc ? hc.n.clone().applyQuaternion(plan.pivotQuat.clone().invert()) : new THREE.Vector3(0, 0, 1);
+  // leaned back a good deal further than the slope itself: it reads as resting on the branches
+  plan.tilt = THREE.MathUtils.clamp(Math.atan2(nl.y, nl.z) * 1.5, 0.25, 1.15);
+  const up = new THREE.Vector3(0, Math.cos(plan.tilt), -Math.sin(plan.tilt));
+  const fwd = new THREE.Vector3(0, Math.sin(plan.tilt), Math.cos(plan.tilt));
+  // centre: the loop (half an ornament up the slope) hangs `gap` below the anchor; pushed out
+  // just far enough that the ornament's back clears the foliage along its whole height
+  const c = new THREE.Vector3(plan.drift, -plan.gap - up.y * ORN / 2, 0), back = ORN * 0.45;
+  c.z = -Infinity;
+  for (let s = -0.5; s <= 0.5; s += 0.125) {
+    const by = c.y + up.y * s * ORN - fwd.y * back;
+    c.z = Math.max(c.z, reach(by) + 0.003 - up.z * s * ORN + fwd.z * back);
+  }
+  Object.assign(plan, { centreLocal: c, up, fwd });
+  const toWorld = v => v.clone().applyQuaternion(plan.pivotQuat).add(plan.pivotPos);
+  plan.centre = toWorld(c);
+  plan.face = toWorld(c.clone().addScaledVector(fwd, back));
+  return plan;
+}
+const STRING_MAT = new THREE.MeshStandardMaterial({ color: C.clay, roughness: 0.9 });
+// home pose from the plan; the string runs from the anchor to the ornament's loop (which depends on its kind)
+function seatOnPlan(n) {
+  const plan = n.plan, { centreLocal: c, up, fwd } = plan;
+  n.home = { p: c.clone(), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(-plan.tilt, plan.yaw, 0)) };
+  const loop = c.clone().addScaledVector(up, n.orn.top - 0.002);
+  // hook the string on the branch nearest above the loop, so it stays short
+  let anchor = new THREE.Vector3(), best = loop.length();
+  for (let y = loop.y + 0.008; y <= loop.y + 0.06; y += 0.004) {
+    const a = new THREE.Vector3(loop.x * 0.5, y, plan.reach(y) - 0.002), d = a.distanceTo(loop);
+    if (d < best) { best = d; anchor = a; }
+  }
+  const mid = anchor.clone().lerp(loop, 0.5).addScaledVector(fwd, 0.002);
+  const pts = new THREE.CatmullRomCurve3([anchor, mid, loop]).getPoints(12);
+  for (const p of pts) if (p.y < -0.003) p.z = Math.max(p.z, plan.reach(p.y) + 0.002); // never through the foliage
+  if (n.string) { n.pivot.remove(n.string); n.string.geometry.dispose(); }
+  n.string = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 16, 0.0009, 4), STRING_MAT);
+  n.string.castShadow = true; n.string.visible = n !== opened; n.pivot.add(n.string);
+  if (n !== opened) { n.root.position.copy(n.home.p); n.root.quaternion.copy(n.home.q); }
+}
+function hangOnTree(n, plan) {
+  const pivot = new THREE.Group();
+  pivot.position.copy(plan.pivotPos); pivot.quaternion.copy(plan.pivotQuat);
+  scene.add(pivot); n.pivot = pivot; n.plan = plan; n.string = null;
+  pivot.add(n.root);
+  seatOnPlan(n);
+}
+
+// ---------- interaction: pick, bring, read, put back ----------
+const ptr = new THREE.Vector2(); let hovered = null, press = null, opened = null, anim = null;
+
+function pick(e) {
+  if (!tree) return null; // still loading
+  const r = canvas.getBoundingClientRect();
+  ptr.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  raycaster.setFromCamera(ptr, camera); raycaster.far = 20;
+  const hit = raycaster.intersectObjects([tree, ...notes.map(n => n.root)], true)[0];
+  return hit?.object.userData.note ?? null;
+}
+canvas.addEventListener('pointerdown', e => { press = { x: e.clientX, y: e.clientY, id: e.pointerId }; });
+canvas.addEventListener('pointermove', e => { if (!opened && e.pointerType === 'mouse') setHover(pick(e)); });
+canvas.addEventListener('pointerup', e => {
+  const wasClick = press && press.id === e.pointerId && Math.hypot(e.clientX - press.x, e.clientY - press.y) <= 6;
+  press = null;
+  if (!wasClick) return;
+  const n = pick(e);
+  // while a note is out (flying, opening or open), a click anywhere else puts it back
+  if (opened) { if (n !== opened) closeNote(); return; }
+  if (n) openNote(n);
+});
+canvas.addEventListener('pointercancel', () => { press = null; });
+addEventListener('keydown', e => { if (e.key === 'Escape') closeNote(); });
+function setHover(n) { if (n === hovered) return; hovered = n; canvas.classList.toggle('hover', !!n); }
+
+function openNote(n) {
+  if (opened || anim) return false; // one note out at a time
+  setHover(null);
+  n.lift = 0; n.root.scale.setScalar(1); setGlow(n, 0);
+  n.root.position.copy(n.home.p); n.root.quaternion.copy(n.home.q);
+  scene.attach(n.root);
+  n.flight = { from: { p: n.root.position.clone(), q: n.root.quaternion.clone() }, to: openTarget() };
+  n.shellDrop = shellDrop();
+  if (n.string) n.string.visible = false;
+  writeText(n.pk);
+  opened = n; anim = { n, dir: 1, speed: 1 };
+  document.body.classList.add('reading');
+  return true;
+}
+// works from any point of the way out: everything runs backwards from where it is
+function closeNote() {
+  if (!opened || (anim && anim.dir < 0)) return;
+  anim = { n: opened, dir: -1, speed: 1.6 };
+}
+function finishClose(n) {
+  n.pivot.attach(n.root);
+  n.root.position.copy(n.home.p); n.root.quaternion.copy(n.home.q);
+  if (n.string) n.string.visible = true;
+  eraseText(n.pk); n.flight = null; opened = null;
+  document.body.classList.remove('reading');
+}
+// the packet is kept centred on the note's root, so the root sits on the camera axis
+function openDist() {
+  const tanH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  return Math.max((SHEET.H + 0.012) / (0.88 * 2 * tanH), (SHEET.W + 0.012) / (0.9 * 2 * tanH * camera.aspect));
+}
+function openTarget() {
+  const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
+  return { p: camera.position.clone().addScaledVector(dir, openDist()), q: camera.quaternion.clone() };
+}
+const shellDrop = () => openDist() * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * 0.8;
+const setGlow = (n, k) => { n.orn.mats.main.emissiveIntensity = n.orn.mats.accent.emissiveIntensity = k; };
+
+// ---------- loop ----------
+function resize() {
+  const cw = canvas.clientWidth, ch = canvas.clientHeight;
+  renderer.setSize(cw, ch, false); camera.aspect = cw / ch; camera.updateProjectionMatrix();
+  composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(cw, ch);
+  // retarget only while coming out or open, never on the way back
+  if (opened && (!anim || anim.dir > 0)) { opened.flight.to = openTarget(); opened.shellDrop = shellDrop(); applyNote(opened, opened.t); }
+}
+new ResizeObserver(() => resize()).observe(canvas); // the panel below the view can change the canvas height
+const clock = new THREE.Clock();
+function frame() {
+  const dt = Math.min(clock.getDelta(), 0.05);
+  for (const n of notes) {
+    if (n === opened) continue;
+    const target = n === hovered ? 1 : 0;
+    n.lift += (target - n.lift) * Math.min(1, dt * 12);
+    n.root.position.copy(n.home.p); n.root.position.z += 0.015 * n.lift;
+    n.root.scale.setScalar(1 + 0.08 * n.lift);
+    setGlow(n, 0.3 * n.lift);
+  }
+  if (anim) {
+    const n = anim.n, t = THREE.MathUtils.clamp(n.t + anim.dir * anim.speed * dt, 0, n.total);
+    applyNote(n, t);
+    if (anim.dir > 0 && t >= n.total) anim = null;
+    else if (anim.dir < 0 && t <= 0) { anim = null; finishClose(n); }
+  }
+  lights?.update(clock.elapsedTime); topStar?.update(clock.elapsedTime);
+  // the glow eases off while a note is out, so the sheet stays crisp to read
+  bloom.strength += ((opened ? 0.1 : 0.55) - bloom.strength) * Math.min(1, dt * 6);
+  composer.render();
+  requestAnimationFrame(frame);
+}
+
+// ---------- colour panel (mock-only UI) ----------
+let colourTarget = 'all';
+function shownKinds() { return viewKind === 'mixed' ? KINDS : [viewKind]; }
+function setView(kind) {
+  if (opened || anim) return false;
+  viewKind = kind;
+  for (const n of notes) setNoteKind(n, kind === 'mixed' ? n.baseKind : kind);
+  renderPanel(); return true;
+}
+function recolour(target, c) {
+  for (const n of notes) if (target === 'all' || n.kind === target) { Object.assign(n.colors, c); n.orn.setColors(c); }
+}
+function chip(label, on, act) {
+  const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.className = 'chip' + (on ? ' on' : '');
+  b.addEventListener('click', act); return b;
+}
+function renderPanel() {
+  const kinds = document.getElementById('kinds'), targets = document.getElementById('targets');
+  kinds.replaceChildren(chip('섞어서', viewKind === 'mixed', () => setView('mixed')),
+    ...KINDS.map(k => chip(KIND_KO[k], viewKind === k, () => setView(k))));
+  if (colourTarget !== 'all' && !shownKinds().includes(colourTarget)) colourTarget = 'all';
+  targets.replaceChildren(chip('모두', colourTarget === 'all', () => { colourTarget = 'all'; renderPanel(); }),
+    ...shownKinds().map(k => chip(KIND_KO[k], colourTarget === k, () => { colourTarget = k; renderPanel(); })));
+}
+function buildPanel() {
+  const sw = document.getElementById('swatches');
+  for (const [name, hex] of MAIN_SWATCHES) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'swatch'; b.title = name; b.style.background = hex;
+    b.addEventListener('click', () => { recolour(colourTarget, { main: hex }); document.getElementById('free').value = hex; });
+    sw.append(b);
+  }
+  document.getElementById('free').addEventListener('input', e => recolour(colourTarget, { main: e.target.value }));
+  const ac = document.getElementById('accents');
+  for (const k of Object.keys(ACCENTS)) ac.append(chip(ACCENT_KO[k], false, e => {
+    recolour(colourTarget, { accent: k });
+    ac.querySelectorAll('.chip').forEach(x => x.classList.toggle('on', x === e.currentTarget));
+  }));
+  renderPanel();
+}
+
+// ---------- scale strip (?scale=1): every kind, a closed 쪽지, and one Kenney bauble ----------
+function buildScaleStrip() {
+  camera.updateMatrixWorld();
+  const items = KINDS.map((k, i) => buildOrnament(k, { main: MAIN_SWATCHES[i][1], accent: 'gold' }).group);
+  const pk = buildPacket(cards[0]); pk.root.visible = true; pk.root.scale.setScalar(1); items.push(pk.root);
+  const D = 1.1, step = 0.148, y = -0.36, x0 = -(items.length) / 2 * step;
+  const slot = i => new THREE.Vector3(x0 + i * step, y, -D).applyMatrix4(camera.matrixWorld);
+  items.forEach((g, i) => { g.position.copy(slot(i)); g.quaternion.copy(camera.quaternion); scene.add(g); });
+  // one real Kenney bauble: the tree's triangles that lie wholly inside that bauble's measured box
+  // (taken from the untrimmed source geometry: the tree itself no longer carries its baubles)
+  const src = (() => { let m; tree.traverse(o => { if (o.isMesh && !m) m = o; }); return m; })();
+  const bc = KENNEY_BAUBLES[0], half = new THREE.Vector3(...KENNEY_BAUBLE).multiplyScalar(0.5).addScalar(0.002);
+  const bbox = new THREE.Box3(bc.clone().sub(half), bc.clone().add(half));
+  const geo = treeSourceGeo.index ? treeSourceGeo.toNonIndexed() : treeSourceGeo.clone();
+  const pos = geo.attributes.position, keep = [], v = new THREE.Vector3();
+  for (let t = 0; t < pos.count; t += 3) {
+    let inside = true;
+    for (let j = 0; j < 3; j++) { v.fromBufferAttribute(pos, t + j).applyMatrix4(src.matrixWorld); if (!bbox.containsPoint(v)) inside = false; }
+    if (inside) keep.push(t, t + 1, t + 2);
+  }
+  const part = new THREE.BufferGeometry();
+  for (const [name, attr] of Object.entries(geo.attributes)) {
+    const arr = new attr.array.constructor(keep.length * attr.itemSize);
+    keep.forEach((src2, d) => { for (let c = 0; c < attr.itemSize; c++) arr[d * attr.itemSize + c] = attr.array[src2 * attr.itemSize + c]; });
+    part.setAttribute(name, new THREE.BufferAttribute(arr, attr.itemSize));
+  }
+  const kb = new THREE.Mesh(part, src.material);
+  kb.matrix.copy(src.matrixWorld); kb.matrix.decompose(kb.position, kb.quaternion, kb.scale);
+  kb.position.add(slot(items.length).sub(bc));
+  scene.add(kb);
+}
+
+// ---------- tree trim ----------
+// The Kenney tree is one mesh. Split it into its loose parts (vertices welded by position), then
+// drop the baked baubles and the star on top. The three garland bands (bottom, middle, top) are one set;
+// they are rebuilt as three sets of bead strings, each set in one colour. Every string follows its band's
+// centre line (corners cut back 10% along each edge and smoothed), turned about the trunk in 45° steps (so it
+// still fits its octagonal tier), and every bead is pulled in snug against the foliage.
+// Beads are flat-shaded icosahedra; each string has its own bead size, and beads vary a little within it.
+// Returns the untouched source geometry (the scale strip needs it).
+const GARLAND_ROUND = 0.1, BEAD_PITCH = 2.2;
+// bead radius per string, tree units (x0.79 in metres): [set][bottom, middle, top], 5-7.5 mm across
+const BEAD_R = [[0.0085, 0.0072, 0.0064], [0.0078, 0.0092, 0.007], [0.0095, 0.008, 0.0068]];
+// turns = [bottom, middle, top], in 45° steps. Each band keeps its low side toward the viewer (with the
+// high side in front, the camera looks along the band's plane and it reads as a flat bar), and on each tier
+// the three sets dip on different sides.
+const GARLAND_SETS = [
+  { color: '#f3e9d6', metal: 0, turns: [0, 7, 1] },            // beige: dips left, front-right, front-left
+  { color: '#d9a441', metal: 0.25, turns: [2, 4, 4] },         // yellow: front, left, right
+  { color: '#8e3a2e', metal: 0, turns: [4, 5, 3] },            // brown-red: right, front-left, front-right
+];
+// fewer beads per string than a full string, per set (beige, yellow, brown-red): the gaps open up evenly
+const BEAD_CUT = [0.05, 0.07, 0.1];
+function trimTree(root) {
+  let mesh = null; root.traverse(o => { if (o.isMesh && !mesh) mesh = o; });
+  const src = mesh.geometry, geo = src.clone();
+  const pos = geo.attributes.position, idx = geo.index.array, N = pos.count;
+  const par = Int32Array.from({ length: N }, (_, i) => i);
+  const find = x => { while (par[x] !== x) x = par[x] = par[par[x]]; return x; };
+  const join = (a, b) => { a = find(a); b = find(b); if (a !== b) par[a] = b; };
+  const keyOf = i => `${pos.getX(i).toFixed(5)},${pos.getY(i).toFixed(5)},${pos.getZ(i).toFixed(5)}`;
+  const seen = new Map();
+  for (let i = 0; i < N; i++) { const k = keyOf(i); if (seen.has(k)) join(i, seen.get(k)); else seen.set(k, i); }
+  for (let t = 0; t < idx.length; t += 3) { join(idx[t], idx[t + 1]); join(idx[t], idx[t + 2]); }
+  const parts = new Map();
+  for (let i = 0; i < N; i++) {
+    const r = find(i);
+    if (!parts.has(r)) parts.set(r, { verts: [], box: new THREE.Box3() });
+    const p = parts.get(r); p.verts.push(i); p.box.expandByPoint(new THREE.Vector3().fromBufferAttribute(pos, i));
+  }
+  const H = new THREE.Box3().setFromBufferAttribute(pos).max.y, drop = new Set(), bands = [];
+  for (const [r, part] of parts) {
+    const s = part.box.getSize(new THREE.Vector3()), wide = Math.max(s.x, s.z);
+    if (part.box.min.y > H * 0.8 || Math.max(s.x, s.y, s.z) < 0.2) drop.add(r);     // star (+ its stand), baubles
+    else if (s.y < 0.35 && wide > 0.5) { drop.add(r); bands.push({ r, ...part }); } // garland band: rebuilt below
+  }
+  const trisOf = keepIt => { const out = []; for (let t = 0; t < idx.length; t += 3) if (keepIt(find(idx[t]))) out.push(idx[t], idx[t + 1], idx[t + 2]); return out; };
+  const kept = trisOf(r => !drop.has(r));
+  geo.setIndex(kept);
+  geo.computeBoundingBox(); geo.computeBoundingSphere();
+  mesh.geometry = geo;
+  // the bounding box still counts the dropped star's vertices, so the tip is measured from kept triangles
+  let tipY = -Infinity; for (const i of kept) tipY = Math.max(tipY, pos.getY(i));
+  mesh.userData.tip = new THREE.Vector3(0, tipY, 0);
+  bands.sort((a, b) => a.box.min.y - b.box.min.y);
+  const beadGeo = new THREE.IcosahedronGeometry(1, 0), Y = new THREE.Vector3(0, 1, 0);
+  // the trimmed foliage in tree units, to find the surface each bead rests on
+  const leaves = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })), ray = new THREE.Raycaster();
+  const snug = (p, r, lift) => {
+    const out = new THREE.Vector3(p.x, 0, p.z).normalize();
+    ray.set(out.clone().multiplyScalar(2).setY(p.y), out.clone().negate());
+    const hit = ray.intersectObject(leaves)[0];
+    return hit ? out.multiplyScalar(2 - hit.distance + r * 0.6 + lift).setY(p.y) : p;
+  };
+  GARLAND_SETS.forEach((set, si) => {
+    const mat = new THREE.MeshStandardMaterial({ color: set.color, roughness: 0.55, metalness: set.metal, flatShading: true });
+    const beads = [];
+    bands.forEach((band, k) => {
+      const R = BEAD_R[si][k % 3];
+      const turn = new THREE.Quaternion().setFromAxisAngle(Y, set.turns[k % 3] * Math.PI / 4);
+      const path = new THREE.CatmullRomCurve3(bandPath(pos, band.verts, GARLAND_ROUND).map(p => p.applyQuaternion(turn)), true);
+      const n = Math.round(path.getLength() / (R * BEAD_PITCH) * (1 - BEAD_CUT[si]));
+      // each set rests a hair further out, so crossing strings sit on one another instead of merging;
+      // every bead turned at random (the facets catch the light differently) and a little bigger or smaller
+      for (const p of path.getSpacedPoints(n).slice(0, n)) {
+        const r = R * (0.85 + rand() * 0.3);
+        beads.push(new THREE.Matrix4().compose(snug(p, r, si * 0.003),
+          new THREE.Quaternion().setFromEuler(new THREE.Euler(rand() * 6.3, rand() * 6.3, 0)), new THREE.Vector3(r, r, r)));
+      }
+    });
+    const m = new THREE.InstancedMesh(beadGeo, mat, beads.length);
+    beads.forEach((b, i) => m.setMatrixAt(i, b)); m.computeBoundingSphere();
+    m.position.copy(mesh.position); m.quaternion.copy(mesh.quaternion); m.scale.copy(mesh.scale);
+    m.castShadow = m.receiveShadow = true; mesh.parent.add(m);
+  });
+  return src;
+}
+// A band is a ribbon: at each corner a pair of vertices across its width (lower and upper edge).
+// Its centre line runs through the pairs' midpoints in angle order; each corner is replaced by two
+// points `round` of the way along its two edges.
+function bandPath(pos, verts, round) {
+  const uniq = [];
+  for (const i of verts) { const v = new THREE.Vector3().fromBufferAttribute(pos, i); if (!uniq.some(u => u.distanceTo(v) < 1e-5)) uniq.push(v); }
+  const used = new Set(), corners = [];
+  for (const v of uniq) {
+    if (used.has(v)) continue;
+    let best = null, bd = Infinity;
+    for (const u of uniq) if (u !== v && !used.has(u)) { const d = v.distanceTo(u); if (d < bd) { bd = d; best = u; } }
+    used.add(v); used.add(best);
+    const mid = v.clone().add(best).multiplyScalar(0.5);
+    corners.push({ a: Math.atan2(mid.z, mid.x), mid });
+  }
+  corners.sort((p, q) => p.a - q.a);
+  const n = corners.length, out = [];
+  for (let i = 0; i < n; i++) {
+    const c = corners[i].mid, prev = corners[(i + n - 1) % n].mid, next = corners[(i + 1) % n].mid;
+    out.push(c.clone().lerp(prev, round), c.clone().lerp(next, round));
+  }
+  return out;
+}
+
+// ---------- star on top: a low-poly puffy five-point star that shines by itself ----------
+// Steady, never blinking: a warm glow round it, soft sun rays that turn slowly, and a little warm light on
+// the treetop. Only the rays move.
+function sunRaysTexture() {
+  const S = 256, cv = document.createElement('canvas'); cv.width = cv.height = S;
+  const g = cv.getContext('2d'), c = S / 2;
+  g.translate(c, c);
+  for (let k = 0; k < 12; k++) {
+    const len = c * (k % 2 ? 0.62 : 0.95), half = k % 2 ? 0.07 : 0.1;
+    const gr = g.createRadialGradient(0, 0, 0, 0, 0, len);
+    gr.addColorStop(0, 'rgba(255,255,255,.9)'); gr.addColorStop(0.4, 'rgba(255,255,255,.3)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = gr; g.beginPath(); g.moveTo(0, 0);
+    g.lineTo(Math.cos(-half) * len, Math.sin(-half) * len); g.lineTo(Math.cos(half) * len, Math.sin(half) * len);
+    g.closePath(); g.fill(); g.rotate(Math.PI / 6);
+  }
+  return new THREE.CanvasTexture(cv);
+}
+function buildTopStar(topY) {
+  const s = new THREE.Shape(), ro = 0.06, ri = 0.027;
+  for (let k = 0; k < 10; k++) { const a = Math.PI / 2 + k * Math.PI / 5, r = k % 2 ? ri : ro; s[k ? 'lineTo' : 'moveTo'](Math.cos(a) * r, Math.sin(a) * r); }
+  const geo = new THREE.ExtrudeGeometry(s, { depth: 0.012, bevelEnabled: true, bevelThickness: 0.009, bevelSize: 0.006, bevelSegments: 1, curveSegments: 1 });
+  geo.center();
+  const star = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: 0xf0c055, roughness: 0.55, flatShading: true, emissive: 0xffc04a, emissiveIntensity: 1.25 }));
+  star.position.set(0, topY + ro * 0.85, 0);
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.009, 0.03, 6), new THREE.MeshStandardMaterial({ color: 0x8a6a2e, roughness: 0.6, flatShading: true }));
+  stem.position.set(0, topY + 0.008, 0);
+  const sprite = (map, size, opacity) => {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map, color: 0xffcf7a, opacity, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
+    s.scale.setScalar(size); s.position.copy(star.position).add(new THREE.Vector3(0, 0, -0.02)); return s;
+  };
+  const glow = sprite(haloTexture(), 0.36, 0.55), rays = sprite(sunRaysTexture(), 0.42, 0.4);
+  const warm = new THREE.PointLight(0xffc070, 0.35, 0.9, 1.5); warm.position.copy(star.position).add(new THREE.Vector3(0, 0, 0.08));
+  scene.add(glow, rays, star, stem, warm);
+  return { update(t) { rays.material.rotation = t * 0.12; } };
+}
+
+// ---------- fairy lights ----------
+// Strings of lights round the tree in the low-poly style: a brown wire draped in shallow scallops just
+// outside the foliage, with small blunt bulbs that fade on and off, each at its own pace.
+// Warm white strings at the bottom, middle and top, golden strings between them; every string tilted its own
+// way (tilt = degrees off level, dir = the side where it is highest).
+const LIGHT_STRINGS = [
+  { h: 0.55, tilt: 6, dir: 1.9, color: 0xEAE5D9 }, { h: 0.9, tilt: 9, dir: 4.4, color: 0xEAE5D9 }, { h: 1.22, tilt: 7.5, dir: 0.3, color: 0xEAE5D9 },
+  { h: 0.7, tilt: 10, dir: 3.6, color: 0xCDAB3D }, { h: 1.06, tilt: 12, dir: 0.8, color: 0xCDAB3D }, { h: 1.34, tilt: 17, dir: 2.2, color: 0xCDAB3D },
+];
+const LIGHT_GAP = 0.075, LIGHT_SAG = 0.014, LIGHT_HOOKS = 8, LIGHT_HALO = 0.085;
+// soft round glow: a bright core that falls off fast, then a long, nearly clear fringe
+function haloTexture() {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+  const g = cv.getContext('2d'), gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.12, 'rgba(255,255,255,.55)');
+  gr.addColorStop(0.35, 'rgba(255,255,255,.14)'); gr.addColorStop(0.7, 'rgba(255,255,255,.03)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+  return new THREE.CanvasTexture(cv);
+}
+function buildFairyLights() {
+  const group = new THREE.Group(), bulbs = [];
+  const wireMat = new THREE.MeshStandardMaterial({ color: 0x6b4428, roughness: 0.9, flatShading: true });
+  const bulbGeo = new THREE.IcosahedronGeometry(0.0075, 0); bulbGeo.scale(1, 1.3, 1);
+  const halo = haloTexture();
+  for (const { h, tilt, dir, color } of LIGHT_STRINGS) {
+    const glass = new THREE.Color(color).multiplyScalar(0.75);
+    // a plane tilted `tilt` degrees: it rises and falls by the tree's radius at this height times tan(tilt)
+    const rise = (surfaceHit(0, h)?.r ?? 0.3) * Math.tan(THREE.MathUtils.degToRad(tilt));
+    // wire: hooked onto the branches LIGHT_HOOKS times round, sagging a little between hooks
+    const S = 96, pts = [];
+    for (let i = 0; i < S; i++) {
+      const a = i / S * Math.PI * 2;
+      const y = h + rise * Math.cos(a - dir) - LIGHT_SAG * Math.sin(Math.PI * ((i / S * LIGHT_HOOKS) % 1));
+      const hit = surfaceHit(a, y);
+      if (hit) pts.push(hit.out.clone().multiplyScalar(hit.r + 0.007).setY(y));
+    }
+    const curve = new THREE.CatmullRomCurve3(pts, true);
+    const wire = new THREE.Mesh(new THREE.TubeGeometry(curve, 160, 0.0012, 4, true), wireMat);
+    wire.castShadow = true; group.add(wire);
+    // bulbs: evenly spaced, hanging just under the wire
+    const n = Math.round(curve.getLength() / LIGHT_GAP);
+    curve.getSpacedPoints(n).slice(0, n).forEach(p => {
+      const mat = new THREE.MeshStandardMaterial({ color: glass, roughness: 0.5, flatShading: true, emissive: color });
+      const b = new THREE.Mesh(bulbGeo, mat); b.position.copy(p).add(new THREE.Vector3(0, -0.007, 0));
+      const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: halo, color, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
+      glow.scale.setScalar(LIGHT_HALO); glow.position.copy(b.position);
+      group.add(b, glow);
+      bulbs.push({ mat, glow, period: 2.4 + rand() * 1.6, phase: rand() });
+    });
+  }
+  scene.add(group);
+  return {
+    // smooth fade: off (dim glass) -> on (glowing) -> off, never a hard blink
+    update(t) {
+      for (const b of bulbs) {
+        const f = 0.5 - 0.5 * Math.cos(2 * Math.PI * (t / b.period + b.phase));
+        b.mat.emissiveIntensity = 0.08 + 1.5 * f;
+        b.glow.material.opacity = 0.85 * f;
+      }
+    },
+  };
+}
+
+// ---------- boot ----------
+resize();
+// load every hand for exactly the characters it will draw (Korean webfonts come in unicode-range subsets)
+const fontLoads = [];
+for (const d of cards) {
+  fontLoads.push(document.fonts.load(`40px "${fontFor(d)}"`, d.msg + (d.name ?? '익명') + '- '));
+  if (d.reply) fontLoads.push(document.fonts.load(`40px "${REPLY_FONT}"`, d.reply));
+}
+await Promise.race([Promise.allSettled(fontLoads), new Promise(r => setTimeout(r, 8000))]);
+const gltf = await new GLTFLoader().loadAsync(TREE_URL);
+tree = gltf.scene;
+const box = new THREE.Box3().setFromObject(tree);
+tree.scale.setScalar(TREE_H / (box.max.y - box.min.y));
+tree.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+const treeSourceGeo = trimTree(tree);
+scene.add(tree); tree.updateMatrixWorld(true);
+{ let m; tree.traverse(o => { if (o.userData.tip) m = o; }); topStar = buildTopStar(m.localToWorld(m.userData.tip.clone()).y); }
+lights = buildFairyLights();
+placeNotes();
+buildPanel();
+if (new URLSearchParams(location.search).get('scale') === '1') buildScaleStrip();
+// test hooks
+const _m = document.createElement('canvas').getContext('2d');
+window.__mock = {
+  cardCount: notes.length,
+  screenOf: i => { const v = notes[i].root.getWorldPosition(new THREE.Vector3()).project(camera); const r = canvas.getBoundingClientRect(); return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height }; },
+  worldOf: i => { notes[i].root.updateWorldMatrix(true, false); return [...notes[i].root.matrixWorld.elements]; },
+  isOpen: () => !!opened && !anim, isBusy: () => !!anim, openIndex: () => opened ? opened.i : -1,
+  t: () => opened ? [opened.t, opened.total, anim ? anim.dir : 0] : null,
+  phases: () => ({ fly: N_FLY, openAt: N_OPEN_AT, open: N_OPEN, offset: notes[0].offset }),
+  tryOpen: i => openNote(notes[i]),
+  hold: t => { if (!opened) return; anim = null; applyNote(opened, t); },
+  release: () => { if (opened) anim = { n: opened, dir: -1, speed: 1.6 }; },
+  resume: () => { if (opened) anim = { n: opened, dir: 1, speed: 1 }; },
+  kindOf: i => notes[i].kind, kinds: () => notes.map(n => n.kind),
+  setView, recolour,
+  colourOf: i => '#' + notes[i].orn.mats.main.color.getHexString(),
+  hasReply: i => !!cards[i].reply, msgLen: i => [...cards[i].msg].length,
+  centre: () => { if (!opened) return null; const v = opened.root.getWorldPosition(new THREE.Vector3()).project(camera); const r = canvas.getBoundingClientRect(); return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height }; },
+  wrapTest: (text, px, maxW) => { _m.font = `${px}px sans-serif`; return wrap(_m, text, maxW); },
+};
+frame();
+</script>
+</body>
+</html>
