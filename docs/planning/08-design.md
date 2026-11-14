@@ -207,7 +207,7 @@ Figma "Components" 프레임에 있는 컴포넌트와 코드 위치입니다. �
 
 | Figma | 변형 / 속성 | 코드 | 규격 |
 |---|---|---|---|
-| `FeatureCard` | `Status`, `Title`, `Desc`, `Owner` | `src/app/features/page.tsx`, `src/lib/features.ts` | 폭 309, 여백 24, 상태 배지(`key/mist`), 구분선 위에 담당 표시 |
+| `FeatureCard` | `Status`, `Title`, `Desc`, `Owner` | `src/app/features/page.tsx`, `src/lib/features.ts` | 폭 309, 여백 24, 상태 배지(`key/mist`), 구분선 위에 담당 표시. 카드는 버블 채팅, 힙 미니룸, 임시 트리 보기 3개. 정적 페이지로 가는 카드(`staticPage`)는 `Link` 대신 `<a>`로 엶 |
 | `OnboardingBlock` | `Status`, `Title`, `Desc` | `src/app/page.tsx`, `src/lib/onboarding.ts` | `FeatureCard`에서 담당 줄을 뺀 모양. 언제나 링크(`/onboarding/[id]`). 상태 배지는 지금 모두 "준비 중". [미정] Figma에 아직 없음 |
 | `RoomCard` | `Color` 4종, `Initial`, `Name`, `Owner`, `Blurb` | `src/components/heap-funnel/room-card.tsx` | 폭 315, 위 16:9 그라데이션에 첫 글자 48px(흰색 90%), 아래 12 여백 |
 | `ChatListRow` | `Trailing` = Join / Status, `Title`, `Sub` | `src/app/bubble/page.tsx` | 높이 68, 좌우 20, 아바타 44. 참여 전 구독자에게는 Join, 그 밖에는 "열림/닫힘" |
@@ -256,6 +256,7 @@ Figma "Components" 프레임에 있는 컴포넌트와 코드 위치입니다. �
 |---|---|---|---|---|
 | `/` | 프로덕트 설명 (최초 접속 첫 화면) | 설명과 "방 들어가기" | 바로 방으로 보낼지 [미정] | 바로 `/creator`로 |
 | `/onboarding/[concept]` | 온보딩 컨셉 A·B·C 시안 (`a`, `b`, `c`) | 사용 | 사용 | 사용 |
+| `/tree-mock/index.html` | 쪽지 트리 목업 (`public/tree-mock/`의 정적 HTML). `/features`의 "임시 트리 보기" 카드에서 들어감 | 사용 (정적 파일이라 막지 않음) | 사용 | 사용 |
 | `/room/[slug]` | 크리에이터의 방 | 둘러보기, 폴라로이드와 쇼츠, 쪽지·방명록 읽기 | 위 전부 + 쪽지 걸기, 방명록 쓰기 | 주인이면 "꾸미기" |
 | `/login` | 로그인 | 사용 | 사용 | 사용. 역할을 고르지 않음 |
 | `/signup` | 회원가입 | 가입하면 모두 구독자 | | 가입 경로 없음 (계정은 팀이 발급) |
