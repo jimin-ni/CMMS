@@ -123,7 +123,11 @@ export function parseNoteInput(
   let anonymous: boolean;
   if (raw.displayName !== undefined) {
     if (raw.displayName !== null && typeof raw.displayName !== "string") return fail("invalid-note");
-    const name = raw.displayName === null ? "" : raw.displayName.replace(/[\r\n\t\u0000]+/g, " ").trim();
+    // 줄바꿈·탭은 빈칸으로, 보이지 않는 제어 문자와 방향 바꾸기 문자(\p{Cc}, \p{Cf})는 지운다 (이름이 거꾸로 보이게 꾸미는 것을 막는다)
+    const name =
+      raw.displayName === null
+        ? ""
+        : raw.displayName.normalize("NFC").replace(/[\r\n\t]+/g, " ").replace(/[\p{Cc}\p{Cf}]/gu, "").trim();
     if (charLength(name) > HEAP_POLICY.noteNameMaxChars) return fail("invalid-note-name");
     displayName = name === "" ? null : name;
     anonymous = displayName === null;
