@@ -69,7 +69,7 @@ function newNoteId() {
   const h = [...b].map(x => x.toString(16).padStart(2, '0')).join('');
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
-const FONT_LABEL = { 'nanum-pen': '나눔펜', gaegu: '개구', 'hi-melody': '하이멜로디', 'gamja-flower': '감자꽃', 'cute-font': '귀여운', 'single-day': '싱글데이', 'yeon-sung': '연성' };
+export const FONT_LABEL = { 'nanum-pen': '나눔펜', gaegu: '개구', 'hi-melody': '하이멜로디', 'gamja-flower': '감자꽃', 'cute-font': '귀여운', 'single-day': '싱글데이', 'yeon-sung': '연성', 'east-sea-dokdo': '동해독도' }; // 방 주인의 답장 글씨체 칩(tree-owner.js)도 쓴다
 const SPEED = { open: 2.0, fold: 1.5, close: 3.5, unfold: 2.0 };
 const HAND_D = 1.1, HAND_NDC_Y = -0.42; // 접은 쪽지가 놓이는 곳: 카메라 앞 HAND_D m, 화면 아래쪽
 const GREEN = '#6fae6a', RED = '#d23c3c';

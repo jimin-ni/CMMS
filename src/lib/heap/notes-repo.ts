@@ -44,7 +44,8 @@ async function lockRoomTree(tx: Tx, roomId: string): Promise<void> {
 
 // ---------- 타입 ----------
 
-export type HeapNoteReply = { body: string; font: string; createdAt: Date };
+// fontSize: 0009. null 은 자동 맞춤.
+export type HeapNoteReply = { body: string; font: string; fontSize: number | null; createdAt: Date };
 
 // 쪽지 하나. 봉인된 쪽지(sealed)는 body와 reply가 없다. 장식(ornament)이 null 인 옛 쪽지는 클라이언트가 id 해시로 정한다.
 export type HeapNote = {
@@ -99,6 +100,14 @@ function cleanText(value: unknown): string | null {
   return text.includes("\u0000") ? null : text;
 }
 
+// 글자 크기 (쪽지와 답장 공통): 없으면 null(자동), 정수가 0009 의 check 범위 밖이면 거절, 안이면 정책 범위로 맞춘다.
+function parseFontSize(value: unknown): { ok: true; value: number | null } | { ok: false } {
+  if (value === undefined || value === null) return { ok: true, value: null };
+  if (typeof value !== "number" || !Number.isInteger(value)) return { ok: false };
+  if (value < HEAP_POLICY.noteFontAbsMin || value > HEAP_POLICY.noteFontAbsMax) return { ok: false };
+  return { ok: true, value: Math.min(HEAP_POLICY.noteFontMax, Math.max(HEAP_POLICY.noteFontMin, value)) };
+}
+
 export function parseNoteInput(
   input: unknown,
 ): { ok: true; value: HeapNoteInput } | Fail<"invalid-note" | "invalid-note-style" | "invalid-note-spot"> {
@@ -123,13 +132,9 @@ export function parseNoteInput(
     anonymous = raw.anonymous;
   }
 
-  let fontSize: number | null = null;
-  if (raw.fontSize !== undefined && raw.fontSize !== null) {
-    const size = raw.fontSize;
-    if (typeof size !== "number" || !Number.isInteger(size)) return fail("invalid-note-style");
-    if (size < HEAP_POLICY.noteFontAbsMin || size > HEAP_POLICY.noteFontAbsMax) return fail("invalid-note-style");
-    fontSize = Math.min(HEAP_POLICY.noteFontMax, Math.max(HEAP_POLICY.noteFontMin, size));
-  }
+  const size = parseFontSize(raw.fontSize);
+  if (!size.ok) return fail("invalid-note-style");
+  const fontSize = size.value;
   let ornament: string | null = null;
   if (raw.ornament !== undefined && raw.ornament !== null) {
     if (typeof raw.ornament !== "string" || !(NOTE_ORNAMENT_KINDS as readonly string[]).includes(raw.ornament)) return fail("invalid-note-style");
@@ -164,13 +169,15 @@ export function parseNoteInput(
 
 export function parseReplyInput(
   input: unknown,
-): { ok: true; value: { body: string; font: string } } | Fail<"invalid-reply" | "invalid-note-style"> {
+): { ok: true; value: { body: string; font: string; fontSize: number | null } } | Fail<"invalid-reply" | "invalid-note-style"> {
   if (typeof input !== "object" || input === null) return fail("invalid-reply");
   const raw = input as Record<string, unknown>;
   const body = cleanText(raw.body);
   if (body === null || charLength(body) < 1 || charLength(body) > HEAP_POLICY.noteReplyMaxChars) return fail("invalid-reply");
   if (typeof raw.font !== "string" || !Object.hasOwn(NOTE_REPLY_FONT_IDS, raw.font)) return fail("invalid-note-style");
-  return { ok: true, value: { body, font: raw.font } };
+  const size = parseFontSize(raw.fontSize);
+  if (!size.ok) return fail("invalid-note-style");
+  return { ok: true, value: { body, font: raw.font, fontSize: size.value } };
 }
 
 // 트리 원뿔 위의 두 자리 사이 직선거리(m). 높이 y에서 반지름 = base * (1 - y / height).
@@ -249,6 +256,7 @@ function noteSelect(executor: Executor) {
       createdAt: heapNotes.createdAt,
       replyBody: heapNoteReplies.body,
       replyFont: heapNoteReplies.font,
+      replyFontSize: heapNoteReplies.fontSize,
       replyCreatedAt: heapNoteReplies.createdAt,
       // 변경 읽기 기준점용. 응답에는 싣지 않는다.
       ts: isoMicros(heapNotes.updatedAt),
@@ -287,7 +295,7 @@ function toNote(row: NoteRow, ctx: NoteContext, viewerId: string | null): HeapNo
   if (!sealed) {
     note.body = row.body;
     if (row.replyBody !== null && row.replyFont !== null && row.replyCreatedAt !== null) {
-      note.reply = { body: row.replyBody, font: row.replyFont, createdAt: row.replyCreatedAt };
+      note.reply = { body: row.replyBody, font: row.replyFont, fontSize: row.replyFontSize, createdAt: row.replyCreatedAt };
     }
   }
   // 방 주인에게만. 방 주인이 쓴 쪽지는 읽을 것이 아니라서 읽지 않음이 아니다.
@@ -563,7 +571,7 @@ export async function replyToNote(
 > {
   const parsed = parseReplyInput(rawInput);
   if (!parsed.ok) return parsed;
-  const { body, font } = parsed.value;
+  const { body, font, fontSize } = parsed.value;
 
   return db.transaction(async (tx) => {
     const owner = await ownerOfNote(tx, noteId, userId);
@@ -572,8 +580,8 @@ export async function replyToNote(
 
     await tx
       .insert(heapNoteReplies)
-      .values({ noteId, authorId: userId, body, font, createdAt: clockNow, updatedAt: clockNow })
-      .onConflictDoUpdate({ target: heapNoteReplies.noteId, set: { body, font, updatedAt: clockNow } });
+      .values({ noteId, authorId: userId, body, font, fontSize, createdAt: clockNow, updatedAt: clockNow })
+      .onConflictDoUpdate({ target: heapNoteReplies.noteId, set: { body, font, fontSize, updatedAt: clockNow } });
     // 답장한 쪽지는 읽은 것이다.
     await tx
       .update(heapNotes)

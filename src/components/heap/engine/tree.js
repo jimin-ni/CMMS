@@ -161,7 +161,7 @@ const BUILD_PER_FRAME = 8; // 한 프레임에 짓는 쪽지 수: 많은 쪽지�
 const NOTE_FONTS_HREF = 'https://fonts.googleapis.com/css2?family=Gaegu&family=Hi+Melody&family=Gamja+Flower&family=Cute+Font&family=Single+Day&family=Yeon+Sung&family=East+Sea+Dokdo&display=swap';
 
 const validSpot = d => Number.isFinite(d.y) && Number.isFinite(d.angle) && d.y > 0;
-const sigOf = d => JSON.stringify([d.name, d.date, d.msg, d.reply ?? null, d.tint ?? null, d.font ?? null, d.kind ?? null, d.main ?? null, d.accent ?? null, d.fontSize ?? null, d.y ?? null, d.angle ?? null, !!d.sealed, !!d.mine, !!d.hidden, !!d.unread]);
+const sigOf = d => JSON.stringify([d.name, d.date, d.msg, d.reply ?? null, d.replyFont ?? null, d.replySize ?? null, d.tint ?? null, d.font ?? null, d.kind ?? null, d.main ?? null, d.accent ?? null, d.fontSize ?? null, d.y ?? null, d.angle ?? null, !!d.sealed, !!d.mine, !!d.hidden, !!d.unread]);
 // 쪽지 하나의 장식 모양: 데이터가 정하지 않은 것은 id 에서 정한다 (모든 방문자가 같은 것을 본다)
 function lookOf(d) {
   const h = hashId(d.id), accents = Object.keys(ACCENTS);
@@ -442,18 +442,19 @@ export function setupTree(ctx) {
   const view = { dist: 1, shift: 0, shiftWorld: 0, delTop: 0, key: '' };
   const DEL_ROOM = 46; // 내 쪽지는 아래에 지우기 단추 자리를 더 비운다 (px)
   const hudBottom = () => ctx.root.querySelector('.hud .bottom');
-  /** bottomEl 의 위쪽 끝(reserve px 위)까지를 가용 높이로 쓴다. 숫자가 바뀌었으면 true */
-  function measure(bottomEl, reserve = 0) {
+  /** bottomEl 의 위쪽 끝(reserve px 위)까지를 가용 높이로 쓴다. pairW: 화면에 들어야 할 종이 너비 (답장이 옆에 서는 쪽지는 두 종이의 너비). 숫자가 바뀌었으면 true */
+  function measure(bottomEl, reserve = 0, pairW = SHEET.W) {
     const cr = canvas.getBoundingClientRect(), H = cr.height, Wd = cr.width;
     if (!(H > 0 && Wd > 0)) return false;
     const who = ctx.root.querySelector('.hud .who'), br = bottomEl?.getBoundingClientRect();
     let top = who ? who.getBoundingClientRect().bottom - cr.top + 8 : 8;
     let bottom = (br && br.height > 0 ? br.top - cr.top - 8 : H - 8) - reserve;
     if (bottom - top < 80) { top = 0.06 * H; bottom = Math.max(top + 80, 0.94 * H - reserve); } // 아주 작은 창: 가운데에 크게라도
-    const key = [Wd | 0, H | 0, top | 0, bottom | 0, camera.fov.toFixed(2), camera.aspect.toFixed(3)].join('|');
+    const key = [Wd | 0, H | 0, top | 0, bottom | 0, camera.fov.toFixed(2), camera.aspect.toFixed(3), Math.round(pairW * 1000)].join('|');
     if (key === view.key) return false;
     const tanH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-    const dist = Math.max((SHEET.H + 0.012) / (((bottom - top) / H) * 2 * tanH), (SHEET.W + 0.012) / (0.9 * 2 * tanH * camera.aspect));
+    // 두 종이가 나란히 서도 높이는 팬 종이 하나다. 좁은 화면에서는 너비가 거리를 정해 두 종이가 함께 작아진다.
+    const dist = Math.max((SHEET.H + 0.012) / (((bottom - top) / H) * 2 * tanH), (pairW + 0.012) / (0.9 * 2 * tanH * camera.aspect));
     const shift = (H / 2 - (top + bottom) / 2) / (H / 2);
     Object.assign(view, { dist, shift, shiftWorld: shift * dist * tanH, delTop: bottom + 6, key });
     return true;
@@ -465,18 +466,19 @@ export function setupTree(ctx) {
   }
   const shellDrop = () => view.dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * 0.8;
   // 창이나 시야가 바뀌었거나 머리글, 단추 줄의 높이가 바뀌면 나온 쪽지와 쓰기 판의 자리를 다시 잡는다 (돌아가는 중에는 건드리지 않는다)
+  // 쓰기 판(W)이 있으면 그 조작 줄까지, 답장 판(R)이 있으면 그 조작 줄까지가 높이다. 답장 판일 때는 열린 쪽지 자신을 다시 앉힌다.
   function reFit() {
-    const o = opened, el = W?.fitEl();
-    if (!el && !(o && o.flight)) return;
-    if (!measure(el ?? hudBottom(), el ? 0 : toolsRoom(o))) return;
-    if (!el) { o.flight.to = openTarget(); o.shellDrop = shellDrop(); applyNote(o, o.t); }
+    const o = opened, wEl = W?.fitEl(), rEl = wEl ? null : R?.fitEl();
+    if (!wEl && !(o && o.flight)) return;
+    if (!measure(wEl ?? rEl ?? hudBottom(), wEl || rEl ? 0 : toolsRoom(o), wEl ? SHEET.W : o.pk.pairW)) return;
+    if (!wEl) { o.flight.to = openTarget(); o.shellDrop = shellDrop(); applyNote(o, o.t); }
     W?.relayout(); R?.relayout();
   }
   function openNote(n) {
     const r = rig;
     if (!r || opened || n === opened) return false;
     setHover(null);
-    measure(hudBottom(), toolsRoom(n));
+    measure(hudBottom(), toolsRoom(n), n.pk.pairW);
     n.lift = 0; n.root.scale.setScalar(1); setGlow(n, 0);
     n.root.position.copy(n.home.p); n.root.quaternion.copy(n.home.q);
     scene.attach(n.root);
@@ -523,7 +525,8 @@ export function setupTree(ctx) {
   }
   // 열린 쪽지를 같은 자리에서 새 데이터 d 로 다시 짓는다 (답장 쓰기, 숨기기): 펼친 채로 이어지고, 시간이 모자라면 남은 구간이 이어서 펼쳐진다.
   // listData: 목록 쪽의 데이터 (이 쪽지의 sig 로 쓴다: 닫은 뒤 목록과 다르면 다시 짓는다). 열린 쪽지가 없으면 null.
-  function reviseOpened(d, listData = d) {
+  // toEnd: 새 쪽지를 끝까지 펼친 모습으로 둔다 (답장을 달고 나서 접을 때, 답장 종이가 접혀 들어가는 것부터 거꾸로 돈다)
+  function reviseOpened(d, listData = d, toEnd = false) {
     const r = rig, o = opened; if (!r || !o) return null;
     const n = buildNote(r, d);
     n.sig = sigOf(listData);
@@ -538,8 +541,8 @@ export function setupTree(ctx) {
     const an = anims.get(o); anims.delete(o);
     opened = n;
     disposeNote(o);
-    applyNote(n, Math.min(o.t, n.total), n.flight);
-    if (an) anims.set(n, an); else if (n.t < n.total) anims.set(n, { dir: 1, speed: 1 });
+    applyNote(n, toEnd ? n.total : Math.min(o.t, n.total), n.flight);
+    if (an && !toEnd) anims.set(n, an); else if (n.t < n.total) anims.set(n, { dir: 1, speed: 1 });
     syncNav();
     return n;
   }

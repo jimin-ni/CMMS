@@ -22,19 +22,26 @@ const STRIP_L = 6.5 * KW;                     // 띠 길이 = 종이 높이
 export const SHEET = { W: 4 * KW, H: STRIP_L };      // 0.144 x 0.234 m
 const LD = 0.00008;                           // 종이 한 겹의 간격
 export const INSIDE_SCALE = 0.35;             // 장식 안에 든 닫힌 쪽지
-const REPLY = { W: 0.064, H: 0.08, COLS: 2, ROWS: [0.5, 0.5], DZ: 0.00003 };
+// 답장 종이: 펼치면 팬의 종이 옆에 나란히 선다 (글이 200자라 팬 종이와 같은 글 밀도가 되게 키웠다). 접으면 쪽지 안에 REPLY_TUCK_S 배로 든다 (접은 크기 0.0315 x 0.05 m, 띠 너비 0.036 안).
+const REPLY = { W: 0.126, H: 0.2, COLS: 2, ROWS: [0.5, 0.5], DZ: 0.00003 };
 export const REPLY_DIM = { W: REPLY.W, H: REPLY.H }; // 답장 종이를 펼친 크기 (m)
+const REPLY_TUCK_S = 0.5;
+export const REPLY_GAP = 0.012;                      // 팬 종이와 답장 종이 사이 (m)
+export const PAIR_W = SHEET.W + REPLY_GAP + REPLY.W; // 나란히 선 두 종이의 너비 (m). 높이는 팬 종이(SHEET.H)다
+const PAIR_SHIFT = (REPLY_GAP + REPLY.W) / 2;        // 답장이 나오면 두 종이를 화면 가운데에 두려고 왼쪽으로 옮기는 거리
 const FAN_FONTS = ['Nanum Pen Script', 'Gaegu', 'Hi Melody', 'Gamja Flower', 'Cute Font', 'Single Day', 'Yeon Sung'];
 export const REPLY_FONT = 'East Sea Dokdo';
 // 어떤 글씨체는 같은 px에서 작게 그려진다. 모든 손글씨가 비슷한 크기로 읽히게 맞춘다.
 const FONT_SCALE = { 'Nanum Pen Script': 1.3, 'Gaegu': 1.0, 'Hi Melody': 1.15, 'Gamja Flower': 1.0, 'Cute Font': 1.3, 'Single Day': 0.95, 'Yeon Sung': 1.0, 'East Sea Dokdo': 1.3 };
 export const NOTE_FONTS = { fan: FAN_FONTS, reply: REPLY_FONT, scale: FONT_SCALE };
 const NOTE_TINTS = ['#fbf7ee', '#f6efdf', '#f9f4ea', '#f2eadb', '#fdf9f2'];
-const REPLY_TINT = '#f3d5bf';
-const FRONT_PX = [1200, 1950], REPLY_PX = [720, 900], BACK_PX = [400, 650];
+const REPLY_TINT = '#f1c9ad'; // 크리에이터의 답장 종이는 늘 이 색이다: 브랜드 점토색(#A6613C)을 옅게 푼 색. 팬 종이 다섯 색(노랑, 회색 기가 도는 흰색)과 겹치지 않는다
+const REPLY_MAX_PX = 200;     // 답장 글자의 자동 맞춤 상한 (글씨체 배율 전)
+const FRONT_PX = [1200, 1950], REPLY_PX = [1050, 1667], BACK_PX = [400, 650]; // 답장 종이는 팬 종이와 같은 픽셀 밀도(약 8333 px/m)
 
 const hashStr = s => { let h = 2166136261; for (const ch of s) h = Math.imul(h ^ ch.codePointAt(0), 16777619); return h >>> 0; };
 // data.font / data.tint 가 있으면 그것을 쓰고, 없으면 지금처럼 이름과 글에서 정한다 (목은 읽지 않던 선택 필드)
+export const replyFontFor = data => data.replyFont ?? REPLY_FONT;
 export const fontFor = data => data.font ?? FAN_FONTS[hashStr(data.name ?? ('익명:' + data.msg)) % FAN_FONTS.length];
 // 숨긴 쪽지(data.hidden: 작성자와 방 주인에게만 보인다)는 종이가 어둡다
 const dimTint = hex => '#' + [1, 3, 5].map(i => Math.round(parseInt(hex.slice(i, i + 2), 16) * 0.78).toString(16).padStart(2, '0')).join('');
@@ -46,7 +53,7 @@ export function noteFontLoads(list) {
   const out = [];
   for (const d of list) {
     out.push({ font: fontFor(d), text: d.msg + (d.name ?? '익명') + '- ' });
-    if (d.reply) out.push({ font: REPLY_FONT, text: d.reply });
+    if (d.reply) out.push({ font: replyFontFor(d), text: d.reply });
   }
   return out;
 }
@@ -205,8 +212,8 @@ export function fitText(g, text, font, boxW, boxH, maxPx, minPx, wantPx = null) 
   return px >= auto.px ? auto : fitAuto(g, text, font, boxW, boxH, px, minPx);
 }
 // 쪽지 앞면 글자 크기의 범위: 하한(읽을 수 있는 가장 작은 크기)과 지금 글이 상자에 드는 가장 큰 크기 (캔버스 픽셀, 글씨체 배율 포함)
-export function sizeRangeFor(g, text, font, hasReply = false) {
-  const s = FONT_SCALE[font] ?? 1, { boxW, boxH } = frontTextBox(hasReply);
+export function sizeRangeFor(g, text, font) {
+  const s = FONT_SCALE[font] ?? 1, { boxW, boxH } = frontTextBox();
   const min = Math.round(62 * s), auto = fitAuto(g, text, font, boxW, boxH, Math.round(290 * s), min);
   return { min, max: Math.max(min, auto.px) };
 }
@@ -284,23 +291,22 @@ function backTexture(cache, anisotropy, tint, knot) {
   return cache.get(key);
 }
 // 글 쓴 면에서 팬의 글이 앉는 상자 (텍스처 픽셀). tree-write.js 의 글상자가 같은 상자를 종이 위에 겹친다.
-// 답장이 위에 얹히면 팬의 글은 위쪽 절반에 머문다.
-export function frontTextBox(hasReply) {
+// 답장은 종이 옆에 따로 서므로 답장이 있어도 같은 상자다.
+export function frontTextBox() {
   const [cw, ch] = FRONT_PX, x = cw * 0.11 + 50, top = 130;
-  return { cw, ch, x, top, boxW: cw - x - 70, boxH: (hasReply ? ch * 0.45 : ch * 0.78) - top };
+  return { cw, ch, x, top, boxW: cw - x - 70, boxH: ch * 0.78 - top };
 }
-function frontTexture(data, hasReply, anisotropy) {
+function frontTexture(data, anisotropy) {
   const [cw, ch] = FRONT_PX, cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
   const g = cv.getContext('2d'); drawPaper(g, cw, ch, tintFor(data), { ruled: true, knot: true });
   const font = fontFor(data), s = FONT_SCALE[font] ?? 1;
-  const { x, boxW, top, boxH } = frontTextBox(hasReply);
+  const { x, boxW, top, boxH } = frontTextBox();
   const fit = fitText(g, data.msg, font, boxW, boxH, Math.round(290 * s), Math.round(62 * s), data.fontSize);
   drawBlock(g, fit, font, x, top, boxW, boxH, '#2e2a24', fit.lines.length === 1);
-  // 이름과 날짜는 왼쪽 아래. 답장이 있으면 그 왼쪽에 머문다
-  const metaW = hasReply ? cw * 0.47 - x - 20 : boxW;
-  const nm = fitLine(g, '- ' + (data.name ?? '익명'), `"${font}"`, Math.round(84 * s), Math.round(40 * s), metaW);
+  // 이름과 날짜는 왼쪽 아래
+  const nm = fitLine(g, '- ' + (data.name ?? '익명'), `"${font}"`, Math.round(84 * s), Math.round(40 * s), boxW);
   g.font = `${nm.px}px "${font}"`; g.fillStyle = '#4a4034'; g.fillText(nm.text, x, ch * 0.875);
-  const dt = fitLine(g, String(data.date ?? ''), 'system-ui, sans-serif', 40, 24, metaW);
+  const dt = fitLine(g, String(data.date ?? ''), 'system-ui, sans-serif', 40, 24, boxW);
   g.font = `${dt.px}px system-ui, sans-serif`; g.fillStyle = 'rgba(80,70,55,.7)'; g.fillText(dt.text, x, ch * 0.875 + 62);
   if (data.hidden) { // 숨겨짐: 오른쪽 위의 작은 딱지
     g.font = '600 44px system-ui, sans-serif'; g.textAlign = 'right'; g.textBaseline = 'middle';
@@ -314,22 +320,28 @@ function frontTexture(data, hasReply, anisotropy) {
 // 답장 종이에서 글이 앉는 상자 (텍스처 픽셀). tree-owner.js 의 글상자가 같은 상자를 답장 종이 위에 겹친다.
 export function replyTextBox() {
   const [cw, ch] = REPLY_PX;
-  return { cw, ch, x: 56, top: 130, boxW: cw - 112, boxH: ch - 180 };
+  return { cw, ch, x: 80, top: 170, boxW: cw - 160, boxH: ch - 170 - 100 };
 }
-// 답장 글이 상자에 드는 크기와 줄바꿈 (종이에 그릴 때와 글상자가 같은 값을 쓴다)
-export function fitReply(g, text) {
-  const s = FONT_SCALE[REPLY_FONT], { boxW, boxH } = replyTextBox();
-  return fitText(g, text, REPLY_FONT, boxW, boxH, Math.round(130 * s), Math.round(52 * s));
+// 답장 글이 상자에 드는 크기와 줄바꿈 (종이에 그릴 때와 글상자가 같은 값을 쓴다). wantPx: 고른 글자 크기 (없으면 자동 맞춤, 쪽지와 같은 맞춤 규칙)
+export function fitReply(g, text, font = REPLY_FONT, wantPx = null) {
+  const s = FONT_SCALE[font] ?? 1, { boxW, boxH } = replyTextBox();
+  return fitText(g, text, font, boxW, boxH, Math.round(REPLY_MAX_PX * s), Math.round(62 * s), wantPx);
 }
-function replyTexture(text, anisotropy) {
+// 답장 글자 크기의 범위: 하한(쪽지와 같다)과 지금 글이 상자에 드는 가장 큰 크기
+export function replySizeRange(g, text, font = REPLY_FONT) {
+  const s = FONT_SCALE[font] ?? 1, { boxW, boxH } = replyTextBox();
+  const min = Math.round(62 * s), auto = fitAuto(g, text, font, boxW, boxH, Math.round(REPLY_MAX_PX * s), min);
+  return { min, max: Math.max(min, auto.px) };
+}
+function replyTexture(data, anisotropy) {
   const [cw, ch] = REPLY_PX, cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
   const g = cv.getContext('2d'); drawPaper(g, cw, ch, REPLY_TINT, { ruled: false, knot: false });
-  const hd = fitLine(g, '크리에이터의 답장', 'system-ui, sans-serif', 38, 24, cw - 112, '600 ');
+  const hd = fitLine(g, '크리에이터의 답장', 'system-ui, sans-serif', 54, 32, cw - 160, '600 ');
   g.font = `600 ${hd.px}px system-ui, sans-serif`; g.fillStyle = '#a6613c'; g.textBaseline = 'alphabetic';
-  g.fillText(hd.text, 56, 88);
-  const { x, top, boxW, boxH } = replyTextBox();
-  const fit = fitReply(g, text);
-  drawBlock(g, fit, REPLY_FONT, x, top, boxW, boxH, '#6e3418', false);
+  g.fillText(hd.text, 80, 120);
+  const font = replyFontFor(data), { x, top, boxW, boxH } = replyTextBox();
+  const fit = fitReply(g, data.reply, font, data.replySize);
+  drawBlock(g, fit, font, x, top, boxW, boxH, '#6e3418', false);
   return texFrom(cv, anisotropy);
 }
 
@@ -349,7 +361,8 @@ export function buildPacket(data, opts = {}) {
   // 펼치면 종이가 선다. 날아가는 동안 돌며 앞면이 늘 보는 쪽을 향한다.
   const root = new THREE.Group(), centerer = new THREE.Group(), spin = new THREE.Group();
   root.add(centerer); centerer.add(spin); spin.add(knot.root);
-  const p = { data, root, centerer, spin, knot, mats: [fanFront, fanBackMat], fanFront, t: 0, reply: null, textOn: false, anisotropy, cache, ownCache };
+  // pair: 0..1 답장이 나오며 두 종이가 가운데로 옮겨간 정도. pairW: 이 쪽지를 화면에 맞출 때 필요한 너비
+  const p = { data, root, centerer, spin, knot, mats: [fanFront, fanBackMat], fanFront, t: 0, reply: null, pair: 0, pairW: data.reply ? PAIR_W : SHEET.W, textOn: false, anisotropy, cache, ownCache };
 
   if (data.reply) {
     const rBack = backTexture(cache, anisotropy, REPLY_TINT, false);
@@ -357,12 +370,13 @@ export function buildPacket(data, opts = {}) {
     const sheet = buildAccordion(REPLY, rFront, rBackMat);
     // 끼워 둠: 띠의 맨 위 두 겹 사이, 긴 끝 안에 작게 접혀 있다. 접힘이 가려서 종이가 한 장 너비로 열릴 때 나타난다
     knot.segs.BAND.cells[1].add(sheet.root);
-    const fw = sheet.cw, fh = sheet.rh[0], bandMid = (TIP + 3 * w + L) / 2;
+    const fw = sheet.cw * REPLY_TUCK_S, fh = sheet.rh[0] * REPLY_TUCK_S, bandMid = (TIP + 3 * w + L) / 2;
     const tuck = { p: new THREE.Vector3(1.5 * w - fw / 2, bandMid + fh / 2, 0.00004), rz: 0 };
-    // 보임: 펼친 종이의 오른쪽 아래에 얹힌다
-    const show = { p: new THREE.Vector3(SHEET.W * 0.47, SHEET.H * 0.52, 0.004), rz: -0.06 };
-    sheet.root.position.copy(tuck.p);
-    p.reply = { sheet, front: rFront, tuck, show };
+    // 보임: 펼친 종이의 오른쪽 옆에 위아래 가운데로 선다 (p 는 답장 종이의 왼쪽 위 모서리)
+    const show = { p: new THREE.Vector3(SHEET.W + REPLY_GAP, (SHEET.H + REPLY.H) / 2, 0.004), rz: 0 };
+    sheet.root.position.copy(tuck.p); sheet.root.scale.setScalar(REPLY_TUCK_S);
+    // writing: 방 주인이 답장을 쓰는 중이다 (tree-owner.js). 접힌 채 나오는 대신 화면 아래에서 펼친 채 올라온다 (setReplyRise). rise 0..1, startY: rise 0 일 때 왼쪽 위 모서리의 y
+    p.reply = { sheet, front: rFront, tuck, show, writing: !!data.replyWriting, rise: 0, startY: -0.4 };
     p.mats.push(rFront, rBackMat);
   }
 
@@ -376,8 +390,8 @@ export function buildPacket(data, opts = {}) {
     { k: 'h', d: 0.5, hs: [...knot.cols[1], ...knot.cols[3]] },        // 4 띠 -> 반 너비
     { k: 'h', d: 0.5, hs: knot.cols[2] },                              //   반 -> 온 종이
   ];
-  if (p.reply) {
-    segs.push({ k: 'lift', d: 0.5 });
+  if (p.reply && !p.reply.writing) {
+    segs.push({ k: 'lift', d: 0.55 });
     segs.push({ k: 'h', d: 0.45, hs: [...p.reply.sheet.rowHinges, ...p.reply.sheet.colHinges.flat()] });
   }
   let s0 = 0; for (const s of segs) { s.s = s0; s0 += s.d + REST; }
@@ -388,7 +402,7 @@ export function buildPacket(data, opts = {}) {
 
   // 글씨체가 실제로 불러와지면 열려 있는 쪽지를 다시 그린다
   const loads = [{ font: fontFor(data), text: data.msg + (data.name ?? '익명') + '- ' }];
-  if (data.reply) loads.push({ font: REPLY_FONT, text: data.reply });
+  if (data.reply) loads.push({ font: replyFontFor(data), text: data.reply });
   // opts.lazyFonts: 지을 때는 글씨체를 부르지 않는다. 트리처럼 쪽지가 많을 때 열려는 쪽지만 p.loadFonts() 로 부른다.
   p.loadFonts = () => (p.fontsReady = loadNoteFonts(loads).then(() => { if (p.textOn) writeText(p); }));
   p.fontsReady = opts.lazyFonts ? Promise.resolve() : p.loadFonts();
@@ -415,16 +429,33 @@ export function applyPose(p, t) {
       p.spin.rotation.z = -Math.PI / 2 * (1 - f);
       p.root.scale.setScalar(THREE.MathUtils.lerp(INSIDE_SCALE, 1, f));
       p.root.position.set(0, Math.sin(Math.PI * f) * 0.03, 0.012 * f);
-    } else if (s.k === 'lift') liftReply(p.reply, f);
+    } else if (s.k === 'lift') liftReply(p, f);
   }
+  if (p.reply?.writing) placeWritingReply(p);
   recentre(p);
 }
-// 펼친 종이 위에 놓인 접힌 답장이 호를 그리며 떠서 오른쪽 아래에 앉는다
-function liftReply(r, f) {
-  const { tuck, show, sheet } = r;
+// 안에 든 접힌 답장이 호를 그리며 나와 오른쪽 옆에 앉는다. 커지며 (접힌 종이가 펼친 크기로), 두 종이는 화면 가운데로 옮겨간다.
+function liftReply(p, f) {
+  const { tuck, show, sheet } = p.reply;
   sheet.root.position.lerpVectors(tuck.p, show.p, f);
   sheet.root.position.z += Math.sin(Math.PI * f) * 0.03;
   sheet.root.rotation.z = THREE.MathUtils.lerp(tuck.rz, show.rz, f);
+  sheet.root.scale.setScalar(THREE.MathUtils.lerp(REPLY_TUCK_S, 1, f));
+  p.pair = f;
+}
+// 답장을 쓰는 중: 펼친 종이가 화면 아래에서 옆자리로 올라온다
+function placeWritingReply(p) {
+  const r = p.reply, f = ease(THREE.MathUtils.clamp(r.rise, 0, 1));
+  r.sheet.root.position.set(r.show.p.x, THREE.MathUtils.lerp(r.startY, r.show.p.y, f), r.show.p.z);
+  r.sheet.root.rotation.z = 0; r.sheet.root.scale.setScalar(1);
+  p.pair = f;
+}
+/** 답장 쓰기 종이가 올라온 정도 (0 화면 아래 .. 1 옆자리). startY: rise 0 일 때 종이 왼쪽 위 모서리의 y (쪽지 종이 좌표, 화면 아래 끝보다 낮게) */
+export function setReplyRise(p, rise, startY) {
+  const r = p.reply; if (!r?.writing) return;
+  r.rise = rise;
+  if (Number.isFinite(startY)) r.startY = startY;
+  applyPose(p, p.t);
 }
 // 보이는 종이의 바운딩 박스를 root (그래서 카메라 축) 가운데에 둔다
 const _v = new THREE.Vector3(), _inv = new THREE.Matrix4(), _box = new THREE.Box3();
@@ -437,6 +468,7 @@ export function recentre(p) {
     for (let i = 0; i < pos.count; i++) _box.expandByPoint(_v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld).applyMatrix4(_inv));
   }
   _box.getCenter(_v); p.centerer.position.copy(_v).negate();
+  p.centerer.position.x -= p.pair * PAIR_SHIFT; // 답장이 옆에 서면 두 종이가 가운데에 오도록 (답장은 팬 종이에 걸려 있어 함께 움직인다)
   p.root.updateMatrixWorld(true);
 }
 
@@ -451,8 +483,8 @@ function setResting(mat, map) {
   mat.map = map; mat.emissiveMap = null; mat.emissive.set(0xffc070); mat.emissiveIntensity = 0; mat.needsUpdate = true; mat.userData.own = false;
 }
 export function writeText(p) {
-  setReading(p.fanFront, frontTexture(p.data, !!p.reply, p.anisotropy));
-  if (p.reply) setReading(p.reply.front, replyTexture(p.data.reply, p.anisotropy));
+  setReading(p.fanFront, frontTexture(p.data, p.anisotropy));
+  if (p.reply) setReading(p.reply.front, replyTexture(p.data, p.anisotropy));
   p.textOn = true;
 }
 export function eraseText(p) {

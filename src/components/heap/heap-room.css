@@ -439,7 +439,7 @@
 }
 
 /* 쪽지 쓰기 (tree-write.js). 글상자는 3D 종이 위에 정확히 겹치고, 자리와 글자 크기는 엔진이 정한다. */
-.heap-room.tree-writing .hud .bottom, .heap-room.tree-writing .tree-step { visibility: hidden; }
+.heap-room.tree-writing .hud .bottom, .heap-room.tree-writing .tree-step, .heap-room.tree-replying .hud .bottom, .heap-room.tree-replying .tree-step { visibility: hidden; }
 .heap-room #tree-sheet { position: absolute; inset: 0; pointer-events: none; }
 .heap-room #tree-sheet[hidden] { display: none; }
 .heap-room #ts-text { position: absolute; margin: 0; padding: 0; border: 0; outline: 0; resize: none; overflow: hidden; background: transparent; color: #2e2a24; caret-color: var(--clay); pointer-events: auto; word-break: keep-all; overflow-wrap: anywhere; scrollbar-width: none; touch-action: manipulation; }
@@ -448,6 +448,7 @@
 .heap-room .ts-ctl, .heap-room .ts-drag { position: absolute; left: 50%; bottom: max(12px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); width: min(460px, calc(100% - 24px)); display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 16px; background: rgba(47, 44, 36, 0.86); color: var(--paper); pointer-events: auto; }
 .heap-room .ts-ctl[hidden], .heap-room .ts-drag[hidden] { display: none; }
 .heap-room .ts-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; }
+.heap-room .ts-lab { font-size: 11px; font-weight: 600; letter-spacing: 0.02em; color: var(--paper-dim); }
 .heap-room .ts-drag p { margin: 0; font-size: 13px; text-align: center; text-wrap: balance; }
 .heap-room .ts-tints { display: flex; gap: 6px; }
 .heap-room .ts-tints button { width: 26px; height: 26px; padding: 0; border-radius: 50%; border: 2px solid rgba(243, 234, 219, 0.35); cursor: pointer; }
@@ -480,9 +481,7 @@
 .heap-room #tr-text { position: absolute; margin: 0; padding: 0; border: 0; outline: 0; resize: none; overflow-x: hidden; overflow-y: auto; background: transparent; color: #6e3418; caret-color: var(--clay); pointer-events: auto; word-break: keep-all; overflow-wrap: anywhere; scrollbar-width: none; touch-action: manipulation; }
 .heap-room #tr-text::placeholder { color: rgba(110, 52, 24, 0.4); }
 .heap-room #tr-text[hidden] { display: none; }
-.heap-room .tr-ctl { position: absolute; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; pointer-events: auto; }
-.heap-room .tr-ctl[hidden] { display: none; }
-.heap-room .tr-ctl .ts-count { padding: 4px 10px; border-radius: 999px; background: rgba(47, 44, 36, 0.78); }
+/* 답장 조작 줄은 쪽지 쓰기 판의 줄(.ts-ctl)과 같은 모양이다: 아래 가운데 */
 /* 쪽지함 목록 (tree-box.js) */
 .heap-room .tb-list { display: flex; flex-direction: column; gap: 6px; }
 .heap-room .tb-row { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 8px 12px; text-align: left; font: 400 14px var(--ui); color: var(--ink); background: #fff8ea; border: 1px solid rgba(86, 83, 68, 0.25); border-radius: 10px; cursor: pointer; }

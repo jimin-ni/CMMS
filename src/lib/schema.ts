@@ -238,7 +238,7 @@ export const heapNoteReplies = pgTable("heap_note_replies", {
   authorId: text("author_id").notNull(),
   body: text("body").notNull(),
   font: text("font").notNull(),
-  // 0009. 쪽지의 font_size와 같은 뜻이다. 아직 쓰지 않는다.
+  // 0009. 쪽지의 font_size와 같은 뜻이다 (null 은 자동 맞춤).
   fontSize: smallint("font_size"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

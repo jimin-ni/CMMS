@@ -46,7 +46,7 @@ export type HeapNoteWire = {
   y: number | null;
   angle: number | null;
   createdAt: string;
-  reply?: { body: string; font: string; createdAt: string };
+  reply?: { body: string; font: string; fontSize: number | null; createdAt: string };
   unread?: boolean;
 };
 
@@ -422,17 +422,20 @@ export function HeapRoom({
           <input id="ts-name" type="text" maxLength={12} lang="ko" autoComplete="off" spellCheck={false} placeholder="익명" aria-label="이름 (비우면 익명)" />
         </div>
         <div id="ts-ctl" className="ts-ctl">
+          {/* 종이: 종이 색과 글씨체, 글씨 크기. 장식: 종류와 색. 두 묶음에 작은 이름을 붙인다. */}
           <div className="ts-row">
+            <span className="ts-lab">종이</span>
             <div className="ts-tints" id="ts-tints" role="group" aria-label="종이 색" />
-            <div className="ts-tints ts-swatches" id="ts-swatches" role="group" aria-label="장식 색" />
-          </div>
-          <div className="ts-fonts" id="ts-fonts" role="group" aria-label="글씨체" />
-          <div className="ts-row">
-            <div className="ts-seg" id="ts-kinds" role="group" aria-label="장식 종류" />
             <label className="ts-size">
               글씨 크기
               <input id="ts-size" type="range" step={1} min={62} max={290} defaultValue={290} />
             </label>
+          </div>
+          <div className="ts-fonts" id="ts-fonts" role="group" aria-label="글씨체" />
+          <div className="ts-row">
+            <span className="ts-lab">장식</span>
+            <div className="ts-seg" id="ts-kinds" role="group" aria-label="장식 종류" />
+            <div className="ts-tints ts-swatches" id="ts-swatches" role="group" aria-label="장식 색" />
           </div>
           <div className="ts-row">
             <span id="ts-count" className="ts-count" aria-live="off" />
@@ -468,17 +471,26 @@ export function HeapRoom({
           지우기
         </button>
       </div>
-      {/* 방 주인의 답장 쓰기 (tree-owner.js): 답장 종이 위에 겹치는 글상자와 그 아래 조작 줄 */}
+      {/* 방 주인의 답장 쓰기 (tree-owner.js): 팬 종이 옆에 선 답장 종이 위에 겹치는 글상자와 아래 조작 줄 (글씨체, 글씨 크기, 접어서 넣기, 취소) */}
       <div id="tree-rsheet" hidden>
         <textarea id="tr-text" rows={4} lang="ko" spellCheck={false} autoComplete="off" aria-label="답장 내용" placeholder="답장을 써요" hidden />
-        <div id="tr-ctl" className="tr-ctl" hidden>
-          <span id="tr-count" className="ts-count" aria-live="off" />
-          <button id="tr-fold" className="btn" type="button">
-            접어서 넣기
-          </button>
-          <button id="tr-cancel" className="btn ghost" type="button">
-            취소
-          </button>
+        <div id="tr-ctl" className="ts-ctl tr-ctl" hidden>
+          <div className="ts-fonts" id="tr-fonts" role="group" aria-label="답장 글씨체" />
+          <div className="ts-row">
+            <label className="ts-size">
+              글씨 크기
+              <input id="tr-size" type="range" step={1} min={62} max={200} defaultValue={200} />
+            </label>
+          </div>
+          <div className="ts-row">
+            <span id="tr-count" className="ts-count" aria-live="off" />
+            <button id="tr-fold" className="btn" type="button">
+              접어서 넣기
+            </button>
+            <button id="tr-cancel" className="btn ghost" type="button">
+              취소
+            </button>
+          </div>
         </div>
       </div>
       {/* 쪽지함 목록 (tree-box.js) */}

@@ -96,7 +96,7 @@ export async function saveLayoutAction(
 
 export type HeapNoteDto = Omit<HeapNote, "createdAt" | "reply"> & {
   createdAt: string;
-  reply?: { body: string; font: string; createdAt: string };
+  reply?: { body: string; font: string; fontSize: number | null; createdAt: string };
 };
 
 function toNoteDto(note: HeapNote): HeapNoteDto {
@@ -147,7 +147,7 @@ export async function deleteNoteAction(
   return { ok: true };
 }
 
-// 방 주인의 답장. input = { body, font }
+// 방 주인의 답장. input = { body, font, fontSize? }
 export async function replyNoteAction(
   noteId: string,
   input: unknown,

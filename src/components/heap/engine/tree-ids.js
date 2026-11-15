@@ -21,8 +21,8 @@ export const FONT_VALUES = {
   'single-day': 'Single Day',
   'yeon-sung': 'Yeon Sung',
 };
-// 방 주인의 답장 글꼴은 지금 하나라 tree-note.js 의 REPLY_FONT 가 쓰인다. 값이 늘면 여기에 표를 더하고 reply 에 font 를 싣는다.
-export const REPLY_FONT_VALUES = { 'east-sea-dokdo': 'East Sea Dokdo' };
+// 방 주인의 답장 글꼴: 동해독도(기본, 첫째)와 쪽지 글꼴 전부. policy.ts 의 NOTE_REPLY_FONT_IDS 와 같다.
+export const REPLY_FONT_VALUES = { 'east-sea-dokdo': 'East Sea Dokdo', ...FONT_VALUES };
 
 const seoulDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' });
 const seoulMonthDay = new Intl.DateTimeFormat('ko-KR', { timeZone: 'Asia/Seoul', month: 'long', day: 'numeric' });
@@ -55,7 +55,12 @@ export function toEngineNote(n) {
   };
   if (Object.hasOwn(TINT_VALUES, n.tint)) out.tint = TINT_VALUES[n.tint];
   if (Object.hasOwn(FONT_VALUES, n.font)) out.font = FONT_VALUES[n.font];
-  if (n.reply && typeof n.reply.body === 'string') out.reply = n.reply.body;
+  if (n.reply && typeof n.reply.body === 'string') {
+    out.reply = n.reply.body;
+    // 모르는 답장 글꼴은 비워 두어 tree-note.js 의 기본(동해독도)을 쓴다
+    if (Object.hasOwn(REPLY_FONT_VALUES, n.reply.font)) out.replyFont = REPLY_FONT_VALUES[n.reply.font];
+    if (Number.isFinite(n.reply.fontSize)) out.replySize = n.reply.fontSize;
+  }
   // 0009: 글자 크기, 장식 종류, 장식 주색. null 이면 비워 두어 예전처럼 자동 맞춤과 id 해시가 정한다.
   if (Number.isFinite(n.fontSize)) out.fontSize = n.fontSize;
   if (typeof n.ornament === 'string') out.kind = n.ornament;
