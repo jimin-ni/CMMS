@@ -12,10 +12,12 @@
 //
 // 이 파일의 앞 절반은 DOM 없이 도는 순수 함수다 (자리 계산: makeSurface, planSpot, fillSpots, localToSpot, spotIsFree). 뒤 절반이 setupTree(ctx)다.
 //
-// 더미: opts.treeNotes 가 undefined 면 tree-demo.js 의 DEMO_NOTES 를 쓴다. DB 를 잇는 단계에서 DEMO_NOTES 가 나오는 줄(아래 두 곳)과 tree-demo.js 를 지운다.
-// 실제 목록은 opts.treeNotes 로 오고, 나중 갱신은 ctx.setTreeNotes(list) 가 받는다 (id 로 합친다).
+// 쪽지: opts.treeNotes (tree-ids.js 의 toEngineNote 모양, 없으면 빈 트리), opts.noteRevealAt (봉인이 풀리는 ISO 시각), opts.isOwner (이 방의 주인인가).
+// 첫 목록 뒤의 갱신: ctx.mergeTreeNotes(올리는 것, 빼는 id, 봉인 시각) 가 id 로 합치고, ctx.setTreeNotes(list) 는 통째로 바꾼다.
+// 자리(y, angle)가 없는 쪽지는 쪽지함에 있다: 트리에 걸지 않고 ctx.boxedNotes 로 개수만 알린다 (안내 줄에 "쪽지함 N장").
+// 봉인된 쪽지(sealed)는 닫힌 채 걸리고 누르면 열리는 날을 알려 준다. 내 쪽지(mine)는 나만 보는 연필 표시, 숨긴 쪽지(hidden)는 어둡게, 안 읽은 쪽지(unread, 방 주인만)는 점이 붙는다.
 //
-// ctx 에 올리는 것: openTree(it, group, slot)  enterTree()  exitTree()  treeEscape()  nearTree()  setTreeNotes(list)  treeStep(t, dt)  treeSpot { toLocal, fromLocal, fromWorld, isFree, hung }
+// ctx 에 올리는 것: openTree(it, group, slot)  enterTree()  exitTree()  treeEscape()  nearTree()  setTreeNotes(list)  mergeTreeNotes(upserts, removedIds, revealAt)  treeStep(t, dt)  treeSpot { toLocal, fromLocal, fromWorld, isFree, hung }
 import * as THREE from 'three';
 import { mulberry32, disposeScene } from './util.js';
 import {
@@ -23,7 +25,7 @@ import {
 } from './tree-note.js';
 import { buildOrnament, KINDS, ORN, MAIN_SWATCHES, ACCENTS } from './tree-ornament.js';
 import { trimTree, buildTopStar, buildFairyLights } from './tree-dress.js';
-import { DEMO_NOTES } from './tree-demo.js'; // 더미: DB 를 이으면 지운다
+import { revealDay } from './tree-ids.js';
 
 // ---------- 순수 함수: 자리 ----------
 
@@ -147,13 +149,14 @@ const BUILD_PER_FRAME = 8; // 한 프레임에 짓는 쪽지 수: 많은 쪽지�
 const NOTE_FONTS_HREF = 'https://fonts.googleapis.com/css2?family=Gaegu&family=Hi+Melody&family=Gamja+Flower&family=Cute+Font&family=Single+Day&family=Yeon+Sung&family=East+Sea+Dokdo&display=swap';
 
 const validSpot = d => Number.isFinite(d.y) && Number.isFinite(d.angle) && d.y > 0;
-const sigOf = d => JSON.stringify([d.name, d.date, d.msg, d.reply ?? null, d.tint ?? null, d.font ?? null, d.kind ?? null, d.main ?? null, d.accent ?? null, d.y ?? null, d.angle ?? null]);
+const sigOf = d => JSON.stringify([d.name, d.date, d.msg, d.reply ?? null, d.tint ?? null, d.font ?? null, d.kind ?? null, d.main ?? null, d.accent ?? null, d.y ?? null, d.angle ?? null, !!d.sealed, !!d.mine, !!d.hidden, !!d.unread]);
 // 쪽지 하나의 장식 모양: 데이터가 정하지 않은 것은 id 에서 정한다 (모든 방문자가 같은 것을 본다)
 function lookOf(d) {
   const h = hashId(d.id), accents = Object.keys(ACCENTS);
+  const main = typeof d.main === 'string' ? d.main : MAIN_SWATCHES[(h >>> 3) % MAIN_SWATCHES.length][1];
   return {
     kind: KINDS.includes(d.kind) ? d.kind : KINDS[h % KINDS.length],
-    main: typeof d.main === 'string' ? d.main : MAIN_SWATCHES[(h >>> 3) % MAIN_SWATCHES.length][1],
+    main: d.hidden ? '#' + new THREE.Color(main).lerp(new THREE.Color('#7d7a6e'), 0.55).getHexString() : main, // 숨긴 쪽지: 색이 바랜다
     accent: d.accent in ACCENTS ? d.accent : accents[(h >>> 6) % accents.length],
   };
 }
@@ -175,7 +178,10 @@ export function setupTree(ctx) {
 
   const baseFov = camera.fov;
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  let list = normalise(ctx.opts.treeNotes === undefined ? DEMO_NOTES : ctx.opts.treeNotes); // DEMO_NOTES: DB 를 이으면 이 줄은 normalise(ctx.opts.treeNotes ?? []) 가 된다
+  let list = normalise(ctx.opts.treeNotes ?? []);
+  let revealAt = typeof ctx.opts.noteRevealAt === 'string' ? ctx.opts.noteRevealAt : null; // 봉인이 풀리는 시각 (ISO)
+  const isOwner = !!ctx.opts.isOwner;
+  ctx.boxedNotes = 0; // 쪽지함에 있는 쪽지 수: 안내 줄(hud.js)이 읽는다
 
   let rig = null, failedBuild = null; // rig: 지금 build 의 트리에 올린 것들 (아래 makeRig)
   let opened = null, pending = null, hovered = null, press = null; // opened: 나와 있는(나오는) 쪽지 · pending: 지금 쪽지가 돌아간 뒤 날아올 쪽지
@@ -223,6 +229,7 @@ export function setupTree(ctx) {
     sp.scale.set(1.2, 0.375, 1); sp.position.set(0, tip.y + 0.42, 0); sp.renderOrder = 20; sp.userData.slot = slot;
     pivot.add(sp); ctx.build.slotMeshes.push(sp);
     r.count = { sp, cv, tex };
+    r.marks = makeMarks();
     ensureFonts();
     return r;
   }
@@ -237,6 +244,32 @@ export function setupTree(ctx) {
       const v = pt.clone().project(cam);
       return Math.abs(v.x) < 0.9 && Math.abs(v.y) < 0.9;
     };
+  }
+  // 쪽지 장식에 붙는 작은 표시: 내 쪽지의 연필 표시(나만 본다)와 방 주인에게만 보이는 안 읽은 점. 지오메트리와 재질은 트리 하나가 나눠 쓴다.
+  function makeMarks() {
+    const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+    const g = cv.getContext('2d'); g.lineCap = g.lineJoin = 'round';
+    g.strokeStyle = 'rgba(70, 64, 56, 0.85)'; g.lineWidth = 5;
+    g.beginPath(); g.moveTo(14, 35); g.lineTo(27, 48); g.lineTo(50, 17); g.stroke();
+    g.strokeStyle = 'rgba(70, 64, 56, 0.35)'; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(16, 38); g.lineTo(28, 51); g.lineTo(52, 20); g.stroke();
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+    const tickMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, toneMapped: false });
+    const dotMat = new THREE.MeshBasicMaterial({ color: 0xd2452f, toneMapped: false });
+    const tickGeo = new THREE.PlaneGeometry(0.03, 0.03), dotGeo = new THREE.SphereGeometry(0.0065, 8, 6);
+    return { tex, tickMat, dotMat, tickGeo, dotGeo, dispose() { tex.dispose(); tickMat.dispose(); dotMat.dispose(); tickGeo.dispose(); dotGeo.dispose(); } };
+  }
+  function buildMarks(r, d) {
+    const mk = new THREE.Group(); mk.name = 'note-marks';
+    if (d.mine) {
+      const tick = new THREE.Mesh(r.marks.tickGeo, r.marks.tickMat);
+      tick.position.set(-0.022, -0.016, 0.041); tick.renderOrder = 3; mk.add(tick);
+    }
+    if (isOwner && d.unread) {
+      const dot = new THREE.Mesh(r.marks.dotGeo, r.marks.dotMat);
+      dot.position.set(0.027, 0.03, 0.036); mk.add(dot);
+    }
+    return mk;
   }
   function paintCount(r) {
     const n = list.length;
@@ -257,9 +290,10 @@ export function setupTree(ctx) {
   function buildNote(r, d) {
     const look = lookOf(d), root = new THREE.Group(), pk = buildPacket(d, { backCache: r.cache, anisotropy: r.aniso, lazyFonts: true });
     root.add(pk.root);
-    const n = { id: d.id, data: d, sig: sigOf(d), kind: look.kind, colors: { main: look.main, accent: look.accent }, root, pk, orn: null, pivot: new THREE.Group(), string: null, plan: null, home: null, spot: null, flight: null, t: 0, lift: 0, shellDrop: 0.1 };
+    const n = { marks: null, id: d.id, data: d, sig: sigOf(d), kind: look.kind, colors: { main: look.main, accent: look.accent }, root, pk, orn: null, pivot: new THREE.Group(), string: null, plan: null, home: null, spot: null, flight: null, t: 0, lift: 0, shellDrop: 0.1 };
     const times = noteTimes(pk); n.offset = times.offset; n.total = times.total;
     n.orn = buildOrnament(n.kind, n.colors); root.add(n.orn.group);
+    n.marks = buildMarks(r, d); root.add(n.marks); // 열린 동안은 숨긴다 (openNote, finishClose)
     root.traverse(o => { o.userData.note = n; });
     n.pivot.add(root);
     applyNote(n, 0);
@@ -307,19 +341,27 @@ export function setupTree(ctx) {
   // 쪽지가 나와 있는 동안에는 미뤘다가 다 돌아간 뒤에 맞춘다.
   function syncNotes() {
     const r = rig; if (!r) return;
+    syncBoxed();
     if (busy()) { r.dirty = true; return; }
     r.dirty = false;
-    const ids = new Set(list.map(d => d.id));
+    const hung = list.filter(validSpot); // 자리가 없는 쪽지는 쪽지함에 있다: 걸지 않는다
+    const ids = new Set(hung.map(d => d.id));
     for (const n of [...r.notes.values()]) if (!ids.has(n.id)) removeNote(r, n);
     for (const id of [...r.spots.keys()]) if (!ids.has(id)) r.spots.delete(id);
     r.queue = [];
-    for (const d of list) {
+    for (const d of hung) {
       const n = r.notes.get(d.id);
       if (n && n.sig === sigOf(d)) continue;
       if (n) removeNote(r, n); // 글이나 모양이 바뀌었다: 같은 자리에 다시 짓는다 (자동 자리는 r.spots 에 남아 있다)
       r.queue.push(d);
     }
     paintCount(r);
+    syncBoxed();
+  }
+  function syncBoxed() { // 쪽지함 개수는 트리가 서기 전에도 맞춘다
+    const n = list.reduce((k, d) => k + (validSpot(d) ? 0 : 1), 0);
+    if (ctx.boxedNotes === n) return;
+    ctx.boxedNotes = n; ctx.refreshHint?.();
   }
   function assignSpots(r, ds) { // 자리가 없는 쪽지에 목업의 채우기로 자리를 준다
     const lacking = ds.filter(d => !validSpot(d) && !r.spots.has(d.id));
@@ -349,7 +391,7 @@ export function setupTree(ctx) {
   }
 
   // ----- 열기, 닫기, 넘기기 -----
-  const sequence = () => (rig ? list.map(d => rig.notes.get(d.id)).filter(Boolean) : []); // 만든 순서, 걸린 것만
+  const sequence = () => (rig ? list.map(d => rig.notes.get(d.id)).filter(n => n && !n.data.sealed) : []); // 만든 순서, 걸린 것만, 봉인된 것은 넘기지 않는다
   function syncNav() {
     const show = ctx.mode === 'tree' && !!opened && !pending && sequence().length > 1;
     $('tree-prev').hidden = $('tree-next').hidden = !show;
@@ -375,6 +417,7 @@ export function setupTree(ctx) {
     n.shellDrop = shellDrop();
     r.seen.aspect = camera.aspect; r.seen.fov = camera.fov;
     if (n.string) n.string.visible = false;
+    n.marks.visible = false;
     n.pk.loadFonts(); writeText(n.pk); // 글은 지금 그리고, 글씨체가 오면 pk 가 다시 그린다
     const seq = sequence(), i = seq.indexOf(n);
     if (seq.length > 1) { seq[(i + 1) % seq.length].pk.loadFonts(); seq[(i + seq.length - 1) % seq.length].pk.loadFonts(); } // 넘기기 전에 이웃의 글씨체를 부른다
@@ -393,6 +436,7 @@ export function setupTree(ctx) {
     n.pivot.attach(n.root);
     n.root.position.copy(n.home.p); n.root.quaternion.copy(n.home.q); n.root.scale.setScalar(1); n.lift = 0;
     if (n.string) n.string.visible = true;
+    n.marks.visible = true;
     eraseText(n.pk); n.flight = null; applyNote(n, 0, null);
     if (!busy()) {
       if (ctx.mode === 'tree') setHint('tree');
@@ -449,7 +493,13 @@ export function setupTree(ctx) {
     // 쪽지가 나와 있는 동안 종이 밖을 누르면 접어 넣는다
     if (opened) { if (!(hit?.packet && hit.note === opened)) closeNote(); return; }
     if (busy()) return;
-    if (hit?.note) openNote(hit.note);
+    if (!hit?.note) return;
+    if (hit.note.data.sealed) { // 봉인: 열지 않고 날짜만 알려 준다
+      const day = revealAt ? revealDay(revealAt) : '';
+      toast(day ? `${day}에 열려요` : '아직 열 수 없어요');
+      return;
+    }
+    openNote(hit.note);
   });
   on(canvas, 'pointercancel', () => { press = null; setCursor(); });
   on(window, 'keydown', e => {
@@ -517,7 +567,7 @@ export function setupTree(ctx) {
     opened = pending = hovered = press = null; leaving.clear(); anims.clear();
     if (!r) return;
     for (const n of r.notes.values()) disposeNote(n);
-    r.stringMat.dispose(); disposeBackCache(r.cache);
+    r.stringMat.dispose(); r.marks.dispose(); disposeBackCache(r.cache);
     disposeScene(r.deco); disposeScene(r.count.sp);
     r.count.sp.removeFromParent();
     const i = ctx.build.slotMeshes.indexOf(r.count.sp); if (i >= 0) ctx.build.slotMeshes.splice(i, 1);
@@ -552,7 +602,7 @@ export function setupTree(ctx) {
     if (r.queue.length) processQueue(r);
     paintCount(r);
     r.lights.update(t); r.star.update(t);
-    r.count.sp.visible = ctx.mode !== 'tree' && ctx.mode !== 'edit';
+    r.count.sp.visible = ctx.mode !== 'tree' && ctx.mode !== 'edit' && list.length > 0;
     // 다 도착했으면 카메라를 정확한 자리에 놓는다 (글라이드는 0.02 m 앞에서 멈춘다)
     if (ctx.mode === 'tree' && !ctx.camGoal && !r.settled) {
       camera.position.copy(r.view.pos); controls.target.copy(r.view.target); camera.lookAt(r.view.target);
@@ -584,7 +634,15 @@ export function setupTree(ctx) {
   }
 
   // ----- 공개 -----
-  function setTreeNotes(next) { list = normalise(next); if (rig) syncNotes(); }
+  function setTreeNotes(next) { list = normalise(next); if (rig) syncNotes(); else syncBoxed(); }
+  // 폴링용: id 로 합친다. upserts 는 올리거나 바꾸는 쪽지(엔진 모양), removedIds 는 뺄 id. nextReveal 이 undefined 가 아니면 봉인 시각을 바꾼다 (null 도 받는다).
+  function mergeTreeNotes(upserts, removedIds, nextReveal) {
+    if (nextReveal !== undefined) revealAt = typeof nextReveal === 'string' ? nextReveal : null;
+    const byId = new Map(list.map(d => [d.id, d]));
+    for (const id of removedIds ?? []) byId.delete(id);
+    for (const d of upserts ?? []) if (d && typeof d.id === 'string') byId.set(d.id, d);
+    setTreeNotes([...byId.values()]);
+  }
   function surfaceReady() { if (!rig) return false; rig.surface.sync(); return true; }
   const treeSpot = {
     /** 자리 -> 트리 틀(pivot 지역)의 표면 점. 그 높이에 잎이 없거나 트리가 아직 없으면 null */
@@ -601,6 +659,6 @@ export function setupTree(ctx) {
 
   onDispose(() => { dropRig(); fontsLink?.remove(); fontsLink = null; });
   Object.assign(ctx, {
-    openTree: () => enterTree(), enterTree, exitTree, treeEscape, nearTree, setTreeNotes, treeStep, treeSpot,
+    openTree: () => enterTree(), enterTree, exitTree, treeEscape, nearTree, setTreeNotes, mergeTreeNotes, treeStep, treeSpot,
   });
 }

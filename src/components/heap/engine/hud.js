@@ -16,11 +16,14 @@ export function setupHud(ctx) {
   $('phone-sub').textContent = '버블';
 
   ctx.visits = { today: DATA.visits.today, total: DATA.visits.total };
+  // 새 쪽지: 방 주인에게만 센다 (opts.unreadNotes 는 서버가 주인에게만 0 이 아닌 값을 준다). live.js 의 폴링이 바꾼다.
+  ctx.unreadNotes = opts.isOwner && Number.isFinite(opts.unreadNotes) ? opts.unreadNotes : 0;
   // 영상 수는 그릴 때마다 센다: 채널 탭이 영상을 넣고 빼면 reels 가 바뀐다 (live.js 의 replaceReels)
   function renderMeta() {
     const nShorts = reels.filter(r => !r.wide).length, nWide = reels.length - nShorts;
     const metaBase = nWide ? `쇼츠 ${nShorts} · 영상 ${nWide}` : `쇼츠 ${nShorts}`;
-    $('meta').textContent = `${metaBase} · TODAY ${ctx.visits.today} · TOTAL ${ctx.visits.total.toLocaleString('ko-KR')}` + (opts.viewerName ? ` · ${opts.viewerName}` : '');
+    const unread = opts.isOwner && ctx.unreadNotes > 0 ? ` · 새 쪽지 ${ctx.unreadNotes}` : '';
+    $('meta').textContent = `${metaBase} · TODAY ${ctx.visits.today} · TOTAL ${ctx.visits.total.toLocaleString('ko-KR')}${unread}` + (opts.viewerName ? ` · ${opts.viewerName}` : '');
   }
   renderMeta();
   // 다녀감: the day the creator last came by, "2026.11.12" (Asia/Seoul), or null. From heap_rooms.creator_visited_at.
@@ -46,7 +49,10 @@ export function setupHud(ctx) {
     treeNote: '‹ › 로 다른 쪽지 · 바깥을 누르거나 Esc로 접기',
     perch: '방향키·WASD 또는 바닥을 눌러 일어나기 · Esc로도 일어나요',
   };
-  const setHint = k => { if (hint.dataset.k !== k) { hint.dataset.k = k; hint.textContent = HINTS[k]; } };
+  // 트리 모드 안내에는 쪽지함의 개수가 붙는다 (자리가 없는 쪽지: tree.js 의 ctx.boxedNotes)
+  const hintText = k => HINTS[k] + (k === 'tree' && ctx.boxedNotes > 0 ? ` · 쪽지함 ${ctx.boxedNotes}장` : '');
+  const setHint = k => { const t = hintText(k); if (hint.dataset.k !== k || hint.textContent !== t) { hint.dataset.k = k; hint.textContent = t; } };
+  const refreshHint = () => { if (hint.dataset.k) setHint(hint.dataset.k); };
 
   function syncUI() {
     const seated = ctx.mode === 'sit' || ctx.mode === 'watch';
@@ -66,5 +72,5 @@ export function setupHud(ctx) {
   ctx.toastTimer = 0;
   function toast(t) { $('toast').textContent = t; ctx.toastTimer = 2.2; }
 
-  Object.assign(ctx, { setHint, syncUI, toast, renderMeta, renderCreatorVisit, showName });
+  Object.assign(ctx, { setHint, refreshHint, syncUI, toast, renderMeta, renderCreatorVisit, showName });
 }

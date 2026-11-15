@@ -12,6 +12,7 @@ import { isEmailAddress, isSafeLink, isWebLink, parseMusicUrl } from "@/lib/heap
 import { SHELL_KEYS } from "@/lib/heap/template-move";
 import type { HeapChannelPlatform } from "@/lib/heap/platform";
 import type { ReelClass } from "@/lib/heap/caps";
+import { toEngineNote } from "./engine/tree-ids";
 import { RoomEditor } from "./room-editor";
 import { SetupChecklist, setupFlags, type ChecklistAction } from "./setup-checklist";
 import { ShareButton } from "./share-button";
@@ -22,6 +23,23 @@ const DATA_BASE = "/heap/rooms/";
 // 엔진이 캔버스에 글자를 그릴 때 이 두 글꼴 이름을 그대로 쓴다.
 const FONTS_HREF =
   "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600&family=Nanum+Pen+Script&display=swap";
+
+// 쪽지 하나의 전송 모양. notes-repo.ts의 HeapNote에서 Date만 ISO 문자열로 바꾼 것이다 (실시간 읽기의 notes와 같다). 엔진의 tree-ids.js가 엔진 모양으로 바꾼다.
+export type HeapNoteWire = {
+  id: string;
+  name: string | null;
+  mine: boolean;
+  sealed: boolean;
+  hidden: boolean;
+  body?: string;
+  tint: string;
+  font: string;
+  y: number | null;
+  angle: number | null;
+  createdAt: string;
+  reply?: { body: string; font: string; createdAt: string };
+  unread?: boolean;
+};
 
 // page.tsx가 DB 스냅샷을 엔진이 쓰는 모양으로 바꿔 넘긴다. 날짜는 한국 시간 "YYYY.MM.DD" 문자열.
 export type HeapRoomData = {
@@ -51,6 +69,10 @@ export type HeapRoomData = {
   guestbook: { id: string; name: string; createdAt: string }[];
   visits: { today: number; total: number };
   creatorVisit: string | null;
+  // 쪽지 트리: 보는 사람에게 보이는 쪽지 전부, 봉인이 풀리는 시각(ISO, 없으면 null), 방 주인에게만 0이 아닌 안 읽은 쪽지 수
+  notes: HeapNoteWire[];
+  noteRevealAt: string | null;
+  unreadNotes: number;
 };
 
 // 방 주인에게만 넘기는 값 (page.tsx). 체크리스트와 꾸미기의 채널 탭이 읽는다. 주소(url)는 https 만, 아니면 null.
@@ -249,6 +271,11 @@ export function HeapRoom({
         // 가구 위에 얹기: 받침의 윗면 높이, 작은 가구, 위에 선 것 찾기, 저장된 물건을 윗면에 맞추기 (surfaces.ts)
         surfaces,
         policy: HEAP_POLICY,
+        // 쪽지 트리: 엔진 모양의 쪽지 목록(빈 목록이면 빈 트리), 봉인이 풀리는 시각, 방 주인인가(canEdit는 방 주인에게만 켜진다), 안 읽은 수
+        treeNotes: mountData.notes.map(toEngineNote),
+        noteRevealAt: mountData.noteRevealAt,
+        isOwner: canEdit,
+        unreadNotes: mountData.unreadNotes,
         recordVisit: () => recordVisitAction(data.roomUuid),
         addGuestbook: (name: string) => addGuestbookAction(data.roomUuid, name),
         // 원본의 hash + reload 자리. 이동하면 이 방의 effect가 정리되면서 엔진이 dispose된다.
@@ -262,7 +289,7 @@ export function HeapRoom({
       root.removeEventListener("heap:remount", onRemount);
       dispose?.();
     };
-  }, [roomId, viewerName, signedIn, router, resume]);
+  }, [roomId, viewerName, signedIn, canEdit, router, resume]);
 
   // 체크리스트: 방 주인에게, 방이 뜬 뒤, 걸어 다니는 방이나 꾸미기(팔로워로 보기 빼고)에서
   const showChecklist = !!owner && ready && (editing ? !preview : mode === "room");

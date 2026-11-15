@@ -35,7 +35,9 @@ const FRONT_PX = [1200, 1950], REPLY_PX = [720, 900], BACK_PX = [400, 650];
 const hashStr = s => { let h = 2166136261; for (const ch of s) h = Math.imul(h ^ ch.codePointAt(0), 16777619); return h >>> 0; };
 // data.font / data.tint 가 있으면 그것을 쓰고, 없으면 지금처럼 이름과 글에서 정한다 (목은 읽지 않던 선택 필드)
 export const fontFor = data => data.font ?? FAN_FONTS[hashStr(data.name ?? ('익명:' + data.msg)) % FAN_FONTS.length];
-export const tintFor = data => data.tint ?? NOTE_TINTS[hashStr(data.msg) % NOTE_TINTS.length];
+// 숨긴 쪽지(data.hidden: 작성자와 방 주인에게만 보인다)는 종이가 어둡다
+const dimTint = hex => '#' + [1, 3, 5].map(i => Math.round(parseInt(hex.slice(i, i + 2), 16) * 0.78).toString(16).padStart(2, '0')).join('');
+export const tintFor = data => { const t = data.tint ?? NOTE_TINTS[hashStr(data.msg) % NOTE_TINTS.length]; return data.hidden && /^#[0-9a-f]{6}$/i.test(t) ? dimTint(t) : t; };
 
 // 글씨체를 그릴 글자만큼 미리 불러온다. 한글 웹폰트는 unicode-range 조각으로 온다.
 // names: [{ font, text }] 또는 data 목록은 noteFontLoads(list)로 만든다.
@@ -282,6 +284,13 @@ function frontTexture(data, hasReply, anisotropy) {
   g.font = `${nm.px}px "${font}"`; g.fillStyle = '#4a4034'; g.fillText(nm.text, x, ch * 0.875);
   const dt = fitLine(g, String(data.date ?? ''), 'system-ui, sans-serif', 40, 24, metaW);
   g.font = `${dt.px}px system-ui, sans-serif`; g.fillStyle = 'rgba(80,70,55,.7)'; g.fillText(dt.text, x, ch * 0.875 + 62);
+  if (data.hidden) { // 숨겨짐: 오른쪽 위의 작은 딱지
+    g.font = '600 44px system-ui, sans-serif'; g.textAlign = 'right'; g.textBaseline = 'middle';
+    const tw = g.measureText('숨겨짐').width, px = 22, rx = cw - 70 - tw - px * 2, ry = 52, rh = 64;
+    g.strokeStyle = 'rgba(90,80,64,.7)'; g.lineWidth = 3; g.beginPath(); g.roundRect(rx, ry, tw + px * 2, rh, rh / 2); g.stroke();
+    g.fillStyle = 'rgba(90,80,64,.85)'; g.fillText('숨겨짐', cw - 70 - px, ry + rh / 2 + 2);
+    g.textAlign = 'start'; g.textBaseline = 'alphabetic';
+  }
   return texFrom(cv, anisotropy);
 }
 function replyTexture(text, anisotropy) {

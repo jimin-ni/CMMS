@@ -128,7 +128,7 @@ export const HEAP_FUNNEL_POLICY = {
 } as const;
 
 // 쪽지 색과 글꼴 목록. DB에는 id(^[a-z0-9-]{1,24}$)만 저장하고 화면 값은 엔진(tree-note.js)이 가진다.
-// 값을 더하려면 엔진의 NOTE_TINTS, FAN_FONTS와 여기 두 곳을 같이 고친다.
+// 값을 더하려면 엔진의 tree-ids.js(id -> 화면 값 표), tree-note.js의 NOTE_TINTS, FAN_FONTS와 여기를 같이 고친다.
 export const NOTE_TINT_IDS = {
   ivory: "#fbf7ee",
   cream: "#f6efdf",
