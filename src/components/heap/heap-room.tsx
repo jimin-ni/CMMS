@@ -304,7 +304,7 @@ export function HeapRoom({
         unreadNotes: mountData.unreadNotes,
         recordVisit: () => recordVisitAction(data.roomUuid),
         addGuestbook: (name: string) => addGuestbookAction(data.roomUuid, name),
-        // 쪽지 쓰기. addNote 는 서버 액션의 답을 그대로 주되 쪽지를 엔진 모양으로 바꿔 준다 (tree-ids.js). input = { body, tint, font, anonymous, spot }
+        // 쪽지 쓰기. addNote 는 서버 액션의 답을 그대로 주되 쪽지를 엔진 모양으로 바꿔 준다 (tree-ids.js). input = { body, tint, font, displayName, fontSize, ornament, ornamentColor, spot }
         addNote: async (input: unknown) => {
           const result = await addNoteAction(data.roomUuid, input);
           return result.ok ? { ok: true as const, note: toEngineNote(result.note), evictedId: result.evictedId } : result;
@@ -417,17 +417,23 @@ export function HeapRoom({
           aria-label="쪽지 내용"
           placeholder="여기에 써요"
         />
+        <div id="ts-sig" className="ts-sig" hidden>
+          <span aria-hidden="true">- </span>
+          <input id="ts-name" type="text" maxLength={12} lang="ko" autoComplete="off" spellCheck={false} placeholder="익명" aria-label="이름 (비우면 익명)" />
+        </div>
         <div id="ts-ctl" className="ts-ctl">
           <div className="ts-row">
             <div className="ts-tints" id="ts-tints" role="group" aria-label="종이 색" />
-            <div className="ts-seg" role="group" aria-label="이름 공개">
-              <button id="ts-named" type="button" />
-              <button id="ts-anon" type="button">
-                익명
-              </button>
-            </div>
+            <div className="ts-tints ts-swatches" id="ts-swatches" role="group" aria-label="장식 색" />
           </div>
           <div className="ts-fonts" id="ts-fonts" role="group" aria-label="글씨체" />
+          <div className="ts-row">
+            <div className="ts-seg" id="ts-kinds" role="group" aria-label="장식 종류" />
+            <label className="ts-size">
+              글씨 크기
+              <input id="ts-size" type="range" step={1} min={62} max={290} defaultValue={290} />
+            </label>
+          </div>
           <div className="ts-row">
             <span id="ts-count" className="ts-count" aria-live="off" />
             <button id="ts-fold" className="btn" type="button">

@@ -1,7 +1,14 @@
 import { and, asc, eq, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { heapAttempts, heapNoteReplies, heapNotes, heapRooms, user } from "@/lib/schema";
-import { HEAP_POLICY, NOTE_FONT_IDS, NOTE_REPLY_FONT_IDS, NOTE_TINT_IDS } from "@/lib/heap/policy";
+import {
+  HEAP_POLICY,
+  NOTE_FONT_IDS,
+  NOTE_ORNAMENT_COLORS,
+  NOTE_ORNAMENT_KINDS,
+  NOTE_REPLY_FONT_IDS,
+  NOTE_TINT_IDS,
+} from "@/lib/heap/policy";
 import type { Fail, HeapChangesPosition } from "@/lib/heap/repo";
 
 // 쪽지 트리의 DB 접근. repo.ts가 길어서 따로 뒀고, 규칙은 repo.ts와 같다 (쿼리는 이 파일에만, 실패는 { ok: false, reason }).
@@ -39,7 +46,7 @@ async function lockRoomTree(tx: Tx, roomId: string): Promise<void> {
 
 export type HeapNoteReply = { body: string; font: string; createdAt: Date };
 
-// 쪽지 하나. 봉인된 쪽지(sealed)는 body와 reply가 없다. 장식 종류(kind)는 열이 없어서 돌려주지 않는다 (클라이언트가 id 해시로 정한다).
+// 쪽지 하나. 봉인된 쪽지(sealed)는 body와 reply가 없다. 장식(ornament)이 null 인 옛 쪽지는 클라이언트가 id 해시로 정한다.
 export type HeapNote = {
   id: string;
   // 익명이면 모두에게 null (방 주인에게도)
@@ -51,6 +58,10 @@ export type HeapNote = {
   body?: string;
   tint: string;
   font: string;
+  // 0009. null 은 예전 동작 (자동 글자 크기, id 에서 정한 장식).
+  fontSize: number | null;
+  ornament: string | null;
+  ornamentColor: string | null;
   // 트리 위 자리. 쪽지함에 있으면 둘 다 null.
   y: number | null;
   angle: number | null;
@@ -68,6 +79,11 @@ export type HeapNoteInput = {
   tint: string;
   font: string;
   anonymous: boolean;
+  // 작성자가 적은 이름. null 이면 익명 (anonymous 와 같이 움직인다).
+  displayName: string | null;
+  fontSize: number | null;
+  ornament: string | null;
+  ornamentColor: string | null;
   // 트리에 걸 자리. 없으면 쪽지함으로 간다.
   spot: HeapNoteSpot | null;
   // 클라이언트가 정한 쪽지 id (uuid). 쓰기 판에서 접힌 장식이 id 로 정해지므로, 같은 id 를 써야 걸린 장식과 같다. 없거나 이미 있으면 서버가 정한다.
@@ -93,7 +109,39 @@ export function parseNoteInput(
   if (body === null || charLength(body) < 1 || charLength(body) > HEAP_POLICY.noteBodyMaxChars) return fail("invalid-note");
   if (body.split("\n").length > HEAP_POLICY.noteBodyMaxLines) return fail("invalid-note");
 
-  if (typeof raw.anonymous !== "boolean") return fail("invalid-note");
+  // 옛 클라이언트: anonymous 만 보낸다. 새 클라이언트: displayName 을 보내면 anonymous 는 그 값이 정한다.
+  let displayName: string | null = null;
+  let anonymous: boolean;
+  if (raw.displayName !== undefined) {
+    if (raw.displayName !== null && typeof raw.displayName !== "string") return fail("invalid-note");
+    const name = raw.displayName === null ? "" : raw.displayName.replace(/[\r\n\t\u0000]+/g, " ").trim();
+    if (charLength(name) > HEAP_POLICY.noteNameMaxChars) return fail("invalid-note");
+    displayName = name === "" ? null : name;
+    anonymous = displayName === null;
+  } else {
+    if (typeof raw.anonymous !== "boolean") return fail("invalid-note");
+    anonymous = raw.anonymous;
+  }
+
+  let fontSize: number | null = null;
+  if (raw.fontSize !== undefined && raw.fontSize !== null) {
+    const size = raw.fontSize;
+    if (typeof size !== "number" || !Number.isInteger(size)) return fail("invalid-note-style");
+    if (size < HEAP_POLICY.noteFontAbsMin || size > HEAP_POLICY.noteFontAbsMax) return fail("invalid-note-style");
+    fontSize = Math.min(HEAP_POLICY.noteFontMax, Math.max(HEAP_POLICY.noteFontMin, size));
+  }
+  let ornament: string | null = null;
+  if (raw.ornament !== undefined && raw.ornament !== null) {
+    if (typeof raw.ornament !== "string" || !(NOTE_ORNAMENT_KINDS as readonly string[]).includes(raw.ornament)) return fail("invalid-note-style");
+    ornament = raw.ornament;
+  }
+  let ornamentColor: string | null = null;
+  if (raw.ornamentColor !== undefined && raw.ornamentColor !== null) {
+    if (typeof raw.ornamentColor !== "string") return fail("invalid-note-style");
+    const hex = raw.ornamentColor.toLowerCase();
+    if (!(NOTE_ORNAMENT_COLORS as readonly string[]).includes(hex)) return fail("invalid-note-style");
+    ornamentColor = hex;
+  }
   if (typeof raw.tint !== "string" || !Object.hasOwn(NOTE_TINT_IDS, raw.tint)) return fail("invalid-note-style");
   if (typeof raw.font !== "string" || !Object.hasOwn(NOTE_FONT_IDS, raw.font)) return fail("invalid-note-style");
 
@@ -108,7 +156,10 @@ export function parseNoteInput(
     spot = { y, angle };
   }
   const id = isUuid(raw.id) ? raw.id.toLowerCase() : null;
-  return { ok: true, value: { body, tint: raw.tint, font: raw.font, anonymous: raw.anonymous, spot, id } };
+  return {
+    ok: true,
+    value: { body, tint: raw.tint, font: raw.font, anonymous, displayName, fontSize, ornament, ornamentColor, spot, id },
+  };
 }
 
 export function parseReplyInput(
@@ -184,6 +235,10 @@ function noteSelect(executor: Executor) {
       authorId: heapNotes.authorId,
       authorName: user.name,
       anonymous: heapNotes.anonymous,
+      displayName: heapNotes.displayName,
+      fontSize: heapNotes.fontSize,
+      ornament: heapNotes.ornament,
+      ornamentColor: heapNotes.ornamentColor,
       body: heapNotes.body,
       tint: heapNotes.tint,
       font: heapNotes.font,
@@ -215,12 +270,16 @@ function toNote(row: NoteRow, ctx: NoteContext, viewerId: string | null): HeapNo
   const sealed = ctx.sealedNow && !mine && !(owner && ctx.ownerEarly);
   const note: HeapNote = {
     id: row.id,
-    name: row.anonymous ? null : row.authorName,
+    // 작성자가 적은 이름이 있으면 그것, 없으면 익명이 아닌 옛 쪽지만 계정 이름
+    name: row.displayName ?? (row.anonymous ? null : row.authorName),
     mine,
     sealed,
     hidden: row.hiddenAt !== null,
     tint: row.tint,
     font: row.font,
+    fontSize: row.fontSize,
+    ornament: row.ornament,
+    ornamentColor: row.ornamentColor,
     y: row.posY,
     angle: row.posAngle,
     createdAt: row.createdAt,
@@ -443,6 +502,10 @@ export async function addNote(
         tint: input.tint,
         font: input.font,
         anonymous: input.anonymous,
+        displayName: input.displayName,
+        fontSize: input.fontSize,
+        ornament: input.ornament,
+        ornamentColor: input.ornamentColor,
         posY: spot?.y ?? null,
         posAngle: spot?.angle ?? null,
         createdAt: clockNow,

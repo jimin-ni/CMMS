@@ -6,7 +6,8 @@
 //   - 카메라는 그대로다. 펼친 종이(쪽지 읽기와 같은 3D 종이)가 화면 가운데에 서고, 그 위에 투명한 <textarea> 가 겹친다.
 //     글자 크기와 줄바꿈은 읽을 때와 같은 fitText 로 정하므로 접은 뒤의 글과 모양이 거의 같다. 입력(한글 조합 포함)은 브라우저가 받는다.
 //   - 200자, 8줄 (policy.ts 의 noteBodyMaxChars, noteBodyMaxLines). 줄은 서버처럼 \n 으로 센다.
-//   - L7 초안: 글, 색, 글씨체, 익명이 방마다 localStorage 에 남는다. 글이 있는 판에서 Esc 나 취소를 누르면 버리기 / 계속 쓰기를 묻는다.
+//   - L7 초안: 글, 색, 글씨체, 글자 크기, 이름, 장식 종류와 색이 방마다 localStorage 에 남는다 (O1 O2 O3).
+//     글자 크기 슬라이더의 범위는 [하한, 지금 글이 종이에 드는 가장 큰 크기]이고, 이름은 종이 끝 서명 줄 자리의 입력(#ts-name, 12자, 비면 익명)이다. 글이 있는 판에서 Esc 나 취소를 누르면 버리기 / 계속 쓰기를 묻는다.
 //   - 접어서 달기: 읽기의 거꾸로 네 박자로 접혀 장식 안에 들어간다. 장식은 화면 아래쪽에 놓이고, 집어서 트리에 끌어다 놓는다 (L11).
 //     집기 전에는 빈 곳을 끌어 트리를 돌릴 수 있다. 끄는 동안은 돌지 않는다. 장식은 놓일 자리에서 초록(걸림) 또는 빨강(다른 쪽지와 너무 가까움)이다.
 //     트리 밖에 놓으면 쪽지함으로 간다. 걸 자리가 트리 어디에도 없으면 L12 대로 쪽지함에 바로 넣는다.
@@ -21,8 +22,9 @@
 import * as THREE from 'three';
 import { mulberry32 } from './util.js';
 import {
-  applyNote, writeText, eraseText, fitText, frontTextBox, loadNoteFonts, NOTE_FONTS, SHEET, N_FLY, ease,
+  applyNote, writeText, eraseText, fitText, fitLine, sizeRangeFor, frontTextBox, loadNoteFonts, NOTE_FONTS, SHEET, N_FLY, ease,
 } from './tree-note.js';
+import { KINDS, KIND_KO, MAIN_SWATCHES } from './tree-ornament.js';
 import { TINT_VALUES, FONT_VALUES, noteDate } from './tree-ids.js';
 
 // ---------- 순수 함수 ----------
@@ -38,7 +40,10 @@ export function clampBody(text, maxChars, maxLines) {
 }
 export const countBody = s => ({ chars: Array.from(s).length, lines: s.split('\n').length });
 
-export const DRAFT_DEFAULT = { text: '', tint: 'ivory', font: 'nanum-pen', anonymous: false };
+// name: null 이면 손대지 않은 것이라 계정 이름이 미리 들어가고, 문자열(빈 문자열 포함)은 쓴 사람이 적은 것이다 (비면 익명).
+// fontSize: null 이면 자동 맞춤. kind, main: null 이면 처음 열 때 무작위로 정해 초안에 남긴다.
+export const DRAFT_DEFAULT = { text: '', tint: 'ivory', font: 'nanum-pen', name: null, fontSize: null, kind: null, main: null };
+export const NAME_MAX = 12;
 /** localStorage 의 문자열 -> 초안. 깨졌거나 모르는 값은 기본값으로 */
 export function parseDraft(raw, maxChars, maxLines) {
   let o = null;
@@ -48,7 +53,11 @@ export function parseDraft(raw, maxChars, maxLines) {
     text: typeof o.text === 'string' ? clampBody(o.text, maxChars, maxLines) : '',
     tint: Object.hasOwn(TINT_VALUES, o.tint) ? o.tint : DRAFT_DEFAULT.tint,
     font: Object.hasOwn(FONT_VALUES, o.font) ? o.font : DRAFT_DEFAULT.font,
-    anonymous: o.anonymous === true,
+    // 예전 초안의 anonymous: true 는 빈 이름(익명)으로 옮긴다
+    name: typeof o.name === 'string' ? Array.from(o.name).slice(0, NAME_MAX).join('') : o.anonymous === true ? '' : null,
+    fontSize: Number.isFinite(o.fontSize) ? Math.round(o.fontSize) : null,
+    kind: KINDS.includes(o.kind) ? o.kind : null,
+    main: MAIN_SWATCHES.some(([, hex]) => hex === o.main) ? o.main : null,
   };
 }
 
@@ -76,7 +85,7 @@ export function setupTreeWrite(ctx, T) {
 
   const sheetEl = $('tree-sheet'), ta = $('ts-text'), ctl = $('ts-ctl'), dragEl = $('ts-drag');
   const tintsEl = $('ts-tints'), fontsEl = $('ts-fonts'), countEl = $('ts-count');
-  const namedBtn = $('ts-named'), anonBtn = $('ts-anon');
+  const kindsEl = $('ts-kinds'), swatchEl = $('ts-swatches'), sizeEl = $('ts-size'), sigEl = $('ts-sig'), sigIn = $('ts-name');
   const delBtn = $('tree-del'), confirmEl = $('tree-confirm');
   const writeBtn = $('tree-write'), foldBtn = $('ts-fold'), cancelBtn = $('ts-cancel'), boxBtn = $('ts-box'), reopenBtn = $('ts-reopen');
   const setDisabled = (el, off) => { if (el.getAttribute('aria-disabled') !== String(off)) { if (off) el.setAttribute('aria-disabled', 'true'); else el.removeAttribute('aria-disabled'); } };
@@ -103,13 +112,18 @@ export function setupTreeWrite(ctx, T) {
   }
 
   // ----- 화면 -----
+  // 이름: 손대지 않았으면 계정 이름. 비면 익명 (null).
+  const nameNow = () => (draft.name ?? opts.viewerName ?? '').trim();
   const dataOf = final => ({
     id: sheet.id,
-    name: draft.anonymous ? null : (opts.viewerName || null),
+    name: nameNow() || null,
     date: final ? noteDate(new Date().toISOString()) : '',
     msg: final ? draft.text.trim() : '',
     tint: TINT_VALUES[draft.tint],
     font: FONT_VALUES[draft.font],
+    kind: draft.kind,
+    main: draft.main,
+    ...(draft.fontSize === null ? {} : { fontSize: draft.fontSize }),
   });
   const showCtl = () => st === 'opening' || st === 'sheet' || st === 'unfolding' || st === 'returning';
   function ui() {
@@ -117,6 +131,7 @@ export function setupTreeWrite(ctx, T) {
     root.classList.toggle('tree-writing', writing);
     sheetEl.hidden = !writing;
     ta.hidden = st !== 'sheet';
+    sigEl.hidden = st !== 'sheet';
     ctl.hidden = !showCtl();
     ctl.inert = st !== 'sheet';
     dragEl.hidden = !(st === 'toHand' || st === 'ready' || st === 'carry' || st === 'sending');
@@ -148,15 +163,22 @@ export function setupTreeWrite(ctx, T) {
       fontsEl.append(b);
     }
     loadNoteFonts(Object.keys(FONT_VALUES).map(k => ({ font: FONT_VALUES[k], text: FONT_LABEL[k] ?? k })));
+    for (const kind of KINDS) {
+      const b = document.createElement('button'); b.type = 'button'; b.dataset.key = kind;
+      b.textContent = KIND_KO[kind] ?? kind; b.title = `장식 ${KIND_KO[kind] ?? kind}`; b.setAttribute('aria-label', `장식 ${KIND_KO[kind] ?? kind}`);
+      kindsEl.append(b);
+    }
+    for (const [label, hex] of MAIN_SWATCHES) {
+      const b = document.createElement('button'); b.type = 'button'; b.dataset.key = hex;
+      b.style.background = hex; b.title = `장식 색 ${label}`; b.setAttribute('aria-label', `장식 색 ${label}`);
+      swatchEl.append(b);
+    }
   }
   function syncChips() {
     for (const b of tintsEl.children) b.setAttribute('aria-pressed', String(b.dataset.key === draft.tint));
     for (const b of fontsEl.children) b.setAttribute('aria-pressed', String(b.dataset.key === draft.font));
-    const name = opts.viewerName || '';
-    namedBtn.textContent = name ? `이름으로 (${name})` : '이름으로';
-    namedBtn.title = name ? `${name} 이름으로 남겨요` : '이름으로 남겨요';
-    namedBtn.setAttribute('aria-pressed', String(!draft.anonymous));
-    anonBtn.setAttribute('aria-pressed', String(draft.anonymous));
+    for (const b of kindsEl.children) b.setAttribute('aria-pressed', String(b.dataset.key === draft.kind));
+    for (const b of swatchEl.children) b.setAttribute('aria-pressed', String(b.dataset.key === draft.main));
   }
   function paintCount() {
     const { chars, lines } = countBody(ta.value);
@@ -182,16 +204,38 @@ export function setupTreeWrite(ctx, T) {
     }
     return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
   }
+  // 글자 크기의 범위는 [하한, 지금 글이 상자에 드는 가장 큰 크기]다. 고른 값(draft.fontSize)은 늘 그 안으로 맞춘다. null 이면 자동 맞춤(가장 큰 크기).
+  let sizeRange = { min: 62, max: 290 };
+  const sizeNow = () => Math.min(sizeRange.max, Math.max(sizeRange.min, draft.fontSize ?? sizeRange.max));
   function fitFor(text, fontName) {
     const s = NOTE_FONTS.scale[fontName] ?? 1, b = frontTextBox(false);
     measureCtx ||= document.createElement('canvas').getContext('2d');
-    return fitText(measureCtx, text, fontName, b.boxW, b.boxH, Math.round(290 * s), Math.round(62 * s));
+    sizeRange = sizeRangeFor(measureCtx, text, fontName);
+    return fitText(measureCtx, text, fontName, b.boxW, b.boxH, Math.round(290 * s), Math.round(62 * s), draft.fontSize === null ? null : sizeNow());
+  }
+  // 슬라이더는 글이 바뀔 때마다 범위와 값을 다시 맞춘다. 글이 길어져 최대가 줄면 값도 같이 내려간다.
+  function paintSize() {
+    const { min, max } = sizeRange, v = sizeNow();
+    sizeEl.min = String(min); sizeEl.max = String(max); sizeEl.value = String(v);
+    sizeEl.disabled = max <= min;
+  }
+  // 종이 끝의 서명 줄 ("- 이름"). 접은 뒤 종이에 그려지는 줄(tree-note.js 의 frontTexture)과 같은 자리와 크기다.
+  function layoutSig(r, b, k, fontName) {
+    const s = NOTE_FONTS.scale[fontName] ?? 1;
+    measureCtx ||= document.createElement('canvas').getContext('2d');
+    const nm = fitLine(measureCtx, '- ' + (sigIn.value || '익명'), `"${fontName}"`, Math.round(84 * s), Math.round(40 * s), b.boxW);
+    const g = sigEl.style;
+    g.left = `${r.x + b.x * k}px`; g.width = `${b.boxW * k}px`;
+    g.top = `${r.y + (b.ch * 0.875 - nm.px * 0.95) * k}px`; g.height = `${nm.px * 1.2 * k}px`;
+    g.fontFamily = `"${fontName}", system-ui, sans-serif`; g.fontSize = `${nm.px * k}px`; g.lineHeight = `${nm.px * 1.2 * k}px`;
   }
   function layoutText() {
     if (st !== 'sheet' && st !== 'opening') return;
     const r = paperRect(), b = frontTextBox(false), k = r.w / b.cw, font = FONT_VALUES[draft.font];
     // 글이 비었을 때는 짧은 글로 크기를 잡는다 (비어 있는데 글자가 거대하면 놀란다)
     const fit = fitFor(ta.value || '가나다라마바사아자차', font);
+    paintSize();
+    layoutSig(r, b, k, font);
     const s = ta.style;
     // 위쪽 여백: drawBlock 이 남는 높이의 0.4 만큼 글을 내려 그리므로 글상자도 같이 내린다 (접은 뒤의 글 자리와 맞는다).
     // 너비는 조금 넉넉히 준다: 글상자의 줄바꿈이 캔버스보다 한 줄 일찍 일어나 내용이 상자보다 높아지는 일을 막는다.
@@ -223,12 +267,18 @@ export function setupTreeWrite(ctx, T) {
     if (old) T.disposeNote(old);
   }
   const tintChanged = () => { if (st === 'sheet') buildSheet(false); };
+  const pick = list => list[Math.floor(Math.random() * list.length)];
 
   function openSheet() {
     const r = T.syncRig();
     if (!r || !r.settled || ctx.mode !== 'tree' || st !== 'idle') return false;
     draft = loadDraft();
+    // 장식은 처음 열 때 무작위로 정하고 초안에 남긴다
+    if (!draft.kind) draft.kind = pick(KINDS);
+    if (!draft.main) draft.main = pick(MAIN_SWATCHES)[1];
+    saveDraft();
     ensureChips(); syncChips();
+    sigIn.value = nameNow();
     sheet = { n: null, id: newNoteId() }; // 서버도 이 id 로 쪽지를 만든다: 접힌 장식과 걸린 장식이 같다
     ta.value = draft.text; paintCount();
     setSt('sheet'); // 여는 연출은 없다: 빈 판이 바로 펼쳐진 채로 나타나고 글을 쓸 수 있다 (O5)
@@ -359,7 +409,15 @@ export function setupTreeWrite(ctx, T) {
     setSt('sending');
     let res;
     try {
-      res = await opts.addNote({ id: sheet.id, body: draft.text.trim(), tint: draft.tint, font: draft.font, anonymous: draft.anonymous, spot });
+      const text = draft.text.trim(), name = nameNow();
+      // 고른 크기가 없으면 null(자동). 있으면 글에 맞게 줄어든 값을 보낸다 (서버도 범위로 맞춘다).
+      let fontSize = null;
+      if (draft.fontSize !== null) {
+        measureCtx ||= document.createElement('canvas').getContext('2d');
+        const rg = sizeRangeFor(measureCtx, text, FONT_VALUES[draft.font]);
+        fontSize = Math.min(rg.max, Math.max(rg.min, draft.fontSize));
+      }
+      res = await opts.addNote({ id: sheet.id, body: text, tint: draft.tint, font: draft.font, displayName: name || null, fontSize, ornament: draft.kind, ornamentColor: draft.main, spot });
     } catch {
       res = { ok: false, reason: 'network', message: '쪽지를 보내지 못했어요. 잠시 뒤 다시 시도해 주세요.' };
     }
@@ -438,8 +496,30 @@ export function setupTreeWrite(ctx, T) {
     loadNoteFonts([{ font: FONT_VALUES[draft.font], text: draft.text }]).then(() => { if (!ctx.disposed) layoutText(); });
     layoutText();
   });
-  on(namedBtn, 'click', () => { draft.anonymous = false; saveDraft(); syncChips(); });
-  on(anonBtn, 'click', () => { draft.anonymous = true; saveDraft(); syncChips(); });
+  on(kindsEl, 'click', e => {
+    const b = e.target.closest?.('button[data-key]'); if (!b || b.dataset.key === draft.kind) return;
+    draft.kind = b.dataset.key; saveDraft(); syncChips(); tintChanged();
+  });
+  on(swatchEl, 'click', e => {
+    const b = e.target.closest?.('button[data-key]'); if (!b || b.dataset.key === draft.main) return;
+    draft.main = b.dataset.key; saveDraft(); syncChips(); tintChanged();
+  });
+  on(sizeEl, 'input', () => { draft.fontSize = Number(sizeEl.value); saveDraft(); layoutText(); });
+  on(sizeEl, 'pointerup', () => { if (st === 'sheet') ta.focus({ preventScroll: true }); }); // 끌고 난 뒤에는 글을 계속 쓴다
+  // 이름: 12자(코드포인트)까지. 한글 조합 중에는 값을 건드리지 않는다.
+  const nameChanged = () => {
+    let v = sigIn.value.replace(/[\r\n\t]+/g, ' ');
+    const cps = Array.from(v);
+    if (cps.length > NAME_MAX) v = cps.slice(0, NAME_MAX).join('');
+    if (v !== sigIn.value) sigIn.value = v;
+    draft.name = v; saveDraft(); layoutText();
+  };
+  on(sigIn, 'input', e => { if (e.isComposing) { draft.name = sigIn.value; layoutText(); return; } nameChanged(); });
+  on(sigIn, 'compositionend', nameChanged);
+  on(sigIn, 'keydown', e => {
+    if (e.key === 'Escape' && !e.isComposing) { e.preventDefault(); e.stopPropagation(); escape(); }
+    else if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); ta.focus({ preventScroll: true }); }
+  });
   on($('tc-yes'), 'click', () => {
     const c = confirmState; closeConfirm(false);
     if (c?.kind === 'discard') discard(); else if (c?.kind === 'delete') doDelete(c.id); else if (c?.kind === 'ask') c.onYes?.();

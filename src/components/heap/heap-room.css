@@ -452,6 +452,14 @@
 .heap-room .ts-tints { display: flex; gap: 6px; }
 .heap-room .ts-tints button { width: 26px; height: 26px; padding: 0; border-radius: 50%; border: 2px solid rgba(243, 234, 219, 0.35); cursor: pointer; }
 .heap-room .ts-tints button[aria-pressed="true"] { border-color: var(--clay); box-shadow: 0 0 0 2px var(--paper); }
+.heap-room .ts-swatches button { width: 22px; height: 22px; }
+.heap-room .ts-size { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--paper-dim); }
+.heap-room .ts-size input { width: 120px; accent-color: var(--clay); }
+.heap-room .ts-sig { position: absolute; display: flex; align-items: baseline; margin: 0; padding: 0; color: #4a4034; pointer-events: none; white-space: pre; }
+.heap-room .ts-sig[hidden] { display: none; }
+.heap-room .ts-sig input { flex: 1; min-width: 0; margin: 0; padding: 0; border: 0; outline: 0; background: transparent; color: inherit; font: inherit; line-height: inherit; caret-color: var(--clay); pointer-events: auto; border-bottom: 1px dashed rgba(74, 64, 52, 0.28); }
+.heap-room .ts-sig input:focus { border-bottom-color: var(--clay); }
+.heap-room .ts-sig input::placeholder { color: rgba(74, 64, 52, 0.45); }
 .heap-room .ts-seg { display: flex; border-radius: 999px; overflow: hidden; border: 1px solid rgba(243, 234, 219, 0.35); }
 .heap-room .ts-seg button { font: 600 13px var(--ui); color: var(--paper); background: transparent; border: 0; padding: 6px 12px; cursor: pointer; max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .heap-room .ts-seg button[aria-pressed="true"] { background: var(--clay); }

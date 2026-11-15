@@ -108,7 +108,7 @@ function toNoteDto(note: HeapNote): HeapNoteDto {
   };
 }
 
-// 쪽지 남기기. input = { body, tint, font, anonymous, spot?: { y, angle } | null }
+// 쪽지 남기기. input = { body, tint, font, displayName?, fontSize?, ornament?, ornamentColor?, spot?: { y, angle } | null } (옛 클라이언트는 anonymous)
 export async function addNoteAction(
   roomId: string,
   input: unknown,

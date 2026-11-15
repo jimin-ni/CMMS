@@ -9,6 +9,7 @@ import {
   pgTable,
   primaryKey,
   real,
+  smallint,
   text,
   timestamp,
   uuid,
@@ -218,6 +219,11 @@ export const heapNotes = pgTable("heap_notes", {
   tint: text("tint").notNull(),
   font: text("font").notNull(),
   anonymous: boolean("anonymous").notNull().default(false),
+  // 0009. 모두 null 허용이고 null은 예전 동작이다 (자동 글자 크기, id로 정한 장식, 계정 이름).
+  fontSize: smallint("font_size"),
+  ornament: text("ornament"),
+  ornamentColor: text("ornament_color"),
+  displayName: text("display_name"),
   posY: real("pos_y"),
   posAngle: real("pos_angle"),
   hiddenAt: timestamp("hidden_at", { withTimezone: true }),
@@ -232,6 +238,8 @@ export const heapNoteReplies = pgTable("heap_note_replies", {
   authorId: text("author_id").notNull(),
   body: text("body").notNull(),
   font: text("font").notNull(),
+  // 0009. 쪽지의 font_size와 같은 뜻이다. 아직 쓰지 않는다.
+  fontSize: smallint("font_size"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

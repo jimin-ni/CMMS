@@ -56,5 +56,9 @@ export function toEngineNote(n) {
   if (Object.hasOwn(TINT_VALUES, n.tint)) out.tint = TINT_VALUES[n.tint];
   if (Object.hasOwn(FONT_VALUES, n.font)) out.font = FONT_VALUES[n.font];
   if (n.reply && typeof n.reply.body === 'string') out.reply = n.reply.body;
+  // 0009: 글자 크기, 장식 종류, 장식 주색. null 이면 비워 두어 예전처럼 자동 맞춤과 id 해시가 정한다.
+  if (Number.isFinite(n.fontSize)) out.fontSize = n.fontSize;
+  if (typeof n.ornament === 'string') out.kind = n.ornament;
+  if (typeof n.ornamentColor === 'string') out.main = n.ornamentColor;
   return out;
 }

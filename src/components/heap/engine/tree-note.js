@@ -197,7 +197,20 @@ function ellipsize(g, s, maxW) {
   return gs.join('') + '…';
 }
 // 줄바꿈한 글이 상자에 드는 가장 큰 크기. 짧은 쪽지는 크게, 긴 쪽지는 작게, minPx 아래로는 가지 않는다
-export function fitText(g, text, font, boxW, boxH, maxPx, minPx) {
+export function fitText(g, text, font, boxW, boxH, maxPx, minPx, wantPx = null) {
+  const auto = fitAuto(g, text, font, boxW, boxH, maxPx, minPx);
+  if (!Number.isFinite(wantPx)) return auto;
+  // 고른 크기는 상자에 드는 가장 큰 크기보다 크지 않고 하한보다 작지 않다
+  const px = Math.round(Math.min(auto.px, Math.max(minPx, wantPx)));
+  return px >= auto.px ? auto : fitAuto(g, text, font, boxW, boxH, px, minPx);
+}
+// 쪽지 앞면 글자 크기의 범위: 하한(읽을 수 있는 가장 작은 크기)과 지금 글이 상자에 드는 가장 큰 크기 (캔버스 픽셀, 글씨체 배율 포함)
+export function sizeRangeFor(g, text, font, hasReply = false) {
+  const s = FONT_SCALE[font] ?? 1, { boxW, boxH } = frontTextBox(hasReply);
+  const min = Math.round(62 * s), auto = fitAuto(g, text, font, boxW, boxH, Math.round(290 * s), min);
+  return { min, max: Math.max(min, auto.px) };
+}
+function fitAuto(g, text, font, boxW, boxH, maxPx, minPx) {
   let fit;
   // 가득 찬 줄에 매달린 닫는 부호가 boxW를 넘을 수 있어 너비도 본다
   const widthOk = lines => lines.every(l => g.measureText(l).width <= boxW);
@@ -281,7 +294,7 @@ function frontTexture(data, hasReply, anisotropy) {
   const g = cv.getContext('2d'); drawPaper(g, cw, ch, tintFor(data), { ruled: true, knot: true });
   const font = fontFor(data), s = FONT_SCALE[font] ?? 1;
   const { x, boxW, top, boxH } = frontTextBox(hasReply);
-  const fit = fitText(g, data.msg, font, boxW, boxH, Math.round(290 * s), Math.round(62 * s));
+  const fit = fitText(g, data.msg, font, boxW, boxH, Math.round(290 * s), Math.round(62 * s), data.fontSize);
   drawBlock(g, fit, font, x, top, boxW, boxH, '#2e2a24', fit.lines.length === 1);
   // 이름과 날짜는 왼쪽 아래. 답장이 있으면 그 왼쪽에 머문다
   const metaW = hasReply ? cw * 0.47 - x - 20 : boxW;

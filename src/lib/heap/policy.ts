@@ -57,6 +57,14 @@ export const HEAP_POLICY = {
   noteBodyMaxLines: 8,
   // 답장 상한은 200자다 (DECISIONS N6). 0008의 check는 500자로 남겨 두므로 이 값을 500보다 키우면 안 된다.
   noteReplyMaxChars: 200,
+  // 쪽지 글자 크기 (0009). 종이 캔버스 픽셀이고 글씨체 배율이 곱해진 실제 크기다 (엔진 tree-note.js 의 62..290 에 배율 0.95..1.3).
+  // 이 범위 밖이지만 0009의 check(20..400) 안인 값은 범위로 맞추고, check 밖이면 거절한다.
+  noteFontMin: 56,
+  noteFontMax: 380,
+  noteFontAbsMin: 20,
+  noteFontAbsMax: 400,
+  // 쓴 이름 (0009 display_name). 코드포인트 기준.
+  noteNameMaxChars: 12,
   // 팬 한 명이 방 하나에 하루(한국 시간) 동안 남길 수 있는 쪽지 수. 지운 쪽지는 세지 않는다.
   notesPerDay: 5,
   // 트리에 걸 수 있는 쪽지 수. 넘으면 답장 없는 가장 오래된 쪽지가 쪽지함으로 내려간다.
@@ -148,3 +156,8 @@ export const NOTE_FONT_IDS = {
 } as const;
 // 방 주인의 답장 글꼴. 지금은 하나다.
 export const NOTE_REPLY_FONT_IDS = { "east-sea-dokdo": "East Sea Dokdo" } as const;
+
+// 쪽지 장식 종류와 주색 (0009). 엔진 tree-ornament.js 의 KINDS, MAIN_SWATCHES 와 같아야 한다.
+// 주색은 이 네 색만 받는다 (소문자 hex). 색을 더하려면 엔진의 MAIN_SWATCHES 와 여기를 같이 고친다.
+export const NOTE_ORNAMENT_KINDS = ["bauble", "gift", "mitten"] as const;
+export const NOTE_ORNAMENT_COLORS = ["#b8394a", "#efe4cf", "#d4a537", "#a6613c"] as const;
