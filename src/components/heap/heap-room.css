@@ -370,7 +370,11 @@
 .heap-room .setup-label { min-width: 0; display: flex; flex-direction: column; }
 .heap-room .setup-label small { font-size: 11px; color: rgba(47, 44, 36, 0.55); overflow-wrap: anywhere; }
 .heap-room .setup-check li button { margin-left: auto; flex: none; border: 0; background: var(--clay); color: #fff; border-radius: 6px; padding: 1px 8px; cursor: pointer; font: 600 12px var(--ui); }
-.heap-room .setup-note { margin: 6px 0 0; font-size: 12px; color: #4f6a2a; overflow-wrap: anywhere; }
+/* 완료 안내: 4초 보인 뒤 0.6초에 걸쳐 사라진다 (setup-checklist.tsx 의 DONE_SHOW_MS, DONE_FADE_MS) */
+.heap-room .setup-done p { margin: 2px 0 0; font-size: 13px; line-height: 1.45; }
+.heap-room .setup-done { animation: setup-done-in 0.25s ease-out; transition: opacity 0.6s ease, transform 0.6s ease; }
+.heap-room .setup-done.leaving { opacity: 0; transform: translateY(-6px); }
+@keyframes setup-done-in { from { opacity: 0; transform: translateY(4px); } }
 .heap-room .setup-pill { position: absolute; overflow: hidden; border: 0; border-radius: 999px; padding: 6px 14px 8px; background: rgba(243, 234, 219, 0.96); color: var(--ink); font: 600 13px var(--ui); cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); }
 .heap-room .setup-pill i { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--olive); }
 

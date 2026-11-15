@@ -4,9 +4,10 @@ import { useEffect, useState } from "react";
 import { HEAP_TEMPLATES } from "@/lib/heap/templates";
 
 // 첫 방 열기 체크리스트 (DECISIONS A8, 판정 J4). 방 주인에게만, 방에서도 꾸미기에서도 왼쪽 카드로 보인다.
-// 일곱 줄이 모두 차면 사라지고, 접으면 진행 알약이 되고, 숨기기를 누르면 이 브라우저에서는 다시 나오지 않는다 (localStorage).
+// 접으면 진행 알약이 되고, 숨기기를 누르면 이 브라우저에서는 다시 나오지 않는다 (localStorage).
 // 줄은 실제 상태로 찬다: 방 이름(닉네임과 다른가), 연결한 채널 수, 가구에 달린 기능(꾸미기 중이면 저장 전 것), 저장한 레이아웃이 템플릿 그대로인가.
-// 링크 공유하기만 이 브라우저의 기록(주소를 복사했거나 방 HUD의 공유를 썼는지)으로 찬다.
+// 여섯 줄이 이 화면에서 모두 차면 완료 안내를 잠깐 보이고 사라진다 (판정 2026-11-14). 공유는 안내가 가리키는 다음 단계라 줄에 없다.
+// 처음부터 모두 찬 방에서는 안내 없이 아무것도 그리지 않는다.
 // 이 컴포넌트는 엔진이 뜬 뒤(heap:ready)에만 그려진다: 서버 렌더에 없으니 localStorage를 첫 렌더에서 읽어도 어긋나지 않는다.
 
 export type ChecklistAction = "name" | "pc" | "keepsake" | "palette" | "channel";
@@ -34,9 +35,10 @@ function signature(layout: Record<string, unknown>): string {
 const TEMPLATE_SIGS = new Set(HEAP_TEMPLATES.map((t) => signature(t.layout)));
 
 const HIDE_KEY = "heap-setup-hidden:";
-const SHARE_KEY = "heap-setup-shared:";
-// 공유했다는 알림. 방 HUD의 공유 단추(share-button.tsx)가 보내고, 열려 있는 체크리스트가 듣는다. detail 은 방의 roomUuid.
-const SHARED_EVENT = "heap:setup-shared";
+// 완료 안내를 보이는 시간과 사라지는 시간 (ms). 사라지는 시간은 heap-room.css 의 .setup-check.leaving 과 맞춘다.
+const DONE_SHOW_MS = 4000;
+const DONE_FADE_MS = 600;
+
 function readFlag(key: string): boolean {
   try {
     return window.localStorage.getItem(key) === "1";
@@ -52,11 +54,8 @@ function writeFlag(key: string) {
   }
 }
 
-// 이 방을 공유했다고 적는다 (링크 공유하기 줄이 찬다). 방 HUD의 공유 단추가 부른다.
-export function markShared(roomUuid: string) {
-  writeFlag(SHARE_KEY + roomUuid);
-  window.dispatchEvent(new CustomEvent(SHARED_EVENT, { detail: roomUuid }));
-}
+// list: 줄을 보인다. done: 완료 안내. leaving: 안내가 사라지는 중. gone: 그리지 않는다.
+type Phase = "list" | "done" | "leaving" | "gone";
 
 export function SetupChecklist({
   roomId,
@@ -80,30 +79,9 @@ export function SetupChecklist({
   onAction: (action: ChecklistAction) => void;
 }) {
   const [hidden, setHidden] = useState(() => readFlag(HIDE_KEY + roomUuid));
-  const [shared, setShared] = useState(() => readFlag(SHARE_KEY + roomUuid));
   const [open, setOpen] = useState(true);
-  const [note, setNote] = useState("");
-  useEffect(() => {
-    const onShared = (e: Event) => {
-      if ((e as CustomEvent<string>).detail === roomUuid) setShared(true);
-    };
-    window.addEventListener(SHARED_EVENT, onShared);
-    return () => window.removeEventListener(SHARED_EVENT, onShared);
-  }, [roomUuid]);
 
   const url = `/room/${encodeURIComponent(roomId)}`;
-  const share = async () => {
-    const full = `${window.location.origin}${url}`;
-    try {
-      await navigator.clipboard.writeText(full);
-      writeFlag(SHARE_KEY + roomUuid);
-      setShared(true);
-      setNote("방 주소를 복사했어요");
-    } catch {
-      setNote(`복사하지 못했어요 · ${full}`);
-    }
-  };
-
   const decorated = savedThisVisit || !TEMPLATE_SIGS.has(signature(savedLayout));
   // [이름, 찼는가, 단추 이름, 누르면]  단추가 없으면 null
   const rows: [string, boolean, string | null, (() => void) | null][] = [
@@ -113,10 +91,47 @@ export function SetupChecklist({
     ["링크 놓기", flags.pc, "하기", () => onAction("pc")],
     ["기념품 놓기", flags.keepsake, "하기", () => onAction("keepsake")],
     ["방 꾸미고 저장하기", decorated, "하기", () => onAction("palette")],
-    ["링크 공유하기", shared, "복사", () => void share()],
   ];
   const done = rows.filter((r) => r[1]).length;
-  if (hidden || done === rows.length) return null;
+  const allDone = done === rows.length;
+
+  // 모두 찬 순간을 렌더 중에 알아챈다 (이전 값과 견주는 React 권장 방식). 처음부터 모두 찼으면 gone 으로 시작한다.
+  // 안내 중에 줄이 다시 비면 (꾸미기에서 링크를 지우는 등) 목록으로 돌아간다.
+  const [phase, setPhase] = useState<Phase>(allDone ? "gone" : "list");
+  const [prevAllDone, setPrevAllDone] = useState(allDone);
+  if (allDone !== prevAllDone) {
+    setPrevAllDone(allDone);
+    setPhase(allDone ? "done" : "list");
+  }
+
+  useEffect(() => {
+    if (phase === "done") {
+      const t = window.setTimeout(() => setPhase("leaving"), DONE_SHOW_MS);
+      return () => window.clearTimeout(t);
+    }
+    if (phase === "leaving") {
+      const t = window.setTimeout(() => setPhase("gone"), DONE_FADE_MS);
+      return () => window.clearTimeout(t);
+    }
+  }, [phase]);
+
+  if (hidden || phase === "gone") return null;
+
+  if (phase === "done" || phase === "leaving") {
+    return (
+      <section
+        className={`setup-check setup-done${phase === "leaving" ? " leaving" : ""}`}
+        role="status"
+        aria-label="첫 방 열기 완료"
+      >
+        <h3>방 열기 완료</h3>
+        <div className="setup-meter" aria-hidden="true">
+          <i style={{ width: "100%" }} />
+        </div>
+        <p>첫 방 꾸미기를 모두 마쳤어요. 저장한 뒤에는 위의 ‘공유’로 방을 알릴 수 있어요.</p>
+      </section>
+    );
+  }
 
   const title = `방 열기 ${done}/${rows.length}`;
   if (!open) {
@@ -158,8 +173,7 @@ export function SetupChecklist({
               {label}
               {label === "URL 정하기" && <small>{url}</small>}
             </span>
-            {/* 링크 공유하기는 찬 뒤에도 다시 복사할 수 있다 */}
-            {act && run && (!ok || label === "링크 공유하기") && (
+            {act && run && !ok && (
               <button type="button" onClick={run}>
                 {act}
               </button>
@@ -167,11 +181,6 @@ export function SetupChecklist({
           </li>
         ))}
       </ol>
-      {note && (
-        <p className="setup-note" role="status">
-          {note}
-        </p>
-      )}
     </section>
   );
 }
