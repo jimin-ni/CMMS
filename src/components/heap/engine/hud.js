@@ -66,6 +66,7 @@ export function setupHud(ctx) {
     $('sortexit').hidden = ctx.mode !== 'sort';
     $('albumrow').hidden = ctx.mode !== 'sort';
     $('treeexit').hidden = ctx.mode !== 'tree';
+    $('tree-write').hidden = ctx.mode !== 'tree'; // 쪽지 쓰기 (tree-write.js)
     root.dispatchEvent(new CustomEvent('heap:mode', { detail: ctx.mode })); // heap-room.tsx shows its 꾸미기 button in room mode only
   }
 

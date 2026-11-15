@@ -269,13 +269,17 @@ function backTexture(cache, anisotropy, tint, knot) {
   }
   return cache.get(key);
 }
+// 글 쓴 면에서 팬의 글이 앉는 상자 (텍스처 픽셀). tree-write.js 의 글상자가 같은 상자를 종이 위에 겹친다.
+// 답장이 위에 얹히면 팬의 글은 위쪽 절반에 머문다.
+export function frontTextBox(hasReply) {
+  const [cw, ch] = FRONT_PX, x = cw * 0.11 + 50, top = 130;
+  return { cw, ch, x, top, boxW: cw - x - 70, boxH: (hasReply ? ch * 0.45 : ch * 0.78) - top };
+}
 function frontTexture(data, hasReply, anisotropy) {
   const [cw, ch] = FRONT_PX, cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
   const g = cv.getContext('2d'); drawPaper(g, cw, ch, tintFor(data), { ruled: true, knot: true });
   const font = fontFor(data), s = FONT_SCALE[font] ?? 1;
-  const x = cw * 0.11 + 50, boxW = cw - x - 70, top = 130;
-  // 답장이 위에 얹히면 팬의 글은 위쪽 절반에 머문다
-  const boxH = (hasReply ? ch * 0.45 : ch * 0.78) - top;
+  const { x, boxW, top, boxH } = frontTextBox(hasReply);
   const fit = fitText(g, data.msg, font, boxW, boxH, Math.round(290 * s), Math.round(62 * s));
   drawBlock(g, fit, font, x, top, boxW, boxH, '#2e2a24', fit.lines.length === 1);
   // 이름과 날짜는 왼쪽 아래. 답장이 있으면 그 왼쪽에 머문다

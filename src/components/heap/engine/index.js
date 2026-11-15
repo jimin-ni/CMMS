@@ -37,8 +37,8 @@ import { setupEditCamera } from './edit-camera.js';
 import { setupRecolour } from './recolour.js';
 
 // heap-room.tsx 가 그리고 엔진이 채우거나 보이게 하는 노드의 id. dispose 가 첫 렌더 상태로 되돌린다.
-const LISTS = ['albumrow', 'player-frame', 'music-frame', 'phone-feed', 'pc-list', 'ks-body', 'cal-body', 'grid-list', 'gb-list', 'roomlist'];
-const HIDDEN = ['visit', 'albumrow', 'stand', 'flip', 'srclink', 'eject', 'ytlink', 'sortexit', 'treeexit', 'tree-prev', 'tree-next', 'player', 'player-note', 'music', 'music-note', 'music-link', 'phone', 'pc', 'keepsake', 'calendar', 'grid', 'guestbook', 'rooms', 'rooms-legend'];
+const LISTS = ['albumrow', 'player-frame', 'music-frame', 'phone-feed', 'pc-list', 'ks-body', 'cal-body', 'grid-list', 'gb-list', 'roomlist', 'ts-tints', 'ts-fonts'];
+const HIDDEN = ['visit', 'albumrow', 'stand', 'flip', 'srclink', 'eject', 'ytlink', 'sortexit', 'treeexit', 'tree-write', 'tree-prev', 'tree-next', 'tree-sheet', 'ts-text', 'ts-ctl', 'ts-drag', 'tree-del', 'tree-confirm', 'player', 'player-note', 'music', 'music-note', 'music-link', 'phone', 'pc', 'keepsake', 'calendar', 'grid', 'guestbook', 'rooms', 'rooms-legend'];
 
 /**
  * 방을 `root`(heap-room.tsx 가 그린 요소)에 올리고 dispose 함수를 돌려준다.
@@ -57,9 +57,10 @@ const HIDDEN = ['visit', 'albumrow', 'stand', 'flip', 'srclink', 'eject', 'ytlin
  * opts.parseMusic(url) 은 slots.ts 의 parseMusicUrl 이다: { video, list } (정규식을 통과한 임베드 ID) 또는 null. data.rooms[].changed 는 문 앞 방 목록의 그 방에 점을 찍는다.
  * 꾸미기(edit.js)는 서버와 같은 규칙을 쓴다: opts.itemHalfExtents, opts.placementError 는 layout.ts 의 itemHalfExtents, itemPlacementError 이고
  * opts.policy 는 policy.ts 의 HEAP_POLICY 다 (frameY, frameWallMargin).
+ * 쪽지 쓰기(tree-write.js): opts.addNote(input) 는 { ok, note(엔진 모양), evictedId } 또는 { ok: false, reason, message }, opts.deleteNote(id) 는 { ok } 또는 { ok: false, reason, message }, opts.signIn() 은 로그인 화면으로 보내고, opts.openWrite 가 참이면 트리 모드와 쓰기 판을 열고 opts.consumeWrite() 를 부른다.
  * 쪽지 트리: opts.treeNotes (tree-ids.js 의 toEngineNote 로 바꾼 목록, 없으면 빈 트리), opts.noteRevealAt (ISO 또는 null), opts.isOwner, opts.unreadNotes. 폴링(live.js)이 같은 변환으로 합친다.
  * @param {HTMLElement} root
- * @param {{ roomId: string, roomUuid: string, dataBase: string, modelBase?: string, data: any, viewerName: string | null, signedIn: boolean, pollMs: number, bubbleHref: string, navigate: (href: string) => void, parseLink: (url: string) => ({ platform: string, externalId: string, wide: boolean | null } | null), parseMusic: (url: string) => ({ video: string | null, list: string | null } | null), isSafeLink: (v: unknown) => boolean, isWebLink: (v: unknown) => boolean, isEmail: (v: unknown) => boolean, recordVisit: () => Promise<any>, addGuestbook: (name: string) => Promise<any>, onNavigate: (roomId: string) => void, itemHalfExtents: (item: any) => ({ hx: number, hz: number } | null), placementError: (item: any, room: { w: number, d: number }, table: { x: number, z: number }) => (string | null), surfaces?: any, policy: { frameY: number, frameWallMargin: number }, treeNotes?: any[], noteRevealAt?: string | null, isOwner?: boolean, unreadNotes?: number, resume?: any }} opts
+ * @param {{ roomId: string, roomUuid: string, dataBase: string, modelBase?: string, data: any, viewerName: string | null, signedIn: boolean, pollMs: number, bubbleHref: string, navigate: (href: string) => void, parseLink: (url: string) => ({ platform: string, externalId: string, wide: boolean | null } | null), parseMusic: (url: string) => ({ video: string | null, list: string | null } | null), isSafeLink: (v: unknown) => boolean, isWebLink: (v: unknown) => boolean, isEmail: (v: unknown) => boolean, recordVisit: () => Promise<any>, addGuestbook: (name: string) => Promise<any>, onNavigate: (roomId: string) => void, itemHalfExtents: (item: any) => ({ hx: number, hz: number } | null), placementError: (item: any, room: { w: number, d: number }, table: { x: number, z: number }) => (string | null), surfaces?: any, policy: { frameY: number, frameWallMargin: number }, treeNotes?: any[], noteRevealAt?: string | null, isOwner?: boolean, unreadNotes?: number, addNote?: (input: any) => Promise<any>, deleteNote?: (noteId: string) => Promise<any>, signIn?: () => void, openWrite?: boolean, consumeWrite?: () => void, resume?: any }} opts
  * @returns {() => void}
  */
 export function mountRoom(root, opts) {

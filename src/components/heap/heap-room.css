@@ -430,3 +430,31 @@
   .heap-room .ch-list li { flex-wrap: wrap; row-gap: 0; }
   .heap-room .ch-list b { max-width: 100%; }
 }
+
+/* 쪽지 쓰기 (tree-write.js). 글상자는 3D 종이 위에 정확히 겹치고, 자리와 글자 크기는 엔진이 정한다. */
+.heap-room.tree-writing .hud .bottom, .heap-room.tree-writing .tree-step { visibility: hidden; }
+.heap-room #tree-sheet { position: absolute; inset: 0; pointer-events: none; }
+.heap-room #tree-sheet[hidden] { display: none; }
+.heap-room #ts-text { position: absolute; margin: 0; padding: 0; border: 0; outline: 0; resize: none; overflow: hidden; background: transparent; color: #2e2a24; caret-color: var(--clay); pointer-events: auto; word-break: keep-all; overflow-wrap: anywhere; scrollbar-width: none; touch-action: manipulation; }
+.heap-room #ts-text::placeholder { color: rgba(46, 42, 36, 0.38); }
+.heap-room #ts-text[hidden] { display: none; }
+.heap-room .ts-ctl, .heap-room .ts-drag { position: absolute; left: 50%; bottom: max(12px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); width: min(460px, calc(100% - 24px)); display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 16px; background: rgba(47, 44, 36, 0.86); color: var(--paper); pointer-events: auto; }
+.heap-room .ts-ctl[hidden], .heap-room .ts-drag[hidden] { display: none; }
+.heap-room .ts-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; }
+.heap-room .ts-drag p { margin: 0; font-size: 13px; text-align: center; text-wrap: balance; }
+.heap-room .ts-tints { display: flex; gap: 6px; }
+.heap-room .ts-tints button { width: 26px; height: 26px; padding: 0; border-radius: 50%; border: 2px solid rgba(243, 234, 219, 0.35); cursor: pointer; }
+.heap-room .ts-tints button[aria-pressed="true"] { border-color: var(--clay); box-shadow: 0 0 0 2px var(--paper); }
+.heap-room .ts-seg { display: flex; border-radius: 999px; overflow: hidden; border: 1px solid rgba(243, 234, 219, 0.35); }
+.heap-room .ts-seg button { font: 600 13px var(--ui); color: var(--paper); background: transparent; border: 0; padding: 6px 12px; cursor: pointer; max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.heap-room .ts-seg button[aria-pressed="true"] { background: var(--clay); }
+.heap-room .ts-fonts { display: flex; gap: 6px; max-width: 100%; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
+.heap-room .ts-fonts button { flex: none; font-size: 20px; line-height: 1.1; color: var(--ink); background: var(--paper); border: 2px solid transparent; border-radius: 10px; padding: 3px 10px; cursor: pointer; }
+.heap-room .ts-fonts button[aria-pressed="true"] { border-color: var(--clay); }
+.heap-room .ts-count { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--paper-dim); margin-right: auto; }
+.heap-room .ts-count.full { color: #f0b090; }
+.heap-room .ts-ctl button:focus-visible, .heap-room .ts-drag button:focus-visible { outline: 3px solid var(--paper); outline-offset: 2px; }
+.heap-room #tree-del { position: absolute; left: 50%; transform: translateX(-50%); pointer-events: auto; }
+.heap-room #tree-del[hidden] { display: none; }
+.heap-room .panel.confirm { width: min(300px, 100%); padding: 18px 16px 14px; gap: 14px; align-items: center; }
+.heap-room .panel.confirm p { margin: 0; font-size: 15px; text-align: center; }
