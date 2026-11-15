@@ -8,7 +8,8 @@
     "keepsake": { "label": "기념품", "models": ["bookcaseOpen", "bookcaseOpenLow", "bookcaseClosed", "bookcaseClosedDoors", "bookcaseClosedWide", "cabinetTelevision", "cabinetTelevisionDoors"], "hand": ["frame", "shelf"] },
     "music": { "label": "음악 (유튜브)", "models": ["radio", "speaker", "speakerSmall", "televisionModern"], "hand": [] },
     "latest": { "label": "최신 영상", "models": ["televisionModern"], "hand": [] },
-    "calendar": { "label": "달력", "models": [], "hand": ["calendar"] }
+    "calendar": { "label": "달력", "models": [], "hand": ["calendar"] },
+    "tree": { "label": "쪽지 트리", "models": ["holidayTreeDecorated"], "hand": [] }
   },
   "_seats": "앉을 수 있는 가구: category별 규칙. top은 가구 높이 중 앉는 면의 비율(1이면 윗면), per는 앉는 자리 하나가 차지하는 폭(소파가 넓으면 자리가 여럿), floor는 바닥에 앉는 자세. 자리 좌표는 모델의 바닥 크기에서 엔진이 계산한다 (데이터를 따로 저장하지 않는다).",
   "seats": {

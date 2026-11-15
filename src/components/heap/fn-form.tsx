@@ -98,6 +98,7 @@ export function FnForm({
       {fn.kind === "music" && <MusicFields fn={fn} onChange={onChange} />}
       {fn.kind === "latest" && <p className="note">TV 화면에 가장 최근 영상이 나와요. TV를 누르면 그 영상이 영사기로 가요.</p>}
       {fn.kind === "calendar" && <CalendarFields fn={fn} onChange={onChange} />}
+      {fn.kind === "tree" && <p className="note">팬들이 이 트리에 쪽지를 걸어요.</p>}
     </div>
   );
 }
@@ -107,6 +108,7 @@ export function newFn(kind: SlotKind, prefill: () => PcLink[]): SlotFn {
   if (kind === "pc") return { kind: "pc", links: prefill() };
   if (kind === "music") return { kind: "music", url: "" };
   if (kind === "latest") return { kind: "latest" };
+  if (kind === "tree") return { kind: "tree" };
   if (kind === "calendar") return { kind: "calendar", entries: [] };
   return { kind: "keepsake", name: "" };
 }

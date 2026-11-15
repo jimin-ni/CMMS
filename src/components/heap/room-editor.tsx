@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { saveLayoutAction } from "@/lib/heap/actions";
 import { HEAP_FUNNEL_POLICY, HEAP_POLICY } from "@/lib/heap/policy";
 import { checkFn, slotKindsFor, type PcLink, type SlotFn, type SlotKind } from "@/lib/heap/slots";
@@ -106,10 +106,10 @@ const HAND_MODELS: Model[] = [
 const HAND_GROUP = "액자·달력";
 
 // 다섯 기능: 독의 기능 탭 순서, 짧은 이름, 칸의 표시, 기본 모양 (붙일 가구가 없을 때 커서에 올린다)
-const FN_ORDER: SlotKind[] = ["music", "latest", "pc", "keepsake", "calendar"];
-const FN_NAME: Record<SlotKind, string> = { music: "음악", latest: "최신 영상", pc: "PC 링크", keepsake: "기념품", calendar: "달력" };
-const FN_GLYPH: Record<SlotKind, string> = { music: "♪", latest: "▶", pc: "↗", keepsake: "★", calendar: "▦" };
-const FN_DEFAULT: Record<SlotKind, string> = { music: "radio", latest: "televisionModern", pc: "laptop", keepsake: `${HAND_PREFIX}frame`, calendar: `${HAND_PREFIX}calendar` };
+const FN_ORDER: SlotKind[] = ["music", "latest", "pc", "keepsake", "calendar", "tree"];
+const FN_NAME: Record<SlotKind, string> = { music: "음악", latest: "최신 영상", pc: "PC 링크", keepsake: "기념품", calendar: "달력", tree: "쪽지 트리" };
+const FN_GLYPH: Record<SlotKind, string> = { music: "♪", latest: "▶", pc: "↗", keepsake: "★", calendar: "▦", tree: "✦" };
+const FN_DEFAULT: Record<SlotKind, string> = { music: "radio", latest: "televisionModern", pc: "laptop", keepsake: `${HAND_PREFIX}frame`, calendar: `${HAND_PREFIX}calendar`, tree: "holidayTreeDecorated" };
 
 const NOTICE_MS = 6000;
 
@@ -321,7 +321,7 @@ export function RoomEditor({
   // 독에 내놓는 모델: 벽 조각(catalogue.json 의 mount "structure")은 뺀다. 벽에 거는 것("wall")과 천장에 다는 것("ceiling")은 엔진이 벽과 천장에 붙인다.
   // 이미 방에 놓인 것은 그대로 그려지고 고르고 옮기고 넣을 수 있다 (이름은 models 전체에서 찾는다).
   const placeable = models.filter((m) => m.mount !== "structure");
-  const items = st?.items ?? [];
+  const items = useMemo(() => st?.items ?? [], [st?.items]);
   const sel = st?.sel ?? null;
   const selItem = sel != null ? items[sel] : undefined;
   // 고른 가구가 어디에 거는 것인지 ("wall" | "ceiling" | undefined). 벽 가구는 돌리지 않고 높이를 바꾼다.
@@ -361,13 +361,15 @@ export function RoomEditor({
         return;
       }
       const r = checkFn(fn, item.type, item.model, "fn");
-      if ("error" in r) setDraft({ index, fn, base: fnKey(item.fn), error: r.error.replace(/^fn[^:]*:\s*/, "") });
+      const treeTaken = fn.kind === "tree" && items.some((o, i) => i !== index && o.fn?.kind === "tree");
+      if (treeTaken) setDraft({ index, fn, base: fnKey(item.fn), error: `쪽지 트리는 방에 ${HEAP_POLICY.treesPerRoom}개까지예요.` });
+      else if ("error" in r) setDraft({ index, fn, base: fnKey(item.fn), error: r.error.replace(/^fn[^:]*:\s*/, "") });
       else {
         cmd({ op: "fn", index, fn: r.fn });
         setDraft(null);
       }
     },
-    [cmd],
+    [cmd, items],
   );
 
   // 가구를 고르고 말풍선을 연다. kind 를 주면 기능이 없는 가구에 그 기능을 바로 단다 (값이 비어 있으면 말풍선이 들고 있는다).
@@ -603,8 +605,8 @@ export function RoomEditor({
     if (have >= 0) openBubble(have, items[have]);
     else if (can >= 0) openBubble(can, items[can], k);
     else if (dflt) {
-      pendingKind.current = k === "latest" || k === "calendar" ? null : k;
-      arm(dflt, k === "latest" ? { kind: "latest" } : undefined);
+      pendingKind.current = k === "latest" || k === "calendar" || k === "tree" ? null : k;
+      arm(dflt, k === "latest" ? { kind: "latest" } : k === "tree" ? { kind: "tree" } : undefined);
     }
   };
 

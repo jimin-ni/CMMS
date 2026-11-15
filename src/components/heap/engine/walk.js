@@ -120,7 +120,7 @@ export function setupWalk(ctx) {
     const swing = Math.sin(walkPhase) * 0.6;
     legL.rotation.x = swing; legR.rotation.x = -swing;
     me.position.y = moving ? Math.abs(Math.sin(walkPhase)) * 0.04 : 0;
-    setHint(nearTable() ? 'near' : nearShelf() ? 'nearShelf' : nearDoor() ? 'nearDoor' : nearBook() ? 'nearBook' : 'room');
+    setHint(nearTable() ? 'near' : nearShelf() ? 'nearShelf' : nearDoor() ? 'nearDoor' : nearBook() ? 'nearBook' : ctx.nearTree?.() ? 'nearTree' : 'room');
   }
 
   Object.assign(ctx, { unperch, me, nearTable, nearShelf, nearDoor, nearBook, sitOn, walkRoute, stepCharacter, legL, legR });

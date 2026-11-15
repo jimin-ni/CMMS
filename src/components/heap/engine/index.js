@@ -27,6 +27,7 @@ import { setupModes } from './modes.js';
 import { setupEditorBridge } from './editor-bridge.js';
 import { setupPlayers } from './players.js';
 import { setupPanels } from './panels.js';
+import { setupTree } from './tree.js';
 import { setupLive } from './live.js';
 import { setupInput } from './input.js';
 import { setupPath } from './path.js';
@@ -37,7 +38,7 @@ import { setupRecolour } from './recolour.js';
 
 // heap-room.tsx 가 그리고 엔진이 채우거나 보이게 하는 노드의 id. dispose 가 첫 렌더 상태로 되돌린다.
 const LISTS = ['albumrow', 'player-frame', 'music-frame', 'phone-feed', 'pc-list', 'ks-body', 'cal-body', 'grid-list', 'gb-list', 'roomlist'];
-const HIDDEN = ['visit', 'albumrow', 'stand', 'flip', 'srclink', 'eject', 'ytlink', 'sortexit', 'player', 'player-note', 'music', 'music-note', 'music-link', 'phone', 'pc', 'keepsake', 'calendar', 'grid', 'guestbook', 'rooms', 'rooms-legend'];
+const HIDDEN = ['visit', 'albumrow', 'stand', 'flip', 'srclink', 'eject', 'ytlink', 'sortexit', 'treeexit', 'tree-prev', 'tree-next', 'player', 'player-note', 'music', 'music-note', 'music-link', 'phone', 'pc', 'keepsake', 'calendar', 'grid', 'guestbook', 'rooms', 'rooms-legend'];
 
 /**
  * 방을 `root`(heap-room.tsx 가 그린 요소)에 올리고 dispose 함수를 돌려준다.
@@ -45,7 +46,7 @@ const HIDDEN = ['visit', 'albumrow', 'stand', 'flip', 'srclink', 'eject', 'ytlin
  * `heap:editcmd`(edit.js), `heap:thumb`(dock-thumbs.js), `heap:reels`(live.js: 새 영상 목록으로 더미를 맞춘다), `heap:capture`(loop.js: 지금 구도를 한 장 그려 준다).
  * 팔레트와 배경은 그 자리에서 다시 칠한다 (recolour.js, time.js 의 setBackdrop). 꾸미기가 방의 틀(템플릿)을 바꾸면 엔진은 `heap:remount`(detail: 편집 상태)를 보낸다. heap-room.tsx 가 그 상태를 opts.resume 으로 넘겨 다시 마운트한다:
  * resume { edit, items, time, palette, backdrop, brand, shell, name, savedName, hist, future, saved, original, baseLayout } (edit.js 의 remount 참고).
- * 엔진이 `root` 에 직접 보내는 것은 둘이다. `heap:mode`(detail: 'room' | 'sit' | 'watch' | 'sort')는 모드가 정해질 때마다,
+ * 엔진이 `root` 에 직접 보내는 것은 둘이다. `heap:mode`(detail: 'room' | 'sit' | 'watch' | 'sort' | 'tree')는 모드가 정해질 때마다,
  * `heap:ready` 는 방이 화면에 뜬 뒤에 한 번.
  * `modelBase` 는 가구 모델과 catalogue.json 이 있는 폴더다. 없으면 `dataBase` 옆의 "models/" 다.
  * `data` 는 서버가 DB에서 읽은 값이다 (page.tsx 가 바꿔 넘긴다): { roomUuid, name, serverTime, rooms, layout, reels, pieces, guestbook, visits, creatorVisit }.
@@ -108,6 +109,7 @@ async function run(ctx) {
   setupEditorBridge(ctx);
   setupPlayers(ctx);
   setupPanels(ctx);
+  setupTree(ctx); // 쪽지 트리 모드. ctx.goTo(modes.js), ctx.me(walk.js)는 쓸 때 읽으므로 여기서 세워도 된다
   setupLive(ctx);
   setupInput(ctx);
   setupPath(ctx);

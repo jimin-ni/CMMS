@@ -302,6 +302,9 @@ export function HeapRoom({
             <button id="sortexit" className="btn ghost" type="button" hidden>
               책장에서 물러나기
             </button>
+            <button id="treeexit" className="btn ghost" type="button" hidden>
+              트리에서 물러나기
+            </button>
             {canEdit && ready && mode === "room" && !editing && (
               <button className="btn ghost" type="button" onClick={() => setEditing(true)}>
                 꾸미기
@@ -311,6 +314,13 @@ export function HeapRoom({
           </div>
           <p className="hint" id="hint" />
         </div>
+        {/* 쪽지 트리 모드에서 쪽지가 나와 있을 때만 (tree.js). 화면 양옆에 뜬다. */}
+        <button id="tree-prev" className="tree-step prev" type="button" aria-label="이전 쪽지" hidden>
+          ‹
+        </button>
+        <button id="tree-next" className="tree-step next" type="button" aria-label="다음 쪽지" hidden>
+          ›
+        </button>
       </div>
       <p id="toast" />
       {editing && (

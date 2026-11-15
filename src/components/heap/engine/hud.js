@@ -41,6 +41,9 @@ export function setupHud(ctx) {
     watch: '상영 중 · 스크린을 눌러 다시 재생 · Esc로 사진 꺼내기',
     shelf: '앨범을 눌러 안을 보기 · Esc로 물러나기',
     nearBook: 'E 또는 방명록을 눌러 이름 남기기',
+    nearTree: 'E 또는 트리를 눌러 쪽지 보기',
+    tree: '장식을 눌러 쪽지 읽기 · 끌어서 트리 돌리기 · Esc로 물러나기',
+    treeNote: '‹ › 로 다른 쪽지 · 바깥을 누르거나 Esc로 접기',
     perch: '방향키·WASD 또는 바닥을 눌러 일어나기 · Esc로도 일어나요',
   };
   const setHint = k => { if (hint.dataset.k !== k) { hint.dataset.k = k; hint.textContent = HINTS[k]; } };
@@ -56,6 +59,7 @@ export function setupHud(ctx) {
     $('ytlink').hidden = ctx.mode !== 'watch' || isFan(ctx.loaded);
     $('sortexit').hidden = ctx.mode !== 'sort';
     $('albumrow').hidden = ctx.mode !== 'sort';
+    $('treeexit').hidden = ctx.mode !== 'tree';
     root.dispatchEvent(new CustomEvent('heap:mode', { detail: ctx.mode })); // heap-room.tsx shows its 꾸미기 button in room mode only
   }
 

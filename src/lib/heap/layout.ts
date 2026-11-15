@@ -376,9 +376,13 @@ export function validateLayout(input: unknown): LayoutCheck {
         if (!Array.isArray(value)) return fail("items: 배열이 아니에요.");
         if (value.length > HEAP_POLICY.layoutMaxItems) return fail("items: 가구가 너무 많아요.");
         const items: Obj[] = [];
+        let trees = 0;
         for (let i = 0; i < value.length; i++) {
           const r = checkItem(value[i], i);
           if ("error" in r) return fail(r.error);
+          if ((r.item.fn as { kind?: string } | undefined)?.kind === "tree" && ++trees > HEAP_POLICY.treesPerRoom) {
+            return fail(`items[${i}].fn: 쪽지 트리는 방에 ${HEAP_POLICY.treesPerRoom}개까지예요.`);
+          }
           items.push(r.item);
         }
         out.items = items;

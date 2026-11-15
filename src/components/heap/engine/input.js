@@ -25,12 +25,13 @@ export function setupInput(ctx) {
     if (ev.target.closest?.('input, textarea')) { if (ev.key === 'Escape') $('guestbook').hidden = true; return; }
     if (ctx.mode === 'edit') return; // 꾸미기 중의 키는 edit.js 가 받는다
     const k = ev.key.toLowerCase(); keys.add(k);
-    if (ctx.mode === 'room' && !anyOverlay() && (k === 'e' || k === 'enter')) { if (nearTable()) sit(); else if (nearShelf()) enterSort(); else if (nearDoor()) openRooms(); else if (nearBook()) openGuestbook(); }
+    if (ctx.mode === 'room' && !anyOverlay() && (k === 'e' || k === 'enter')) { if (nearTable()) sit(); else if (nearShelf()) enterSort(); else if (nearDoor()) openRooms(); else if (nearBook()) openGuestbook(); else if (ctx.nearTree?.()) ctx.enterTree(); }
     if (ctx.mode === 'sit' && ctx.held && k === 'f') flip();
     if (k === 'escape') {
       for (const id of OVERLAYS) if (!$(id).hidden) { $(id).hidden = true; return; }
       if (ctx.mode === 'watch') eject();
       else if (ctx.mode === 'sort') exitSort();
+      else if (ctx.mode === 'tree') ctx.treeEscape(); // 열린 쪽지를 접고, 한 번 더 누르면 나간다 (tree.js)
       else if (ctx.held) putBack();
       else if (ctx.mode === 'sit') stand();
       else if (ctx.perch) unperch();
@@ -81,6 +82,7 @@ export function setupInput(ctx) {
     if (ctx.mode === 'sit' && !ctx.held && !ctx.camGoal) controls.enabled = true;
     const d = down; down = null;
     if (ctx.mode === 'edit') return; // 꾸미기 중의 누르기는 edit.js 몫이다 (capture 가 먼저 받지만 한 번 더 막는다)
+    if (ctx.mode === 'tree') return; // 트리 모드의 누르기는 tree.js 가 받는다: 아래의 방 걷기로 흘러가면 안 된다
     if (wasDrag || !d || Math.hypot(ev.clientX - d.x, ev.clientY - d.y) > 6) return;
     rayFrom(ev);
     if (ctx.mode === 'watch') { if (player.hidden && ray.intersectObject(screen, false).length) openPlayer(ctx.loaded.userData.reel); return; }

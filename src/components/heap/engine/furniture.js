@@ -123,8 +123,8 @@ export function setupFurniture(ctx) {
       hold.scale.setScalar(ctx.scaleOf(m.entry)); hold.position.y = (it.y || 0) + (rug ? 0.012 : 0); // 러그는 바닥 바로 위에 눕혀 둘이 깜박이지 않게 한다
       hold.add(inst); g.add(hold);
       if (it.fn?.kind === 'keepsake') ctx.keepsakeObject(g, it, build, 'standee', 0, (it.y || 0) + m.size.y, 0); // 선반 같은 가구 위에
-      else if (it.fn && ['pc', 'music', 'latest'].includes(it.fn.kind)) { // 모델 전체가 버튼이다. 기능이 달린 TV 는 그려 넣은 화면도 갖는다
-        const slot = { it, fn: it.fn };
+      else if (it.fn && ['pc', 'music', 'latest', 'tree'].includes(it.fn.kind)) { // 모델 전체가 버튼이다. 기능이 달린 TV 는 그려 넣은 화면도 갖는다
+        const slot = { it, fn: it.fn, group: g }; // group: 이 가구의 그룹(위치·회전). 쪽지 트리가 나무를 찾는 데 쓴다
         inst.traverse(o => { if (o.isMesh) { o.userData.slot = slot; build.slotMeshes.push(o); } });
         build.slots.push(slot);
         if (m.entry.screen && it.fn.kind !== 'pc') ctx.tvScreen(inst, build, slot, m.entry.screen);

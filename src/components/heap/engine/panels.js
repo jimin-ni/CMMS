@@ -120,6 +120,7 @@ export function setupPanels(ctx) {
   }
   const openSlot = slot => {
     const k = slot.fn.kind;
+    if (k === 'tree') { ctx.openTree?.(slot.it, slot.group, slot); return; } // 쪽지 트리: 나중 모듈이 ctx.openTree(item, group, slot) 를 단다
     if (k === 'pc') openPc(slot.fn); else if (k === 'keepsake') openKeepsake(slot.fn);
     else if (k === 'music') openMusic(slot.fn); else if (k === 'latest') watchLatest(); else if (k === 'calendar') openCalendar(slot.fn);
   };

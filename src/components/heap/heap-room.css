@@ -40,6 +40,12 @@
 .heap-room .btn[hidden] { display: none; }
 .heap-room .btn:focus-visible { outline: 3px solid var(--paper); outline-offset: 2px; }
 .heap-room .btn .k { opacity: 0.6; margin-right: 6px; font-variant-numeric: tabular-nums; }
+/* 쪽지 트리: 나온 쪽지 옆의 ‹ › (tree.js). HUD 는 pointer-events 가 꺼져 있어 단추만 받는다. */
+.heap-room .tree-step { position: absolute; top: 50%; transform: translateY(-50%); pointer-events: auto; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 999px; font: 600 28px/1 var(--ui); color: var(--paper); background: rgba(47, 44, 36, 0.78); cursor: pointer; }
+.heap-room .tree-step.prev { left: max(16px, env(safe-area-inset-left, 0px)); }
+.heap-room .tree-step.next { right: max(16px, env(safe-area-inset-right, 0px)); }
+.heap-room .tree-step[hidden] { display: none; }
+.heap-room .tree-step:focus-visible { outline: 3px solid var(--paper); outline-offset: 2px; }
 
 .heap-room #toast { position: absolute; top: 70px; left: 50%; transform: translateX(-50%); margin: 0; font-family: var(--hand); font-size: 26px; color: var(--paper); pointer-events: none; text-align: center; }
 .heap-room .gb-list { display: flex; flex-direction: column; gap: 6px; }
