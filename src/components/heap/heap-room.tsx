@@ -307,7 +307,7 @@ export function HeapRoom({
                 꾸미기
               </button>
             )}
-            {ready && !editing && <ShareButton rootRef={rootRef} roomId={roomId} roomUuid={data.roomUuid} />}
+            {ready && !editing && <ShareButton rootRef={rootRef} roomId={roomId} />}
           </div>
           <p className="hint" id="hint" />
         </div>
