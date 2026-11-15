@@ -7,7 +7,7 @@ import {
   addGuestbookAction,
   addNoteAction,
   deleteNoteAction,
-  markNotesReadAction,
+  markNoteReadAction,
   recordVisitAction,
   refetchNotesAction,
   replyNoteAction,
@@ -316,8 +316,8 @@ export function HeapRoom({
           return result.ok ? { ok: true as const, note: toEngineNote(result.note) } : result;
         },
         setHidden: (noteId: string, hidden: boolean) => setNoteHiddenAction(noteId, hidden),
-        // 트리 모드에 들어설 때 안 읽은 쪽지를 모두 읽은 것으로 (방 단위)
-        markRead: () => markNotesReadAction(data.roomUuid),
+        // 방 주인이 안 읽은 쪽지를 열었다: 그 쪽지만 읽은 것으로
+        markNoteRead: (noteId: string) => markNoteReadAction(noteId),
         // 공개 시각이 되었거나 바뀌었을 때: 쪽지 전부를 다시 읽는다
         refetchNotes: async () => {
           const result = await refetchNotesAction(data.roomUuid);

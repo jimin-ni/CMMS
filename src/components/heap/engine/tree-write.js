@@ -52,7 +52,14 @@ export function parseDraft(raw, maxChars, maxLines) {
   };
 }
 
-const TINT_NAME = { ivory: '아이보리', cream: '크림', linen: '린넨', sand: '모래', snow: '눈' };
+const TINT_NAME = { ivory: '상아색', cream: '크림색', linen: '리넨', sand: '모래색', snow: '눈색' };
+/** 새 쪽지의 id (uuid v4). 장식 모양이 id 로 정해지므로 쓰기 판에서 정한 id 를 서버가 그대로 쓴다. randomUUID 가 없으면 getRandomValues 로 만든다 */
+function newNoteId() {
+  if (typeof crypto?.randomUUID === 'function') return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16)); b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map(x => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
 const FONT_LABEL = { 'nanum-pen': '나눔펜', gaegu: '개구', 'hi-melody': '하이멜로디', 'gamja-flower': '감자꽃', 'cute-font': '귀여운', 'single-day': '싱글데이', 'yeon-sung': '연성' };
 const SPEED = { open: 2.0, fold: 1.5, close: 3.5, unfold: 2.0 };
 const HAND_D = 1.1, HAND_NDC_Y = -0.42; // 접은 쪽지가 놓이는 곳: 카메라 앞 HAND_D m, 화면 아래쪽
@@ -129,7 +136,7 @@ export function setupTreeWrite(ctx, T) {
     if (tintsEl.childElementCount) return;
     for (const key of Object.keys(TINT_VALUES)) {
       const b = document.createElement('button'); b.type = 'button'; b.dataset.key = key;
-      b.style.background = TINT_VALUES[key]; b.title = `종이 ${TINT_NAME[key] ?? key}`; b.setAttribute('aria-label', b.title);
+      b.style.background = TINT_VALUES[key]; b.title = `종이 ${TINT_NAME[key] ?? key}`; b.setAttribute('aria-label', `종이 ${TINT_NAME[key] ?? key}`);
       tintsEl.append(b);
     }
     for (const key of Object.keys(FONT_VALUES)) {
@@ -210,7 +217,7 @@ export function setupTreeWrite(ctx, T) {
     if (!r || !r.settled || ctx.mode !== 'tree' || st !== 'idle') return false;
     draft = loadDraft();
     ensureChips(); syncChips();
-    sheet = { n: null, id: 'draft-' + Math.random().toString(36).slice(2) };
+    sheet = { n: null, id: newNoteId() }; // 서버도 이 id 로 쪽지를 만든다: 접힌 장식과 걸린 장식이 같다
     ta.value = draft.text; paintCount();
     setSt('opening');
     T.measure(ctl, 0);
@@ -337,7 +344,7 @@ export function setupTreeWrite(ctx, T) {
     setSt('sending');
     let res;
     try {
-      res = await opts.addNote({ body: draft.text.trim(), tint: draft.tint, font: draft.font, anonymous: draft.anonymous, spot });
+      res = await opts.addNote({ id: sheet.id, body: draft.text.trim(), tint: draft.tint, font: draft.font, anonymous: draft.anonymous, spot });
     } catch {
       res = { ok: false, reason: 'network', message: '쪽지를 보내지 못했어요. 잠시 뒤 다시 시도해 주세요.' };
     }

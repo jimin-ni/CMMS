@@ -196,7 +196,8 @@ export function setupTree(ctx) {
   ctx.boxedNotes = 0; // 쪽지함에 있는 쪽지 수: 안내 줄(hud.js)이 읽는다
 
   let W = null, R = null, B = null; // 쓰기 (tree-write.js), 방 주인 도구 (tree-owner.js), 쪽지함 (tree-box.js): setupTree 의 끝에서 세운다
-  let boxHover = false, marking = false;
+  let boxHover = false;
+  const reading = new Set(); // 읽음 표시를 서버에 보내는 중인 쪽지 id
   let rig = null, failedBuild = null; // rig: 지금 build 의 트리에 올린 것들 (아래 makeRig)
   let opened = null, pending = null, hovered = null, press = null; // opened: 나와 있는(나오는) 쪽지 · pending: 지금 쪽지가 돌아간 뒤 날아올 쪽지
   const leaving = new Set(), anims = new Map(); // leaving: 접혀 돌아가는 쪽지 · anims: 쪽지 -> { dir, speed } (쪽지 시각 n.t 를 움직인다)
@@ -660,21 +661,18 @@ export function setupTree(ctx) {
     rig.settled = false; rig.view = viewOf(rig);
     rig.turn = rig.view.yaw; rig.pivot.rotation.y = rig.turn;
     setHint('tree'); ctx.goTo({ pos: rig.view.pos.clone(), target: rig.view.target.clone() }); syncUI(); syncNav();
-    markRead();
   }
-  // 방 주인이 트리에 들어서면 안 읽은 쪽지를 모두 읽은 것으로 한다 (서버에는 방 단위 표시뿐이다). 봉인 중이면 서버가 아무것도 표시하지 않는다 (marked 0).
-  async function markRead() {
-    if (!isOwner || !ctx.opts.markRead || marking) return;
-    if (!(ctx.unreadNotes > 0 || list.some(d => d.unread && !d.hidden))) return;
-    marking = true;
-    try {
-      const res = await ctx.opts.markRead();
-      if (ctx.disposed) return;
-      if (res?.ok && res.marked > 0) {
-        ctx.unreadNotes = 0; ctx.renderMeta?.();
-        setTreeNotes(list.map(d => (d.unread && !d.hidden ? { ...d, unread: false } : d))); // 점을 뗀다 (숨긴 쪽지는 서버도 그대로 둔다)
-      }
-    } catch { /* 다음에 들어설 때 다시 한다 */ } finally { marking = false; }
+  // 방 주인이 안 읽은 쪽지를 열면 그 쪽지만 읽은 것으로 한다 (L9: 점은 주인이 쪽지를 열기 전까지 보여야 한다). 다 펼쳐진 뒤에 부른다.
+  // 봉인 중이면 서버가 표시하지 않는다 (marked 0). 실패하면 점이 남아 다음에 열 때 다시 한다. 안 읽은 수(HUD)는 ctx.unreadNotes 와 ctx.renderMeta 로 맞춘다.
+  function markOpenedRead(n) {
+    const d = n.data;
+    if (!isOwner || !ctx.opts.markNoteRead || !d?.unread || d.hidden || d.sealed || reading.has(n.id)) return;
+    reading.add(n.id);
+    ctx.opts.markNoteRead(n.id).then(res => {
+      if (ctx.disposed || !res?.ok || !(res.marked > 0)) return;
+      if (ctx.unreadNotes > 0) { ctx.unreadNotes -= 1; ctx.renderMeta?.(); }
+      if (list.some(x => x.id === n.id && x.unread)) setTreeNotes(list.map(x => (x.id === n.id ? { ...x, unread: false } : x))); // 점을 뗀다 (열려 있는 동안은 닫은 뒤에 반영된다)
+    }).catch(() => { /* 다음에 열 때 다시 한다 */ }).finally(() => reading.delete(n.id));
   }
   function exitTree() {
     if (ctx.mode !== 'tree') return;
@@ -763,12 +761,14 @@ export function setupTree(ctx) {
     for (const [n, an] of anims) {
       const tt = THREE.MathUtils.clamp(n.t + an.dir * an.speed * dt, 0, n.total);
       applyNote(n, tt);
-      if (an.dir > 0 && tt >= n.total) anims.delete(n);
+      if (an.dir > 0 && tt >= n.total) { anims.delete(n); if (n === opened) markOpenedRead(n); }
       else if (an.dir < 0 && tt <= 0) finishClose(n);
     }
     R?.step(t, dt);
+    // 접히는 쪽지의 애니메이션이 사라졌으면 (다시 지어졌거나 치워졌다) 접힌 것으로 마무리한다: 쪽지함과 트리가 계속 바쁜 채로 남지 않는다
+    for (const n of [...leaving]) if (!anims.has(n)) finishClose(n);
     // 넘기기: 지금 쪽지가 제자리로 돌아가기 시작하면 다음 쪽지가 날아온다
-    if (pending && [...leaving].every(n => n.t <= N_FLY)) { const p = pending; pending = null; openNote(p); }
+    if (pending && [...leaving].every(n => n.t <= N_FLY)) { const p = pending; pending = null; if (!openNote(p) && p.boxed) disposeNote(p); }
   }
 
   // ----- 공개일 -----
@@ -833,7 +833,7 @@ export function setupTree(ctx) {
   // 쓰기, 방 주인 도구, 쪽지함이 쓰는 안쪽 손잡이
   const T = {
     rig: () => rig, syncRig, busy, opened: () => opened, pending: () => pending,
-    dismissNote() { if (opened) closeNote(); else if (pending) { clearPending(); syncNav(); } },
+    dismissNote() { if (pending) clearPending(); if (opened) closeNote(); else syncNav(); },
     buildNote, disposeNote, openTarget, shellDrop, view: () => view, measure, setCursor, treeSpot, planFromSpot, hashId,
     hasTreeSlot: () => !!treeSlot(), noteById: id => list.find(d => d.id === id) ?? null,
     reviseOpened, openBoxNote, boxedList, sealedNow, revealAt: () => revealAt,

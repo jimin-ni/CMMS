@@ -47,7 +47,8 @@
 .heap-room .tree-step[hidden] { display: none; }
 .heap-room .tree-step:focus-visible { outline: 3px solid var(--paper); outline-offset: 2px; }
 
-.heap-room #toast { position: absolute; top: 70px; left: 50%; transform: translateX(-50%); margin: 0; font-family: var(--hand); font-size: 26px; color: var(--paper); pointer-events: none; text-align: center; }
+.heap-room #toast { position: absolute; top: 70px; left: 50%; transform: translateX(-50%); margin: 0; font-family: var(--hand); font-size: 26px; line-height: 1.2; color: var(--ink); background: var(--paper); padding: 4px 18px 6px; border: 2px solid var(--clay); border-radius: 999px; box-shadow: 0 3px 10px rgba(47, 44, 36, 0.35); pointer-events: none; text-align: center; }
+.heap-room #toast:empty { display: none; }
 .heap-room .gb-list { display: flex; flex-direction: column; gap: 6px; }
 .heap-room .gb-row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px dashed rgba(86, 83, 68, 0.25); font-size: 14px; }
 .heap-room .gb-row span:first-child { font-family: var(--hand); font-size: 22px; line-height: 1; }

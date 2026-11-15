@@ -7,6 +7,7 @@ import {
   addNote,
   deleteOwnNote,
   getNotesState,
+  markNoteRead,
   markNotesRead,
   replyToNote,
   setNoteHidden,
@@ -185,6 +186,19 @@ export async function markNotesReadAction(
   if (typeof roomId !== "string") return fail("not-found");
 
   const result = await markNotesRead(viewer.id, roomId);
+  if (!result.ok) return fail(result.reason);
+  return { ok: true, marked: result.marked };
+}
+
+// 방 주인이 쪽지 하나를 열었다: 그 쪽지만 읽은 것으로 표시한다.
+export async function markNoteReadAction(
+  noteId: string,
+): Promise<{ ok: true; marked: number } | HeapFail<"not-signed-in" | "note-not-found" | "not-owner">> {
+  const viewer = await getViewer();
+  if (!viewer) return fail("not-signed-in");
+  if (typeof noteId !== "string") return fail("note-not-found");
+
+  const result = await markNoteRead(viewer.id, noteId);
   if (!result.ok) return fail(result.reason);
   return { ok: true, marked: result.marked };
 }

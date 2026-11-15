@@ -70,6 +70,8 @@ export type HeapNoteInput = {
   anonymous: boolean;
   // 트리에 걸 자리. 없으면 쪽지함으로 간다.
   spot: HeapNoteSpot | null;
+  // 클라이언트가 정한 쪽지 id (uuid). 쓰기 판에서 접힌 장식이 id 로 정해지므로, 같은 id 를 써야 걸린 장식과 같다. 없거나 이미 있으면 서버가 정한다.
+  id: string | null;
 };
 
 // ---------- 검사 (DB를 쓰지 않는다) ----------
@@ -105,7 +107,8 @@ export function parseNoteInput(
     if (y < 0 || y >= HEAP_POLICY.noteTreeHeight || angle < -Math.PI || angle > Math.PI) return fail("invalid-note-spot");
     spot = { y, angle };
   }
-  return { ok: true, value: { body, tint: raw.tint, font: raw.font, anonymous: raw.anonymous, spot } };
+  const id = isUuid(raw.id) ? raw.id.toLowerCase() : null;
+  return { ok: true, value: { body, tint: raw.tint, font: raw.font, anonymous: raw.anonymous, spot, id } };
 }
 
 export function parseReplyInput(
@@ -412,10 +415,17 @@ export async function addNote(
     );
     const evictedId = evictId;
 
+    // 클라이언트가 정한 id 는 아직 없을 때만 쓴다 (겹치면 서버가 정한다)
+    let chosenId: string | null = null;
+    if (input.id) {
+      const taken = await tx.select({ id: heapNotes.id }).from(heapNotes).where(eq(heapNotes.id, input.id));
+      if (!taken[0]) chosenId = input.id;
+    }
     const [created] = await tx
       .insert(heapNotes)
       // 잠금을 얻은 뒤의 시각을 찍는다. 실시간 읽기 커서와 맞추기 위해서다 (방명록과 같다).
       .values({
+        ...(chosenId ? { id: chosenId } : {}),
         roomId,
         authorId: userId,
         body: input.body,
@@ -514,6 +524,22 @@ export async function setNoteHidden(
     .set({ hiddenAt: hidden ? clockNow : null, updatedAt: clockNow })
     .where(eq(heapNotes.id, noteId));
   return { ok: true };
+}
+
+// 방 주인이 쪽지 하나를 읽었다고 표시한다 (주인이 그 쪽지를 열었을 때). 봉인 중이거나 숨긴 쪽지는 표시하지 않는다 (marked: 0).
+export async function markNoteRead(
+  userId: string,
+  noteId: string,
+): Promise<{ ok: true; marked: number } | Fail<"note-not-found" | "not-owner">> {
+  const owner = await ownerOfNote(db, noteId, userId);
+  if (!owner.ok) return owner;
+  if (owner.sealedNow) return { ok: true, marked: 0 };
+  const rows = await db
+    .update(heapNotes)
+    .set({ ownerReadAt: clockNow, updatedAt: clockNow })
+    .where(and(eq(heapNotes.id, noteId), isNull(heapNotes.ownerReadAt), isNull(heapNotes.hiddenAt)))
+    .returning({ id: heapNotes.id });
+  return { ok: true, marked: rows.length };
 }
 
 // 방 주인이 쪽지를 읽었다고 표시한다. 봉인 중에는 열 수 없으니 아무것도 하지 않는다 (marked: 0).

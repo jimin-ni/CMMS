@@ -6,11 +6,11 @@
 // 이 파일은 three 를 읽지 않는다.
 
 export const TINT_VALUES = {
-  ivory: '#fbf7ee',
-  cream: '#f6efdf',
-  linen: '#f9f4ea',
-  sand: '#f2eadb',
-  snow: '#fdf9f2',
+  ivory: '#f4e8c8',
+  cream: '#f7dca0',
+  linen: '#e6dcc6',
+  sand: '#dcc19a',
+  snow: '#f6f6f2',
 };
 export const FONT_VALUES = {
   'nanum-pen': 'Nanum Pen Script',
