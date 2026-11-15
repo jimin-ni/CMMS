@@ -85,6 +85,8 @@ export function setupTreeWrite(ctx, T) {
   let st = 'idle';
   let sheet = null; // { n, id } n: 3D 쪽지 (tree.js 의 buildNote)
   let draft = { ...DRAFT_DEFAULT };
+  const POP_FROM = 0.9, POP_SEC = 0.2;
+  let pop = null; // 빈 판이 나타날 때의 짧은 커지기
   let tween = null, carry = null, confirmState = null, sendId = 0, delBusy = false, wantOpen = false;
   let fontTimer = 0;
   let measureCtx = null;
@@ -206,6 +208,7 @@ export function setupTreeWrite(ctx, T) {
   // ----- 3D 종이 -----
   function placeSheet(n, from) {
     const tg = T.openTarget();
+    pop = null;
     scene.add(n.root); n.root.scale.setScalar(1);
     n.shellDrop = T.shellDrop();
     n.flight = { from: from ?? { p: tg.p.clone(), q: tg.q.clone() }, to: tg };
@@ -228,15 +231,18 @@ export function setupTreeWrite(ctx, T) {
     ensureChips(); syncChips();
     sheet = { n: null, id: newNoteId() }; // 서버도 이 id 로 쪽지를 만든다: 접힌 장식과 걸린 장식이 같다
     ta.value = draft.text; paintCount();
-    setSt('opening');
+    setSt('sheet'); // 여는 연출은 없다: 빈 판이 바로 펼쳐진 채로 나타나고 글을 쓸 수 있다 (O5)
     T.measure(ctl, 0);
     const tg = T.openTarget();
     camera.getWorldDirection(_d); _u.set(0, 1, 0).applyQuaternion(camera.quaternion);
-    // 장식은 화면 아래에서 올라와 열린다
     const n = T.buildNote(r, dataOf(false));
     sheet.n = n;
+    // from 은 화면 아래: 닫을 때 장식이 아래로 내려가는 길이다 (t 가 끝에 있으니 지금은 쓰이지 않는다)
     placeSheet(n, { p: tg.p.clone().addScaledVector(_u, -T.view().dist * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * 1.2), q: tg.q.clone() });
-    applyNote(n, 0, n.flight);
+    applyNote(n, n.total, n.flight);
+    pop = reduced ? null : { a: 0 };
+    if (pop) n.root.scale.setScalar(POP_FROM);
+    showSheetReady();
     return true;
   }
   function showSheetReady() {
@@ -538,6 +544,12 @@ export function setupTreeWrite(ctx, T) {
     syncDelete();
     if (st === 'idle' || !sheet) return;
     const n = sheet.n, sp = reduced ? 8 : 1;
+    if (pop) {
+      pop.a += dt / POP_SEC;
+      const k = Math.min(1, pop.a), e = 1 - (1 - k) * (1 - k);
+      n.root.scale.setScalar(POP_FROM + (1 - POP_FROM) * e);
+      if (k >= 1) pop = null;
+    }
     if (tween) {
       tween.a += dt / tween.dur;
       const e = ease(Math.min(1, tween.a));

@@ -491,6 +491,14 @@ export function setupTree(ctx) {
     setHint('treeNote'); syncNav();
     return true;
   }
+  // 펼쳐지는 중인 쪽지를 다 펼쳐진 모습으로 건너뛴다 (정상 완료와 같은 마무리). 건너뛰었으면 true. 접는 중에는 건너뛰지 않는다.
+  function skipOpening() {
+    const n = opened, an = n && anims.get(n);
+    if (!an || an.dir <= 0 || n.t >= n.total) return false;
+    applyNote(n, n.total);
+    anims.delete(n); markOpenedRead(n);
+    return true;
+  }
   // 어느 순간에서도 된다: 있는 자리에서 거꾸로 돈다
   function closeNote(speed = 1.6) {
     const n = opened; if (!n) return;
@@ -585,6 +593,8 @@ export function setupTree(ctx) {
   on(canvas, 'pointerdown', e => {
     if (ctx.mode !== 'tree' || !rig?.settled || e.button > 0) return;
     if (W?.down(e) || R?.down(e) || B?.active()) return; // 쓰기 판이나 답장 판이 열려 있거나 접은 쪽지를 집었다
+    // 쪽지가 펼쳐지는 중에 한 번 더 누르면 (더블 클릭 포함) 끝 모습으로 건너뛴다. press 를 만들지 않으니 pointerup 은 '종이 밖 누르기'로 세지 않는다.
+    if (skipOpening()) { press = null; return; }
     press = { x: e.clientX, y: e.clientY, id: e.pointerId, turn: rig.turn, turning: false };
     canvas.setPointerCapture?.(e.pointerId);
   });
