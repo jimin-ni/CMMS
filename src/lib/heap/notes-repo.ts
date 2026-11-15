@@ -110,7 +110,7 @@ function parseFontSize(value: unknown): { ok: true; value: number | null } | { o
 
 export function parseNoteInput(
   input: unknown,
-): { ok: true; value: HeapNoteInput } | Fail<"invalid-note" | "invalid-note-style" | "invalid-note-spot"> {
+): { ok: true; value: HeapNoteInput } | Fail<"invalid-note" | "invalid-note-name" | "invalid-note-style" | "invalid-note-spot"> {
   if (typeof input !== "object" || input === null) return fail("invalid-note");
   const raw = input as Record<string, unknown>;
 
@@ -124,7 +124,7 @@ export function parseNoteInput(
   if (raw.displayName !== undefined) {
     if (raw.displayName !== null && typeof raw.displayName !== "string") return fail("invalid-note");
     const name = raw.displayName === null ? "" : raw.displayName.replace(/[\r\n\t\u0000]+/g, " ").trim();
-    if (charLength(name) > HEAP_POLICY.noteNameMaxChars) return fail("invalid-note");
+    if (charLength(name) > HEAP_POLICY.noteNameMaxChars) return fail("invalid-note-name");
     displayName = name === "" ? null : name;
     anonymous = displayName === null;
   } else {
@@ -408,7 +408,7 @@ export async function addNote(
   rawInput: unknown,
 ): Promise<
   | { ok: true; note: HeapNote; evictedId: string | null }
-  | Fail<"not-found" | "no-tree" | "invalid-note" | "invalid-note-style" | "invalid-note-spot" | "note-spot-taken" | "notes-per-day">
+  | Fail<"not-found" | "no-tree" | "invalid-note" | "invalid-note-name" | "invalid-note-style" | "invalid-note-spot" | "note-spot-taken" | "notes-per-day">
 > {
   if (!isUuid(roomId)) return fail("not-found");
   const parsed = parseNoteInput(rawInput);

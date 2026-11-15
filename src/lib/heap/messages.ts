@@ -32,6 +32,7 @@ export const HEAP_MESSAGES = {
   // 쪽지
   "invalid-note": "쪽지는 1자 이상 200자 이하, 8줄 이하로 적어 주세요.",
   "invalid-reply": "답장은 1자 이상 200자 이하로 적어 주세요.",
+  "invalid-note-name": "이름은 12자까지 적을 수 있어요.",
   "no-tree": "이 방에는 쪽지 트리가 없어요",
   "invalid-note-style": "고를 수 없는 색이나 글씨체예요.",
   "invalid-note-spot": "쪽지를 걸 수 없는 자리예요.",

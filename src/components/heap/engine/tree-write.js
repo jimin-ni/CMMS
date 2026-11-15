@@ -113,7 +113,8 @@ export function setupTreeWrite(ctx, T) {
 
   // ----- 화면 -----
   // 이름: 손대지 않았으면 계정 이름. 비면 익명 (null).
-  const nameNow = () => (draft.name ?? opts.viewerName ?? '').trim();
+  // 이름 칸은 12자까지다. 계정 이름이 더 길면 앞 12자만 미리 채운다 (input 의 maxlength 는 코드로 넣은 값을 자르지 않는다)
+  const nameNow = () => Array.from((draft.name ?? opts.viewerName ?? '').trim()).slice(0, 12).join('');
   const dataOf = final => ({
     id: sheet.id,
     name: nameNow() || null,

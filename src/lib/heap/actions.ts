@@ -118,6 +118,7 @@ export async function addNoteAction(
       | "not-signed-in"
       | "not-found"
       | "invalid-note"
+      | "invalid-note-name"
       | "invalid-note-style"
       | "invalid-note-spot"
       | "note-spot-taken"
