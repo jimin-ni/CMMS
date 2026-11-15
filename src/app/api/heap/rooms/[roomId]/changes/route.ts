@@ -26,7 +26,10 @@ function parseStrictIso(value: string): Date | null {
   const offset = /[+-](\d{2}):(\d{2})$/.exec(value);
   if (offset && (Number(offset[1]) > 23 || Number(offset[2]) > 59)) return null;
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
+  if (Number.isNaN(date.getTime())) return null;
+  // 2000년 이전 값은 데이터가 없고, 0000년은 Postgres가 형변환에서 거부해 500이 된다. 먼 미래도 같이 거른다.
+  const year = date.getUTCFullYear();
+  return year >= 2000 && year <= 2100 ? date : null;
 }
 
 // 기준점 문자열 = base64url("방명록시각|방명록id|조각시각|조각id|쪽지시각|쪽지id"). 시각은 UTC ISO(마이크로초까지), id는 소문자 uuid.

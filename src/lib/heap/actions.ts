@@ -122,6 +122,7 @@ export async function addNoteAction(
       | "invalid-note-spot"
       | "note-spot-taken"
       | "notes-per-day"
+      | "no-tree"
     >
 > {
   const viewer = await getViewer();

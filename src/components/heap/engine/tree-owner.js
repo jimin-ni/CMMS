@@ -22,7 +22,7 @@ const REPLY_FONT_ID = Object.keys(REPLY_FONT_VALUES)[0];
 export function setupTreeOwner(ctx, T, W) {
   const { camera, canvas, root, $, on, onDispose, toast, opts } = ctx;
   const isOwner = !!opts.isOwner;
-  const maxChars = opts.policy?.noteReplyMaxChars ?? 500;
+  const maxChars = opts.policy?.noteReplyMaxChars ?? 200;
 
   const bar = $('tree-tools'), replyBtn = $('tree-reply'), hideBtn = $('tree-hide');
   const sheetEl = $('tree-rsheet'), ta = $('tr-text'), ctl = $('tr-ctl'), countEl = $('tr-count');

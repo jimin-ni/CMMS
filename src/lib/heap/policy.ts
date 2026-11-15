@@ -55,7 +55,8 @@ export const HEAP_POLICY = {
   // 쪽지 트리 (0008). 글자 수는 코드포인트 기준이고 0008의 check(200자, 8줄)보다 느슨하면 안 된다.
   noteBodyMaxChars: 200,
   noteBodyMaxLines: 8,
-  noteReplyMaxChars: 500,
+  // 답장 상한은 200자다 (DECISIONS N6). 0008의 check는 500자로 남겨 두므로 이 값을 500보다 키우면 안 된다.
+  noteReplyMaxChars: 200,
   // 팬 한 명이 방 하나에 하루(한국 시간) 동안 남길 수 있는 쪽지 수. 지운 쪽지는 세지 않는다.
   notesPerDay: 5,
   // 트리에 걸 수 있는 쪽지 수. 넘으면 답장 없는 가장 오래된 쪽지가 쪽지함으로 내려간다.

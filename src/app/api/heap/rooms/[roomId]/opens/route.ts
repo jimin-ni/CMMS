@@ -13,17 +13,25 @@ const IP_WINDOW_MS = 10 * 60 * 1000;
 
 // 서버리스 인스턴스마다 따로 센다. 정확한 제한이 아니라 부풀리기 억제용이다.
 const hits = new Map<string, { start: number; count: number }>();
+const MAX_KEYS = 5000;
 let lastPrune = 0;
 
+function prune(now: number) {
+  lastPrune = now;
+  for (const [key, v] of hits) if (now - v.start > IP_WINDOW_MS) hits.delete(key);
+}
+
+// true면 이 요청은 버린다 (한도 초과, 또는 키가 가득 차서 새 키를 만들 수 없음).
 function overLimit(ip: string, roomId: string): boolean {
   const now = Date.now();
-  if (now - lastPrune > IP_WINDOW_MS) {
-    lastPrune = now;
-    for (const [key, v] of hits) if (now - v.start > IP_WINDOW_MS) hits.delete(key);
-  }
+  if (now - lastPrune > IP_WINDOW_MS) prune(now);
   const key = `${ip}|${roomId}`;
   const cur = hits.get(key);
   if (!cur || now - cur.start > IP_WINDOW_MS) {
+    if (!cur && hits.size >= MAX_KEYS) {
+      prune(now);
+      if (hits.size >= MAX_KEYS) return true;
+    }
     hits.set(key, { start: now, count: 1 });
     return false;
   }
@@ -54,9 +62,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ roo
     const viewer = await getViewer();
     if (viewer?.id === creatorId) return done();
 
-    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-    if (overLimit(ip, roomId)) return done();
+    // 대상 검사를 한도 키 만들기보다 먼저 한다: 잘못된 대상이 키를 만들지 못하게.
     if (!(await isRoomTarget(roomId, kind as HeapOpenKind, target))) return done();
+
+    // x-forwarded-for의 첫 칸은 클라이언트가 마음대로 쓸 수 있다. Render 프록시는 자기가 본 실제 클라이언트 IP를 맨 뒤에 붙이므로 마지막 칸을 쓴다.
+    const hops = (request.headers.get("x-forwarded-for") ?? "").split(",").map((h) => h.trim()).filter(Boolean);
+    const ip = hops[hops.length - 1] || "unknown";
+    if (overLimit(ip, roomId)) return done();
     await recordOpen(roomId, kind as HeapOpenKind, target);
   } catch {
     // 집계 실패는 화면에 영향을 주지 않는다.

@@ -31,7 +31,8 @@ export const HEAP_MESSAGES = {
   "excluded-full": "뺄 수 있는 영상 수를 넘었어요.",
   // 쪽지
   "invalid-note": "쪽지는 1자 이상 200자 이하, 8줄 이하로 적어 주세요.",
-  "invalid-reply": "답장은 1자 이상 500자 이하로 적어 주세요.",
+  "invalid-reply": "답장은 1자 이상 200자 이하로 적어 주세요.",
+  "no-tree": "이 방에는 쪽지 트리가 없어요",
   "invalid-note-style": "고를 수 없는 색이나 글씨체예요.",
   "invalid-note-spot": "쪽지를 걸 수 없는 자리예요.",
   "note-spot-taken": "다른 쪽지와 너무 가까워요. 조금 옆에 걸어 주세요.",

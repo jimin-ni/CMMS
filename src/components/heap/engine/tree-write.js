@@ -88,6 +88,7 @@ export function setupTreeWrite(ctx, T) {
   let tween = null, carry = null, confirmState = null, sendId = 0, delBusy = false, wantOpen = false;
   let fontTimer = 0;
   let measureCtx = null;
+  let textFits = true; // layoutText 가 정한다: 줄여 맞춘 글이 글상자에 드는가
 
   // ----- 초안 -----
   function loadDraft() {
@@ -190,8 +191,16 @@ export function setupTreeWrite(ctx, T) {
     // 글이 비었을 때는 짧은 글로 크기를 잡는다 (비어 있는데 글자가 거대하면 놀란다)
     const fit = fitFor(ta.value || '가나다라마바사아자차', font);
     const s = ta.style;
-    s.left = `${r.x + b.x * k}px`; s.top = `${r.y + b.top * k}px`; s.width = `${b.boxW * k}px`; s.height = `${b.boxH * k}px`;
+    // 위쪽 여백: drawBlock 이 남는 높이의 0.4 만큼 글을 내려 그리므로 글상자도 같이 내린다 (접은 뒤의 글 자리와 맞는다).
+    // 너비는 조금 넉넉히 준다: 글상자의 줄바꿈이 캔버스보다 한 줄 일찍 일어나 내용이 상자보다 높아지는 일을 막는다.
+    const total = fit.lines.length * fit.lh, slack = Math.max(0, (b.boxH - total) * 0.4);
+    s.boxSizing = 'border-box';
+    s.left = `${r.x + b.x * k}px`; s.top = `${r.y + b.top * k}px`; s.width = `${b.boxW * k * 1.03}px`; s.height = `${b.boxH * k}px`;
+    s.paddingTop = `${slack * k}px`;
     s.fontFamily = `"${font}", system-ui, sans-serif`; s.fontSize = `${fit.px * k}px`; s.lineHeight = `${fit.lh * k}px`;
+    // 줄여 맞춘 글이 상자에 들면 글상자는 절대 위로 밀리지 않는다 (끝에서 입력할 때 브라우저가 캐럿을 따라 scrollTop 을 올려서 첫 줄이 잘렸다).
+    textFits = total <= b.boxH + 0.5 && !String(fit.lines[fit.lines.length - 1]).endsWith('…');
+    if (textFits && ta.scrollTop) ta.scrollTop = 0;
   }
 
   // ----- 3D 종이 -----
@@ -449,6 +458,7 @@ export function setupTreeWrite(ctx, T) {
     normalize();
   });
   on(ta, 'compositionend', normalize);
+  on(ta, 'scroll', () => { if (textFits && ta.scrollTop) ta.scrollTop = 0; });
   on(ta, 'beforeinput', e => {
     if (e.inputType === 'insertLineBreak' && ta.value.split('\n').length >= maxLines) e.preventDefault();
   });

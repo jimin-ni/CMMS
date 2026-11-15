@@ -140,6 +140,15 @@ function spotDistance(a: HeapNoteSpot, b: HeapNoteSpot): number {
 type NoteContext = { creatorId: string; noteRevealAt: Date | null; sealedNow: boolean; ownerEarly: boolean };
 
 // 저장된 레이아웃의 트리 기능에서 이른 검토 설정을 읽는다. 명시적으로 false 일 때만 끈다.
+function hasTree(layout: unknown): boolean {
+  const items = typeof layout === "object" && layout !== null ? (layout as { items?: unknown }).items : null;
+  if (!Array.isArray(items)) return false;
+  return items.some((item) => {
+    const fn = typeof item === "object" && item !== null ? (item as { fn?: unknown }).fn : null;
+    return typeof fn === "object" && fn !== null && (fn as { kind?: unknown }).kind === "tree";
+  });
+}
+
 function earlyModerationOf(layout: unknown): boolean {
   const items = typeof layout === "object" && layout !== null ? (layout as { items?: unknown }).items : null;
   if (!Array.isArray(items)) return true;
@@ -332,7 +341,7 @@ export async function addNote(
   rawInput: unknown,
 ): Promise<
   | { ok: true; note: HeapNote; evictedId: string | null }
-  | Fail<"not-found" | "invalid-note" | "invalid-note-style" | "invalid-note-spot" | "note-spot-taken" | "notes-per-day">
+  | Fail<"not-found" | "no-tree" | "invalid-note" | "invalid-note-style" | "invalid-note-spot" | "note-spot-taken" | "notes-per-day">
 > {
   if (!isUuid(roomId)) return fail("not-found");
   const parsed = parseNoteInput(rawInput);
@@ -340,8 +349,10 @@ export async function addNote(
   const input = parsed.value;
 
   return db.transaction(async (tx) => {
-    const rooms = await tx.select({ id: heapRooms.id }).from(heapRooms).where(eq(heapRooms.id, roomId));
+    const rooms = await tx.select({ id: heapRooms.id, layout: heapRooms.layout }).from(heapRooms).where(eq(heapRooms.id, roomId));
     if (!rooms[0]) return fail("not-found");
+    // 트리가 없는 방에는 새 쪽지를 받지 않는다. 읽기와 숨기기는 그대로 둔다: 트리를 나중에 치워도 주인이 옛 쪽지를 다룰 수 있게.
+    if (!hasTree(rooms[0].layout)) return fail("no-tree");
 
     await lockUserInRoom(tx, roomId, userId);
     await lockRoomTree(tx, roomId);
