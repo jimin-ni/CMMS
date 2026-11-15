@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, type RefObject } from "react";
-import { markShared } from "./setup-checklist";
 
 // 방 HUD의 공유 단추 (판정 J5). 방 주인과 방문자 모두에게 보인다.
 // 누르면 엔진이 지금 구도를 한 장 그려(heap:capture, engine/loop.js) PNG로 만든다. 화면 위 글자와 단추는 들어가지 않는다.
@@ -20,12 +19,10 @@ const denied = (error: unknown) => error instanceof DOMException && error.name =
 export function ShareButton({
   rootRef,
   roomId,
-  roomUuid,
 }: {
   rootRef: RefObject<HTMLDivElement | null>;
   // 주소의 방 이름(slug). 방 주소와 내려받을 파일 이름에 쓴다.
   roomId: string;
-  roomUuid: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [out, setOut] = useState<Outcome | null>(null);
@@ -99,7 +96,6 @@ export function ShareButton({
       } catch {
         blob = null;
       }
-      if (copied !== "none") markShared(roomUuid);
       const text =
         copied === "both"
           ? "지금 화면 사진과 방 주소를 복사했어요. 붙여 넣는 곳에 따라 사진이나 주소가 들어가요."
@@ -119,7 +115,6 @@ export function ShareButton({
     const link = roomUrl();
     try {
       await navigator.clipboard.writeText(link);
-      markShared(roomUuid);
       setLinkNote("방 주소를 복사했어요");
     } catch {
       setLinkNote(`주소를 복사하지 못했어요 · ${link}`);
@@ -136,7 +131,7 @@ export function ShareButton({
           <p>{out.text}</p>
           <div className="share-actions">
             {out.href && (
-              <a className="btn small" href={out.href} download={`${roomId}-miniroom.png`} onClick={() => markShared(roomUuid)}>
+              <a className="btn small" href={out.href} download={`${roomId}-miniroom.png`}>
                 내려받기
               </a>
             )}

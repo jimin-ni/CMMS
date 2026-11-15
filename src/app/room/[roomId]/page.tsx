@@ -1,6 +1,8 @@
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getViewer } from "@/lib/session";
+import { getRoomBySlug } from "@/lib/heap/repo";
 import { loadRoomView } from "@/lib/heap/room-view";
 import { HeapRoom } from "@/components/heap/heap-room";
 
@@ -30,6 +32,23 @@ async function RoomContent({ params }: RoomPageProps) {
       canEdit={view.canEdit}
     />
   );
+}
+
+// 링크 미리보기 (판정 2026-11-14): 방 이름과 소개. 사진은 같은 폴더의 opengraph-image.tsx 가 그린다.
+// 미리보기 사진 주소는 절대 주소여야 해서 사이트 주소(BETTER_AUTH_URL, 인증과 같은 출처)를 기준으로 삼는다.
+export async function generateMetadata({ params }: RoomPageProps): Promise<Metadata> {
+  const { roomId } = await params;
+  const room = await getRoomBySlug(roomId);
+  if (!room) return { title: "미니홈을 찾을 수 없어요" };
+  const title = `${room.name} · 미니홈`;
+  const description = room.blurb || `${room.creatorName}의 방. 지난 영상이 사진 더미로 쌓여 있어요.`;
+  return {
+    metadataBase: new URL(process.env.BETTER_AUTH_URL ?? "http://localhost:3000"),
+    title,
+    description,
+    openGraph: { title, description, type: "website", url: `/room/${encodeURIComponent(room.slug)}` },
+    twitter: { card: "summary_large_image", title, description },
+  };
 }
 
 export default function RoomPage({ params }: RoomPageProps) {
