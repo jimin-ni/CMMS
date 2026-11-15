@@ -3,6 +3,15 @@
 import { validateLayout } from "./layout";
 import { HEAP_MESSAGES, type HeapReason } from "./messages";
 import { addGuestbookEntry, recordVisit, saveRoomLayout } from "./repo";
+import {
+  addNote,
+  deleteOwnNote,
+  markNotesRead,
+  replyToNote,
+  setNoteHidden,
+  setNoteReveal,
+  type HeapNote,
+} from "./notes-repo";
 import { checkRoomName } from "./slug";
 import { getViewer } from "@/lib/session";
 
@@ -77,4 +86,122 @@ export async function saveLayoutAction(
   const result = await saveRoomLayout(roomId, viewer.id, check.layout, newName);
   if (!result.ok) return fail(result.reason);
   return { ok: true };
+}
+
+// ---------- 쪽지 트리 ----------
+// 쪽지 규칙(글자 수, 일일 제한, 간격)과 검사는 notes-repo.ts가 서버에서 한다. 여기서는 로그인과 인자 형식만 본다.
+// 돌려주는 쪽지의 날짜는 문자열(ISO)이다.
+
+export type HeapNoteDto = Omit<HeapNote, "createdAt" | "reply"> & {
+  createdAt: string;
+  reply?: { body: string; font: string; createdAt: string };
+};
+
+function toNoteDto(note: HeapNote): HeapNoteDto {
+  const { createdAt, reply, ...rest } = note;
+  return {
+    ...rest,
+    createdAt: createdAt.toISOString(),
+    ...(reply ? { reply: { ...reply, createdAt: reply.createdAt.toISOString() } } : {}),
+  };
+}
+
+// 쪽지 남기기. input = { body, tint, font, anonymous, spot?: { y, angle } | null }
+export async function addNoteAction(
+  roomId: string,
+  input: unknown,
+): Promise<
+  | { ok: true; note: HeapNoteDto; evictedId: string | null }
+  | HeapFail<
+      | "not-signed-in"
+      | "not-found"
+      | "invalid-note"
+      | "invalid-note-style"
+      | "invalid-note-spot"
+      | "note-spot-taken"
+      | "notes-per-day"
+    >
+> {
+  const viewer = await getViewer();
+  if (!viewer) return fail("not-signed-in");
+  if (typeof roomId !== "string") return fail("not-found");
+
+  const result = await addNote(viewer.id, roomId, input);
+  if (!result.ok) return fail(result.reason);
+  return { ok: true, note: toNoteDto(result.note), evictedId: result.evictedId };
+}
+
+// 내가 쓴 쪽지 지우기
+export async function deleteNoteAction(
+  noteId: string,
+): Promise<{ ok: true } | HeapFail<"not-signed-in" | "note-not-found" | "not-author">> {
+  const viewer = await getViewer();
+  if (!viewer) return fail("not-signed-in");
+  if (typeof noteId !== "string") return fail("note-not-found");
+
+  const result = await deleteOwnNote(viewer.id, noteId);
+  if (!result.ok) return fail(result.reason);
+  return { ok: true };
+}
+
+// 방 주인의 답장. input = { body, font }
+export async function replyNoteAction(
+  noteId: string,
+  input: unknown,
+): Promise<
+  | { ok: true; note: HeapNoteDto }
+  | HeapFail<"not-signed-in" | "note-not-found" | "not-owner" | "notes-sealed" | "invalid-reply" | "invalid-note-style">
+> {
+  const viewer = await getViewer();
+  if (!viewer) return fail("not-signed-in");
+  if (typeof noteId !== "string") return fail("note-not-found");
+
+  const result = await replyToNote(viewer.id, noteId, input);
+  if (!result.ok) return fail(result.reason);
+  return { ok: true, note: toNoteDto(result.note) };
+}
+
+// 방 주인이 쪽지를 숨기거나 되살린다.
+export async function setNoteHiddenAction(
+  noteId: string,
+  hidden: boolean,
+): Promise<{ ok: true } | HeapFail<"not-signed-in" | "note-not-found" | "not-owner">> {
+  const viewer = await getViewer();
+  if (!viewer) return fail("not-signed-in");
+  if (typeof noteId !== "string" || typeof hidden !== "boolean") return fail("note-not-found");
+
+  const result = await setNoteHidden(viewer.id, noteId, hidden);
+  if (!result.ok) return fail(result.reason);
+  return { ok: true };
+}
+
+// 방 주인이 쪽지를 읽었다고 표시한다.
+export async function markNotesReadAction(
+  roomId: string,
+): Promise<{ ok: true; marked: number } | HeapFail<"not-signed-in" | "not-found" | "not-owner">> {
+  const viewer = await getViewer();
+  if (!viewer) return fail("not-signed-in");
+  if (typeof roomId !== "string") return fail("not-found");
+
+  const result = await markNotesRead(viewer.id, roomId);
+  if (!result.ok) return fail(result.reason);
+  return { ok: true, marked: result.marked };
+}
+
+// 쪽지 공개 시각. revealAt은 ISO 문자열이고 null이면 봉인을 푼다.
+export async function setNoteRevealAction(
+  roomId: string,
+  revealAt: string | null,
+): Promise<
+  | { ok: true; noteRevealAt: string | null }
+  | HeapFail<"not-signed-in" | "not-found" | "not-owner" | "invalid-reveal">
+> {
+  const viewer = await getViewer();
+  if (!viewer) return fail("not-signed-in");
+  if (typeof roomId !== "string") return fail("not-found");
+  if (revealAt !== null && typeof revealAt !== "string") return fail("invalid-reveal");
+
+  const result = await setNoteReveal(viewer.id, roomId, revealAt === null ? null : new Date(revealAt));
+  if (!result.ok) return fail(result.reason);
+  return { ok: true, noteRevealAt: result.noteRevealAt?.toISOString() ?? null };
 }

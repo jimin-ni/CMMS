@@ -6,7 +6,7 @@ import {
 } from "@/lib/heap/repo";
 import { getViewer } from "@/lib/session";
 
-// 실시간 읽기: ?since=<기준점> 뒤에 바뀐 방명록, 조각, 방문 수를 돌려준다. roomId는 방의 uuid.
+// 실시간 읽기: ?since=<기준점> 뒤에 바뀐 방명록, 조각, 쪽지, 방문 수를 돌려준다. roomId는 방의 uuid.
 // 기준점은 응답의 cursor를 그대로 되돌려 보내는 불투명 문자열이다. 방 화면이 처음 여는 값만 ISO 시각이다.
 // 한 번에 주는 줄 수에는 상한이 있다. 응답의 more가 true면 받은 cursor로 이어서 읽는다.
 // 지금은 클라이언트가 폴링한다. 로그인하지 않아도 읽을 수 있고, 그때는 조각의 voted가 항상 false다.
@@ -14,7 +14,8 @@ const NO_STORE = { "Cache-Control": "no-store" };
 const ISO_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})$/;
 const UTC_ISO_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?Z$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const CURSOR_PATTERN = /^[A-Za-z0-9_-]{1,400}$/;
+const CURSOR_PATTERN = /^[A-Za-z0-9_-]{1,600}$/;
+const EPOCH_ISO = "1970-01-01T00:00:00.000000Z";
 
 // 달력 값이 실제로 있는 날짜와 시각인지 확인한 뒤 Date로 바꾼다. 2026-02-31이나 24:00:00은 다음 날로 밀려서 통과하므로 직접 거른다.
 function parseStrictIso(value: string): Date | null {
@@ -28,13 +29,15 @@ function parseStrictIso(value: string): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-// 기준점 문자열 = base64url("방명록시각|방명록id|조각시각|조각id"). 시각은 UTC ISO(마이크로초까지), id는 소문자 uuid.
+// 기준점 문자열 = base64url("방명록시각|방명록id|조각시각|조각id|쪽지시각|쪽지id"). 시각은 UTC ISO(마이크로초까지), id는 소문자 uuid.
+// 쪽지 필드가 없는 예전 4칸 기준점도 받는다. 그 경우 쪽지는 처음부터 읽는다 (조회 한계 changesMaxLookbackMs 안에서).
 function encodePosition(pos: HeapChangesPosition): string {
   return `${pos.ts}|${pos.id}`;
 }
 
 function encodeCursor(cursor: HeapChangesCursor): string {
-  return Buffer.from(`${encodePosition(cursor.guestbook)}|${encodePosition(cursor.pieces)}`).toString("base64url");
+  const parts = [cursor.guestbook, cursor.pieces, cursor.notes].map(encodePosition);
+  return Buffer.from(parts.join("|")).toString("base64url");
 }
 
 function parsePosition(ts: string, id: string): HeapChangesPosition | null {
@@ -48,10 +51,11 @@ function decodeCursor(value: string): HeapChangesCursor | null {
   // 다시 인코딩했을 때 같아야 한다. 같은 뜻의 다른 문자열은 받지 않는다.
   if (Buffer.from(decoded).toString("base64url") !== value) return null;
   const parts = decoded.split("|");
-  if (parts.length !== 4) return null;
+  if (parts.length !== 4 && parts.length !== 6) return null;
   const guestbook = parsePosition(parts[0], parts[1]);
   const pieces = parsePosition(parts[2], parts[3]);
-  return guestbook && pieces ? { guestbook, pieces } : null;
+  const notes = parts.length === 6 ? parsePosition(parts[4], parts[5]) : { ts: EPOCH_ISO, id: ZERO_UUID };
+  return guestbook && pieces && notes ? { guestbook, pieces, notes } : null;
 }
 
 // 예전 방식(ISO 시각 하나)도 받는다. 두 목록이 같은 시각에서 시작한다.
@@ -59,7 +63,7 @@ function parseSince(value: string): HeapChangesCursor | null {
   const date = parseStrictIso(value);
   if (date) {
     const pos = { ts: date.toISOString(), id: ZERO_UUID };
-    return { guestbook: pos, pieces: pos };
+    return { guestbook: pos, pieces: pos, notes: pos };
   }
   return decodeCursor(value);
 }
@@ -81,9 +85,35 @@ export async function GET(
     return Response.json({ error: "방을 찾을 수 없어요." }, { status: 404, headers: NO_STORE });
   }
 
-  const { voteThreshold, creatorVisitedAt, guestbook, pieces, removedPieceIds, visits, more, nextCursor } = changes;
+  const {
+    voteThreshold,
+    creatorVisitedAt,
+    guestbook,
+    pieces,
+    removedPieceIds,
+    notes,
+    removedNoteIds,
+    noteRevealAt,
+    unreadNotes,
+    visits,
+    more,
+    nextCursor,
+  } = changes;
   return Response.json(
-    { voteThreshold, creatorVisitedAt, guestbook, pieces, removedPieceIds, visits, more, cursor: encodeCursor(nextCursor) },
+    {
+      voteThreshold,
+      creatorVisitedAt,
+      guestbook,
+      pieces,
+      removedPieceIds,
+      notes,
+      removedNoteIds,
+      noteRevealAt,
+      unreadNotes,
+      visits,
+      more,
+      cursor: encodeCursor(nextCursor),
+    },
     { headers: NO_STORE },
   );
 }

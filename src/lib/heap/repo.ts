@@ -20,6 +20,7 @@ import type {
 } from "@/lib/heap/platform";
 import { allocateCaps, classifyReel, REEL_CLASSES, type ReelClass, type ReelCounts } from "@/lib/heap/caps";
 import { REEL_KEY } from "@/lib/heap/layout";
+import { getNotesState, listNoteChanges, type HeapNote } from "@/lib/heap/notes-repo";
 import { likePattern } from "@/lib/heap/search";
 import type { ImportCandidate } from "@/lib/heap/import";
 
@@ -107,6 +108,12 @@ export type HeapRoomSnapshot = {
   guestbook: HeapGuestbookEntry[];
   visits: HeapVisitCounts;
   channels: HeapChannel[];
+  // 쪽지 트리. 보는 사람에게 보이는 쪽지 전부 (notes-repo.ts의 listNotes 규칙).
+  notes: HeapNote[];
+  // 쪽지 공개 시각. null이면 봉인되지 않았다.
+  noteRevealAt: Date | null;
+  // 방 주인에게만 0이 아니다. 아직 읽지 않은 쪽지 수.
+  unreadNotes: number;
 };
 
 export type HeapRoomChanges = {
@@ -120,8 +127,14 @@ export type HeapRoomChanges = {
   pieces: HeapPiece[];
   // since 뒤에 바뀌어 더는 보이지 않는 조각(lifted, rejected, pending)
   removedPieceIds: string[];
+  // since 뒤에 바뀐 쪽지 중 보이는 것. 지운 쪽지는 여기에 나오지 않는다 (행이 없다).
+  notes: HeapNote[];
+  // since 뒤에 바뀌어 보는 사람에게는 더 보이지 않는 쪽지 (남이 숨긴 쪽지)
+  removedNoteIds: string[];
+  noteRevealAt: Date | null;
+  unreadNotes: number;
   visits: HeapVisitCounts;
-  // 다음 요청의 기준점. 방명록과 조각이 각자 자리를 가진다.
+  // 다음 요청의 기준점. 방명록, 조각, 쪽지가 각자 자리를 가진다.
   nextCursor: HeapChangesCursor;
   // 한쪽 목록이 한 번의 상한(changesPageSize)에 닿았다. 받은 기준점으로 이어서 읽어야 한다.
   more: boolean;
@@ -129,7 +142,11 @@ export type HeapRoomChanges = {
 
 // (시각, id) 한 지점. 시각은 DB의 마이크로초까지 담은 UTC ISO 문자열이라 페이지 경계에서 줄이 겹치거나 빠지지 않는다.
 export type HeapChangesPosition = { ts: string; id: string };
-export type HeapChangesCursor = { guestbook: HeapChangesPosition; pieces: HeapChangesPosition };
+export type HeapChangesCursor = {
+  guestbook: HeapChangesPosition;
+  pieces: HeapChangesPosition;
+  notes: HeapChangesPosition;
+};
 
 export const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
 
@@ -409,7 +426,7 @@ export async function getRoomSnapshot(
   const { room, serverTime } = found;
 
   // 영상과 조각은 상한만큼만 읽는다 (최근 것이 남는다). 조각은 안착한 것과 투표 중인 것을 따로 센다.
-  const [reels, landed, voting, guestbook, visits, channels] = await Promise.all([
+  const [reels, landed, voting, guestbook, visits, channels, notesState] = await Promise.all([
     listReels(room.id, HEAP_POLICY.snapshotReelsMax, excludedReelKeys(room.layout)),
     pieceSelect(db, viewerId)
       .where(and(eq(heapPieces.roomId, room.id), eq(heapPieces.status, "landed")))
@@ -422,6 +439,7 @@ export async function getRoomSnapshot(
     listGuestbook(room.id, HEAP_POLICY.guestbookPageSize),
     getVisitCounts(room.id),
     listCreatorChannels(room.creatorId),
+    getNotesState(room.id, viewerId),
   ]);
 
   return {
@@ -433,6 +451,7 @@ export async function getRoomSnapshot(
     guestbook,
     visits,
     channels,
+    ...notesState,
   };
 }
 
@@ -466,10 +485,10 @@ export async function getRoomChangesSince(
   const floorMs = serverTime.getTime() - HEAP_POLICY.changesMaxLookbackMs;
   const clamp = (pos: HeapChangesPosition): HeapChangesPosition =>
     new Date(pos.ts).getTime() < floorMs ? { ts: new Date(floorMs).toISOString(), id: ZERO_UUID } : pos;
-  const from = { guestbook: clamp(since.guestbook), pieces: clamp(since.pieces) };
+  const from = { guestbook: clamp(since.guestbook), pieces: clamp(since.pieces), notes: clamp(since.notes) };
   const pageSize = HEAP_POLICY.changesPageSize;
 
-  const [guestbookRows, changedRows, visits] = await Promise.all([
+  const [guestbookRows, changedRows, visits, noteChanges] = await Promise.all([
     db
       .select({
         id: heapGuestbook.id,
@@ -496,6 +515,7 @@ export async function getRoomChangesSince(
       .orderBy(asc(heapPieces.updatedAt), asc(heapPieces.id))
       .limit(pageSize),
     getVisitCounts(roomId),
+    listNoteChanges(roomId, viewerId, from.notes, pageSize),
   ]);
 
   // 늦게 커밋된 변경을 놓치지 않도록 다 읽은 목록의 기준점은 서버 시각보다 조금 앞당긴다. 받는 쪽은 id로 합친다.
@@ -526,9 +546,17 @@ export async function getRoomChangesSince(
     guestbook,
     pieces: changed.filter(visible),
     removedPieceIds: changed.filter((piece) => !visible(piece)).map((piece) => piece.id),
+    notes: noteChanges.notes,
+    removedNoteIds: noteChanges.removedNoteIds,
+    noteRevealAt: noteChanges.noteRevealAt,
+    unreadNotes: noteChanges.unreadNotes,
     visits,
-    nextCursor: { guestbook: advance(guestbookRows, from.guestbook), pieces: advance(changedRows, from.pieces) },
-    more: guestbookRows.length >= pageSize || changedRows.length >= pageSize,
+    nextCursor: {
+      guestbook: advance(guestbookRows, from.guestbook),
+      pieces: advance(changedRows, from.pieces),
+      notes: advance(noteChanges.positions, from.notes),
+    },
+    more: guestbookRows.length >= pageSize || changedRows.length >= pageSize || noteChanges.positions.length >= pageSize,
   };
 }
 
