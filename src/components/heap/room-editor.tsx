@@ -9,6 +9,7 @@ import { HEAP_TEMPLATES, type HeapTemplate } from "@/lib/heap/templates";
 import { moveFunctions, shellOf, SHELL_KEYS, type MoveItem } from "@/lib/heap/template-move";
 import type { HeapOwnerData, SavedRoom } from "./heap-room";
 import { ChannelTab } from "./channel-tab";
+import { StatsTab } from "./stats-tab";
 import type { ChecklistAction } from "./setup-checklist";
 import { FnForm, canCarryFn, isLamp, itemLabel, newFn, type Item, type Model } from "./fn-form";
 import { ColourPane, type Backdrop } from "./colour-pane";
@@ -230,7 +231,7 @@ export function RoomEditor({
 }) {
   const [room, setRoom] = useState<RoomState | null>(null);
   const [st, setSt] = useState<EditState | null>(null);
-  const [tab, setTab] = useState<"furn" | "fn" | "pal" | "tpl" | "ch">("furn");
+  const [tab, setTab] = useState<"furn" | "fn" | "pal" | "tpl" | "ch" | "st">("furn");
   // 위 막대의 ⋯ 메뉴 (시간, 처음으로, 저장 전으로, 팔로워로 보기). left 는 메뉴를 펼칠 자리(방 루트 기준 px)
   const [menu, setMenu] = useState<{ left: number } | null>(null);
   const menuBtn = useRef<HTMLButtonElement>(null);
@@ -406,7 +407,10 @@ export function RoomEditor({
     if (saving || !room || !st || st.busy) return false;
     setSaving(true);
     setSaveNote("");
-    const layout: Record<string, unknown> = { ...room.layout, items: st.items, time: st.time };
+    // links 가 없는 PC 는 엔진이 정적 creator.json 링크를 대신 보여 준다. 서버가 검증하지 못하는 링크라 열람 집계가 버려지므로, 저장할 때 그 링크를 PC 의 links 로 옮겨 적는다.
+    const fallback = prefill();
+    const items = fallback.length ? st.items.map((it) => (it.fn?.kind === "pc" && it.fn.links === undefined ? { ...it, fn: { ...it.fn, links: fallback } } : it)) : st.items;
+    const layout: Record<string, unknown> = { ...room.layout, items, time: st.time };
     delete layout.excludedReels;
     for (const key of SHELL_KEYS) delete layout[key];
     Object.assign(layout, st.shell);
@@ -439,7 +443,7 @@ export function RoomEditor({
       if (alive.current) setSaving(false);
     }
     return false;
-  }, [saving, room, st, roomUuid, send, onSaved]);
+  }, [saving, room, st, roomUuid, send, onSaved, prefill]);
 
   // Ctrl+S 는 저장. 브라우저의 페이지 저장은 막는다.
   useEffect(() => {
@@ -1078,6 +1082,7 @@ export function RoomEditor({
               ["pal", "색·무늬"],
               ["tpl", "템플릿"],
               ["ch", "채널"],
+              ["st", "통계"],
             ] as const
           ).map(([k, label]) => (
             <button key={k} type="button" role="tab" className="ed-tab" aria-selected={tab === k} onClick={() => setTab(k)}>
@@ -1179,6 +1184,8 @@ export function RoomEditor({
         )}
 
         {tab === "ch" && <ChannelTab owner={owner} />}
+
+        {tab === "st" && <StatsTab roomUuid={roomUuid} />}
 
         {tab === "pal" && (
           <ColourPane palette={st?.palette ?? null} brand={st?.brand ?? null} backdrop={st?.backdrop ?? null} busy={busy} cmd={cmd} />

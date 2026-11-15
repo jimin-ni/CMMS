@@ -28,7 +28,7 @@ export async function setupData(ctx) {
 
   const DEFAULT_PALETTE = {
     olive: '#565344', accent: '#A6613C', paper: '#F3EADB', ink: '#2f2c24',
-    wall: '#EADCC4', trim: '#565344', floor: ['#9a6a43', '#8b5d3a', '#a7774d'], woodB: '#8b5d3a', woodDark: '#6e4a30',
+    wall: '#EADCC4', trim: '#565344', floor: ['#9a6a43', '#8b5d3a', '#a7774d'], woodB: '#B07A4E', woodDark: '#6e4a30',
     leaf: '#6f7d4f', leaf2: '#87925f', leafDark: '#556240',
   };
   const C = { ...DEFAULT_PALETTE, ...(layout.palette || {}) };
