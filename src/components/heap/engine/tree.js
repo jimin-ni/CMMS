@@ -461,13 +461,28 @@ export function setupTree(ctx) {
   on($('treeexit'), 'click', () => treeEscape());
 
   // ----- 들어가고 나가기 -----
+  // 시점은 트리에서 방 가운데 쪽으로 둔다. 트리가 벽을 보고 서 있어도 카메라가 벽 밖으로 나가지 않게 하고, 방 안에 가둔다.
+  // 그 방향을 향하도록 pivot 을 돌려 둔다. 쪽지 자리는 pivot 틀에 있으므로 돌려도 바뀌지 않는다.
   function viewOf(r) {
     r.g.updateWorldMatrix(true, false);
     const b = r.pivot.position;
-    return {
-      pos: r.g.localToWorld(new THREE.Vector3(b.x, b.y + TREE_VIEW.eye, b.z + TREE_VIEW.dist)),
-      target: r.g.localToWorld(new THREE.Vector3(b.x, b.y + TREE_VIEW.look, b.z)),
-    };
+    const base = r.g.localToWorld(new THREE.Vector3(b.x, b.y, b.z));
+    let dx = -base.x, dz = -base.z, len = Math.hypot(dx, dz);
+    if (len < 0.05) { // 방 한가운데: 가구가 바라보는 쪽
+      const f = new THREE.Vector3(0, 0, 1).transformDirection(r.g.matrixWorld);
+      dx = f.x; dz = f.z; len = Math.hypot(dx, dz) || 1;
+    }
+    dx /= len; dz /= len;
+    const m = 0.15;
+    const pos = new THREE.Vector3(
+      THREE.MathUtils.clamp(base.x + dx * TREE_VIEW.dist, -ctx.RX + m, ctx.RX - m),
+      base.y + TREE_VIEW.eye,
+      THREE.MathUtils.clamp(base.z + dz * TREE_VIEW.dist, -ctx.RZ + m, ctx.RZ - m),
+    );
+    const gq = new THREE.Quaternion(); r.g.getWorldQuaternion(gq);
+    const gYaw = new THREE.Euler().setFromQuaternion(gq, 'YXZ').y;
+    const yaw = wrapAngle(Math.atan2(dx, dz) - gYaw);
+    return { pos, target: new THREE.Vector3(base.x, base.y + TREE_VIEW.look, base.z), yaw };
   }
   function enterTree() {
     if (ctx.mode !== 'room') return;
@@ -477,6 +492,7 @@ export function setupTree(ctx) {
     ctx.mode = 'tree'; ctx.walkTo = null; ctx.arrive = null; ctx.waypoints = []; ctx.hovered = null;
     ctx.me.visible = false; // 1인칭이다: 걷는 사람이 시야를 가리지 않는다
     rig.settled = false; rig.view = viewOf(rig);
+    rig.turn = rig.view.yaw; rig.pivot.rotation.y = rig.turn;
     setHint('tree'); ctx.goTo({ pos: rig.view.pos.clone(), target: rig.view.target.clone() }); syncUI(); syncNav();
   }
   function exitTree() {
