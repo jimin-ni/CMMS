@@ -50,7 +50,7 @@ export function setupHud(ctx) {
     perch: '방향키·WASD 또는 바닥을 눌러 일어나기 · Esc로도 일어나요',
   };
   // 트리 모드 안내에는 쪽지함의 개수가 붙는다 (자리가 없는 쪽지: tree.js 의 ctx.boxedNotes)
-  const hintText = k => HINTS[k] + (k === 'tree' && ctx.boxedNotes > 0 ? ` · 쪽지함 ${ctx.boxedNotes}장` : '');
+  const hintText = k => HINTS[k] + (k === 'tree' && ctx.boxedNotes > 0 ? ` · 쪽지함 ${ctx.boxedNotes}장은 상자를 눌러 열기` : '');
   const setHint = k => { const t = hintText(k); if (hint.dataset.k !== k || hint.textContent !== t) { hint.dataset.k = k; hint.textContent = t; } };
   const refreshHint = () => { if (hint.dataset.k) setHint(hint.dataset.k); };
 

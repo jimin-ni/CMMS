@@ -3,7 +3,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { addGuestbookAction, addNoteAction, deleteNoteAction, recordVisitAction } from "@/lib/heap/actions";
+import {
+  addGuestbookAction,
+  addNoteAction,
+  deleteNoteAction,
+  markNotesReadAction,
+  recordVisitAction,
+  refetchNotesAction,
+  replyNoteAction,
+  setNoteHiddenAction,
+} from "@/lib/heap/actions";
 import { itemHalfExtents, itemPlacementError } from "@/lib/heap/layout";
 import { surfaces } from "@/lib/heap/surfaces";
 import { HEAP_POLICY } from "@/lib/heap/policy";
@@ -149,6 +158,12 @@ export function HeapRoom({
   const [saved, setSaved] = useState<SavedRoom>({ layout: data.layout, name: data.name });
   const [beforeSave, setBeforeSave] = useState<SavedRoom | null>(null);
   const [savedThisVisit, setSavedThisVisit] = useState(false);
+  // 쪽지 공개 시각. 꾸미기의 공개일 칸이 바꾸면 여기와 엔진(heap:reveal)이 함께 바뀐다.
+  const [noteRevealAt, setNoteRevealAt] = useState<string | null>(data.noteRevealAt);
+  const onRevealSaved = useCallback((iso: string | null) => {
+    setNoteRevealAt(iso);
+    rootRef.current?.dispatchEvent(new CustomEvent("heap:reveal", { detail: iso }));
+  }, []);
   const onSaved = useCallback((prev: SavedRoom, next: SavedRoom) => {
     setBeforeSave(prev);
     setSaved(next);
@@ -295,6 +310,21 @@ export function HeapRoom({
           return result.ok ? { ok: true as const, note: toEngineNote(result.note), evictedId: result.evictedId } : result;
         },
         deleteNote: (noteId: string) => deleteNoteAction(noteId),
+        // 방 주인의 도구 (engine/tree-owner.js). replyNote 의 note 는 엔진 모양으로 바꿔 준다.
+        replyNote: async (noteId: string, input: unknown) => {
+          const result = await replyNoteAction(noteId, input);
+          return result.ok ? { ok: true as const, note: toEngineNote(result.note) } : result;
+        },
+        setHidden: (noteId: string, hidden: boolean) => setNoteHiddenAction(noteId, hidden),
+        // 트리 모드에 들어설 때 안 읽은 쪽지를 모두 읽은 것으로 (방 단위)
+        markRead: () => markNotesReadAction(data.roomUuid),
+        // 공개 시각이 되었거나 바뀌었을 때: 쪽지 전부를 다시 읽는다
+        refetchNotes: async () => {
+          const result = await refetchNotesAction(data.roomUuid);
+          return result.ok
+            ? { ok: true as const, notes: result.notes.map(toEngineNote), noteRevealAt: result.noteRevealAt, unreadNotes: result.unreadNotes }
+            : result;
+        },
         // 로그인이 없는 사람이 쪽지 쓰기를 누르면: 로그인 화면으로 보낸다. next 는 돌아올 주소다 (로그인 화면이 읽으면 그리로 돌아온다).
         signIn: () => router.push(`/login?next=${encodeURIComponent(`/room/${encodeURIComponent(roomId)}?write=1`)}`),
         openWrite: signedIn && writeOnLoad.current === true,
@@ -420,9 +450,45 @@ export function HeapRoom({
           </div>
         </div>
       </div>
-      <button id="tree-del" className="btn ghost" type="button" hidden>
-        지우기
-      </button>
+      {/* 열린 쪽지 아래의 단추 줄 (tree-owner.js 가 자리를 정한다): 방 주인의 답장 쓰기와 숨기기, 내 쪽지의 지우기 */}
+      <div id="tree-tools" hidden>
+        <button id="tree-reply" className="btn" type="button" hidden>
+          답장 쓰기
+        </button>
+        <button id="tree-hide" className="btn ghost" type="button" hidden>
+          숨기기
+        </button>
+        <button id="tree-del" className="btn ghost" type="button" hidden>
+          지우기
+        </button>
+      </div>
+      {/* 방 주인의 답장 쓰기 (tree-owner.js): 답장 종이 위에 겹치는 글상자와 그 아래 조작 줄 */}
+      <div id="tree-rsheet" hidden>
+        <textarea id="tr-text" rows={4} lang="ko" spellCheck={false} autoComplete="off" aria-label="답장 내용" placeholder="답장을 써요" hidden />
+        <div id="tr-ctl" className="tr-ctl" hidden>
+          <span id="tr-count" className="ts-count" aria-live="off" />
+          <button id="tr-fold" className="btn" type="button">
+            접어서 넣기
+          </button>
+          <button id="tr-cancel" className="btn ghost" type="button">
+            취소
+          </button>
+        </div>
+      </div>
+      {/* 쪽지함 목록 (tree-box.js) */}
+      <div id="tree-box" className="overlay" hidden>
+        <div className="panel">
+          <div className="panel-head">
+            <b id="tb-count">쪽지함</b>
+            <button id="tb-close" className="btn ghost" type="button">
+              닫기
+            </button>
+          </div>
+          <div className="panel-body">
+            <div id="tb-list" className="tb-list" />
+          </div>
+        </div>
+      </div>
       <div id="tree-confirm" className="overlay" hidden>
         <div className="panel confirm" role="alertdialog" aria-labelledby="tc-text">
           <p id="tc-text" />
@@ -445,6 +511,8 @@ export function HeapRoom({
           beforeSave={beforeSave}
           onSaved={onSaved}
           owner={owner}
+          noteRevealAt={noteRevealAt}
+          onRevealSaved={onRevealSaved}
         />
       )}
       {showChecklist && owner && (

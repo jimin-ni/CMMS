@@ -11,6 +11,8 @@
 //     집기 전에는 빈 곳을 끌어 트리를 돌릴 수 있다. 끄는 동안은 돌지 않는다. 장식은 놓일 자리에서 초록(걸림) 또는 빨강(다른 쪽지와 너무 가까움)이다.
 //     트리 밖에 놓으면 쪽지함으로 간다. 걸 자리가 트리 어디에도 없으면 L12 대로 쪽지함에 바로 넣는다.
 //   - 내 쪽지(mine)를 열면 아래에 지우기가 뜬다. 확인을 거쳐 서버에서 지우고 트리에서 뺀다.
+//   - 애니메이션이 단추를 막는 동안에는 단추를 숨기지 않고 aria-disabled 로 흐리게 둔다 (눌러도 아무 일이 없고, 단추가 사라진 것처럼 보이지 않는다).
+//   - 확인창은 다른 모듈도 쓴다: 반환값의 ask(text, yes, no, onYes, onClose) (tree-owner.js 의 숨기기와 답장 버리기).
 //
 // 상태: idle opening sheet folding toHand ready carry sending returning unfolding closing
 //
@@ -69,12 +71,15 @@ export function setupTreeWrite(ctx, T) {
   const tintsEl = $('ts-tints'), fontsEl = $('ts-fonts'), countEl = $('ts-count');
   const namedBtn = $('ts-named'), anonBtn = $('ts-anon');
   const delBtn = $('tree-del'), confirmEl = $('tree-confirm');
+  const writeBtn = $('tree-write'), foldBtn = $('ts-fold'), cancelBtn = $('ts-cancel'), boxBtn = $('ts-box'), reopenBtn = $('ts-reopen');
+  const setDisabled = (el, off) => { if (el.getAttribute('aria-disabled') !== String(off)) { if (off) el.setAttribute('aria-disabled', 'true'); else el.removeAttribute('aria-disabled'); } };
+  const isOff = el => el.getAttribute('aria-disabled') === 'true';
 
   let st = 'idle';
   let sheet = null; // { n, id } n: 3D 쪽지 (tree.js 의 buildNote)
   let draft = { ...DRAFT_DEFAULT };
   let tween = null, carry = null, confirmState = null, sendId = 0, delBusy = false, wantOpen = false;
-  let fontTimer = 0, delTopShown = null;
+  let fontTimer = 0;
   let measureCtx = null;
 
   // ----- 초안 -----
@@ -107,7 +112,16 @@ export function setupTreeWrite(ctx, T) {
     dragEl.hidden = !(st === 'toHand' || st === 'ready' || st === 'carry' || st === 'sending');
     dragEl.inert = st !== 'ready';
     $('ts-drag-text').textContent = st === 'carry' ? '초록색이 보이는 곳에 놓으면 달려요' : st === 'sending' ? '다는 중이에요…' : '접은 쪽지를 집어 트리 위에 끌어다 놓으세요';
-    if (!writing) { delBtn.hidden = true; delTopShown = null; }
+    if (!writing) delBtn.hidden = true;
+    syncButtons();
+  }
+  // 막힌 단추는 흐리게 둔다: 쓰기 판이 펼쳐지는 동안의 접어서 달기, 접는 동안의 쪽지 쓰기 ...
+  function syncButtons() {
+    setDisabled(writeBtn, st !== 'idle' || !!T.otherBusy() || !T.rig()?.settled);
+    setDisabled(foldBtn, st !== 'sheet');
+    setDisabled(cancelBtn, st !== 'sheet');
+    setDisabled(boxBtn, st !== 'ready');
+    setDisabled(reopenBtn, st !== 'ready');
   }
   function setSt(next) { st = next; ui(); }
 
@@ -226,6 +240,7 @@ export function setupTreeWrite(ctx, T) {
 
   // ----- 접기, 집기, 걸기 -----
   function fold() {
+    if (st !== 'sheet') return;
     const text = draft.text.trim();
     if (!text) { toast('쪽지에 글을 써 주세요'); ta.focus(); return; }
     if (!T.rig()) return;
@@ -345,14 +360,15 @@ export function setupTreeWrite(ctx, T) {
   }
 
   // ----- 확인창 -----
-  function askConfirm(kind, text, yes, no, id) {
-    confirmState = { kind, id };
+  function askConfirm(kind, text, yes, no, id, extra = {}) {
+    confirmState = { kind, id, ...extra };
     $('tc-text').textContent = text; $('tc-yes').textContent = yes; $('tc-no').textContent = no;
     confirmEl.hidden = false; $('tc-no').focus();
   }
   function closeConfirm(refocus) {
     const was = confirmState; confirmState = null; confirmEl.hidden = true;
     if (refocus && was?.kind === 'discard' && st === 'sheet') ta.focus({ preventScroll: true });
+    if (refocus) was?.onClose?.();
   }
   function discard() {
     draft.text = ''; ta.value = ''; saveDraft(); closeSheet();
@@ -381,14 +397,15 @@ export function setupTreeWrite(ctx, T) {
     if (T.busy()) { T.dismissNote(); wantOpen = true; return; }
     openSheet();
   };
-  on($('tree-write'), 'click', () => {
+  on(writeBtn, 'click', () => {
+    if (isOff(writeBtn)) return;
     if (!opts.signedIn) { opts.signIn?.(); return; }
     request();
   });
-  on($('ts-fold'), 'click', fold);
-  on($('ts-cancel'), 'click', cancel);
-  on($('ts-box'), 'click', () => { if (st === 'ready') send(null); });
-  on($('ts-reopen'), 'click', () => { if (st === 'ready') returnToSheet(); });
+  on(foldBtn, 'click', () => { if (!isOff(foldBtn)) fold(); });
+  on(cancelBtn, 'click', () => { if (!isOff(cancelBtn)) cancel(); });
+  on(boxBtn, 'click', () => { if (st === 'ready') send(null); });
+  on(reopenBtn, 'click', () => { if (st === 'ready') returnToSheet(); });
   on(tintsEl, 'click', e => {
     const b = e.target.closest?.('button[data-key]'); if (!b || b.dataset.key === draft.tint) return;
     draft.tint = b.dataset.key; saveDraft(); syncChips(); tintChanged();
@@ -403,12 +420,13 @@ export function setupTreeWrite(ctx, T) {
   on(anonBtn, 'click', () => { draft.anonymous = true; saveDraft(); syncChips(); });
   on($('tc-yes'), 'click', () => {
     const c = confirmState; closeConfirm(false);
-    if (c?.kind === 'discard') discard(); else if (c?.kind === 'delete') doDelete(c.id);
+    if (c?.kind === 'discard') discard(); else if (c?.kind === 'delete') doDelete(c.id); else if (c?.kind === 'ask') c.onYes?.();
   });
   on($('tc-no'), 'click', () => closeConfirm(true));
   on(confirmEl, 'click', e => { if (e.target === confirmEl) closeConfirm(true); });
   on(delBtn, 'click', () => {
     const o = T.opened();
+    if (isOff(delBtn)) return;
     if (o?.data.mine && !confirmState) askConfirm('delete', '이 쪽지를 지울까요?', '지우기', '취소', o.id);
   });
 
@@ -498,6 +516,7 @@ export function setupTreeWrite(ctx, T) {
   const advance = (n, d, min = 0) => { const t = THREE.MathUtils.clamp(n.t + d, min, n.total); applyNote(n, t, n.flight); return t; };
   function step(t, dt) {
     if (auto) tickAuto();
+    syncButtons();
     if (wantOpen && st === 'idle' && ctx.mode === 'tree' && !T.busy()) { wantOpen = false; openSheet(); }
     syncDelete();
     if (st === 'idle' || !sheet) return;
@@ -522,13 +541,12 @@ export function setupTreeWrite(ctx, T) {
       }
     }
   }
-  // 내 쪽지가 활짝 펼쳐지면 아래에 지우기
+  // 내 쪽지를 열면 아래에 지우기. 펼쳐지는 동안은 흐리게 두고, 자리는 tree-owner.js 의 단추 줄(#tree-tools)이 정한다.
   function syncDelete() {
     const o = T.opened();
-    const show = !!o && o.data.mine && !T.pending() && o.t >= o.total - 0.02 && !confirmState && !delBusy && st === 'idle';
-    if (delBtn.hidden === !show && (!show || delTopShown === T.view().delTop)) return;
-    delBtn.hidden = !show;
-    if (show) { delTopShown = T.view().delTop; delBtn.style.top = `${delTopShown}px`; } else delTopShown = null;
+    const show = !!o && o.data.mine && !T.pending() && !confirmState && !delBusy && st === 'idle' && !T.otherBusy();
+    if (delBtn.hidden === show) delBtn.hidden = !show;
+    setDisabled(delBtn, show && !(o.t >= o.total - 0.02));
   }
 
   function reset() {
@@ -551,6 +569,13 @@ export function setupTreeWrite(ctx, T) {
   return {
     step, down, move, up, cancelPointer, escape, reset,
     active: () => st !== 'idle',
+    /** 확인창 (tc-yes 가 누르면 onYes). 다른 확인창이 떠 있으면 false */
+    ask(text, yes, no, onYes, onClose) {
+      if (confirmState) return false;
+      askConfirm('ask', text, yes, no, null, { onYes, onClose });
+      return true;
+    },
+    confirming: () => !!confirmState,
     /** 쪽지 쓰기 판이 보일 때 그 조작 줄 (쪽지를 화면에 맞출 때 아래 끝이 된다). 없으면 null */
     fitEl: () => (showCtl() ? ctl : null),
     // 창이나 머리글, 조작 줄이 바뀌었다: 판을 새 자리로 옮기고 글상자를 다시 맞춘다

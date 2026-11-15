@@ -52,6 +52,8 @@ export function setupLive(ctx) {
     ctx.refreshPosters(); ctx.refreshLatestTv(); // 벽 포스터와 최신 영상 TV 도 남은 영상으로 다시 고른다
   }
   on(root, 'heap:reels', e => replaceReels(e.detail));
+  // 방 주인이 꾸미기에서 쪽지 공개일을 바꿨다 (heap-room.tsx 가 저장된 ISO 시각 또는 null 을 보낸다): 트리가 쪽지를 다시 읽는다 (tree.js 의 setRevealAt)
+  on(root, 'heap:reveal', e => ctx.setNoteRevealAt?.(typeof e.detail === 'string' ? e.detail : null));
 
   // 팬 작품: 방문자가 방에 있는 동안 올라온 것은 탁자 위에서 더미 꼭대기로 떨어진다
   function landPiece(p) {

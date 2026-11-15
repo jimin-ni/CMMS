@@ -23,6 +23,7 @@ export const SHEET = { W: 4 * KW, H: STRIP_L };      // 0.144 x 0.234 m
 const LD = 0.00008;                           // 종이 한 겹의 간격
 export const INSIDE_SCALE = 0.35;             // 장식 안에 든 닫힌 쪽지
 const REPLY = { W: 0.064, H: 0.08, COLS: 2, ROWS: [0.5, 0.5], DZ: 0.00003 };
+export const REPLY_DIM = { W: REPLY.W, H: REPLY.H }; // 답장 종이를 펼친 크기 (m)
 const FAN_FONTS = ['Nanum Pen Script', 'Gaegu', 'Hi Melody', 'Gamja Flower', 'Cute Font', 'Single Day', 'Yeon Sung'];
 export const REPLY_FONT = 'East Sea Dokdo';
 // 어떤 글씨체는 같은 px에서 작게 그려진다. 모든 손글씨가 비슷한 크기로 읽히게 맞춘다.
@@ -297,15 +298,25 @@ function frontTexture(data, hasReply, anisotropy) {
   }
   return texFrom(cv, anisotropy);
 }
+// 답장 종이에서 글이 앉는 상자 (텍스처 픽셀). tree-owner.js 의 글상자가 같은 상자를 답장 종이 위에 겹친다.
+export function replyTextBox() {
+  const [cw, ch] = REPLY_PX;
+  return { cw, ch, x: 56, top: 130, boxW: cw - 112, boxH: ch - 180 };
+}
+// 답장 글이 상자에 드는 크기와 줄바꿈 (종이에 그릴 때와 글상자가 같은 값을 쓴다)
+export function fitReply(g, text) {
+  const s = FONT_SCALE[REPLY_FONT], { boxW, boxH } = replyTextBox();
+  return fitText(g, text, REPLY_FONT, boxW, boxH, Math.round(130 * s), Math.round(52 * s));
+}
 function replyTexture(text, anisotropy) {
   const [cw, ch] = REPLY_PX, cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
   const g = cv.getContext('2d'); drawPaper(g, cw, ch, REPLY_TINT, { ruled: false, knot: false });
   const hd = fitLine(g, '크리에이터의 답장', 'system-ui, sans-serif', 38, 24, cw - 112, '600 ');
   g.font = `600 ${hd.px}px system-ui, sans-serif`; g.fillStyle = '#a6613c'; g.textBaseline = 'alphabetic';
   g.fillText(hd.text, 56, 88);
-  const s = FONT_SCALE[REPLY_FONT], boxW = cw - 112, boxH = ch - 180;
-  const fit = fitText(g, text, REPLY_FONT, boxW, boxH, Math.round(130 * s), Math.round(52 * s));
-  drawBlock(g, fit, REPLY_FONT, 56, 130, boxW, boxH, '#6e3418', false);
+  const { x, top, boxW, boxH } = replyTextBox();
+  const fit = fitReply(g, text);
+  drawBlock(g, fit, REPLY_FONT, x, top, boxW, boxH, '#6e3418', false);
   return texFrom(cv, anisotropy);
 }
 

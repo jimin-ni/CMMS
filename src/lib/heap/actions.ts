@@ -6,6 +6,7 @@ import { addGuestbookEntry, recordVisit, saveRoomLayout } from "./repo";
 import {
   addNote,
   deleteOwnNote,
+  getNotesState,
   markNotesRead,
   replyToNote,
   setNoteHidden,
@@ -186,6 +187,23 @@ export async function markNotesReadAction(
   const result = await markNotesRead(viewer.id, roomId);
   if (!result.ok) return fail(result.reason);
   return { ok: true, marked: result.marked };
+}
+
+// 쪽지 전부를 보는 사람 기준으로 다시 읽는다 (공개 시각이 되었거나 바뀌었을 때 엔진이 부른다). 로그인하지 않아도 된다.
+export async function refetchNotesAction(
+  roomId: string,
+): Promise<
+  { ok: true; notes: HeapNoteDto[]; noteRevealAt: string | null; unreadNotes: number } | HeapFail<"not-found">
+> {
+  if (typeof roomId !== "string") return fail("not-found");
+  const viewer = await getViewer();
+  const state = await getNotesState(roomId, viewer?.id ?? null);
+  return {
+    ok: true,
+    notes: state.notes.map(toNoteDto),
+    noteRevealAt: state.noteRevealAt?.toISOString() ?? null,
+    unreadNotes: state.unreadNotes,
+  };
 }
 
 // 쪽지 공개 시각. revealAt은 ISO 문자열이고 null이면 봉인을 푼다.

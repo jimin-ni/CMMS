@@ -207,6 +207,8 @@ export function RoomEditor({
   beforeSave,
   onSaved,
   owner,
+  noteRevealAt,
+  onRevealSaved,
 }: {
   rootRef: RefObject<HTMLDivElement | null>;
   roomUuid: string;
@@ -222,6 +224,9 @@ export function RoomEditor({
   onSaved: (prev: SavedRoom, next: SavedRoom) => void;
   // 방 주인의 채널과 영상 (채널 탭)
   owner: HeapOwnerData | null;
+  // 쪽지 공개 시각(ISO, 없으면 null)과 공개일 칸이 저장한 뒤의 알림. 공개일은 꾸미기 저장과 따로 바로 저장된다 (fn-form.tsx).
+  noteRevealAt: string | null;
+  onRevealSaved: (iso: string | null) => void;
 }) {
   const [room, setRoom] = useState<RoomState | null>(null);
   const [st, setSt] = useState<EditState | null>(null);
@@ -1046,7 +1051,14 @@ export function RoomEditor({
               ×
             </button>
           </div>
-          <FnForm key={sel} item={shownItem} models={models} prefill={prefill} onChange={(fn) => applyFn(sel, selItem, fn)} />
+          <FnForm
+            key={sel}
+            item={shownItem}
+            models={models}
+            prefill={prefill}
+            onChange={(fn) => applyFn(sel, selItem, fn)}
+            reveal={{ roomUuid, revealAt: noteRevealAt, onSaved: onRevealSaved }}
+          />
           {liveDraft ? (
             <p className="note ed-bad">아직 붙지 않았어요 · {liveDraft.error} 올바르게 적으면 바로 붙어요.</p>
           ) : (

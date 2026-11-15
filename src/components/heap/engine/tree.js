@@ -18,6 +18,11 @@
 // 봉인된 쪽지(sealed)는 닫힌 채 걸리고 누르면 열리는 날을 알려 준다. 내 쪽지(mine)는 나만 보는 연필 표시, 숨긴 쪽지(hidden)는 어둡게, 안 읽은 쪽지(unread, 방 주인만)는 점이 붙는다.
 //
 // 쪽지 쓰기와 끌어 걸기, 내 쪽지 지우기는 tree-write.js 다 (setupTree 의 끝에서 세운다). opts.addNote(input), opts.deleteNote(id), opts.signIn(), opts.openWrite, opts.consumeWrite.
+// 방 주인의 도구(답장, 숨기기)는 tree-owner.js, 쪽지함(상자와 목록)은 tree-box.js 다. opts.replyNote(id, input), opts.setHidden(id, hidden), opts.markRead(), opts.refetchNotes().
+//
+// 쪽지함의 쪽지는 트리에 걸려 있지 않아서 3D 쪽지가 없다. 열 때 그 자리에서 (상자 위) 짓고 (makeBoxNote), 접히고 나면 치운다 (n.boxed).
+// 공개일(noteRevealAt)이 미래면 그 시각에 맞춰 한 번 전체를 다시 읽는다 (refetchNotes): 봉인 여부는 쪽지의 updated_at 을 바꾸지 않아서 폴링이 알려 주지 못한다.
+// 방 주인이 트리 모드로 들어서면 안 읽은 쪽지를 모두 읽은 것으로 표시한다 (opts.markRead: 방 단위 하나뿐이다).
 //
 // ctx 에 올리는 것: openTree(it, group, slot)  enterTree()  exitTree()  treeEscape()  nearTree()  setTreeNotes(list)  mergeTreeNotes(upserts, removedIds, revealAt)  treeStep(t, dt)  treeSpot { toLocal, fromLocal, fromWorld, isFree, hung }
 import * as THREE from 'three';
@@ -29,6 +34,8 @@ import { buildOrnament, KINDS, ORN, MAIN_SWATCHES, ACCENTS } from './tree-orname
 import { trimTree, buildTopStar, buildFairyLights } from './tree-dress.js';
 import { revealDay } from './tree-ids.js';
 import { setupTreeWrite } from './tree-write.js';
+import { setupTreeOwner } from './tree-owner.js';
+import { setupTreeBox, buildBox } from './tree-box.js';
 
 // ---------- 순수 함수: 자리 ----------
 
@@ -148,6 +155,8 @@ export function fillSpots(surface, count, rnd, { taken = [], visible = null } = 
 // ---------- 트리 모드 ----------
 
 const TURN_PER_PX = 0.008; // 옆으로 1px 끌 때 트리가 도는 각 (rad)
+const REVEAL_MAX_MS = 7 * 24 * 3600 * 1000; // 이보다 먼 공개일에는 타이머를 걸지 않는다 (그 전에 페이지를 다시 연다)
+const BOX_SIDE = 0.62, BOX_FRONT = 0.12; // 쪽지함 상자: 트리 밑동에서 보는 이의 오른쪽으로, 앞으로 (m)
 const BUILD_PER_FRAME = 8; // 한 프레임에 짓는 쪽지 수: 많은 쪽지를 한 프레임에 지으면 방이 멈칫한다
 const NOTE_FONTS_HREF = 'https://fonts.googleapis.com/css2?family=Gaegu&family=Hi+Melody&family=Gamja+Flower&family=Cute+Font&family=Single+Day&family=Yeon+Sung&family=East+Sea+Dokdo&display=swap';
 
@@ -186,11 +195,16 @@ export function setupTree(ctx) {
   const isOwner = !!ctx.opts.isOwner;
   ctx.boxedNotes = 0; // 쪽지함에 있는 쪽지 수: 안내 줄(hud.js)이 읽는다
 
-  let W = null; // 쓰기 (tree-write.js): setupTree 의 끝에서 세운다
+  let W = null, R = null, B = null; // 쓰기 (tree-write.js), 방 주인 도구 (tree-owner.js), 쪽지함 (tree-box.js): setupTree 의 끝에서 세운다
+  let boxHover = false, marking = false;
   let rig = null, failedBuild = null; // rig: 지금 build 의 트리에 올린 것들 (아래 makeRig)
   let opened = null, pending = null, hovered = null, press = null; // opened: 나와 있는(나오는) 쪽지 · pending: 지금 쪽지가 돌아간 뒤 날아올 쪽지
   const leaving = new Set(), anims = new Map(); // leaving: 접혀 돌아가는 쪽지 · anims: 쪽지 -> { dir, speed } (쪽지 시각 n.t 를 움직인다)
   const busy = () => !!opened || !!pending || leaving.size > 0;
+  const writing = () => !!(W?.active() || R?.active()); // 쓰기 판이나 답장 판이 열려 있다: 포인터로 쪽지를 열거나 접지 않는다
+  const sealedNow = () => !!revealAt && Date.parse(revealAt) > Date.now();
+  const toolsRoom = n => (isOwner || n.data.mine ? DEL_ROOM : 0); // 열린 쪽지 아래에 단추 줄이 있는 쪽지는 자리를 더 비운다
+  function clearPending() { if (pending?.boxed) disposeNote(pending); pending = null; }
 
   // ----- 트리 찾기와 짓기 -----
   const treeSlot = () => ctx.build.slots.find(s => s.fn.kind === 'tree') ?? null;
@@ -234,6 +248,8 @@ export function setupTree(ctx) {
     pivot.add(sp); ctx.build.slotMeshes.push(sp);
     r.count = { sp, cv, tex };
     r.marks = makeMarks();
+    r.box = buildBox(); r.box.group.visible = false; ctx.scene.add(r.box.group); r.boxKey = '';
+    placeBox(r);
     ensureFonts();
     return r;
   }
@@ -249,6 +265,23 @@ export function setupTree(ctx) {
       return Math.abs(v.x) < 0.9 && Math.abs(v.y) < 0.9;
     };
   }
+  // 쪽지함 상자: 보는 이 쪽(트리에서 방 가운데 쪽)의 오른쪽 바닥에 놓는다. 트리 모드의 화면 아래쪽에 들어오는 자리다 (시점 높이 1.6 m 에서 앞쪽 바닥은 화면 밖이다).
+  // 가구가 옮겨지면(꾸미기) 다시 놓는다. key 는 그 비교용이다.
+  function placeBox(r) {
+    r.g.updateWorldMatrix(true, false);
+    const v = viewOf(r), base = v.target.clone(); base.y -= TREE_VIEW.look;
+    let dx = v.pos.x - base.x, dz = v.pos.z - base.z; const len = Math.hypot(dx, dz) || 1; dx /= len; dz /= len;
+    const x = THREE.MathUtils.clamp(base.x + dz * BOX_SIDE + dx * BOX_FRONT, -ctx.RX + 0.2, ctx.RX - 0.2);
+    const z = THREE.MathUtils.clamp(base.z - dx * BOX_SIDE + dz * BOX_FRONT, -ctx.RZ + 0.2, ctx.RZ - 0.2);
+    const yaw = Math.atan2(dx, dz);
+    r.box.group.position.set(x, base.y, z); r.box.group.rotation.y = yaw;
+    r.boxKey = [r.g.position.x, r.g.position.z, r.g.rotation.y].map(n => n.toFixed(3)).join('|');
+  }
+  // 상자 위에서 쪽지가 날아오는 자세 (월드)
+  const boxPose = r => ({
+    p: r.box.group.position.clone().add(new THREE.Vector3(0, r.box.height + 0.03, 0)),
+    q: new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.5, r.box.group.rotation.y, 0)),
+  });
   // 쪽지 장식에 붙는 작은 표시: 내 쪽지의 연필 표시(나만 본다)와 방 주인에게만 보이는 안 읽은 점. 지오메트리와 재질은 트리 하나가 나눠 쓴다.
   function makeMarks() {
     const cv = document.createElement('canvas'); cv.width = cv.height = 64;
@@ -396,8 +429,11 @@ export function setupTree(ctx) {
 
   // ----- 열기, 닫기, 넘기기 -----
   const sequence = () => (rig ? list.map(d => rig.notes.get(d.id)).filter(n => n && !n.data.sealed) : []); // 만든 순서, 걸린 것만, 봉인된 것은 넘기지 않는다
+  const boxedList = () => list.filter(d => !validSpot(d)); // 쪽지함의 쪽지 (만든 순서)
+  const boxSequence = () => boxedList().filter(d => !d.sealed); // 쪽지함에서 ‹ › 로 넘길 쪽지
+  const seqLength = () => (opened?.boxed ? boxSequence().length : sequence().length);
   function syncNav() {
-    const show = ctx.mode === 'tree' && !!opened && !pending && sequence().length > 1;
+    const show = ctx.mode === 'tree' && !!opened && !pending && !writing() && seqLength() > 1;
     $('tree-prev').hidden = $('tree-next').hidden = !show;
   }
   // 펼친 쪽지(와 쓰기 판)가 앉는 자리. 화면에서 위쪽 머리글(.who)과 아래쪽 단추 줄 사이에 꼭 맞게 거리와 높낮이를 잡는다.
@@ -431,15 +467,15 @@ export function setupTree(ctx) {
   function reFit() {
     const o = opened, el = W?.fitEl();
     if (!el && !(o && o.flight)) return;
-    if (!measure(el ?? hudBottom(), el ? 0 : (o.data.mine ? DEL_ROOM : 0))) return;
+    if (!measure(el ?? hudBottom(), el ? 0 : toolsRoom(o))) return;
     if (!el) { o.flight.to = openTarget(); o.shellDrop = shellDrop(); applyNote(o, o.t); }
-    W?.relayout();
+    W?.relayout(); R?.relayout();
   }
   function openNote(n) {
     const r = rig;
     if (!r || opened || n === opened) return false;
     setHover(null);
-    measure(hudBottom(), n.data.mine ? DEL_ROOM : 0);
+    measure(hudBottom(), toolsRoom(n));
     n.lift = 0; n.root.scale.setScalar(1); setGlow(n, 0);
     n.root.position.copy(n.home.p); n.root.quaternion.copy(n.home.q);
     scene.attach(n.root);
@@ -448,7 +484,7 @@ export function setupTree(ctx) {
     if (n.string) n.string.visible = false;
     n.marks.visible = false;
     n.pk.loadFonts(); writeText(n.pk); // 글은 지금 그리고, 글씨체가 오면 pk 가 다시 그린다
-    const seq = sequence(), i = seq.indexOf(n);
+    const seq = n.boxed ? [] : sequence(), i = seq.indexOf(n);
     if (seq.length > 1) { seq[(i + 1) % seq.length].pk.loadFonts(); seq[(i + seq.length - 1) % seq.length].pk.loadFonts(); } // 넘기기 전에 이웃의 글씨체를 부른다
     opened = n; anims.set(n, { dir: 1, speed: 1 });
     setHint('treeNote'); syncNav();
@@ -462,26 +498,70 @@ export function setupTree(ctx) {
   }
   function finishClose(n) {
     leaving.delete(n); anims.delete(n);
-    n.pivot.attach(n.root);
-    n.root.position.copy(n.home.p); n.root.quaternion.copy(n.home.q); n.root.scale.setScalar(1); n.lift = 0;
-    if (n.string) n.string.visible = true;
-    n.marks.visible = true;
-    eraseText(n.pk); n.flight = null; applyNote(n, 0, null);
+    if (n.boxed) disposeNote(n); // 쪽지함의 쪽지는 3D 쪽지가 열려 있는 동안만 있다
+    else {
+      n.pivot.attach(n.root);
+      n.root.position.copy(n.home.p); n.root.quaternion.copy(n.home.q); n.root.scale.setScalar(1); n.lift = 0;
+      if (n.string) n.string.visible = true;
+      n.marks.visible = true;
+      eraseText(n.pk); n.flight = null; applyNote(n, 0, null);
+    }
     if (!busy()) {
       if (ctx.mode === 'tree') setHint('tree');
-      if (rig?.dirty) syncNotes();
+      if (rig) syncNotes(); // 열려 있는 동안 바뀐 쪽지 (답장, 숨김, 폴링)를 맞춘다. 같은 쪽지는 다시 짓지 않는다
       syncNav();
     }
   }
+  // 열린 쪽지를 같은 자리에서 새 데이터 d 로 다시 짓는다 (답장 쓰기, 숨기기): 펼친 채로 이어지고, 시간이 모자라면 남은 구간이 이어서 펼쳐진다.
+  // listData: 목록 쪽의 데이터 (이 쪽지의 sig 로 쓴다: 닫은 뒤 목록과 다르면 다시 짓는다). 열린 쪽지가 없으면 null.
+  function reviseOpened(d, listData = d) {
+    const r = rig, o = opened; if (!r || !o) return null;
+    const n = buildNote(r, d);
+    n.sig = sigOf(listData);
+    if (o.boxed) { n.boxed = true; n.home = o.home; scene.add(n.pivot); }
+    else { n.spot = o.spot; hang(r, n, o.plan); r.notes.set(n.id, n); } // 끈과 home 을 앉힌다 (아래에서 열린 모습으로 바꾼다)
+    n.lift = 0; n.root.scale.setScalar(1); setGlow(n, 0);
+    scene.attach(n.root);
+    n.flight = o.flight; n.shellDrop = o.shellDrop;
+    if (n.string) n.string.visible = false;
+    n.marks.visible = false;
+    n.pk.loadFonts(); writeText(n.pk);
+    const an = anims.get(o); anims.delete(o);
+    opened = n;
+    disposeNote(o);
+    applyNote(n, Math.min(o.t, n.total), n.flight);
+    if (an) anims.set(n, an); else if (n.t < n.total) anims.set(n, { dir: 1, speed: 1 });
+    syncNav();
+    return n;
+  }
+  // 쪽지함의 쪽지 d 의 3D 쪽지. 상자 위에 있고 아직 씬에 걸리지 않았다 (openNote 가 날려 보낸다).
+  function makeBoxNote(d) {
+    const r = rig, n = buildNote(r, d);
+    n.boxed = true; n.sig = sigOf(d); n.home = boxPose(r); scene.add(n.pivot);
+    return n;
+  }
+  function openBoxNote(d) {
+    if (!rig?.settled || ctx.mode !== 'tree' || busy() || writing() || d.sealed) return false;
+    const n = makeBoxNote(d);
+    if (!openNote(n)) { disposeNote(n); return false; }
+    return true;
+  }
   function step(dir) { // ‹ ›: 지금 쪽지가 접혀 돌아가는 동안 다음 쪽지가 날아온다
-    if (ctx.mode !== 'tree' || !rig?.settled || !opened || pending) return;
-    const seq = sequence(); if (seq.length < 2) return;
-    const next = seq[(seq.indexOf(opened) + dir + seq.length) % seq.length];
+    if (ctx.mode !== 'tree' || !rig?.settled || !opened || pending || writing()) return;
+    let next;
+    if (opened.boxed) { // 쪽지함 안에서 넘긴다
+      const seq = boxSequence(); if (seq.length < 2) return;
+      const i = Math.max(0, seq.findIndex(d => d.id === opened.id));
+      next = makeBoxNote(seq[(i + dir + seq.length) % seq.length]);
+    } else {
+      const seq = sequence(); if (seq.length < 2) return;
+      next = seq[(seq.indexOf(opened) + dir + seq.length) % seq.length];
+    }
     closeNote(2.6); pending = next;
     syncNav();
   }
   function snapAll() { // 나가거나 트리가 바뀔 때: 움직이던 쪽지는 애니메이션 없이 제자리로 간다
-    pending = null;
+    clearPending();
     const out = new Set([...anims.keys(), ...leaving]); if (opened) out.add(opened);
     opened = null;
     for (const n of out) finishClose(n);
@@ -494,38 +574,41 @@ export function setupTree(ctx) {
     const b = canvas.getBoundingClientRect();
     ndc.set(((e.clientX - b.left) / b.width) * 2 - 1, -((e.clientY - b.top) / b.height) * 2 + 1);
     ray.setFromCamera(ndc, camera); ray.far = 20;
-    const hit = ray.intersectObjects([rig.hold, ...[...rig.notes.values()].map(n => n.root)], true)[0];
-    return hit ? { note: hit.object.userData.note ?? null, packet: !!hit.object.userData.packet } : null;
+    const targets = [rig.hold, ...[...rig.notes.values()].map(n => n.root)];
+    if (rig.box.group.visible) targets.push(rig.box.group); // 레이는 보이지 않는 것도 맞춘다: 보일 때만 넣는다
+    const hit = ray.intersectObjects(targets, true)[0];
+    return hit ? { note: hit.object.userData.note ?? null, packet: !!hit.object.userData.packet, box: !!hit.object.userData.box } : null;
   }
-  const setCursor = () => { canvas.style.cursor = ctx.mode !== 'tree' ? '' : press?.turning ? 'grabbing' : hovered ? 'pointer' : 'grab'; };
-  function setHover(n) { if (n === hovered) return; hovered = n; setCursor(); }
+  const setCursor = () => { canvas.style.cursor = ctx.mode !== 'tree' ? '' : press?.turning ? 'grabbing' : hovered || boxHover ? 'pointer' : 'grab'; };
+  function setHover(n, box = false) { if (n === hovered && box === boxHover) return; hovered = n; boxHover = box; setCursor(); }
   on(canvas, 'pointerdown', e => {
     if (ctx.mode !== 'tree' || !rig?.settled || e.button > 0) return;
-    if (W?.down(e)) return; // 쓰기 판이 열려 있거나 접은 쪽지를 집었다
+    if (W?.down(e) || R?.down(e) || B?.active()) return; // 쓰기 판이나 답장 판이 열려 있거나 접은 쪽지를 집었다
     press = { x: e.clientX, y: e.clientY, id: e.pointerId, turn: rig.turn, turning: false };
     canvas.setPointerCapture?.(e.pointerId);
   });
   on(canvas, 'pointermove', e => {
     if (ctx.mode !== 'tree' || !rig?.settled) return;
-    if (W?.move(e)) return;
+    if (W?.move(e) || R?.active()) return;
     if (press && press.id === e.pointerId && !busy()) {
       const dx = e.clientX - press.x;
       if (!press.turning && Math.hypot(dx, e.clientY - press.y) > 6) { press.turning = true; setHover(null); }
       if (press.turning) { rig.turn = press.turn + dx * TURN_PER_PX; rig.pivot.rotation.y = rig.turn; setCursor(); return; }
     }
-    if (!press && e.pointerType === 'mouse' && !busy() && !W?.active()) setHover(pick(e)?.note ?? null);
+    if (!press && e.pointerType === 'mouse' && !busy() && !W?.active()) { const h = pick(e); setHover(h?.note ?? null, !!h?.box && !h.note); }
   });
   on(canvas, 'pointerup', e => {
     if (ctx.mode === 'tree' && W?.up(e)) return; // 끌던 쪽지를 놓았다
     const p = press; press = null;
     if (ctx.mode !== 'tree') return;
     setCursor();
-    if (W?.active()) return; // 쓰기 중에는 빈 곳을 끌어 돌리기만 된다: 눌러서 쪽지를 열지 않는다
+    if (writing() || B?.active()) return; // 쓰기 중에는 빈 곳을 끌어 돌리기만 된다: 눌러서 쪽지를 열지 않는다
     if (!p || p.id !== e.pointerId || p.turning || Math.hypot(e.clientX - p.x, e.clientY - p.y) > 6 || !rig?.settled) return;
     const hit = pick(e);
     // 쪽지가 나와 있는 동안 종이 밖을 누르면 접어 넣는다
     if (opened) { if (!(hit?.packet && hit.note === opened)) closeNote(); return; }
     if (busy()) return;
+    if (hit?.box && !hit.note) { B?.open(); return; } // 쪽지함 상자
     if (!hit?.note) return;
     if (hit.note.data.sealed) { // 봉인: 열지 않고 날짜만 알려 준다
       const day = revealAt ? revealDay(revealAt) : '';
@@ -536,7 +619,7 @@ export function setupTree(ctx) {
   });
   on(canvas, 'pointercancel', e => { W?.cancelPointer(e); press = null; setCursor(); });
   on(window, 'keydown', e => {
-    if (ctx.mode !== 'tree' || e.target.closest?.('input, textarea')) return;
+    if (ctx.mode !== 'tree' || e.target.closest?.('input, textarea') || B?.active()) return;
     if (e.key === 'ArrowLeft') step(-1); else if (e.key === 'ArrowRight') step(1);
   });
   on($('tree-prev'), 'click', () => step(-1));
@@ -577,19 +660,35 @@ export function setupTree(ctx) {
     rig.settled = false; rig.view = viewOf(rig);
     rig.turn = rig.view.yaw; rig.pivot.rotation.y = rig.turn;
     setHint('tree'); ctx.goTo({ pos: rig.view.pos.clone(), target: rig.view.target.clone() }); syncUI(); syncNav();
+    markRead();
+  }
+  // 방 주인이 트리에 들어서면 안 읽은 쪽지를 모두 읽은 것으로 한다 (서버에는 방 단위 표시뿐이다). 봉인 중이면 서버가 아무것도 표시하지 않는다 (marked 0).
+  async function markRead() {
+    if (!isOwner || !ctx.opts.markRead || marking) return;
+    if (!(ctx.unreadNotes > 0 || list.some(d => d.unread && !d.hidden))) return;
+    marking = true;
+    try {
+      const res = await ctx.opts.markRead();
+      if (ctx.disposed) return;
+      if (res?.ok && res.marked > 0) {
+        ctx.unreadNotes = 0; ctx.renderMeta?.();
+        setTreeNotes(list.map(d => (d.unread && !d.hidden ? { ...d, unread: false } : d))); // 점을 뗀다 (숨긴 쪽지는 서버도 그대로 둔다)
+      }
+    } catch { /* 다음에 들어설 때 다시 한다 */ } finally { marking = false; }
   }
   function exitTree() {
     if (ctx.mode !== 'tree') return;
-    W?.reset();
+    W?.reset(); R?.reset(); B?.reset();
     snapAll();
-    press = null; hovered = null;
+    press = null; hovered = null; boxHover = false;
     ctx.mode = 'room'; ctx.camGoal = null; ctx.me.visible = true;
     setCursor(); setHint('room'); syncUI(); syncNav();
   }
   // Esc 와 물러나기 단추: 나온 쪽지가 있으면 접고, 없으면 트리 모드에서 나간다
   function treeEscape() {
     if (W?.escape()) return; // 쓰기 판, 확인창, 끌던 쪽지
-    if (opened) closeNote(); else if (pending) { pending = null; syncNav(); } else exitTree();
+    if (R?.escape() || B?.escape()) return; // 답장 판, 쪽지함 목록
+    if (opened) closeNote(); else if (pending) { clearPending(); syncNav(); } else exitTree();
   }
   const nearTree = () => {
     const s = treeSlot(), me = ctx.me;
@@ -598,10 +697,12 @@ export function setupTree(ctx) {
 
   // ----- 프레임 -----
   function dropRig() {
-    W?.reset();
+    W?.reset(); R?.reset(); B?.reset();
     const r = rig; rig = null;
-    opened = pending = hovered = press = null; leaving.clear(); anims.clear();
+    for (const n of [opened, pending, ...leaving]) if (n?.boxed) disposeNote(n);
+    opened = pending = hovered = press = null; boxHover = false; leaving.clear(); anims.clear();
     if (!r) return;
+    r.box.dispose();
     for (const n of r.notes.values()) disposeNote(n);
     r.stringMat.dispose(); r.marks.dispose(); disposeBackCache(r.cache);
     disposeScene(r.deco); disposeScene(r.count.sp);
@@ -640,6 +741,9 @@ export function setupTree(ctx) {
     paintCount(r);
     r.lights.update(t); r.star.update(t);
     r.count.sp.visible = ctx.mode !== 'tree' && ctx.mode !== 'edit' && list.length > 0;
+    const showBox = ctx.mode !== 'edit' && ctx.boxedNotes > 0;
+    if (r.box.group.visible !== showBox) r.box.group.visible = showBox;
+    if (r.boxKey !== [r.g.position.x, r.g.position.z, r.g.rotation.y].map(n => n.toFixed(3)).join('|')) placeBox(r); // 가구가 옮겨졌다
     // 다 도착했으면 카메라를 정확한 자리에 놓는다 (글라이드는 0.02 m 앞에서 멈춘다)
     if (ctx.mode === 'tree' && !ctx.camGoal && !r.settled) {
       camera.position.copy(r.view.pos); controls.target.copy(r.view.target); camera.lookAt(r.view.target);
@@ -662,15 +766,51 @@ export function setupTree(ctx) {
       if (an.dir > 0 && tt >= n.total) anims.delete(n);
       else if (an.dir < 0 && tt <= 0) finishClose(n);
     }
+    R?.step(t, dt);
     // 넘기기: 지금 쪽지가 제자리로 돌아가기 시작하면 다음 쪽지가 날아온다
     if (pending && [...leaving].every(n => n.t <= N_FLY)) { const p = pending; pending = null; openNote(p); }
   }
 
+  // ----- 공개일 -----
+  // 봉인은 쪽지 행을 바꾸지 않아서 폴링이 알려 주지 못한다: 공개 시각에 한 번, 그리고 공개 시각이 바뀌었을 때(방 주인이 꾸미기에서 바꿨다) 전체를 다시 읽는다.
+  // 다시 읽는 것은 서버 액션 하나다 (opts.refetchNotes: 보는 사람에게 보이는 쪽지 전부와 공개 시각, 안 읽은 수).
+  let revealTimer = 0, refetchBusy = false;
+  async function refetchNotes(tries = 0) {
+    if (!ctx.opts.refetchNotes || ctx.disposed || refetchBusy) return;
+    refetchBusy = true;
+    let res = null;
+    try { res = await ctx.opts.refetchNotes(); } catch { /* 폴링이 이어서 맞춘다 */ }
+    refetchBusy = false;
+    if (ctx.disposed || !res?.ok) return;
+    revealAt = typeof res.noteRevealAt === 'string' ? res.noteRevealAt : null;
+    if (isOwner && Number.isFinite(res.unreadNotes) && res.unreadNotes !== ctx.unreadNotes) { ctx.unreadNotes = res.unreadNotes; ctx.renderMeta?.(); }
+    setTreeNotes(res.notes);
+    // 내 시계가 서버보다 빨라 아직 닫혀 있으면 잠시 뒤 다시 읽는다 (세 번까지)
+    if (!sealedNow() && list.some(d => d.sealed) && tries < 3) { clearTimeout(revealTimer); revealTimer = setTimeout(() => refetchNotes(tries + 1), 5000); } else scheduleReveal();
+  }
+  function scheduleReveal() {
+    clearTimeout(revealTimer); revealTimer = 0;
+    if (!revealAt) return;
+    const wait = Date.parse(revealAt) - Date.now();
+    if (!(wait > 0 && wait <= REVEAL_MAX_MS)) return;
+    revealTimer = setTimeout(() => { revealTimer = 0; refetchNotes(0); }, wait + 1500);
+  }
+  function setRevealAt(next) {
+    const was = revealAt;
+    revealAt = typeof next === 'string' ? next : null;
+    if (was === revealAt) return;
+    scheduleReveal();
+    refetchNotes(0); // 닫혀 있던 쪽지가 열리거나 열려 있던 쪽지가 닫힌다
+  }
+  // 탭이 숨겨져 있던 동안 공개 시각이 지났다: 돌아오면 닫혀 있는 쪽지를 다시 읽는다
+  on(document, 'visibilitychange', () => { if (!document.hidden && !sealedNow() && list.some(d => d.sealed)) refetchNotes(0); });
+  scheduleReveal();
+
   // ----- 공개 -----
-  function setTreeNotes(next) { list = normalise(next); if (rig) syncNotes(); else syncBoxed(); }
+  function setTreeNotes(next) { list = normalise(next); if (rig) syncNotes(); else syncBoxed(); B?.refresh(); syncNav(); }
   // 폴링용: id 로 합친다. upserts 는 올리거나 바꾸는 쪽지(엔진 모양), removedIds 는 뺄 id. nextReveal 이 undefined 가 아니면 봉인 시각을 바꾼다 (null 도 받는다).
   function mergeTreeNotes(upserts, removedIds, nextReveal) {
-    if (nextReveal !== undefined) revealAt = typeof nextReveal === 'string' ? nextReveal : null;
+    if (nextReveal !== undefined) setRevealAt(nextReveal);
     const byId = new Map(list.map(d => [d.id, d]));
     for (const id of removedIds ?? []) byId.delete(id);
     for (const d of upserts ?? []) if (d && typeof d.id === 'string') byId.set(d.id, d);
@@ -690,15 +830,21 @@ export function setupTree(ctx) {
     isFree: (spot, others, ignoreId) => spotIsFree(spot, others ?? treeSpot.hung().filter(o => o.id !== ignoreId)),
   };
 
-  // 쓰기가 쓰는 안쪽 손잡이
-  W = setupTreeWrite(ctx, {
+  // 쓰기, 방 주인 도구, 쪽지함이 쓰는 안쪽 손잡이
+  const T = {
     rig: () => rig, syncRig, busy, opened: () => opened, pending: () => pending,
-    dismissNote() { if (opened) closeNote(); else if (pending) { pending = null; syncNav(); } },
+    dismissNote() { if (opened) closeNote(); else if (pending) { clearPending(); syncNav(); } },
     buildNote, disposeNote, openTarget, shellDrop, view: () => view, measure, setCursor, treeSpot, planFromSpot, hashId,
     hasTreeSlot: () => !!treeSlot(), noteById: id => list.find(d => d.id === id) ?? null,
-  });
-  onDispose(() => { dropRig(); fontsLink?.remove(); fontsLink = null; });
+    reviseOpened, openBoxNote, boxedList, sealedNow, revealAt: () => revealAt,
+    otherBusy: () => !!(R?.active() || B?.active()), writing,
+  };
+  W = setupTreeWrite(ctx, T);
+  B = setupTreeBox(ctx, T);
+  R = setupTreeOwner(ctx, T, W);
+  onDispose(() => { clearTimeout(revealTimer); dropRig(); fontsLink?.remove(); fontsLink = null; });
   Object.assign(ctx, {
     openTree: () => enterTree(), enterTree, exitTree, treeEscape, nearTree, setTreeNotes, mergeTreeNotes, treeStep, treeSpot,
+    setNoteRevealAt: setRevealAt, // 방 주인이 꾸미기에서 공개일을 바꿨다 (live.js 의 heap:reveal)
   });
 }

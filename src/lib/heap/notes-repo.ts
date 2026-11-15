@@ -1,6 +1,6 @@
-import { and, asc, eq, gte, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { heapNoteReplies, heapNotes, heapRooms, user } from "@/lib/schema";
+import { heapAttempts, heapNoteReplies, heapNotes, heapRooms, user } from "@/lib/schema";
 import { HEAP_POLICY, NOTE_FONT_IDS, NOTE_REPLY_FONT_IDS, NOTE_TINT_IDS } from "@/lib/heap/policy";
 import type { Fail, HeapChangesPosition } from "@/lib/heap/repo";
 
@@ -19,7 +19,7 @@ const isUuid = (value: unknown): value is string => typeof value === "string" &&
 const charLength = (value: string) => Array.from(value).length;
 
 // repo.ts와 같은 값. 한국 시간 오늘이 시작된 시각, 그리고 잠금을 얻은 뒤의 실제 시각.
-const seoulDayStart = sql`(date_trunc('day', now() at time zone 'Asia/Seoul') at time zone 'Asia/Seoul')`;
+const seoulDayKey = sql<string>`to_char(now() at time zone 'Asia/Seoul', 'YYYY-MM-DD')`;
 const clockNow = sql`clock_timestamp()`;
 const isoMicros = (column: typeof heapNotes.updatedAt) =>
   sql<string>`to_char(${column} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
@@ -133,7 +133,21 @@ function spotDistance(a: HeapNoteSpot, b: HeapNoteSpot): number {
 
 // ---------- 읽기 ----------
 
-type NoteContext = { creatorId: string; noteRevealAt: Date | null; sealedNow: boolean };
+// ownerEarly: 방 주인이 공개일 전에도 쪽지를 읽고 숨길 수 있는가. 트리 기능 값 { kind: "tree", earlyModeration } 에서 서버가 읽는다 (없으면 true).
+type NoteContext = { creatorId: string; noteRevealAt: Date | null; sealedNow: boolean; ownerEarly: boolean };
+
+// 저장된 레이아웃의 트리 기능에서 이른 검토 설정을 읽는다. 명시적으로 false 일 때만 끈다.
+function earlyModerationOf(layout: unknown): boolean {
+  const items = typeof layout === "object" && layout !== null ? (layout as { items?: unknown }).items : null;
+  if (!Array.isArray(items)) return true;
+  for (const item of items) {
+    const fn = typeof item === "object" && item !== null ? (item as { fn?: unknown }).fn : null;
+    if (typeof fn === "object" && fn !== null && (fn as { kind?: unknown }).kind === "tree") {
+      return (fn as { earlyModeration?: unknown }).earlyModeration !== false;
+    }
+  }
+  return true;
+}
 
 async function noteContext(executor: Executor, roomId: string): Promise<NoteContext | null> {
   const rows = await executor
@@ -141,10 +155,13 @@ async function noteContext(executor: Executor, roomId: string): Promise<NoteCont
       creatorId: heapRooms.creatorId,
       noteRevealAt: heapRooms.noteRevealAt,
       sealedNow: sql<boolean>`coalesce(${heapRooms.noteRevealAt} > now(), false)`,
+      layout: heapRooms.layout,
     })
     .from(heapRooms)
     .where(eq(heapRooms.id, roomId));
-  return rows[0] ?? null;
+  if (!rows[0]) return null;
+  const { layout, ...rest } = rows[0];
+  return { ...rest, ownerEarly: earlyModerationOf(layout) };
 }
 
 function noteSelect(executor: Executor) {
@@ -182,7 +199,8 @@ function toNote(row: NoteRow, ctx: NoteContext, viewerId: string | null): HeapNo
   const owner = viewerId !== null && viewerId === ctx.creatorId;
   // 숨긴 쪽지는 작성자와 방 주인(되돌리기용)에게만 보인다.
   if (row.hiddenAt !== null && !mine && !owner) return null;
-  const sealed = ctx.sealedNow && !mine;
+  // 봉인 중에는 작성자 말고는 닫혀 있다. 방 주인은 이른 검토가 켜져 있을 때만 읽는다 (서버가 레이아웃에서 읽은 값).
+  const sealed = ctx.sealedNow && !mine && !(owner && ctx.ownerEarly);
   const note: HeapNote = {
     id: row.id,
     name: row.anonymous ? null : row.authorName,
@@ -201,7 +219,8 @@ function toNote(row: NoteRow, ctx: NoteContext, viewerId: string | null): HeapNo
       note.reply = { body: row.replyBody, font: row.replyFont, createdAt: row.replyCreatedAt };
     }
   }
-  if (viewerId !== null && viewerId === ctx.creatorId) note.unread = row.ownerReadAt === null;
+  // 방 주인에게만. 방 주인이 쓴 쪽지는 읽을 것이 아니라서 읽지 않음이 아니다.
+  if (owner) note.unread = row.ownerReadAt === null && !mine;
   return note;
 }
 
@@ -214,6 +233,7 @@ export async function countUnreadNotes(roomId: string, viewerId: string | null):
       eq(heapNotes.roomId, roomId),
       isNull(heapNotes.ownerReadAt),
       isNull(heapNotes.hiddenAt),
+      ne(heapNotes.authorId, viewerId),
       sql`exists (select 1 from ${heapRooms} where ${heapRooms.id} = ${heapNotes.roomId} and ${heapRooms.creatorId} = ${viewerId})`,
     ),
   );
@@ -323,19 +343,24 @@ export async function addNote(
     await lockUserInRoom(tx, roomId, userId);
     await lockRoomTree(tx, roomId);
 
-    const today = await tx.$count(
-      heapNotes,
-      and(eq(heapNotes.roomId, roomId), eq(heapNotes.authorId, userId), gte(heapNotes.createdAt, seoulDayStart)),
-    );
-    if (today >= HEAP_POLICY.notesPerDay) return fail("notes-per-day");
+    // 하루 제한은 쓴 횟수로 센다 (heap_attempts). 쪽지를 지워도 줄지 않는다. 읽기만 먼저 하고, 올리는 일은 아래 삽입 바로 앞에서 한다:
+    // 자리 검사에서 실패하면 이 트랜잭션은 그대로 끝나므로 그 전에 올리면 헛되이 센다.
+    const [{ day }] = (await tx.execute<{ day: string }>(sql`select ${seoulDayKey} as day`)).rows;
+    const counterKey = `note-day:${roomId}:${userId}:${day}`;
+    const used = await tx
+      .select({ count: heapAttempts.count })
+      .from(heapAttempts)
+      .where(eq(heapAttempts.key, counterKey));
+    if ((used[0]?.count ?? 0) >= HEAP_POLICY.notesPerDay) return fail("notes-per-day");
 
     let spot = input.spot;
-    let evictedId: string | null = null;
+    let evictId: string | null = null;
     if (spot) {
-      let hung = await tx
+      const hung = await tx
         .select({ id: heapNotes.id, y: heapNotes.posY, angle: heapNotes.posAngle })
         .from(heapNotes)
         .where(and(eq(heapNotes.roomId, roomId), isNotNull(heapNotes.posY)));
+      let others = hung;
       if (hung.length >= HEAP_POLICY.noteTreeMax) {
         const oldest = await tx
           .select({ id: heapNotes.id })
@@ -345,28 +370,47 @@ export async function addNote(
           .orderBy(asc(heapNotes.createdAt), asc(heapNotes.id))
           .limit(1);
         if (oldest[0]) {
-          const movedId = oldest[0].id;
-          evictedId = movedId;
-          await tx
-            .update(heapNotes)
-            .set({ posY: null, posAngle: null, updatedAt: clockNow })
-            .where(eq(heapNotes.id, movedId));
-          hung = hung.filter((row) => row.id !== movedId);
+          evictId = oldest[0].id;
+          others = hung.filter((row) => row.id !== evictId);
         } else {
           spot = null;
         }
       }
       if (spot) {
         const wanted = spot;
-        const tooClose = hung.some(
+        const tooClose = others.some(
           (row) =>
             row.y !== null &&
             row.angle !== null &&
             spotDistance(wanted, { y: row.y, angle: row.angle }) < HEAP_POLICY.noteSpacing,
         );
+        // 실패하면 아무것도 바꾸지 않았다: 내릴 쪽지는 아래에서 내린다.
         if (tooClose) return fail("note-spot-taken");
       }
     }
+
+    if (evictId) {
+      await tx
+        .update(heapNotes)
+        .set({ posY: null, posAngle: null, updatedAt: clockNow })
+        .where(eq(heapNotes.id, evictId));
+    }
+    // 쓴 횟수를 올린다. 이미 한도면 행이 바뀌지 않아 아무것도 돌아오지 않는다 (사용자 잠금 안이라 위의 읽기와 어긋나지 않지만 한 번 더 막는다).
+    const bumped = await tx
+      .insert(heapAttempts)
+      .values({ key: counterKey, count: 1 })
+      .onConflictDoUpdate({
+        target: heapAttempts.key,
+        set: { count: sql`${heapAttempts.count} + 1` },
+        setWhere: lt(heapAttempts.count, HEAP_POLICY.notesPerDay),
+      })
+      .returning({ count: heapAttempts.count });
+    if (!bumped[0]) return fail("notes-per-day");
+    // 지난 날의 제한 행은 쓸 때마다 조금씩 치운다.
+    await tx.execute(
+      sql`delete from heap_attempts where key like 'note-day:%' and window_start < now() - interval '3 days'`,
+    );
+    const evictedId = evictId;
 
     const [created] = await tx
       .insert(heapNotes)

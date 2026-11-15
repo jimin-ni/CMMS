@@ -15,8 +15,9 @@ import { HEAP_POLICY } from "@/lib/heap/policy";
 //     TV 화면에 가장 최근 영상의 썸네일을 보여 주고, 누르면 그 영상이 영사기로 간다. 값은 따로 없다.
 //   { kind: "calendar", entries?: { date: "YYYY-MM-DD", label }[] }
 //     책상 위 달력(손으로 만드는 가구 calendar). 크리에이터가 팬에게 알리는 날짜 목록.
-//   { kind: "tree" }
-//     크리스마스 트리(쪽지 트리). 팬들이 쪽지를 걸어 둔다. 값은 따로 없고, 방에 하나만 둘 수 있다 (layout.ts).
+//   { kind: "tree", earlyModeration?: boolean }
+//     크리스마스 트리(쪽지 트리). 팬들이 쪽지를 걸어 둔다. 방에 하나만 둘 수 있다 (layout.ts).
+//     earlyModeration: 방 주인이 공개일 전에도 쪽지를 읽고 숨길 수 있는가. 없으면 true. 서버(notes-repo.ts)가 저장된 레이아웃에서 읽는다.
 
 export type SlotKind = "pc" | "keepsake" | "music" | "latest" | "calendar" | "tree";
 export type PcLink = { title: string; url: string } | { title: string; email: string };
@@ -27,7 +28,7 @@ export type SlotFn =
   | { kind: "music"; url: string }
   | { kind: "latest" }
   | { kind: "calendar"; entries?: CalendarEntry[] }
-  | { kind: "tree" };
+  | { kind: "tree"; earlyModeration?: boolean };
 
 type SlotEntry = { label: string; models: string[]; hand: string[] };
 const SLOTS = catalogue.slots as Record<SlotKind, SlotEntry>;
@@ -182,9 +183,11 @@ export function checkFn(raw: unknown, type: string, model: string | undefined, a
   }
 
   if (kind === "tree") {
-    const bad = Object.keys(raw).find((key) => key !== "kind");
+    const bad = Object.keys(raw).find((key) => key !== "kind" && key !== "earlyModeration");
     if (bad) return { error: `${at}: 알 수 없는 필드 ${bad}` };
-    return { fn: { kind: "tree" } };
+    if (raw.earlyModeration === undefined) return { fn: { kind: "tree" } };
+    if (typeof raw.earlyModeration !== "boolean") return { error: `${at}: earlyModeration은 true/false여야 해요.` };
+    return { fn: { kind: "tree", earlyModeration: raw.earlyModeration } };
   }
 
   if (kind === "calendar") {

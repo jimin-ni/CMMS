@@ -318,6 +318,8 @@
 .heap-room .ed-field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: rgba(47, 44, 36, 0.7); }
 .heap-room .ed-field input, .heap-room .ed-field textarea { font: 13px var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 8px; padding: 6px 8px; }
 .heap-room .ed-field textarea { resize: vertical; min-height: 54px; }
+.heap-room .ed-field.ed-check { flex-direction: row; align-items: center; gap: 8px; }
+.heap-room .ed-field.ed-check input { padding: 0; }
 .heap-room .ed-linkrow { display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 10px; background: rgba(86, 83, 68, 0.07); }
 .heap-room .ed-linkrow input { font: 13px var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 8px; padding: 6px 8px; }
 .heap-room .ed-bad { color: #a23a2a; }
@@ -458,7 +460,27 @@
 .heap-room .ts-count { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--paper-dim); margin-right: auto; }
 .heap-room .ts-count.full { color: #f0b090; }
 .heap-room .ts-ctl button:focus-visible, .heap-room .ts-drag button:focus-visible { outline: 3px solid var(--paper); outline-offset: 2px; }
-.heap-room #tree-del { position: absolute; left: 50%; transform: translateX(-50%); pointer-events: auto; }
-.heap-room #tree-del[hidden] { display: none; }
+/* 열린 쪽지 아래의 단추 줄 (tree-owner.js 가 top 을 정한다) */
+.heap-room #tree-tools { position: absolute; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; pointer-events: none; }
+.heap-room #tree-tools[hidden], .heap-room #tree-tools .btn[hidden] { display: none; }
+/* 애니메이션이 막고 있는 단추는 숨기지 않고 흐리게 둔다 (눌러도 아무 일이 없다) */
+.heap-room .btn[aria-disabled="true"] { opacity: 0.45; cursor: default; }
+/* 답장 쓰기 (tree-owner.js): 글상자는 답장 종이 위에 정확히 겹치고, 자리와 기울기와 글자 크기는 엔진이 정한다. */
+.heap-room #tree-rsheet { position: absolute; inset: 0; pointer-events: none; }
+.heap-room #tree-rsheet[hidden] { display: none; }
+.heap-room #tr-text { position: absolute; margin: 0; padding: 0; border: 0; outline: 0; resize: none; overflow-x: hidden; overflow-y: auto; background: transparent; color: #6e3418; caret-color: var(--clay); pointer-events: auto; word-break: keep-all; overflow-wrap: anywhere; scrollbar-width: none; touch-action: manipulation; }
+.heap-room #tr-text::placeholder { color: rgba(110, 52, 24, 0.4); }
+.heap-room #tr-text[hidden] { display: none; }
+.heap-room .tr-ctl { position: absolute; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; pointer-events: auto; }
+.heap-room .tr-ctl[hidden] { display: none; }
+.heap-room .tr-ctl .ts-count { padding: 4px 10px; border-radius: 999px; background: rgba(47, 44, 36, 0.78); }
+/* 쪽지함 목록 (tree-box.js) */
+.heap-room .tb-list { display: flex; flex-direction: column; gap: 6px; }
+.heap-room .tb-row { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 8px 12px; text-align: left; font: 400 14px var(--ui); color: var(--ink); background: #fff8ea; border: 1px solid rgba(86, 83, 68, 0.25); border-radius: 10px; cursor: pointer; }
+.heap-room .tb-row:hover { border-color: var(--clay); }
+.heap-room .tb-row[aria-disabled="true"] { opacity: 0.55; cursor: default; }
+.heap-room .tb-row:focus-visible { outline: 3px solid var(--clay); outline-offset: 2px; }
+.heap-room .tb-meta { font-size: 12px; color: rgba(46, 42, 36, 0.65); }
+.heap-room .tb-text { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .heap-room .panel.confirm { width: min(300px, 100%); padding: 18px 16px 14px; gap: 14px; align-items: center; }
 .heap-room .panel.confirm p { margin: 0; font-size: 15px; text-align: center; }
