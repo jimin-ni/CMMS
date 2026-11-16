@@ -70,6 +70,9 @@ export function setupPanels(ctx) {
     $('pc').hidden = false;
   }
   bindOverlay(ctx, 'pc', 'pc-close', { backdrop: true });
+  // 링크를 연 것으로 센다: 창 안의 바깥 링크를 누르거나 가운데 단추로 열 때
+  const countLinkClicks = e => { const a = e.target.closest?.('a[href]'); if (a && opts.isWebLink(a.href)) ctx.countOpen?.('link', a.getAttribute('href')); };
+  for (const id of ['pc-list', 'ks-body']) { const box = $(id); ctx.on(box, 'click', countLinkClicks); ctx.on(box, 'auxclick', e => { if (e.button === 1) countLinkClicks(e); }); }
 
   // 기념품(액자 또는 선반 위 스탠드): 이름, 날짜, 설명, 원본 링크
   function openKeepsake(fn) {
@@ -120,6 +123,7 @@ export function setupPanels(ctx) {
   }
   const openSlot = slot => {
     const k = slot.fn.kind;
+    if (k === 'tree') { ctx.openTree?.(slot.it, slot.group, slot); return; } // 쪽지 트리: 나중 모듈이 ctx.openTree(item, group, slot) 를 단다
     if (k === 'pc') openPc(slot.fn); else if (k === 'keepsake') openKeepsake(slot.fn);
     else if (k === 'music') openMusic(slot.fn); else if (k === 'latest') watchLatest(); else if (k === 'calendar') openCalendar(slot.fn);
   };

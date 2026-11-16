@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { saveLayoutAction } from "@/lib/heap/actions";
 import { HEAP_FUNNEL_POLICY, HEAP_POLICY } from "@/lib/heap/policy";
 import { checkFn, slotKindsFor, type PcLink, type SlotFn, type SlotKind } from "@/lib/heap/slots";
@@ -9,6 +9,7 @@ import { HEAP_TEMPLATES, type HeapTemplate } from "@/lib/heap/templates";
 import { moveFunctions, shellOf, SHELL_KEYS, type MoveItem } from "@/lib/heap/template-move";
 import type { HeapOwnerData, SavedRoom } from "./heap-room";
 import { ChannelTab } from "./channel-tab";
+import { StatsTab } from "./stats-tab";
 import type { ChecklistAction } from "./setup-checklist";
 import { FnForm, canCarryFn, isLamp, itemLabel, newFn, type Item, type Model } from "./fn-form";
 import { ColourPane, type Backdrop } from "./colour-pane";
@@ -106,10 +107,10 @@ const HAND_MODELS: Model[] = [
 const HAND_GROUP = "액자·달력";
 
 // 다섯 기능: 독의 기능 탭 순서, 짧은 이름, 칸의 표시, 기본 모양 (붙일 가구가 없을 때 커서에 올린다)
-const FN_ORDER: SlotKind[] = ["music", "latest", "pc", "keepsake", "calendar"];
-const FN_NAME: Record<SlotKind, string> = { music: "음악", latest: "최신 영상", pc: "PC 링크", keepsake: "기념품", calendar: "달력" };
-const FN_GLYPH: Record<SlotKind, string> = { music: "♪", latest: "▶", pc: "↗", keepsake: "★", calendar: "▦" };
-const FN_DEFAULT: Record<SlotKind, string> = { music: "radio", latest: "televisionModern", pc: "laptop", keepsake: `${HAND_PREFIX}frame`, calendar: `${HAND_PREFIX}calendar` };
+const FN_ORDER: SlotKind[] = ["music", "latest", "pc", "keepsake", "calendar", "tree"];
+const FN_NAME: Record<SlotKind, string> = { music: "음악", latest: "최신 영상", pc: "PC 링크", keepsake: "기념품", calendar: "달력", tree: "쪽지 트리" };
+const FN_GLYPH: Record<SlotKind, string> = { music: "♪", latest: "▶", pc: "↗", keepsake: "★", calendar: "▦", tree: "✦" };
+const FN_DEFAULT: Record<SlotKind, string> = { music: "radio", latest: "televisionModern", pc: "laptop", keepsake: `${HAND_PREFIX}frame`, calendar: `${HAND_PREFIX}calendar`, tree: "holidayTreeDecorated" };
 
 const NOTICE_MS = 6000;
 
@@ -207,6 +208,8 @@ export function RoomEditor({
   beforeSave,
   onSaved,
   owner,
+  noteRevealAt,
+  onRevealSaved,
 }: {
   rootRef: RefObject<HTMLDivElement | null>;
   roomUuid: string;
@@ -222,10 +225,13 @@ export function RoomEditor({
   onSaved: (prev: SavedRoom, next: SavedRoom) => void;
   // 방 주인의 채널과 영상 (채널 탭)
   owner: HeapOwnerData | null;
+  // 쪽지 공개 시각(ISO, 없으면 null)과 공개일 칸이 저장한 뒤의 알림. 공개일은 꾸미기 저장과 따로 바로 저장된다 (fn-form.tsx).
+  noteRevealAt: string | null;
+  onRevealSaved: (iso: string | null) => void;
 }) {
   const [room, setRoom] = useState<RoomState | null>(null);
   const [st, setSt] = useState<EditState | null>(null);
-  const [tab, setTab] = useState<"furn" | "fn" | "pal" | "tpl" | "ch">("furn");
+  const [tab, setTab] = useState<"furn" | "fn" | "pal" | "tpl" | "ch" | "st">("furn");
   // 위 막대의 ⋯ 메뉴 (시간, 처음으로, 저장 전으로, 팔로워로 보기). left 는 메뉴를 펼칠 자리(방 루트 기준 px)
   const [menu, setMenu] = useState<{ left: number } | null>(null);
   const menuBtn = useRef<HTMLButtonElement>(null);
@@ -321,7 +327,7 @@ export function RoomEditor({
   // 독에 내놓는 모델: 벽 조각(catalogue.json 의 mount "structure")은 뺀다. 벽에 거는 것("wall")과 천장에 다는 것("ceiling")은 엔진이 벽과 천장에 붙인다.
   // 이미 방에 놓인 것은 그대로 그려지고 고르고 옮기고 넣을 수 있다 (이름은 models 전체에서 찾는다).
   const placeable = models.filter((m) => m.mount !== "structure");
-  const items = st?.items ?? [];
+  const items = useMemo(() => st?.items ?? [], [st?.items]);
   const sel = st?.sel ?? null;
   const selItem = sel != null ? items[sel] : undefined;
   // 고른 가구가 어디에 거는 것인지 ("wall" | "ceiling" | undefined). 벽 가구는 돌리지 않고 높이를 바꾼다.
@@ -361,13 +367,15 @@ export function RoomEditor({
         return;
       }
       const r = checkFn(fn, item.type, item.model, "fn");
-      if ("error" in r) setDraft({ index, fn, base: fnKey(item.fn), error: r.error.replace(/^fn[^:]*:\s*/, "") });
+      const treeTaken = fn.kind === "tree" && items.some((o, i) => i !== index && o.fn?.kind === "tree");
+      if (treeTaken) setDraft({ index, fn, base: fnKey(item.fn), error: `쪽지 트리는 방에 ${HEAP_POLICY.treesPerRoom}개까지예요.` });
+      else if ("error" in r) setDraft({ index, fn, base: fnKey(item.fn), error: r.error.replace(/^fn[^:]*:\s*/, "") });
       else {
         cmd({ op: "fn", index, fn: r.fn });
         setDraft(null);
       }
     },
-    [cmd],
+    [cmd, items],
   );
 
   // 가구를 고르고 말풍선을 연다. kind 를 주면 기능이 없는 가구에 그 기능을 바로 단다 (값이 비어 있으면 말풍선이 들고 있는다).
@@ -399,7 +407,10 @@ export function RoomEditor({
     if (saving || !room || !st || st.busy) return false;
     setSaving(true);
     setSaveNote("");
-    const layout: Record<string, unknown> = { ...room.layout, items: st.items, time: st.time };
+    // links 가 없는 PC 는 엔진이 정적 creator.json 링크를 대신 보여 준다. 서버가 검증하지 못하는 링크라 열람 집계가 버려지므로, 저장할 때 그 링크를 PC 의 links 로 옮겨 적는다.
+    const fallback = prefill();
+    const items = fallback.length ? st.items.map((it) => (it.fn?.kind === "pc" && it.fn.links === undefined ? { ...it, fn: { ...it.fn, links: fallback } } : it)) : st.items;
+    const layout: Record<string, unknown> = { ...room.layout, items, time: st.time };
     delete layout.excludedReels;
     for (const key of SHELL_KEYS) delete layout[key];
     Object.assign(layout, st.shell);
@@ -432,7 +443,7 @@ export function RoomEditor({
       if (alive.current) setSaving(false);
     }
     return false;
-  }, [saving, room, st, roomUuid, send, onSaved]);
+  }, [saving, room, st, roomUuid, send, onSaved, prefill]);
 
   // Ctrl+S 는 저장. 브라우저의 페이지 저장은 막는다.
   useEffect(() => {
@@ -603,8 +614,8 @@ export function RoomEditor({
     if (have >= 0) openBubble(have, items[have]);
     else if (can >= 0) openBubble(can, items[can], k);
     else if (dflt) {
-      pendingKind.current = k === "latest" || k === "calendar" ? null : k;
-      arm(dflt, k === "latest" ? { kind: "latest" } : undefined);
+      pendingKind.current = k === "latest" || k === "calendar" || k === "tree" ? null : k;
+      arm(dflt, k === "latest" ? { kind: "latest" } : k === "tree" ? { kind: "tree" } : undefined);
     }
   };
 
@@ -1044,7 +1055,14 @@ export function RoomEditor({
               ×
             </button>
           </div>
-          <FnForm key={sel} item={shownItem} models={models} prefill={prefill} onChange={(fn) => applyFn(sel, selItem, fn)} />
+          <FnForm
+            key={sel}
+            item={shownItem}
+            models={models}
+            prefill={prefill}
+            onChange={(fn) => applyFn(sel, selItem, fn)}
+            reveal={{ roomUuid, revealAt: noteRevealAt, onSaved: onRevealSaved }}
+          />
           {liveDraft ? (
             <p className="note ed-bad">아직 붙지 않았어요 · {liveDraft.error} 올바르게 적으면 바로 붙어요.</p>
           ) : (
@@ -1064,6 +1082,7 @@ export function RoomEditor({
               ["pal", "색·무늬"],
               ["tpl", "템플릿"],
               ["ch", "채널"],
+              ["st", "통계"],
             ] as const
           ).map(([k, label]) => (
             <button key={k} type="button" role="tab" className="ed-tab" aria-selected={tab === k} onClick={() => setTab(k)}>
@@ -1165,6 +1184,8 @@ export function RoomEditor({
         )}
 
         {tab === "ch" && <ChannelTab owner={owner} />}
+
+        {tab === "st" && <StatsTab roomUuid={roomUuid} />}
 
         {tab === "pal" && (
           <ColourPane palette={st?.palette ?? null} brand={st?.brand ?? null} backdrop={st?.backdrop ?? null} busy={busy} cmd={cmd} />

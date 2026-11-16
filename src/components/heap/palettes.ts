@@ -19,7 +19,7 @@ export type Palette = {
 export type Preset = { id: string; name: string; palette: Palette };
 
 export const PRESETS: Preset[] = [
-  { id: "olive-afternoon", name: "올리브 오후", palette: { olive: "#565344", accent: "#A6613C", paper: "#F3EADB", ink: "#2f2c24", wall: "#EADCC4", trim: "#565344", floor: ["#9a6a43", "#8b5d3a", "#a7774d"], woodB: "#8b5d3a", woodDark: "#6e4a30", leaf: "#6f7d4f", leaf2: "#87925f", leafDark: "#556240" } },
+  { id: "olive-afternoon", name: "올리브 오후", palette: { olive: "#565344", accent: "#A6613C", paper: "#F3EADB", ink: "#2f2c24", wall: "#EADCC4", trim: "#565344", floor: ["#9a6a43", "#8b5d3a", "#a7774d"], woodB: "#B07A4E", woodDark: "#6e4a30", leaf: "#6f7d4f", leaf2: "#87925f", leafDark: "#556240" } },
   { id: "clay-evening", name: "점토 저녁", palette: { olive: "#5C4636", accent: "#9A4E2E", paper: "#F2E2D0", ink: "#2E2018", wall: "#D9A98A", trim: "#6B3F2A", floor: ["#6E4B3A", "#624233", "#7A5543"], woodB: "#B58154", woodDark: "#4E3020", leaf: "#7A7A4A", leaf2: "#8F8F5C", leafDark: "#58582F" } },
   { id: "cream-morning", name: "크림 아침", palette: { olive: "#6B6A55", accent: "#D58A5C", paper: "#FBF6EA", ink: "#3A352B", wall: "#FAF3E6", trim: "#B9A98C", floor: ["#C4A272", "#B99767", "#CDAC7C"], woodB: "#8E6B45", woodDark: "#6B4E31", leaf: "#7F9A5E", leaf2: "#98B070", leafDark: "#5F7A45" } },
   { id: "forest-cabin", name: "숲 오두막", palette: { olive: "#3E4A34", accent: "#B5693A", paper: "#EDE6D2", ink: "#26291F", wall: "#8C9A7A", trim: "#3E4A34", floor: ["#6A4B33", "#5E432D", "#755438"], woodB: "#B2865A", woodDark: "#3F2B1B", leaf: "#4F6B3A", leaf2: "#68834A", leafDark: "#37502A" } },

@@ -78,6 +78,14 @@ function toRoomData(
       createdAt: entry.createdAt.toISOString(),
     })),
     visits: snapshot.visits,
+    // 쪽지: Date는 ISO 문자열로 (실시간 읽기와 같은 모양). 봉인된 쪽지는 body와 reply가 이미 없다.
+    notes: snapshot.notes.map((note) => ({
+      ...note,
+      createdAt: note.createdAt.toISOString(),
+      reply: note.reply ? { ...note.reply, createdAt: note.reply.createdAt.toISOString() } : undefined,
+    })),
+    noteRevealAt: snapshot.noteRevealAt ? snapshot.noteRevealAt.toISOString() : null,
+    unreadNotes: snapshot.unreadNotes,
     creatorVisit: snapshot.room.creatorVisitedAt ? formatDay(snapshot.room.creatorVisitedAt) : null,
   };
 }

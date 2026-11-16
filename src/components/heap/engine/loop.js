@@ -70,6 +70,7 @@ export function setupLoop(ctx) {
   function frame() {
     if (ctx.disposed) return;
     const rawDt = clock.getDelta(), dt = Math.min(rawDt, 0.05), t = clock.elapsedTime, a = reduced ? 1 : 1 - Math.exp(-dt * 7);
+    ctx.treeStep?.(t, rawDt); // 쪽지 트리 (tree.js): 트리 모드의 fov, 쪽지 움직임, 불빛. 카메라 분기보다 먼저 돈다
     if (ctx.mode === 'edit') { // 꾸미기는 자기 카메라(edit-camera.js)를 쓰고, 걷는 사람은 문 앞에 세워 둔다
       if (ctx.editPreview) roomCam(a); else ctx.editCam.step(a); // 팔로워로 보기는 방 카메라다 (edit.js)
       ctx.editFrame(); // 가구 위 막대와 말풍선은 이 프레임의 카메라로 자리를 잡는다

@@ -49,6 +49,32 @@ export const HEAP_POLICY = {
   // 달력: 날짜 줄 수와 한 줄 설명의 길이
   calendarEntriesMax: 8,
   calendarLabelMaxChars: 30,
+  // 쪽지 트리: 방에 둘 수 있는 개수
+  treesPerRoom: 1,
+
+  // 쪽지 트리 (0008). 글자 수는 코드포인트 기준이고 0008의 check(200자, 8줄)보다 느슨하면 안 된다.
+  noteBodyMaxChars: 200,
+  noteBodyMaxLines: 8,
+  // 답장 상한은 200자다 (DECISIONS N6). 0008의 check는 500자로 남겨 두므로 이 값을 500보다 키우면 안 된다.
+  noteReplyMaxChars: 200,
+  // 쪽지 글자 크기 (0009). 답장 글자 크기도 같은 범위로 맞춘다. 종이 캔버스 픽셀이고 글씨체 배율이 곱해진 실제 크기다 (엔진 tree-note.js 의 62..290 에 배율 0.95..1.3).
+  // 이 범위 밖이지만 0009의 check(20..400) 안인 값은 범위로 맞추고, check 밖이면 거절한다.
+  noteFontMin: 56,
+  noteFontMax: 380,
+  noteFontAbsMin: 20,
+  noteFontAbsMax: 400,
+  // 쓴 이름 (0009 display_name). 코드포인트 기준.
+  noteNameMaxChars: 12,
+  // 팬 한 명이 방 하나에 하루(한국 시간) 동안 남길 수 있는 쪽지 수. 지운 쪽지는 세지 않는다.
+  notesPerDay: 5,
+  // 트리에 걸 수 있는 쪽지 수. 넘으면 답장 없는 가장 오래된 쪽지가 쪽지함으로 내려간다.
+  noteTreeMax: 120,
+  // 걸린 쪽지 사이의 최소 거리(m). 엔진의 ORN과 같다.
+  noteSpacing: 0.088,
+  // 트리 원뿔 근사. 높이 y에서 반지름은 base * (1 - y / height). 엔진의 트리와 같은 값이다.
+  noteTreeHeight: 1.83,
+  noteTreeBaseRadius: 0.475,
+  // 실시간 읽기 한 번에 돌려주는 쪽지 수 상한은 changesPageSize를 쓴다.
 
   // 방 화면이 열려 있는 동안(탭이 보일 때) 바뀐 것을 가져오는 간격
   pollIntervalMs: 10_000,
@@ -109,3 +135,29 @@ export const HEAP_FUNNEL_POLICY = {
   // 붙여 넣은 제목("<주소> | <제목>")의 길이. 0007의 check(300자)보다 좁다.
   pasteTitleMaxChars: 100,
 } as const;
+
+// 쪽지 색과 글꼴 목록. DB에는 id(^[a-z0-9-]{1,24}$)만 저장하고 화면 값은 엔진(tree-note.js)이 가진다.
+// 값을 더하려면 엔진의 tree-ids.js(id -> 화면 값 표), tree-note.js의 NOTE_TINTS, FAN_FONTS와 여기를 같이 고친다.
+export const NOTE_TINT_IDS = {
+  ivory: "#fbf7ee",
+  cream: "#f6efdf",
+  linen: "#f9f4ea",
+  sand: "#f2eadb",
+  snow: "#fdf9f2",
+} as const;
+export const NOTE_FONT_IDS = {
+  "nanum-pen": "Nanum Pen Script",
+  gaegu: "Gaegu",
+  "hi-melody": "Hi Melody",
+  "gamja-flower": "Gamja Flower",
+  "cute-font": "Cute Font",
+  "single-day": "Single Day",
+  "yeon-sung": "Yeon Sung",
+} as const;
+// 방 주인의 답장 글꼴: 쪽지 글꼴 전부와 동해독도 (기본). 엔진의 tree-ids.js REPLY_FONT_VALUES 와 같다.
+export const NOTE_REPLY_FONT_IDS = { "east-sea-dokdo": "East Sea Dokdo", ...NOTE_FONT_IDS } as const;
+
+// 쪽지 장식 종류와 주색 (0009). 엔진 tree-ornament.js 의 KINDS, MAIN_SWATCHES 와 같아야 한다.
+// 주색은 이 네 색만 받는다 (소문자 hex). 색을 더하려면 엔진의 MAIN_SWATCHES 와 여기를 같이 고친다.
+export const NOTE_ORNAMENT_KINDS = ["bauble", "gift", "mitten"] as const;
+export const NOTE_ORNAMENT_COLORS = ["#b8394a", "#efe4cf", "#d4a537", "#a6613c"] as const;

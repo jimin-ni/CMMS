@@ -8,6 +8,8 @@ import {
   jsonb,
   pgTable,
   primaryKey,
+  real,
+  smallint,
   text,
   timestamp,
   uuid,
@@ -126,6 +128,8 @@ export const heapRooms = pgTable("heap_rooms", {
   layout: jsonb("layout").$type<Record<string, unknown>>().notNull().default({}),
   voteThreshold: integer("vote_threshold").notNull().default(3),
   creatorVisitedAt: timestamp("creator_visited_at", { withTimezone: true }),
+  // 쪽지 공개 시각 (0008). null이면 모두에게 열려 있고, 미래 시각이면 그때까지 봉인된다.
+  noteRevealAt: timestamp("note_reveal_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -204,3 +208,55 @@ export const heapPieceVotes = pgTable(
   },
   (t) => [primaryKey({ columns: [t.pieceId, t.userId] })],
 );
+
+// 쪽지 트리 (0008). 기준은 db/migrations/0008_heap_notes_audit.sql (제약·인덱스는 SQL에만 있다).
+// 위치(pos_y, pos_angle)는 둘 다 있거나 둘 다 null이고, null이면 트리 아래 쪽지함에 있다.
+export const heapNotes = pgTable("heap_notes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  roomId: uuid("room_id").notNull(),
+  authorId: text("author_id").notNull(),
+  body: text("body").notNull(),
+  tint: text("tint").notNull(),
+  font: text("font").notNull(),
+  anonymous: boolean("anonymous").notNull().default(false),
+  // 0009. 모두 null 허용이고 null은 예전 동작이다 (자동 글자 크기, id로 정한 장식, 계정 이름).
+  fontSize: smallint("font_size"),
+  ornament: text("ornament"),
+  ornamentColor: text("ornament_color"),
+  displayName: text("display_name"),
+  posY: real("pos_y"),
+  posAngle: real("pos_angle"),
+  hiddenAt: timestamp("hidden_at", { withTimezone: true }),
+  ownerReadAt: timestamp("owner_read_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// 방 주인의 답장. 쪽지 하나에 답장 하나.
+export const heapNoteReplies = pgTable("heap_note_replies", {
+  noteId: uuid("note_id").primaryKey(),
+  authorId: text("author_id").notNull(),
+  body: text("body").notNull(),
+  font: text("font").notNull(),
+  // 0009. 쪽지의 font_size와 같은 뜻이다 (null 은 자동 맞춤).
+  fontSize: smallint("font_size"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+// 콘텐츠 열람 통계. 하루 단위 카운터만 둔다. day는 한국 시간 날짜, target은 링크 주소 또는 <platform>:<externalId>.
+export const heapOpenCounts = pgTable("heap_open_counts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  roomId: uuid("room_id").notNull(),
+  day: date("day").notNull(),
+  kind: text("kind", { enum: ["link", "reel"] }).notNull(),
+  target: text("target").notNull(),
+  opens: integer("opens").notNull().default(0),
+});
+
+// 실패 시도 제한(DB 기반). key는 앱이 정하고, 창이 지나면 앱이 window_start와 count를 되돌린다.
+export const heapAttempts = pgTable("heap_attempts", {
+  key: text("key").primaryKey(),
+  windowStart: timestamp("window_start", { withTimezone: true }).notNull().defaultNow(),
+  count: integer("count").notNull().default(1),
+});

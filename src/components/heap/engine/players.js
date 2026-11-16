@@ -45,7 +45,13 @@ export function setupPlayers(ctx) {
       ratio: 550 / 620, max: 550, allow: 'encrypted-media; fullscreen',
     }),
   };
+  // 열람 집계(DECISIONS M): 쏘고 잊는다. 주인 본인은 보내지 않고, 서버도 한 번 더 거른다.
+  function countOpen(kind, target) {
+    if (opts.isOwner || !opts.roomUuid || typeof navigator === 'undefined' || typeof navigator.sendBeacon !== 'function') return;
+    try { navigator.sendBeacon(`/api/heap/rooms/${encodeURIComponent(opts.roomUuid)}/opens`, JSON.stringify({ kind, target })); } catch {}
+  }
   function openPlayer(reel) {
+    if (reel.kind !== 'fan' && reel.id) countOpen('reel', `${platformOf(reel)}:${reel.id}`);
     closeMusic(); // 영사기가 넘겨받는다: 플레이어는 한 번에 하나만 재생한다
     $('player-title').textContent = reel.title || '';
     frameBox.innerHTML = '';
@@ -110,5 +116,5 @@ export function setupPlayers(ctx) {
     if (!dock.hidden) { dockFrame.replaceChildren(); layoutMusic(); }
   });
 
-  Object.assign(ctx, { closeMusic, openPlayer, closePlayer, openMusic, player, layoutMusic });
+  Object.assign(ctx, { countOpen, closeMusic, openPlayer, closePlayer, openMusic, player, layoutMusic });
 }

@@ -1,6 +1,7 @@
 // 다른 사람이 남긴 것: 방명록, 방문 수, 올라온 팬 작품. 주기적으로 읽어 온다.
 import { el, bindOverlay } from './dom.js';
 import { fmtDay, reelKey } from './format.js';
+import { toEngineNote } from './tree-ids.js';
 
 export function setupLive(ctx) {
   const {
@@ -51,6 +52,8 @@ export function setupLive(ctx) {
     ctx.refreshPosters(); ctx.refreshLatestTv(); // 벽 포스터와 최신 영상 TV 도 남은 영상으로 다시 고른다
   }
   on(root, 'heap:reels', e => replaceReels(e.detail));
+  // 방 주인이 꾸미기에서 쪽지 공개일을 바꿨다 (heap-room.tsx 가 저장된 ISO 시각 또는 null 을 보낸다): 트리가 쪽지를 다시 읽는다 (tree.js 의 setRevealAt)
+  on(root, 'heap:reveal', e => ctx.setNoteRevealAt?.(typeof e.detail === 'string' ? e.detail : null));
 
   // 팬 작품: 방문자가 방에 있는 동안 올라온 것은 탁자 위에서 더미 꼭대기로 떨어진다
   function landPiece(p) {
@@ -123,6 +126,14 @@ export function setupLive(ctx) {
       if (typeof d.cursor === 'string') cursor = d.cursor;
       if (d.visits && Number.isFinite(d.visits.today) && Number.isFinite(d.visits.total)) { ctx.visits = { today: d.visits.today, total: d.visits.total }; renderMeta(); }
       if (typeof d.creatorVisitedAt === 'string') { const day = fmtDay(d.creatorVisitedAt); if (day && day !== ctx.creatorDay) { ctx.creatorDay = day; renderCreatorVisit(); } }
+      // 쪽지: 바뀐 것은 id 로 합치고 보이지 않게 된 것은 뺀다 (tree.js 의 mergeTreeNotes). 봉인 시각과 안 읽은 수는 답이 주는 값으로 맞춘다.
+      if (Array.isArray(d.notes) || Array.isArray(d.removedNoteIds) || d.noteRevealAt !== undefined) {
+        const up = (Array.isArray(d.notes) ? d.notes : []).filter(n => n && typeof n.id === 'string').map(toEngineNote);
+        const gone = Array.isArray(d.removedNoteIds) ? d.removedNoteIds : [];
+        const reveal = d.noteRevealAt === undefined ? undefined : (typeof d.noteRevealAt === 'string' ? d.noteRevealAt : null);
+        if (up.length || gone.length || reveal !== undefined) ctx.mergeTreeNotes?.(up, gone, reveal);
+      }
+      if (opts.isOwner && Number.isFinite(d.unreadNotes) && d.unreadNotes !== ctx.unreadNotes) { ctx.unreadNotes = d.unreadNotes; renderMeta(); }
       for (const e of d.guestbook || []) gbRows.set(e.id, { id: e.id, name: e.name, createdAt: e.createdAt });
       if (!$('guestbook').hidden) renderGuestbook();
       // 작품: 새로 올라온 것은 더미로 떨어진다. 더미에 있는 카드는 그 작품이 내려져도 남는다 (팬 작품 화면이 생기기 전까지)

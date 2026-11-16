@@ -29,6 +29,19 @@ export const HEAP_MESSAGES = {
   "too-many-links": "한 번에 붙여 넣을 수 있는 링크 수를 넘었어요. 나눠서 넣어 주세요.",
   "reel-not-found": "영상을 찾을 수 없어요.",
   "excluded-full": "뺄 수 있는 영상 수를 넘었어요.",
+  // 쪽지
+  "invalid-note": "쪽지는 1자 이상 200자 이하, 8줄 이하로 적어 주세요.",
+  "invalid-reply": "답장은 1자 이상 200자 이하로 적어 주세요.",
+  "invalid-note-name": "이름은 12자까지 적을 수 있어요.",
+  "no-tree": "이 방에는 쪽지 트리가 없어요",
+  "invalid-note-style": "고를 수 없는 색이나 글씨체예요.",
+  "invalid-note-spot": "쪽지를 걸 수 없는 자리예요.",
+  "note-spot-taken": "다른 쪽지와 너무 가까워요. 조금 옆에 걸어 주세요.",
+  "notes-per-day": "오늘 남길 수 있는 쪽지를 다 썼어요. 내일 다시 남길 수 있어요.",
+  "note-not-found": "쪽지를 찾을 수 없어요.",
+  "not-author": "내가 쓴 쪽지만 지울 수 있어요.",
+  "invalid-reveal": "공개 시각이 올바르지 않아요.",
+  "notes-sealed": "공개 시각이 되기 전에는 쪽지를 열 수 없어요.",
 } as const;
 
 export type HeapReason = keyof typeof HEAP_MESSAGES;

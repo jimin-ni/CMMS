@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { setNoteRevealAction } from "@/lib/heap/actions";
 import { HEAP_POLICY } from "@/lib/heap/policy";
 import { parseMusicUrl, slotKindsFor, slotLabel, type CalendarEntry, type PcLink, type SlotFn, type SlotKind } from "@/lib/heap/slots";
 
@@ -48,16 +49,21 @@ export const canCarryFn = (it: Pick<Item, "type" | "model">) => slotKindsFor(it.
 const chars = (v: string) => [...v].length;
 
 // 고른 가구의 기능 칸. 달 수 있는 종류가 없으면 아무것도 그리지 않는다.
+// 쪽지 트리의 공개일 칸이 쓰는 값. 공개일은 레이아웃이 아니라 방(heap_rooms.note_reveal_at)에 바로 저장된다.
+export type RevealProps = { roomUuid: string; revealAt: string | null; onSaved: (iso: string | null) => void };
+
 export function FnForm({
   item,
   models,
   prefill,
   onChange,
+  reveal,
 }: {
   item: Item;
   models: Model[];
   prefill: () => PcLink[];
   onChange: (fn: SlotFn | undefined) => void;
+  reveal?: RevealProps;
 }) {
   const kinds = slotKindsFor(item.type, item.model);
   if (kinds.length === 0) return null;
@@ -98,6 +104,7 @@ export function FnForm({
       {fn.kind === "music" && <MusicFields fn={fn} onChange={onChange} />}
       {fn.kind === "latest" && <p className="note">TV 화면에 가장 최근 영상이 나와요. TV를 누르면 그 영상이 영사기로 가요.</p>}
       {fn.kind === "calendar" && <CalendarFields fn={fn} onChange={onChange} />}
+      {fn.kind === "tree" && <TreeFields fn={fn} onChange={onChange} reveal={reveal} />}
     </div>
   );
 }
@@ -107,6 +114,7 @@ export function newFn(kind: SlotKind, prefill: () => PcLink[]): SlotFn {
   if (kind === "pc") return { kind: "pc", links: prefill() };
   if (kind === "music") return { kind: "music", url: "" };
   if (kind === "latest") return { kind: "latest" };
+  if (kind === "tree") return { kind: "tree" };
   if (kind === "calendar") return { kind: "calendar", entries: [] };
   return { kind: "keepsake", name: "" };
 }
@@ -138,6 +146,87 @@ function ErrorLine({ text }: { text: string | null }) {
     <span className="note ed-bad ed-slot" aria-live="polite">
       {text ?? " "}
     </span>
+  );
+}
+
+// 쪽지 공개일: 한국 날짜 하나. 그날 0시에 쪽지가 열린다. 비우면 늘 열려 있다. 고르는 즉시 서버에 저장한다 (setNoteRevealAction).
+const seoulDateFormat = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" });
+const seoulDateOf = (iso: string | null) => {
+  if (!iso) return "";
+  const t = new Date(iso);
+  return Number.isNaN(t.getTime()) ? "" : seoulDateFormat.format(t);
+};
+
+function TreeFields({
+  fn,
+  onChange,
+  reveal,
+}: {
+  fn: Extract<SlotFn, { kind: "tree" }>;
+  onChange: (fn: SlotFn | undefined) => void;
+  reveal?: RevealProps;
+}) {
+  const early = fn.earlyModeration !== false;
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<{ text: string; bad: boolean } | null>(null);
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  const day = seoulDateOf(reveal?.revealAt ?? null);
+  const saveReveal = async (value: string) => {
+    if (!reveal || busy) return;
+    // 비우면 봉인을 푼다. 날짜를 고르면 그날 한국 시간 0시부터 열린다.
+    const iso = value === "" ? null : new Date(`${value}T00:00:00+09:00`).toISOString();
+    if (value !== "" && iso === null) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      const result = await setNoteRevealAction(reveal.roomUuid, iso);
+      if (!alive.current) return;
+      if (result.ok) {
+        reveal.onSaved(result.noteRevealAt);
+        setStatus({ text: "저장했어요", bad: false });
+      } else setStatus({ text: result.message, bad: true });
+    } catch {
+      if (alive.current) setStatus({ text: "지금은 저장하지 못했어요. 잠시 뒤 다시 시도해 주세요.", bad: true });
+    } finally {
+      if (alive.current) setBusy(false);
+    }
+  };
+  return (
+    <>
+      <p className="note">팬들이 이 트리에 쪽지를 걸어요.</p>
+      {reveal && (
+        <>
+          <label className="ed-field">
+            <span>쪽지 공개일 (한국 날짜, 비우면 늘 열려 있어요)</span>
+            <input type="date" value={day} disabled={busy} onChange={(e) => void saveReveal(e.target.value)} />
+          </label>
+          <div className="row">
+            <button type="button" className="btn ghost small" disabled={busy || day === ""} onClick={() => void saveReveal("")}>
+              공개일 없애기
+            </button>
+          </div>
+          <span className={status?.bad ? "note ed-bad ed-slot" : "note ed-ok ed-slot"} role="status" aria-live="polite">
+            {status?.text ?? " "}
+          </span>
+          <p className="note">공개일은 고르는 즉시 저장돼요. 아래 꾸미기 저장과는 따로예요. 공개일 전에는 팬이 쪽지를 열 수 없어요.</p>
+        </>
+      )}
+      <label className="ed-field ed-check">
+        <input
+          type="checkbox"
+          checked={early}
+          onChange={(e) => onChange(e.target.checked ? { kind: "tree" } : { kind: "tree", earlyModeration: false })}
+        />
+        <span>공개일 전에 쪽지를 미리 읽고 숨길 수 있어요</span>
+      </label>
+      <p className="note">끄면 공개일까지 나도 쪽지를 열 수 없어요. 꾸미기를 저장하면 적용돼요.</p>
+    </>
   );
 }
 

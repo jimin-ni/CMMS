@@ -3,7 +3,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { addGuestbookAction, recordVisitAction } from "@/lib/heap/actions";
+import {
+  addGuestbookAction,
+  addNoteAction,
+  deleteNoteAction,
+  markNoteReadAction,
+  recordVisitAction,
+  refetchNotesAction,
+  replyNoteAction,
+  setNoteHiddenAction,
+} from "@/lib/heap/actions";
 import { itemHalfExtents, itemPlacementError } from "@/lib/heap/layout";
 import { surfaces } from "@/lib/heap/surfaces";
 import { HEAP_POLICY } from "@/lib/heap/policy";
@@ -12,6 +21,7 @@ import { isEmailAddress, isSafeLink, isWebLink, parseMusicUrl } from "@/lib/heap
 import { SHELL_KEYS } from "@/lib/heap/template-move";
 import type { HeapChannelPlatform } from "@/lib/heap/platform";
 import type { ReelClass } from "@/lib/heap/caps";
+import { toEngineNote } from "./engine/tree-ids";
 import { RoomEditor } from "./room-editor";
 import { SetupChecklist, setupFlags, type ChecklistAction } from "./setup-checklist";
 import { ShareButton } from "./share-button";
@@ -22,6 +32,23 @@ const DATA_BASE = "/heap/rooms/";
 // 엔진이 캔버스에 글자를 그릴 때 이 두 글꼴 이름을 그대로 쓴다.
 const FONTS_HREF =
   "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600&family=Nanum+Pen+Script&display=swap";
+
+// 쪽지 하나의 전송 모양. notes-repo.ts의 HeapNote에서 Date만 ISO 문자열로 바꾼 것이다 (실시간 읽기의 notes와 같다). 엔진의 tree-ids.js가 엔진 모양으로 바꾼다.
+export type HeapNoteWire = {
+  id: string;
+  name: string | null;
+  mine: boolean;
+  sealed: boolean;
+  hidden: boolean;
+  body?: string;
+  tint: string;
+  font: string;
+  y: number | null;
+  angle: number | null;
+  createdAt: string;
+  reply?: { body: string; font: string; fontSize: number | null; createdAt: string };
+  unread?: boolean;
+};
 
 // page.tsx가 DB 스냅샷을 엔진이 쓰는 모양으로 바꿔 넘긴다. 날짜는 한국 시간 "YYYY.MM.DD" 문자열.
 export type HeapRoomData = {
@@ -51,6 +78,10 @@ export type HeapRoomData = {
   guestbook: { id: string; name: string; createdAt: string }[];
   visits: { today: number; total: number };
   creatorVisit: string | null;
+  // 쪽지 트리: 보는 사람에게 보이는 쪽지 전부, 봉인이 풀리는 시각(ISO, 없으면 null), 방 주인에게만 0이 아닌 안 읽은 쪽지 수
+  notes: HeapNoteWire[];
+  noteRevealAt: string | null;
+  unreadNotes: number;
 };
 
 // 방 주인에게만 넘기는 값 (page.tsx). 체크리스트와 꾸미기의 채널 탭이 읽는다. 주소(url)는 https 만, 아니면 null.
@@ -127,6 +158,12 @@ export function HeapRoom({
   const [saved, setSaved] = useState<SavedRoom>({ layout: data.layout, name: data.name });
   const [beforeSave, setBeforeSave] = useState<SavedRoom | null>(null);
   const [savedThisVisit, setSavedThisVisit] = useState(false);
+  // 쪽지 공개 시각. 꾸미기의 공개일 칸이 바꾸면 여기와 엔진(heap:reveal)이 함께 바뀐다.
+  const [noteRevealAt, setNoteRevealAt] = useState<string | null>(data.noteRevealAt);
+  const onRevealSaved = useCallback((iso: string | null) => {
+    setNoteRevealAt(iso);
+    rootRef.current?.dispatchEvent(new CustomEvent("heap:reveal", { detail: iso }));
+  }, []);
   const onSaved = useCallback((prev: SavedRoom, next: SavedRoom) => {
     setBeforeSave(prev);
     setSaved(next);
@@ -162,6 +199,9 @@ export function HeapRoom({
   // 새 영상 목록만 heap:reels 로 보내고(engine/live.js), 다음에 다시 마운트하면(팔레트) 이 값으로 뜬다.
   const latest = useRef(data);
   const engineData = useRef(data);
+  // 로그인하고 돌아온 주소의 ?write=1: 쪽지 쓰기를 바로 연다 (L6). 처음 한 번만 읽고 주소에서 지운다.
+  // StrictMode의 첫 effect가 지운 뒤에도 두 번째 effect가 알 수 있게 ref에 둔다. 엔진이 열고 나면 false가 된다 (다시 마운트해도 열리지 않는다).
+  const writeOnLoad = useRef<boolean | null>(null);
   useEffect(() => {
     latest.current = data;
     if (engineData.current === data) return;
@@ -188,6 +228,14 @@ export function HeapRoom({
     let dispose: (() => void) | null = null;
     const data = latest.current;
     engineData.current = data;
+    if (writeOnLoad.current === null) {
+      const url = new URL(window.location.href);
+      writeOnLoad.current = url.searchParams.get("write") === "1";
+      if (url.searchParams.has("write")) {
+        url.searchParams.delete("write");
+        window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+      }
+    }
     // 엔진이 뜨는 동안(dynamic import, setupLive 전) 새 스냅샷이 오면 그 heap:reels 는 듣는 이가 없다. 뜬 뒤에 최신 목록을 한 번 더 보낸다.
     const onReady = () => {
       setReady(true);
@@ -249,8 +297,40 @@ export function HeapRoom({
         // 가구 위에 얹기: 받침의 윗면 높이, 작은 가구, 위에 선 것 찾기, 저장된 물건을 윗면에 맞추기 (surfaces.ts)
         surfaces,
         policy: HEAP_POLICY,
+        // 쪽지 트리: 엔진 모양의 쪽지 목록(빈 목록이면 빈 트리), 봉인이 풀리는 시각, 방 주인인가(canEdit는 방 주인에게만 켜진다), 안 읽은 수
+        treeNotes: mountData.notes.map(toEngineNote),
+        noteRevealAt: mountData.noteRevealAt,
+        isOwner: canEdit,
+        unreadNotes: mountData.unreadNotes,
         recordVisit: () => recordVisitAction(data.roomUuid),
         addGuestbook: (name: string) => addGuestbookAction(data.roomUuid, name),
+        // 쪽지 쓰기. addNote 는 서버 액션의 답을 그대로 주되 쪽지를 엔진 모양으로 바꿔 준다 (tree-ids.js). input = { body, tint, font, displayName, fontSize, ornament, ornamentColor, spot }
+        addNote: async (input: unknown) => {
+          const result = await addNoteAction(data.roomUuid, input);
+          return result.ok ? { ok: true as const, note: toEngineNote(result.note), evictedId: result.evictedId } : result;
+        },
+        deleteNote: (noteId: string) => deleteNoteAction(noteId),
+        // 방 주인의 도구 (engine/tree-owner.js). replyNote 의 note 는 엔진 모양으로 바꿔 준다.
+        replyNote: async (noteId: string, input: unknown) => {
+          const result = await replyNoteAction(noteId, input);
+          return result.ok ? { ok: true as const, note: toEngineNote(result.note) } : result;
+        },
+        setHidden: (noteId: string, hidden: boolean) => setNoteHiddenAction(noteId, hidden),
+        // 방 주인이 안 읽은 쪽지를 열었다: 그 쪽지만 읽은 것으로
+        markNoteRead: (noteId: string) => markNoteReadAction(noteId),
+        // 공개 시각이 되었거나 바뀌었을 때: 쪽지 전부를 다시 읽는다
+        refetchNotes: async () => {
+          const result = await refetchNotesAction(data.roomUuid);
+          return result.ok
+            ? { ok: true as const, notes: result.notes.map(toEngineNote), noteRevealAt: result.noteRevealAt, unreadNotes: result.unreadNotes }
+            : result;
+        },
+        // 로그인이 없는 사람이 쪽지 쓰기를 누르면: 로그인 화면으로 보낸다. next 는 돌아올 주소다 (로그인 화면이 읽으면 그리로 돌아온다).
+        signIn: () => router.push(`/login?next=${encodeURIComponent(`/room/${encodeURIComponent(roomId)}?write=1`)}`),
+        openWrite: signedIn && writeOnLoad.current === true,
+        consumeWrite: () => {
+          writeOnLoad.current = false;
+        },
         // 원본의 hash + reload 자리. 이동하면 이 방의 effect가 정리되면서 엔진이 dispose된다.
         onNavigate: (id) => router.push(`/room/${encodeURIComponent(id)}`),
       });
@@ -262,7 +342,7 @@ export function HeapRoom({
       root.removeEventListener("heap:remount", onRemount);
       dispose?.();
     };
-  }, [roomId, viewerName, signedIn, router, resume]);
+  }, [roomId, viewerName, signedIn, canEdit, router, resume]);
 
   // 체크리스트: 방 주인에게, 방이 뜬 뒤, 걸어 다니는 방이나 꾸미기(팔로워로 보기 빼고)에서
   const showChecklist = !!owner && ready && (editing ? !preview : mode === "room");
@@ -302,6 +382,12 @@ export function HeapRoom({
             <button id="sortexit" className="btn ghost" type="button" hidden>
               책장에서 물러나기
             </button>
+            <button id="tree-write" className="btn" type="button" hidden>
+              쪽지 쓰기
+            </button>
+            <button id="treeexit" className="btn ghost" type="button" hidden>
+              트리에서 물러나기
+            </button>
             {canEdit && ready && mode === "room" && !editing && (
               <button className="btn ghost" type="button" onClick={() => setEditing(true)}>
                 꾸미기
@@ -311,8 +397,125 @@ export function HeapRoom({
           </div>
           <p className="hint" id="hint" />
         </div>
+        {/* 쪽지 트리 모드에서 쪽지가 나와 있을 때만 (tree.js). 화면 양옆에 뜬다. */}
+        <button id="tree-prev" className="tree-step prev" type="button" aria-label="이전 쪽지" hidden>
+          ‹
+        </button>
+        <button id="tree-next" className="tree-step next" type="button" aria-label="다음 쪽지" hidden>
+          ›
+        </button>
       </div>
       <p id="toast" />
+      {/* 쪽지 쓰기 (tree-write.js): 3D 종이 위에 겹치는 글상자, 아래 조작 줄, 접은 쪽지를 끌어 걸 때의 안내 줄, 내 쪽지 지우기와 확인창 */}
+      <div id="tree-sheet" hidden>
+        <textarea
+          id="ts-text"
+          rows={4}
+          lang="ko"
+          spellCheck={false}
+          autoComplete="off"
+          aria-label="쪽지 내용"
+          placeholder="여기에 써요"
+        />
+        <div id="ts-sig" className="ts-sig" hidden>
+          <span aria-hidden="true">- </span>
+          <input id="ts-name" type="text" maxLength={12} lang="ko" autoComplete="off" spellCheck={false} placeholder="익명" aria-label="이름 (비우면 익명)" />
+        </div>
+        <div id="ts-ctl" className="ts-ctl">
+          {/* 종이: 종이 색과 글씨체, 글씨 크기. 장식: 종류와 색. 두 묶음에 작은 이름을 붙인다. */}
+          <div className="ts-row">
+            <span className="ts-lab">종이</span>
+            <div className="ts-tints" id="ts-tints" role="group" aria-label="종이 색" />
+            <label className="ts-size">
+              글씨 크기
+              <input id="ts-size" type="range" step={1} min={62} max={290} defaultValue={290} />
+            </label>
+          </div>
+          <div className="ts-fonts" id="ts-fonts" role="group" aria-label="글씨체" />
+          <div className="ts-row">
+            <span className="ts-lab">장식</span>
+            <div className="ts-seg" id="ts-kinds" role="group" aria-label="장식 종류" />
+            <div className="ts-tints ts-swatches" id="ts-swatches" role="group" aria-label="장식 색" />
+          </div>
+          <div className="ts-row">
+            <span id="ts-count" className="ts-count" aria-live="off" />
+            <button id="ts-fold" className="btn" type="button">
+              접어서 달기
+            </button>
+            <button id="ts-cancel" className="btn ghost" type="button">
+              취소
+            </button>
+          </div>
+        </div>
+        <div id="ts-drag" className="ts-drag" hidden>
+          <p id="ts-drag-text">접은 쪽지를 트리 위로 끌어다 놓으세요</p>
+          <div className="ts-row">
+            <button id="ts-box" className="btn" type="button">
+              쪽지함에 넣기
+            </button>
+            <button id="ts-reopen" className="btn ghost" type="button">
+              다시 펼치기
+            </button>
+          </div>
+        </div>
+      </div>
+      {/* 열린 쪽지 아래의 단추 줄 (tree-owner.js 가 자리를 정한다): 방 주인의 답장 쓰기와 숨기기, 내 쪽지의 지우기 */}
+      <div id="tree-tools" hidden>
+        <button id="tree-reply" className="btn" type="button" hidden>
+          답장 쓰기
+        </button>
+        <button id="tree-hide" className="btn ghost" type="button" hidden>
+          숨기기
+        </button>
+        <button id="tree-del" className="btn ghost" type="button" hidden>
+          지우기
+        </button>
+      </div>
+      {/* 방 주인의 답장 쓰기 (tree-owner.js): 팬 종이 옆에 선 답장 종이 위에 겹치는 글상자와 아래 조작 줄 (글씨체, 글씨 크기, 접어서 넣기, 취소) */}
+      <div id="tree-rsheet" hidden>
+        <textarea id="tr-text" rows={4} lang="ko" spellCheck={false} autoComplete="off" aria-label="답장 내용" placeholder="답장을 써요" hidden />
+        <div id="tr-ctl" className="ts-ctl tr-ctl" hidden>
+          <div className="ts-fonts" id="tr-fonts" role="group" aria-label="답장 글씨체" />
+          <div className="ts-row">
+            <label className="ts-size">
+              글씨 크기
+              <input id="tr-size" type="range" step={1} min={62} max={200} defaultValue={200} />
+            </label>
+          </div>
+          <div className="ts-row">
+            <span id="tr-count" className="ts-count" aria-live="off" />
+            <button id="tr-fold" className="btn" type="button">
+              접어서 넣기
+            </button>
+            <button id="tr-cancel" className="btn ghost" type="button">
+              취소
+            </button>
+          </div>
+        </div>
+      </div>
+      {/* 쪽지함 목록 (tree-box.js) */}
+      <div id="tree-box" className="overlay" hidden>
+        <div className="panel">
+          <div className="panel-head">
+            <b id="tb-count">쪽지함</b>
+            <button id="tb-close" className="btn ghost" type="button">
+              닫기
+            </button>
+          </div>
+          <div className="panel-body">
+            <div id="tb-list" className="tb-list" />
+          </div>
+        </div>
+      </div>
+      <div id="tree-confirm" className="overlay" hidden>
+        <div className="panel confirm" role="alertdialog" aria-labelledby="tc-text">
+          <p id="tc-text" />
+          <div className="row">
+            <button id="tc-yes" className="btn" type="button" />
+            <button id="tc-no" className="btn ghost" type="button" />
+          </div>
+        </div>
+      </div>
       {editing && (
         <RoomEditor
           key={data.roomUuid}
@@ -326,6 +529,8 @@ export function HeapRoom({
           beforeSave={beforeSave}
           onSaved={onSaved}
           owner={owner}
+          noteRevealAt={noteRevealAt}
+          onRevealSaved={onRevealSaved}
         />
       )}
       {showChecklist && owner && (

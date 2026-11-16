@@ -66,6 +66,21 @@ export function setupTime(ctx) {
     const g = bdCanvas.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 256);
     gr.addColorStop(0, top); gr.addColorStop(1, bottom); g.fillStyle = gr; g.fillRect(0, 0, 2, 256);
     bdTex.needsUpdate = true;
+    toneHud(top);
+  }
+  // 방 이름과 HUD 줄 (판정 J51): 배경 위쪽 색이 밝으면 글자를 짙게 하고 옅은 그림자를 둔다. 흰 글자는 한낮의 옅은 하늘에서 읽히지 않는다.
+  // 글자 색은 CSS 변수(--paper, --paper-dim)로 정해지므로 .who 안에서만 그 변수를 덮어쓴다.
+  const hudWho = root.querySelector('.hud .who');
+  const lumOf = c => { const v = c.startsWith('#') ? [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16)) : (c.match(/[\d.]+/g) || [0, 0, 0]).slice(0, 3).map(Number); return (0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]) / 255; };
+  function toneHud(topColour) {
+    if (!hudWho) return;
+    if (lumOf(topColour) > 0.62) {
+      hudWho.style.setProperty('--paper', '#2f2c24'); hudWho.style.setProperty('--paper-dim', 'rgba(47, 44, 36, 0.78)');
+      hudWho.style.textShadow = '0 1px 3px rgba(255, 255, 255, 0.55)';
+    } else {
+      hudWho.style.removeProperty('--paper'); hudWho.style.removeProperty('--paper-dim');
+      hudWho.style.textShadow = '';
+    }
   }
   // 꾸미기(edit.js)가 배경을 바꾼다. null 은 시간 따라
   function setBackdrop(b) {
