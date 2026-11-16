@@ -77,6 +77,8 @@ export type HeapRoomData = {
     handle: string | null;
     wide: boolean;
     views: string;
+    // 조회수 그대로 (모르면 null). 시안 SVG 를 쓰는 방의 카드가 "2,000,000" 처럼 적는다 (engine/card-art.js).
+    viewCount: number | null;
     published: string | null;
   }[];
   pieces: { id: string; by: string; date: string; caption: string }[];
@@ -363,6 +365,8 @@ export function HeapRoom({
 
       {/* 엔진이 mount마다 여기에 <canvas id="scene">을 새로 만들고, dispose 때 지운다. */}
       <div id="scene-host" />
+      {/* 집어 든 카드를 3D 카드 자리에 겹쳐 보이는 HTML 카드 (engine/card-view.js). 누르면 뒤집히고, 뒷면의 아이콘이 원본 링크다. */}
+      <div id="cardview" hidden />
       <div className="hud">
         <header className="who">
           <span className="name" id="cname" />

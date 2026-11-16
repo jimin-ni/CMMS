@@ -101,12 +101,14 @@ export function setupLoop(ctx) {
     const tn = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
     camera.getWorldDirection(dir);
     const animDt = reduced ? 1 : Math.min(rawDt, 0.1);
+    let heldArrived = false; // 집어 든 카드가 눈앞 자리에 다 왔다: card-view.js 가 그 자리에 HTML 카드를 겹친다
     for (const c of cards) {
       const d = c.userData.d;
       if (c === ctx.held) {
         const dist = Math.max(d.h / (1.5 * tn), d.w / (1.7 * tn * camera.aspect));
         want.copy(camera.position).addScaledVector(dir, dist); wantQ.copy(camera.quaternion);
         if (ctx.heldFlipped) wantQ.multiply(FLIP);
+        heldArrived = c.position.distanceTo(want) < d.h * 0.03 && c.quaternion.angleTo(wantQ) < 0.03;
       } else if (c === ctx.loaded) {
         want.copy(SLOT.pos); want.y += d.h / 2; wantQ.copy(SLOT.quat);
       } else if (c === ctx.dragging) {
@@ -122,6 +124,7 @@ export function setupLoop(ctx) {
       }
       c.position.lerp(want, a); c.quaternion.slerp(wantQ, a);
     }
+    ctx.stepCardView(heldArrived);
     renderer.render(scene, camera);
     ctx.raf = requestAnimationFrame(frame);
   }

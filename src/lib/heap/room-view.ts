@@ -66,6 +66,7 @@ function toRoomData(
         handle: channelHandle(reel.channelUrl),
         wide: reel.wide ?? false,
         views: formatViews(reel.viewCount),
+        viewCount: reel.viewCount,
         published: reel.publishedAt ? formatDay(reel.publishedAt) : null,
       })),
     pieces: snapshot.landed.map((piece) => ({

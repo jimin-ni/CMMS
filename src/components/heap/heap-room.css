@@ -20,6 +20,19 @@
 }
 .heap-room, .heap-room * { box-sizing: content-box; }
 .heap-room #scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+/* 집어 든 카드 (engine/card-view.js). 엔진이 시안 px 크기의 카드를 translate + scale 로 3D 카드 자리에 맞춘다. */
+.heap-room #cardview { position: absolute; left: 0; top: 0; transform-origin: 0 0; cursor: pointer; }
+.heap-room #cardview[hidden] { display: none; }
+.heap-room #cardview .cv-card { position: relative; transform-style: preserve-3d; transition: transform 0.35s ease; }
+.heap-room #cardview .cv-card.flipped { transform: rotateY(180deg); }
+.heap-room #cardview .cv-face { position: absolute; inset: 0; overflow: hidden; backface-visibility: hidden; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35); }
+.heap-room #cardview .cv-face > * { position: absolute; display: block; }
+.heap-room #cardview .cv-back { transform: rotateY(180deg); }
+.heap-room #cardview .cv-photo { object-fit: cover; background: #2b2530; }
+.heap-room #cardview .cv-text { color: #6B4E37; line-height: 1; white-space: nowrap; transform: translateY(-50%); }
+.heap-room #cardview .cv-link { cursor: pointer; }
+.heap-room #cardview .cv-link:focus-visible { outline: 3px solid var(--clay); outline-offset: -3px; }
+@media (prefers-reduced-motion: reduce) { .heap-room #cardview .cv-card { transition: none; } }
 .heap-room .hud {
   position: absolute; inset: 0; pointer-events: none;
   display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start;
