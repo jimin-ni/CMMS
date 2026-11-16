@@ -57,8 +57,9 @@ export type HeapReel = {
   wide: boolean | null;
   viewCount: number | null;
   publishedAt: Date | null;
-  // 연결된 채널의 이름. 채널을 모르면 null.
+  // 연결된 채널의 이름과 주소. 채널을 모르면 null.
   channelTitle: string | null;
+  channelUrl: string | null;
 };
 
 export type HeapPieceStatus = "pending" | "rejected" | "voting" | "landed" | "lifted";
@@ -295,6 +296,7 @@ export async function listReels(
       viewCount: heapReels.viewCount,
       publishedAt: heapReels.publishedAt,
       channelTitle: heapCreatorChannels.title,
+      channelUrl: heapCreatorChannels.channelUrl,
     })
     .from(heapReels)
     .leftJoin(heapCreatorChannels, eq(heapCreatorChannels.id, heapReels.channelId))

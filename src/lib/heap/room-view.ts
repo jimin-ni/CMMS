@@ -62,6 +62,8 @@ function toRoomData(
         title: reel.title,
         // 채널을 모르는 영상은 null. 엔진이 방 이름으로 대신한다.
         channel: reel.channelTitle,
+        // 카드 뒷면의 "@핸들". 채널 주소에 @핸들이 없으면 null.
+        handle: channelHandle(reel.channelUrl),
         wide: reel.wide ?? false,
         views: formatViews(reel.viewCount),
         published: reel.publishedAt ? formatDay(reel.publishedAt) : null,
@@ -88,6 +90,12 @@ function toRoomData(
     unreadNotes: snapshot.unreadNotes,
     creatorVisit: snapshot.room.creatorVisitedAt ? formatDay(snapshot.room.creatorVisitedAt) : null,
   };
+}
+
+// 채널 주소의 "@핸들" (youtube.com/@name, tiktok.com/@name). 없으면 null.
+function channelHandle(url: string | null): string | null {
+  const match = url?.match(/\/@([A-Za-z0-9._-]{1,60})(?:[/?#]|$)/);
+  return match ? `@${match[1]}` : null;
 }
 
 // https 주소만 링크로 쓴다. 아니면 null (화면은 글자만 보여 준다).

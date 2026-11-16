@@ -122,13 +122,16 @@ async function run(ctx) {
   setupRecolour(ctx); // 팔레트를 다시 마운트하지 않고 바꾼다 (ctx.recolour, edit.js 가 쓴다)
   setupEdit(ctx); // 꾸미기. 포인터를 방 루트의 capture 단계에서 먼저 받으므로 input.js 뒤에 세워도 된다
 
-  await fontsReady(); // 썸네일은 기다리지 않는다: buildHeap() 이 줄을 세우고 카드는 그림이 오는 대로 채워진다
+  await fontsReady(ctx.CARD_FONT); // 썸네일은 기다리지 않는다: buildHeap() 이 줄을 세우고 카드는 그림이 오는 대로 채워진다
   if (ctx.disposed) return;
   start(ctx);
 }
 
-async function fontsReady() {
-  const wait = Promise.all([document.fonts.load('40px "Nanum Pen Script"', '가나 abc'), document.fonts.load('600 20px "IBM Plex Sans KR"', '만 1234')]);
+async function fontsReady(F) {
+  const wait = Promise.all([
+    document.fonts.load('40px "Nanum Pen Script"', '가나 abc'), document.fonts.load('600 20px "IBM Plex Sans KR"', '만 1234'),
+    document.fonts.load(`20px ${F.pixel}`, '가나 abc'), document.fonts.load(`20px ${F.rounded}`, '가나 @abc'), document.fonts.load(`500 20px ${F.body}`, '2026.11'),
+  ]);
   await Promise.race([wait, new Promise(r => setTimeout(r, 3000))]);
 }
 

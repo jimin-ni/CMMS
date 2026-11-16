@@ -25,13 +25,17 @@ import { toEngineNote } from "./engine/tree-ids";
 import { RoomEditor } from "./room-editor";
 import { SetupChecklist, setupFlags, type ChecklistAction } from "./setup-checklist";
 import { ShareButton } from "./share-button";
+import { moneygraphyPixel, moneygraphyRounded, pretendard } from "@/app/fonts/onboarding";
 import "./heap-room.css";
 
 // 크리에이터 정보(creator.json)는 public/heap/rooms/ 아래의 정적 파일이다. 나머지 방 데이터는 서버가 DB에서 읽어 data로 넘긴다.
 const DATA_BASE = "/heap/rooms/";
 // 엔진이 캔버스에 글자를 그릴 때 이 두 글꼴 이름을 그대로 쓴다.
+// 영상 카드의 앞뒷면은 온보딩 글꼴(머니그라피, Pretendard)을 쓴다. 루트에 붙인 CSS 변수에서 엔진이 이름을 읽는다 (card-art.js).
 const FONTS_HREF =
   "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600&family=Nanum+Pen+Script&display=swap";
+
+const CARD_FONTS = `${moneygraphyPixel.variable} ${moneygraphyRounded.variable} ${pretendard.variable}`;
 
 // 쪽지 하나의 전송 모양. notes-repo.ts의 HeapNote에서 Date만 ISO 문자열로 바꾼 것이다 (실시간 읽기의 notes와 같다). 엔진의 tree-ids.js가 엔진 모양으로 바꾼다.
 export type HeapNoteWire = {
@@ -70,6 +74,7 @@ export type HeapRoomData = {
     url: string;
     title: string;
     channel: string | null;
+    handle: string | null;
     wide: boolean;
     views: string;
     published: string | null;
@@ -348,7 +353,10 @@ export function HeapRoom({
   const showChecklist = !!owner && ready && (editing ? !preview : mode === "room");
 
   return (
-    <div ref={rootRef} className={editing ? (preview ? "heap-room editing previewing" : "heap-room editing") : "heap-room"}>
+    <div
+      ref={rootRef}
+      className={`${editing ? (preview ? "heap-room editing previewing" : "heap-room editing") : "heap-room"} ${CARD_FONTS}`}
+    >
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       <link rel="stylesheet" href={FONTS_HREF} precedence="default" />
