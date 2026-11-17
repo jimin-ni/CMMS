@@ -25,13 +25,17 @@ import { toEngineNote } from "./engine/tree-ids";
 import { RoomEditor } from "./room-editor";
 import { SetupChecklist, setupFlags, type ChecklistAction } from "./setup-checklist";
 import { ShareButton } from "./share-button";
+import { moneygraphyPixel, moneygraphyRounded, pretendard } from "@/app/fonts/onboarding";
 import "./heap-room.css";
 
 // 크리에이터 정보(creator.json)는 public/heap/rooms/ 아래의 정적 파일이다. 나머지 방 데이터는 서버가 DB에서 읽어 data로 넘긴다.
 const DATA_BASE = "/heap/rooms/";
 // 엔진이 캔버스에 글자를 그릴 때 이 두 글꼴 이름을 그대로 쓴다.
+// 영상 카드의 앞뒷면은 온보딩 글꼴(머니그라피, Pretendard)을 쓴다. 루트에 붙인 CSS 변수에서 엔진이 이름을 읽는다 (card-art.js).
 const FONTS_HREF =
   "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600&family=Nanum+Pen+Script&display=swap";
+
+const CARD_FONTS = `${moneygraphyPixel.variable} ${moneygraphyRounded.variable} ${pretendard.variable}`;
 
 // 쪽지 하나의 전송 모양. notes-repo.ts의 HeapNote에서 Date만 ISO 문자열로 바꾼 것이다 (실시간 읽기의 notes와 같다). 엔진의 tree-ids.js가 엔진 모양으로 바꾼다.
 export type HeapNoteWire = {
@@ -70,8 +74,11 @@ export type HeapRoomData = {
     url: string;
     title: string;
     channel: string | null;
+    handle: string | null;
     wide: boolean;
     views: string;
+    // 조회수 그대로 (모르면 null). 시안 SVG 를 쓰는 방의 카드가 "2,000,000" 처럼 적는다 (engine/card-art.js).
+    viewCount: number | null;
     published: string | null;
   }[];
   pieces: { id: string; by: string; date: string; caption: string }[];
@@ -348,13 +355,18 @@ export function HeapRoom({
   const showChecklist = !!owner && ready && (editing ? !preview : mode === "room");
 
   return (
-    <div ref={rootRef} className={editing ? (preview ? "heap-room editing previewing" : "heap-room editing") : "heap-room"}>
+    <div
+      ref={rootRef}
+      className={`${editing ? (preview ? "heap-room editing previewing" : "heap-room editing") : "heap-room"} ${CARD_FONTS}`}
+    >
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       <link rel="stylesheet" href={FONTS_HREF} precedence="default" />
 
       {/* 엔진이 mount마다 여기에 <canvas id="scene">을 새로 만들고, dispose 때 지운다. */}
       <div id="scene-host" />
+      {/* 집어 든 카드를 3D 카드 자리에 겹쳐 보이는 HTML 카드 (engine/card-view.js). 누르면 뒤집히고, 뒷면의 아이콘이 원본 링크다. */}
+      <div id="cardview" hidden />
       <div className="hud">
         <header className="who">
           <span className="name" id="cname" />

@@ -24,6 +24,7 @@ import { setupHeap } from './heap.js';
 import { setupThumbs } from './thumbs.js';
 import { setupLoop } from './loop.js';
 import { setupModes } from './modes.js';
+import { setupCardView } from './card-view.js';
 import { setupEditorBridge } from './editor-bridge.js';
 import { setupPlayers } from './players.js';
 import { setupPanels } from './panels.js';
@@ -38,8 +39,8 @@ import { setupRecolour } from './recolour.js';
 import { setupIntro } from './intro.js';
 
 // heap-room.tsx 가 그리고 엔진이 채우거나 보이게 하는 노드의 id. dispose 가 첫 렌더 상태로 되돌린다.
-const LISTS = ['albumrow', 'player-frame', 'music-frame', 'phone-feed', 'pc-list', 'ks-body', 'cal-body', 'grid-list', 'gb-list', 'roomlist', 'ts-tints', 'ts-fonts'];
-const HIDDEN = ['visit', 'albumrow', 'stand', 'flip', 'srclink', 'eject', 'ytlink', 'sortexit', 'treeexit', 'tree-write', 'tree-prev', 'tree-next', 'tree-sheet', 'ts-text', 'ts-ctl', 'ts-drag', 'tree-del', 'tree-confirm', 'player', 'player-note', 'music', 'music-note', 'music-link', 'phone', 'pc', 'keepsake', 'calendar', 'grid', 'guestbook', 'rooms', 'rooms-legend'];
+const LISTS = ['cardview', 'albumrow', 'player-frame', 'music-frame', 'phone-feed', 'pc-list', 'ks-body', 'cal-body', 'grid-list', 'gb-list', 'roomlist', 'ts-tints', 'ts-fonts'];
+const HIDDEN = ['cardview', 'visit', 'albumrow', 'stand', 'flip', 'srclink', 'eject', 'ytlink', 'sortexit', 'treeexit', 'tree-write', 'tree-prev', 'tree-next', 'tree-sheet', 'ts-text', 'ts-ctl', 'ts-drag', 'tree-del', 'tree-confirm', 'player', 'player-note', 'music', 'music-note', 'music-link', 'phone', 'pc', 'keepsake', 'calendar', 'grid', 'guestbook', 'rooms', 'rooms-legend'];
 
 /**
  * 방을 `root`(heap-room.tsx 가 그린 요소)에 올리고 dispose 함수를 돌려준다.
@@ -110,6 +111,7 @@ async function run(ctx) {
   setupLoop(ctx);
   setupIntro(ctx); // 온보딩의 연출 훅 (heap:intro). 보내지 않으면 아무 일도 없다
   setupModes(ctx);
+  setupCardView(ctx); // 집어 든 카드를 HTML 로 (modes.js 의 flip 을 쓴다)
   setupEditorBridge(ctx);
   setupPlayers(ctx);
   setupPanels(ctx);
@@ -122,13 +124,17 @@ async function run(ctx) {
   setupRecolour(ctx); // 팔레트를 다시 마운트하지 않고 바꾼다 (ctx.recolour, edit.js 가 쓴다)
   setupEdit(ctx); // 꾸미기. 포인터를 방 루트의 capture 단계에서 먼저 받으므로 input.js 뒤에 세워도 된다
 
-  await fontsReady(); // 썸네일은 기다리지 않는다: buildHeap() 이 줄을 세우고 카드는 그림이 오는 대로 채워진다
+  await fontsReady(ctx.CARD_FONT, ctx.cardArtReady); // 썸네일은 기다리지 않는다: buildHeap() 이 줄을 세우고 카드는 그림이 오는 대로 채워진다
   if (ctx.disposed) return;
   start(ctx);
 }
 
-async function fontsReady() {
-  const wait = Promise.all([document.fonts.load('40px "Nanum Pen Script"', '가나 abc'), document.fonts.load('600 20px "IBM Plex Sans KR"', '만 1234')]);
+// 카드 글꼴과, 시안 SVG 를 쓰는 방의 카드 뒷면 그림(card-art.js 의 cardArtReady)을 기다린다
+async function fontsReady(F, art) {
+  const wait = Promise.all([art,
+    document.fonts.load('40px "Nanum Pen Script"', '가나 abc'), document.fonts.load('600 20px "IBM Plex Sans KR"', '만 1234'),
+    document.fonts.load(`20px ${F.pixel}`, '가나 abc'), document.fonts.load(`20px ${F.rounded}`, '가나 @abc'), document.fonts.load(`500 20px ${F.body}`, '2026.11'),
+  ]);
   await Promise.race([wait, new Promise(r => setTimeout(r, 3000))]);
 }
 
