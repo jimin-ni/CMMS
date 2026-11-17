@@ -316,6 +316,8 @@
   transform-origin: 50% 50%;
 }
 .ob-xl { font-size: 13cqw; letter-spacing: 0.02em; }
+/* 설정 화면의 제목 ("setting"): 글자가 많아 옆 폴라로이드에 닿지 않게 줄인다 */
+.ob-xl.ob-title-alt { font-size: 7.4cqw; }
 .ob-l { font-size: 10cqw; letter-spacing: 0.02em; }
 .ob-m2 { font-size: 3.6cqw; }
 .ob-m { font-size: 2cqw; line-height: 1.15; }

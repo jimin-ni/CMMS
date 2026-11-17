@@ -311,13 +311,15 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 11px;
+  padding: 6px 12px 6px 8px;
   border: 0;
   border-radius: 4px;
   background: transparent;
   color: var(--oc-ink);
   font: inherit;
-  font-size: 14px;
+  font-family: var(--font-oc-rounded), var(--font-oc-body), sans-serif;
+  font-size: 15px;
+  white-space: nowrap;
   text-decoration: none;
   cursor: pointer;
   transition: background 0.2s, transform 0.2s;
@@ -451,7 +453,10 @@
     text-align: center;
     transform: translateY(var(--oc-shift));
   }
-  .oc-nav-btn .oc-label { display: none; }
+  /* 한 줄에 다 들어가지 않으면 두 줄로 */
+  .oc-nav { width: max-content; max-width: calc(100vw - 32px); }
+  .oc-nav .oc-paper-body { flex-wrap: wrap; justify-content: center; gap: 2px; padding: 8px 10px; }
+  .oc-nav-btn { padding: 5px 8px 5px 6px; font-size: 14px; }
   /* 왼쪽 위 "memories"와 방 정보 줄 아래로 내린다 */
   .oc-nav { top: 84px; }
   .oc-corner { font-size: 28px; }

@@ -26,14 +26,17 @@ const ZOOM_MS = 2800;
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
+// startInRoom: 온보딩을 끝낸 상태로 시작한다 (홈, /home). Esc 로 건너뛴 것과 같다: 방 안, 둘러보기는 모두 채움, 내비게이션 바가 열림.
 export function ConceptC({
   data,
   viewerName,
   signedIn,
+  startInRoom = false,
 }: {
   data: HeapRoomData;
   viewerName: string | null;
   signedIn: boolean;
+  startInRoom?: boolean;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
@@ -42,15 +45,16 @@ export function ConceptC({
   const vignetteRef = useRef<HTMLDivElement>(null);
   const readyRef = useRef<HTMLDivElement>(null);
   const captionRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const phaseRef = useRef<Phase>("scroll");
+  const phaseRef = useRef<Phase>(startInRoom ? "room" : "scroll");
   const progressRef = useRef(0);
-  const zoomStartRef = useRef(-1);
+  // 방 안에서 시작하면 확대가 이미 끝난 시각
+  const zoomStartRef = useRef(startInRoom ? -Infinity : -1);
 
-  const [phase, setPhase] = useState<Phase>("scroll");
+  const [phase, setPhase] = useState<Phase>(startInRoom ? "room" : "scroll");
   // 방이 화면에 떴는지 (엔진의 heap:ready). 그 전에는 대기 화면을 덮고 스크롤을 막는다.
   const [ready, setReady] = useState(false);
   // Esc 로 온보딩을 건너뛰었는지. 둘러보기를 모두 채운다.
-  const [skipped, setSkipped] = useState(false);
+  const [skipped, setSkipped] = useState(startInRoom);
   const itemSteps = useMemo(() => stepOfItems(data.layout.items), [data.layout.items]);
 
   // 매 프레임: 스크롤을 부드럽게 따라가고, 엔진에 연출 값을 보내고, 글의 투명도를 바꾼다 (React 는 다시 그리지 않는다)
@@ -181,7 +185,7 @@ export function ConceptC({
         <div className="oc-stage" onClick={() => phaseRef.current === "scroll" && enterRoom()}>
           {/* 실제 2번 방. 스크롤하는 동안에는 누를 수 없고, 방 안에 들어오면 /room/dname 과 똑같이 움직인다. */}
           <div ref={hostRef} className={phase === "room" ? "oc-room-host live" : "oc-room-host"}>
-            <HeapRoom roomId={ONBOARDING_ROOM_ID} data={data} viewerName={viewerName} signedIn={signedIn} />
+            <HeapRoom roomId={ONBOARDING_ROOM_ID} data={data} viewerName={viewerName} signedIn={signedIn} signInHere />
           </div>
           <div ref={vignetteRef} className="oc-layer oc-vignette" />
           <div ref={shadeRef} className="oc-layer oc-shade" />

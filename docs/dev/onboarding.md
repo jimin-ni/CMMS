@@ -10,11 +10,22 @@
 | 주소 | 흐름 |
 |---|---|
 | `/` | 첫 화면. `/onboarding/c`와 같다 |
+| `/home` | 홈. 온보딩이 끝난 2번 방 (Esc 로 건너뛴 상태와 같다) |
+| `/settings` | 설정 (임시). 컨셉 B 화면, 첫 장 제목만 "setting". 스크롤 연출은 같고, 스크롤 중 노트 바깥을 누르면 `/home` |
 | `/onboarding/c` | 대기 화면(큰 소문자 "memories" 위에서 덮인 책이 펼쳐지는 로우폴리 아이콘, 방이 뜨면 자동으로 넘어감) → 어두운 화면 "Memories" → 창문 빛과 빈 2번 방 → 스크롤마다 글과 가구가 번갈아 떨어져 쌓임 → Ready to Start? → 방이 화면 가득 확대 → 방 안 둘러보기 |
 | `/onboarding/b` | 책상 위 바인더 노트(링이 아래) → 스크롤하면 아랫장이 링을 지나 위로 넘어와 덮임(3D) → 하드보드 표지가 덮여 앨범 한 권이 되고 책 등이 보이게 세워짐 → 책상이 걷히고 2번 방이 보임 → 카메라가 책장으로 줌인, 앨범이 꽂힌 뒤 줌아웃 → Ready to Start? → 방 안 둘러보기 |
 | `/plan` | 나만의 방 결제 안내. 가격이 정해지지 않아 결제 버튼은 비활성 |
 
-방 안 둘러보기(B, C 공통): 종이 안내 팝업("Welcome in.")이 화면 가운데에 떴다가 클릭하거나 3초가 지나면 아래로 내려감, 둘러보기 진행 점(2번 방은 6곳), 3곳을 둘러보면 위에 내비게이션 바(홈, 폴라로이드, 챗, 레터, 로그인, 설정). 왼쪽 위에는 방 이름 대신 머니그라피 Pixel 글꼴의 "memories". 로그인 버튼은 로그인 팝업을 띄우고, 로그인하면 닉네임이 보입니다. 나머지 다섯 버튼은 아직 기능이 없습니다.
+방 안 둘러보기(B, C 공통): 종이 안내 팝업("Welcome in.")이 화면 가운데에 떴다가 클릭하거나 3초가 지나면 아래로 내려감, 둘러보기 진행 점(2번 방은 6곳), 3곳을 둘러보면 위에 내비게이션 바(홈, 폴라로이드, 챗, 레터, 로그인, 설정). 왼쪽 위에는 방 이름 대신 머니그라피 Pixel 글꼴의 "memories". 버튼은 큰 픽셀 아이콘(28px)과 한 단어입니다.
+
+| 버튼 | 동작 |
+|---|---|
+| Home | 처음 들어온 상태: 창과 모드를 닫고 문 앞에 섬 (엔진 `heap:go` `room`) |
+| Polaroid | 탁자에 앉아 더미 맨 위 사진을 집음 (`heap:go` `polaroid`) |
+| Chat | 탁자에 앉아 휴대폰을 엶 (`heap:go` `phone`). 대화를 누르면 로그인 전에는 로그인 팝업(엔진 `heap:signin`), 로그인 뒤에는 버블 대화 |
+| Letter | 아직 없음 |
+| Login | 로그인 팝업. 로그인하면 닉네임 |
+| Setting | `/settings` |
 
 Esc(컨셉 C): 온보딩 중 언제든 누르면 온보딩을 끝냅니다. 방 안으로 바로 들어가고, 둘러보기를 모두 채운 것으로 보고 내비게이션 바를 엽니다. 첫 화면의 스크롤 안내 아래에 "Press Esc to skip"이 있습니다.
 
@@ -30,6 +41,8 @@ Esc(컨셉 C): 온보딩 중 언제든 누르면 온보딩을 끝냅니다. 방 
 | 컨셉 B | `src/components/onboarding-b/concept-b.tsx`, `pages.tsx`, `doodles.tsx` | 3D 책(CSS 3D), 장 콜라주, 손그림 선 |
 | 공통 | `src/components/onboarding-c/room-tour.tsx`, `paper.tsx`, `icons.tsx`, `login-popup.tsx` | 둘러보기, 종이 질감 판과 테이프, Pixelarticons, 로그인 팝업 |
 | 엔진 훅 | `src/components/heap/engine/intro.js` | `heap:intro`, `heap:introquery` |
+| 엔진 훅 | `src/components/heap/engine/nav.js` | `heap:go`. 보내지 않으면 보통 방은 그대로 |
+| 엔진 옵션 | `HeapRoom`의 `signInHere`, 엔진 `opts.askSignIn` | 로그인 전 휴대폰 대화를 누르면 `/login` 대신 방에 `heap:signin`. `/room/[roomId]`는 전과 같음 |
 | 글꼴 | `src/app/fonts/` | 머니그라피 Pixel·Rounded, Pretendard Variable. 온보딩 화면에만 적용 |
 
 ## 변경 사항 (다른 작업자와 AI용 요약)

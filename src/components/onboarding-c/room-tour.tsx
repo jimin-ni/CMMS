@@ -11,17 +11,23 @@ import { PixelIcon, type PixelIconName } from "./icons";
 import { LoginPopup } from "./login-popup";
 
 const LOGIN_REASON = "Sign in to leave your mark in this room.";
+// 휴대폰의 대화를 로그인 전에 누를 때 (엔진의 heap:signin)
+const CHAT_LOGIN_REASON = "Sign in to chat with the creator.";
+// 설정 버튼이 여는 곳 (임시로 컨셉 B 화면)
+const SETTINGS_HREF = "/settings";
 // 가운데 안내 팝업이 아래로 내려가기까지
 const GUIDE_CENTER_MS = 3000;
 
 // 내비게이션 바의 버튼: 홈, 폴라로이드, 챗, 레터, (로그인), 설정.
-// 로그인 말고는 아직 하는 일이 없다. 기능이 정해지면 붙인다.
-const NAV_ITEMS: { id: string; icon: PixelIconName; label: string }[] = [
-  { id: "home", icon: "home", label: "Home" },
-  { id: "polaroid", icon: "image", label: "Polaroid" },
-  { id: "chat", icon: "chat", label: "Chat" },
+// go: 방 안에서 옮겨 갈 곳 (엔진의 heap:go, engine/nav.js). 레터는 아직 하는 일이 없다.
+type Go = "room" | "polaroid" | "phone";
+const NAV_ITEMS: { id: string; icon: PixelIconName; label: string; go?: Go }[] = [
+  { id: "home", icon: "home", label: "Home", go: "room" },
+  { id: "polaroid", icon: "image", label: "Polaroid", go: "polaroid" },
+  { id: "chat", icon: "chat", label: "Chat", go: "phone" },
   { id: "letter", icon: "mail", label: "Letter" },
 ];
+const NAV_ICON = 28;
 
 // 안내 팝업 자리: 가운데, 아래, 숨김(Esc 로 건너뛴 뒤 아직 아무 곳도 둘러보지 않음)
 type GuideSpot = "center" | "bottom" | "hidden";
@@ -51,7 +57,8 @@ export function RoomTour({
   const [guideSpot, setGuideSpot] = useState<GuideSpot>("center");
   const [found, setFound] = useState<SpotId[]>([]);
   const [active, setActive] = useState<SpotId | null>(null);
-  const [loginOpen, setLoginOpen] = useState(false);
+  // 로그인 팝업에 쓰는 까닭 글. null 이면 닫힘.
+  const [loginReason, setLoginReason] = useState<string | null>(null);
   const spots = useMemo(() => spotsFor(layoutItems), [layoutItems]);
 
   useEffect(() => {
@@ -90,10 +97,14 @@ export function RoomTour({
     };
     const watch = new MutationObserver(check);
     watch.observe(roomEl, { subtree: true, attributes: true, attributeFilter: ["hidden"] });
+    // 로그인 전에 휴대폰의 대화를 누르면 엔진이 알려 준다 (HeapRoom 의 signInHere)
+    const onSignIn = () => setLoginReason(CHAT_LOGIN_REASON);
     roomEl.addEventListener("heap:mode", onMode);
+    roomEl.addEventListener("heap:signin", onSignIn);
     return () => {
       watch.disconnect();
       roomEl.removeEventListener("heap:mode", onMode);
+      roomEl.removeEventListener("heap:signin", onSignIn);
     };
   }, [hostRef, markFound]);
 
@@ -110,12 +121,18 @@ export function RoomTour({
     };
   }, [centered]);
 
-  const closeLogin = useCallback(() => setLoginOpen(false), []);
+  const closeLogin = useCallback(() => setLoginReason(null), []);
   // 로그인하면 서버가 닉네임과 로그인 상태를 다시 읽는다 (방명록 쓰기도 켜진다)
   const onSignedIn = useCallback(() => {
-    setLoginOpen(false);
+    setLoginReason(null);
     router.refresh();
   }, [router]);
+  // 방 안의 자리로 옮긴다: 홈(처음 들어온 상태), 탁자의 사진, 탁자의 휴대폰
+  const go = (where: Go) => {
+    // 홈은 온보딩이 끝난 처음 상태라 안내 팝업도 내린다
+    if (where === "room") setGuideSpot("hidden");
+    hostRef.current?.querySelector(".heap-room")?.dispatchEvent(new CustomEvent("heap:go", { detail: where }));
+  };
 
   if (!live) return null;
 
@@ -169,36 +186,41 @@ export function RoomTour({
       <nav className={`oc-nav${navOpen ? " open" : ""}`} aria-label="Menu" aria-hidden={!navOpen}>
         <Paper tape={["tl"]}>
           {NAV_ITEMS.map((item) => (
-            <button key={item.id} type="button" className="oc-nav-btn" tabIndex={navOpen ? 0 : -1} aria-label={item.label}>
-              <PixelIcon name={item.icon} size={20} />
+            <button
+              key={item.id}
+              type="button"
+              className="oc-nav-btn"
+              onClick={item.go ? () => go(item.go!) : undefined}
+              tabIndex={navOpen ? 0 : -1}
+            >
+              <PixelIcon name={item.icon} size={NAV_ICON} />
               <span className="oc-label">{item.label}</span>
             </button>
           ))}
           {signedIn ? (
             <span className="oc-nav-btn oc-nav-name">
-              <PixelIcon name="user" size={20} />
+              <PixelIcon name="user" size={NAV_ICON} />
               <span>{viewerName}</span>
             </span>
           ) : (
             <button
               type="button"
               className="oc-nav-btn"
-              onClick={() => setLoginOpen(true)}
+              onClick={() => setLoginReason(LOGIN_REASON)}
               tabIndex={navOpen ? 0 : -1}
-              aria-label="Sign in"
             >
-              <PixelIcon name="login" size={20} />
-              <span className="oc-label">Sign in</span>
+              <PixelIcon name="login" size={NAV_ICON} />
+              <span className="oc-label">Login</span>
             </button>
           )}
-          <button type="button" className="oc-nav-btn" tabIndex={navOpen ? 0 : -1} aria-label="Settings">
-            <PixelIcon name="settings" size={20} />
-            <span className="oc-label">Settings</span>
+          <button type="button" className="oc-nav-btn" onClick={() => router.push(SETTINGS_HREF)} tabIndex={navOpen ? 0 : -1}>
+            <PixelIcon name="settings" size={NAV_ICON} />
+            <span className="oc-label">Setting</span>
           </button>
         </Paper>
       </nav>
 
-      {loginOpen && <LoginPopup reason={LOGIN_REASON} onClose={closeLogin} onSignedIn={onSignedIn} />}
+      {loginReason && <LoginPopup reason={loginReason} onClose={closeLogin} onSignedIn={onSignedIn} />}
     </>
   );
 }

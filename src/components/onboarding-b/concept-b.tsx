@@ -4,10 +4,13 @@
 // → 마지막 장 뒤에 하드보드 표지가 덮여 앨범 한 권이 되고, 책 등이 보이게 세워진다
 // → 책상이 걷히며 2번 방이 보이고, 카메라가 책장으로 다가가 앨범이 꽂힌 뒤 다시 물러난다
 // → "Ready to Start?" → 방 안 둘러보기 (컨셉 C와 같은 room-tour.tsx).
+// settings: 설정 화면(/settings)으로 쓴다. 첫 장의 큰 제목만 "setting"이고, 스크롤 연출은 같다.
+//   스크롤하는 동안 노트 바깥을 누르면 홈(/home: 온보딩이 끝난 2번 방)으로 간다.
 // 2번 방은 /room/dname 과 같은 HeapRoom 이다. 엔진에는 heap:intro(카메라 줌, 꽂힌 앨범)와 heap:introquery(앨범 자리의 화면 좌표)만 쓴다.
 import "../onboarding-c/onboarding-c.css";
 import "./onboarding-b.css";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { HeapRoom, type HeapRoomData } from "@/components/heap/heap-room";
 import { ONBOARDING_ROOM_ID, ramp } from "../onboarding-c/story";
 import { PaperFilters } from "../onboarding-c/paper";
@@ -49,15 +52,21 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 type Slot = { x: number; y: number; h: number } | null;
 
+// 설정 화면에서 노트 바깥을 누르면 가는 곳
+const HOME_HREF = "/home";
+
 export function ConceptB({
   data,
   viewerName,
   signedIn,
+  settings = false,
 }: {
   data: HeapRoomData;
   viewerName: string | null;
   signedIn: boolean;
+  settings?: boolean;
 }) {
+  const router = useRouter();
   const rootRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const deskRef = useRef<HTMLDivElement>(null);
@@ -191,17 +200,38 @@ export function ConceptB({
     return () => cancelAnimationFrame(raf);
   }, []);
 
+  // 들어갔으면 true
   const enterRoom = useCallback(() => {
-    if (phaseRef.current !== "scroll" || progressRef.current < T.ready[0]) return;
+    if (phaseRef.current !== "scroll" || progressRef.current < T.ready[0]) return false;
     phaseRef.current = "enter";
     enterStartRef.current = performance.now();
     setPhase("enter");
+    return true;
   }, []);
+
+  // 화면을 누르면: Ready 가 보이면 방 안으로. 설정 화면에서는 그 전까지 노트(책, 바인더, 장, 표지) 바깥을 누르면 홈으로 간다.
+  const onStageClick = (event: React.MouseEvent) => {
+    if (phaseRef.current !== "scroll") return;
+    if (!settings || progressRef.current >= T.ready[0]) {
+      enterRoom();
+      return;
+    }
+    const book = bookRef.current;
+    if (!book) return;
+    // 노트 판들은 3D 로 돌아 있어 누르기를 받지 않는다 (pointer-events: none). 화면에 비친 상자로 잰다.
+    const parts = [book, ...book.querySelectorAll<HTMLElement>(".ob-leaf, .ob-binder, .ob-cover")];
+    const inside = parts.some((el) => {
+      const r = el.getBoundingClientRect();
+      return event.clientX >= r.left && event.clientX <= r.right && event.clientY >= r.top && event.clientY <= r.bottom;
+    });
+    if (!inside) router.push(HOME_HREF);
+  };
 
   useEffect(() => {
     if (phase !== "scroll") return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Enter" || event.key === " ") enterRoom();
+      // 들어가는 데 쓴 키는 엔진에 넘기지 않는다: 엔진도 Enter 로 가까운 문이나 탁자를 연다 (input.js)
+      if ((event.key === "Enter" || event.key === " ") && enterRoom()) event.stopImmediatePropagation();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -218,10 +248,10 @@ export function ConceptB({
         </filter>
       </svg>
       <div style={{ height: `${SCROLL_SCREENS * 100}vh` }}>
-        <div className="oc-stage" onClick={() => phaseRef.current === "scroll" && enterRoom()}>
+        <div className="oc-stage" onClick={onStageClick}>
           {/* 실제 2번 방. 책상 아래에 깔려 있다가 표지가 덮일 때부터 보인다. */}
           <div ref={hostRef} className={phase === "room" ? "oc-room-host live" : "oc-room-host"}>
-            <HeapRoom roomId={ONBOARDING_ROOM_ID} data={data} viewerName={viewerName} signedIn={signedIn} />
+            <HeapRoom roomId={ONBOARDING_ROOM_ID} data={data} viewerName={viewerName} signedIn={signedIn} signInHere />
           </div>
           <div ref={deskRef} className="oc-layer ob-desk" />
 
@@ -265,7 +295,7 @@ export function ConceptB({
                   data-side={i === 0 ? "front" : "back"}
                 >
                   <section className="ob-sheet ob-front" aria-label={`Page ${i + 1}`}>
-                    <Page />
+                    <Page title={settings && i === 0 ? "setting" : undefined} />
                   </section>
                   <div className="ob-sheet ob-back">
                     <span className="ob-pixel">Memories</span>
