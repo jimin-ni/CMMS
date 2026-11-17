@@ -162,7 +162,9 @@ try {
        from jsonb_to_recordset($2::jsonb)
          as r(external_id text, source_url text, title text, wide boolean, view_count bigint, ord int)
        on conflict (room_id, platform, external_id) do update
-         set title = excluded.title, wide = excluded.wide, view_count = excluded.view_count, updated_at = now()`,
+         set title = excluded.title, wide = excluded.wide,
+             -- reels.json의 조회수는 반올림 값이다. heap:channels가 넣은 정확한 값이 있으면 그대로 둔다.
+             view_count = coalesce(heap_reels.view_count, excluded.view_count), updated_at = now()`,
       [saved.rows[0].id, JSON.stringify(room.reels)],
     );
   }

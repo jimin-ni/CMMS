@@ -1,6 +1,7 @@
 // 힙 미니룸 YouTube 채널 가져오기: npm run heap:channels -- [--room <slug>] [--dry-run]
 // creator.json의 YouTube 채널 링크(@핸들)를 channels.list(forHandle)로 풀어 heap_creator_channels에 넣고,
-// 방의 영상(heap_reels)을 videos.list로 조회해 snippet.channelId가 맞는 채널에 잇는다. 다시 실행해도 같은 결과다.
+// 방의 영상(heap_reels)을 videos.list로 조회해 snippet.channelId가 맞는 채널에 잇는다.
+// 같은 응답으로 published_at과 view_count를 API 값으로 고친다. 다시 실행해도 같은 결과다.
 // 할당량: 핸들 하나에 1유닛, 영상 50개 묶음에 1유닛. search.list는 쓰지 않는다.
 // 방 주인의 채널이 아닌 영상은 채널 없이 두고 보고만 한다. API 키는 어디에도 출력하지 않는다.
 import { readFileSync } from "node:fs";
@@ -106,17 +107,46 @@ try {
       console.log(`  채널 ${saved.rows[0].created ? "새로 만듦" : "고침"}: "${channel.title}"`);
     }
 
-    // 3) 영상 → 채널 ID
+    // 3) 영상 → 채널 ID, 게시 시각, 조회수 (statistics를 더해도 호출당 1유닛 그대로다)
     const reels = await client.query(
       "select external_id from heap_reels where room_id = $1 and platform = 'youtube' order by external_id",
       [room.id],
     );
     const ids = reels.rows.map((row) => row.external_id);
     const channelOfVideo = new Map();
+    const facts = []; // { id, published, views }
     for (let i = 0; i < ids.length; i += 50) {
-      const data = await apiGet("videos", { part: "snippet", id: ids.slice(i, i + 50).join(",") });
-      for (const item of data.items ?? []) channelOfVideo.set(item.id, item.snippet?.channelId ?? null);
+      const data = await apiGet("videos", { part: "snippet,statistics", id: ids.slice(i, i + 50).join(",") });
+      for (const item of data.items ?? []) {
+        channelOfVideo.set(item.id, item.snippet?.channelId ?? null);
+        const published = new Date(item.snippet?.publishedAt);
+        const views = Number(item.statistics?.viewCount);
+        facts.push({
+          id: item.id,
+          published: Number.isNaN(published.getTime()) ? null : published.toISOString(),
+          views: Number.isSafeInteger(views) && views >= 0 ? views : null,
+        });
+      }
     }
+
+    // 3-1) 게시 시각과 조회수를 API 값으로 고친다. API가 값을 주지 않은 칸은 그대로 둔다.
+    const factSource = "jsonb_to_recordset($2::jsonb) as f(id text, published timestamptz, views bigint)";
+    const factWhere = `
+      where r.room_id = $1 and r.platform = 'youtube' and r.external_id = f.id
+        and (r.published_at is distinct from coalesce(f.published, r.published_at)
+          or r.view_count is distinct from coalesce(f.views, r.view_count))`;
+    const factParams = [room.id, JSON.stringify(facts)];
+    const factResult = dryRun
+      ? await client.query(`select count(*)::int as n from heap_reels r, ${factSource} ${factWhere}`, factParams)
+      : await client.query(
+          `update heap_reels r
+           set published_at = coalesce(f.published, r.published_at),
+               view_count = coalesce(f.views, r.view_count), updated_at = now()
+           from ${factSource} ${factWhere}`,
+          factParams,
+        );
+    const factCount = dryRun ? factResult.rows[0].n : factResult.rowCount;
+    console.log(`  게시 시각·조회수 ${dryRun ? "고칠 예정" : "고침"}: ${factCount}개 (API 응답 ${facts.length}개)`);
 
     // 4) 잇기
     const perChannel = new Map();
