@@ -1,0 +1,199 @@
+/* 온보딩 대기 화면 (loading-screen.tsx). 책은 CSS 3D 판 몇 장으로 만든 로우폴리 모양이다: 면마다 단색, 경계가 딱 끊기는 그러데이션으로 각진 면을 낸다. */
+.ol-root {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #0c0a08;
+  transition: opacity 0.7s ease;
+}
+.ol-root.leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+.ol-word {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  font-family: var(--font-oc-pixel), var(--font-oc-body), sans-serif;
+  font-size: clamp(72px, 21vw, 340px);
+  line-height: 1;
+  text-transform: lowercase;
+  white-space: nowrap;
+  color: rgba(243, 234, 219, 0.09);
+  user-select: none;
+}
+.ol-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+/* 책: 가운데 한 점(.ol-book-3d)에서 책 등이 y 축이다. 오른쪽 반에 뒤표지, 종이 묶음, 낱장, 앞표지가 겹쳐 있다. */
+.ol-book {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  perspective: 700px;
+  animation: ol-float 2.4s ease-in-out infinite;
+}
+.ol-book-3d {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform-style: preserve-3d;
+  transform: rotateX(56deg) rotateZ(-26deg);
+}
+.ol-book-3d > div,
+.ol-block > span,
+.ol-face {
+  position: absolute;
+  display: block;
+}
+.ol-back,
+.ol-block,
+.ol-leaf,
+.ol-cover,
+.ol-shadow {
+  left: 0;
+  top: -42px;
+  width: 64px;
+  height: 84px;
+  transform-style: preserve-3d;
+}
+.ol-shadow {
+  left: -70px;
+  width: 140px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0));
+  transform: translateZ(-6px) scale(1.15);
+  animation: ol-shadow 2.4s ease-in-out infinite;
+}
+.ol-back {
+  border-radius: 1px 3px 3px 1px;
+  background: linear-gradient(130deg, #8e4d2c 50%, #7d4326 50%);
+}
+.ol-block-top {
+  inset: 2px 3px 2px 0;
+  background: linear-gradient(150deg, #f3eadb 0 48%, #e7dcc6 48% 100%);
+  transform: translateZ(8px);
+}
+/* 종이 묶음의 아래 단면과 오른쪽 단면: 줄무늬가 종이 결 */
+.ol-block-front {
+  left: 0;
+  top: 82px;
+  width: 61px;
+  height: 8px;
+  transform-origin: top;
+  transform: rotateX(90deg);
+  background: repeating-linear-gradient(180deg, #d8c6a4 0 1px, #c8b28c 1px 2px);
+}
+.ol-block-side {
+  left: 61px;
+  top: 2px;
+  width: 8px;
+  height: 80px;
+  transform-origin: left;
+  transform: rotateY(-90deg);
+  background: repeating-linear-gradient(90deg, #e0cfae 0 1px, #cfba95 1px 2px);
+}
+.ol-face {
+  inset: 0;
+  backface-visibility: hidden;
+}
+.ol-face-back {
+  transform: rotateY(180deg);
+}
+/* 낱장과 앞표지는 책 등(왼쪽 끝)을 축으로 넘어간다. 넘어간 쪽(왼쪽)에서는 먼저 넘긴 것이 아래에 깔린다. */
+.ol-leaf,
+.ol-cover {
+  transform-origin: left center;
+}
+.ol-leaf {
+  top: -40px;
+  height: 80px;
+  width: 61px;
+}
+.ol-leaf .ol-face {
+  background: linear-gradient(160deg, #fbf3e4 0 52%, #efe4cf 52% 100%);
+}
+.ol-leaf .ol-face-back {
+  background: linear-gradient(200deg, #f6ecda 0 46%, #e9dcc3 46% 100%);
+}
+.ol-leaf-1 {
+  animation: ol-leaf-1 4.8s cubic-bezier(0.45, 0, 0.3, 1) infinite;
+}
+.ol-leaf-2 {
+  animation: ol-leaf-2 4.8s cubic-bezier(0.45, 0, 0.3, 1) infinite;
+}
+.ol-cover {
+  animation: ol-cover 4.8s cubic-bezier(0.45, 0, 0.3, 1) infinite;
+}
+.ol-cover-out {
+  border-radius: 1px 3px 3px 1px;
+  background: linear-gradient(125deg, #c0744a 0 38%, #b0653d 38% 70%, #a05a35 70% 100%);
+}
+/* 표지 위 이름표와 책 등 띠 */
+.ol-cover-out i {
+  position: absolute;
+  display: block;
+}
+.ol-cover-out i:first-child {
+  left: 14px;
+  top: 18px;
+  width: 36px;
+  height: 18px;
+  background: linear-gradient(140deg, #f3eadb 50%, #e3d4b8 50%);
+}
+.ol-cover-out i:last-child {
+  left: 0;
+  top: 0;
+  width: 7px;
+  height: 100%;
+  background: #8a4a2a;
+}
+.ol-cover-in {
+  border-radius: 3px 1px 1px 3px;
+  background: linear-gradient(135deg, #93512f 50%, #84482a 50%);
+}
+
+@keyframes ol-cover {
+  0%, 10% { transform: translateZ(9px) rotateY(0deg); }
+  34%, 80% { transform: translateZ(1px) rotateY(-180deg); }
+  96%, 100% { transform: translateZ(9px) rotateY(0deg); }
+}
+@keyframes ol-leaf-1 {
+  0%, 26% { transform: translateZ(8.6px) rotateY(0deg); }
+  46%, 70% { transform: translateZ(2px) rotateY(-178deg); }
+  86%, 100% { transform: translateZ(8.6px) rotateY(0deg); }
+}
+@keyframes ol-leaf-2 {
+  0%, 36% { transform: translateZ(8.3px) rotateY(0deg); }
+  56%, 62% { transform: translateZ(3px) rotateY(-176deg); }
+  78%, 100% { transform: translateZ(8.3px) rotateY(0deg); }
+}
+@keyframes ol-float {
+  50% { transform: translateY(-10px); }
+}
+@keyframes ol-shadow {
+  50% { opacity: 0.6; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ol-book,
+  .ol-shadow,
+  .ol-leaf-1,
+  .ol-leaf-2,
+  .ol-cover { animation: none; }
+  .ol-cover { transform: translateZ(1px) rotateY(-180deg); }
+  .ol-leaf-1 { transform: translateZ(8.6px); }
+  .ol-leaf-2 { transform: translateZ(8.3px); }
+}

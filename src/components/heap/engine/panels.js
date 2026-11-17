@@ -43,7 +43,12 @@ export function setupPanels(ctx) {
     const bb = el('div', 'bubble');
     bb.appendChild(el('small', null, '크리에이터와 1:1 대화'));
     const open = el('a', null, '버블 열기 →'); open.href = opts.bubbleHref;
-    open.addEventListener('click', e => { if (e.button || e.metaKey || e.ctrlKey || e.shiftKey) return; e.preventDefault(); opts.navigate(opts.bubbleHref); });
+    open.addEventListener('click', e => {
+      if (e.button || e.metaKey || e.ctrlKey || e.shiftKey) return;
+      e.preventDefault();
+      // 온보딩: 로그인 전이면 대화로 가지 않고 로그인 팝업을 띄운다 (opts.askSignIn)
+      if (!opts.signedIn && opts.askSignIn) opts.askSignIn(); else opts.navigate(opts.bubbleHref);
+    });
     bb.appendChild(open);
     feedEl.appendChild(bb);
     const curCard = ctx.held || ctx.loaded, cur = curCard?.userData.reel;

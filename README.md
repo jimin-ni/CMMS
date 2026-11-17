@@ -1,15 +1,18 @@
-# CMMS
-Creator Message Managing System
+# memories
+A Creator's Room Filled Together with Fans
 
-## 작업 현황
+## 기능 명세서 간략
 
-| 작업자 | 내용 |
-|---|---|
-| 지민, 규규 | 기획 문서 작성과 변경 (`docs/planning/`) |
-| 지민 | 공통 기능: 인증 (Better Auth), 역할 3종 |
-| 지민 | 주요 기능 1: 크리에이터와 구독자 채팅, AI 반응 미리보기, 크리에이터 간 채팅 |
-| 규규 | 주요 기능 2: 미니게임과 경쟁 순위 보드 |
-| 규규 | 주요 기능 3: 시참 도구 |
+| Feature ID | Feature Name | Feature Description |
+|---|---|---|
+| F-01 | Login | Feature Description |
+| F-02 | Chat | Creator-fan messaging & public replies |
+| F-03 | Guestbook | Fan daily room visit log |
+| F-04 | Room Decor | Customize room furniture, colors, & themes |
+| F-05 | Polaroid | Reels, shorts, & video clips with fan elements |
+| F-06 | Xmas Tree | Leave messages on the creator's tree |
+| F-07 | Payment | Process room creation & subscription payments |
+
 
 ## 브렌치
 - 브랜치 접두사는 `작업자이름-/`를 사용합니다.

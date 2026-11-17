@@ -140,6 +140,7 @@ export function HeapRoom({
   signedIn,
   canEdit = false,
   owner = null,
+  signInHere = false,
 }: {
   roomId: string;
   data: HeapRoomData;
@@ -148,6 +149,8 @@ export function HeapRoom({
   canEdit?: boolean;
   // 방 주인에게만: 체크리스트가 읽는 닉네임, 채널 탭이 읽는 채널과 영상
   owner?: HeapOwnerData | null;
+  // 온보딩: 로그인 전에 휴대폰의 대화를 누르면 로그인 화면으로 가지 않고 방에 heap:signin 을 보낸다 (둘러보기가 로그인 팝업을 띄운다)
+  signInHere?: boolean;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -290,6 +293,7 @@ export function HeapRoom({
         pollMs: HEAP_POLICY.pollIntervalMs,
         bubbleHref: data.bubbleHref,
         navigate: (href: string) => router.push(href),
+        askSignIn: signInHere ? () => root.dispatchEvent(new CustomEvent("heap:signin")) : undefined,
         // 기념품 링크가 유튜브 게시물인지 알아보는 데 쓴다 (엔진이 썸네일 주소를 만든다)
         parseLink: parsePieceUrl,
         // 음악 링크(유튜브 영상·재생목록)에서 임베드 ID를 뽑는다. 서버가 저장 전에 하는 검사와 같은 함수다.
@@ -349,7 +353,7 @@ export function HeapRoom({
       root.removeEventListener("heap:remount", onRemount);
       dispose?.();
     };
-  }, [roomId, viewerName, signedIn, canEdit, router, resume]);
+  }, [roomId, viewerName, signedIn, canEdit, router, resume, signInHere]);
 
   // 체크리스트: 방 주인에게, 방이 뜬 뒤, 걸어 다니는 방이나 꾸미기(팔로워로 보기 빼고)에서
   const showChecklist = !!owner && ready && (editing ? !preview : mode === "room");
