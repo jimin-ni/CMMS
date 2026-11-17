@@ -55,6 +55,17 @@
 .oc-room-host:not(.live) .heap-room .hud,
 .oc-room-host:not(.live) .heap-room #toast { visibility: hidden; }
 .oc-room-host[data-mode="room"] .heap-room .hud .bottom { display: none; }
+/* 왼쪽 위 방 이름 자리에는 .oc-corner 의 "memories"를 쓴다. 이름 칸은 자리만 남겨 아래 줄이 그대로 있게 한다. */
+.oc-room-host .heap-room .who .name { visibility: hidden; }
+.oc-corner {
+  position: absolute;
+  top: 16px;
+  left: max(16px, env(safe-area-inset-left, 0px));
+  font-size: 34px;
+  line-height: 42px;
+  color: #f7ecd8;
+  pointer-events: none;
+}
 /* 방 둘레를 어둡게: 방은 가운데에서 밝고 가장자리는 밤처럼 */
 .oc-vignette {
   inset: 0;
@@ -106,6 +117,19 @@
   text-transform: uppercase;
   color: rgba(243, 234, 219, 0.72);
 }
+.oc-skip-hint {
+  margin-top: 10px;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: rgba(243, 234, 219, 0.5);
+}
+.oc-skip-hint kbd {
+  padding: 1px 6px;
+  border: 1px solid rgba(243, 234, 219, 0.45);
+  border-radius: 3px;
+  font: inherit;
+  letter-spacing: 0.08em;
+}
 .oc-scroll-hint .oc-bob {
   animation: oc-bob 1.6s ease-in-out infinite;
 }
@@ -118,26 +142,20 @@
 .oc-caption {
   --oc-shift: 0px;
   top: 50%;
-  width: min(30vw, 340px);
+  width: min(36vw, 408px);
   transform: translateY(calc(-50% + var(--oc-shift)));
 }
 .oc-caption.left { left: max(4vw, 24px); text-align: left; }
 .oc-caption.right { right: max(4vw, 24px); text-align: left; }
-.oc-caption .oc-index {
-  display: block;
-  font-size: 13px;
-  color: var(--oc-clay);
-  margin-bottom: 8px;
-}
 .oc-caption h2 {
-  margin: 0 0 10px;
-  font-size: clamp(26px, 2.6vw, 38px);
+  margin: 0 0 12px;
+  font-size: clamp(31px, 3.12vw, 46px);
   line-height: 1.15;
   color: #f7ecd8;
 }
 .oc-caption p {
   margin: 0;
-  font-size: 16px;
+  font-size: 19px;
   line-height: 1.55;
   color: rgba(243, 234, 219, 0.78);
 }
@@ -214,10 +232,15 @@
   bottom: 24px;
   width: min(520px, calc(100vw - 32px));
   transform: translate(-50%, calc(100% + 60px));
-  transition: transform 0.8s cubic-bezier(0.2, 0.9, 0.25, 1.15);
+  transition: transform 0.8s cubic-bezier(0.2, 0.9, 0.25, 1.15), bottom 0.8s cubic-bezier(0.2, 0.9, 0.25, 1.05);
 }
 .oc-guide.open {
   transform: translate(-50%, 0) rotate(-0.6deg);
+}
+/* 방에 들어온 직후: 화면 가운데. 누르거나 3초가 지나면 .center 가 빠지며 아래로 내려간다. */
+.oc-guide.open.center {
+  bottom: 50%;
+  transform: translate(-50%, 50%) rotate(-0.6deg) scale(1.04);
 }
 .oc-guide .oc-paper-body {
   padding: 22px 26px 18px;
@@ -283,12 +306,6 @@
   align-items: center;
   gap: 6px;
   padding: 10px 14px;
-}
-.oc-nav .oc-brand {
-  font-size: 18px;
-  padding: 0 12px 0 6px;
-  margin-right: 4px;
-  border-right: 1px dashed rgba(47, 44, 36, 0.3);
 }
 .oc-nav-btn {
   display: flex;
@@ -434,8 +451,10 @@
     text-align: center;
     transform: translateY(var(--oc-shift));
   }
-  .oc-nav .oc-brand { display: none; }
   .oc-nav-btn .oc-label { display: none; }
+  /* 왼쪽 위 "memories"와 방 정보 줄 아래로 내린다 */
+  .oc-nav { top: 84px; }
+  .oc-corner { font-size: 28px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

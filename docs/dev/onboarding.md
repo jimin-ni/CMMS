@@ -9,11 +9,14 @@
 
 | 주소 | 흐름 |
 |---|---|
-| `/onboarding/c` | 어두운 화면 "Memories" → 창문 빛과 빈 2번 방 → 스크롤마다 글과 가구가 번갈아 떨어져 쌓임 → Ready to Start? → 방이 화면 가득 확대 → 방 안 둘러보기 |
+| `/` | 첫 화면. `/onboarding/c`와 같다 |
+| `/onboarding/c` | 대기 화면(큰 소문자 "memories" 위에서 덮인 책이 펼쳐지는 로우폴리 아이콘, 방이 뜨면 자동으로 넘어감) → 어두운 화면 "Memories" → 창문 빛과 빈 2번 방 → 스크롤마다 글과 가구가 번갈아 떨어져 쌓임 → Ready to Start? → 방이 화면 가득 확대 → 방 안 둘러보기 |
 | `/onboarding/b` | 책상 위 바인더 노트(링이 아래) → 스크롤하면 아랫장이 링을 지나 위로 넘어와 덮임(3D) → 하드보드 표지가 덮여 앨범 한 권이 되고 책 등이 보이게 세워짐 → 책상이 걷히고 2번 방이 보임 → 카메라가 책장으로 줌인, 앨범이 꽂힌 뒤 줌아웃 → Ready to Start? → 방 안 둘러보기 |
 | `/plan` | 나만의 방 결제 안내. 가격이 정해지지 않아 결제 버튼은 비활성 |
 
-방 안 둘러보기(B, C 공통): 아래 종이 안내 팝업, 둘러보기 진행 점(2번 방은 6곳), 3곳을 둘러보면 위에 내비게이션 바(로그인, 내 방 만들기, 쪽지 남기기). 로그인 전에는 세 아이콘 모두 로그인 팝업을 띄웁니다. 로그인하면 바에 닉네임이 보이고, 내 방 만들기는 `/plan`, 쪽지 남기기는 `/tree-mock/index.html`로 갑니다.
+방 안 둘러보기(B, C 공통): 종이 안내 팝업("Welcome in.")이 화면 가운데에 떴다가 클릭하거나 3초가 지나면 아래로 내려감, 둘러보기 진행 점(2번 방은 6곳), 3곳을 둘러보면 위에 내비게이션 바(홈, 폴라로이드, 챗, 레터, 로그인, 설정). 왼쪽 위에는 방 이름 대신 머니그라피 Pixel 글꼴의 "memories". 로그인 버튼은 로그인 팝업을 띄우고, 로그인하면 닉네임이 보입니다. 나머지 다섯 버튼은 아직 기능이 없습니다.
+
+Esc(컨셉 C): 온보딩 중 언제든 누르면 온보딩을 끝냅니다. 방 안으로 바로 들어가고, 둘러보기를 모두 채운 것으로 보고 내비게이션 바를 엽니다. 첫 화면의 스크롤 안내 아래에 "Press Esc to skip"이 있습니다.
 
 ## 구조
 
@@ -21,7 +24,9 @@
 |---|---|---|
 | 페이지 | `src/app/onboarding/[concept]/page.tsx` | B, C는 실제 2번 방(`dname`)을 읽어 화면 전체를 덮음 |
 | 방 데이터 | `src/lib/heap/room-view.ts` | `loadRoomView`. `/room/[roomId]`에서 옮긴 변환 함수. 동작은 같음 |
-| 컨셉 C | `src/components/onboarding-c/concept-c.tsx`, `story.ts` | 스크롤 시간표, 단계별 글, 둘러볼 곳 |
+| 컨셉 C | `src/components/onboarding-c/concept-c.tsx`, `story.ts` | 스크롤 시간표, 단계별 글, 둘러볼 곳, Esc 건너뛰기 |
+| 방 읽기 | `src/components/onboarding-c/onboarding-room.tsx` | `/`와 `/onboarding/[concept]`가 함께 쓰는 서버 컴포넌트 |
+| 대기 화면 | `src/components/onboarding-c/loading-screen.tsx`, `.css` | Suspense 대기 화면, 그리고 엔진의 `heap:ready` 전까지 덮는 화면 |
 | 컨셉 B | `src/components/onboarding-b/concept-b.tsx`, `pages.tsx`, `doodles.tsx` | 3D 책(CSS 3D), 장 콜라주, 손그림 선 |
 | 공통 | `src/components/onboarding-c/room-tour.tsx`, `paper.tsx`, `icons.tsx`, `login-popup.tsx` | 둘러보기, 종이 질감 판과 테이프, Pixelarticons, 로그인 팝업 |
 | 엔진 훅 | `src/components/heap/engine/intro.js` | `heap:intro`, `heap:introquery` |

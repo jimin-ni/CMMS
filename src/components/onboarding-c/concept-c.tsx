@@ -3,6 +3,8 @@
 // 온보딩 컨셉 C. 방은 실제 2번 방이다: /room/dname 과 같은 HeapRoom(힙 엔진)을 띄우고, 그 위에 온보딩을 얹는다.
 // 어두운 화면 → 창문 빛과 빈 방 → 스크롤마다 글과 가구가 번갈아 쌓임 → "Ready to Start?" → 방이 화면 가득 확대
 // → 방 안 둘러보기(room-tour.tsx: 안내 팝업, 진행 점, 내비게이션 바, 로그인 팝업).
+// 방(힙 엔진)이 뜰 때(heap:ready)까지 대기 화면(loading-screen.tsx)을 덮는다.
+// 언제든 Esc 를 누르면 온보딩을 끝낸다: 방 안으로 바로 들어가고, 둘러보기를 모두 채워 내비게이션 바를 연다.
 // 엔진에는 heap:intro 이벤트(engine/intro.js)로 가구와 사진 더미, 카메라 거리만 알려 준다.
 import "./onboarding-c.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -11,6 +13,7 @@ import { ONBOARDING_ROOM_ID, SCROLL_SCREENS, STEPS, TIMELINE, ramp, stepOfItems,
 import { PaperFilters } from "./paper";
 import { PixelIcon } from "./icons";
 import { RoomTour } from "./room-tour";
+import { LoadingScreen } from "./loading-screen";
 
 type Phase = "scroll" | "zoom" | "room";
 
@@ -44,6 +47,10 @@ export function ConceptC({
   const zoomStartRef = useRef(-1);
 
   const [phase, setPhase] = useState<Phase>("scroll");
+  // 방이 화면에 떴는지 (엔진의 heap:ready). 그 전에는 대기 화면을 덮고 스크롤을 막는다.
+  const [ready, setReady] = useState(false);
+  // Esc 로 온보딩을 건너뛰었는지. 둘러보기를 모두 채운다.
+  const [skipped, setSkipped] = useState(false);
   const itemSteps = useMemo(() => stepOfItems(data.layout.items), [data.layout.items]);
 
   // 매 프레임: 스크롤을 부드럽게 따라가고, 엔진에 연출 값을 보내고, 글의 투명도를 바꾼다 (React 는 다시 그리지 않는다)
@@ -98,13 +105,14 @@ export function ConceptC({
       const scrollShade = Math.max(1 - reveal, 0.72 * dark);
       if (shadeRef.current) shadeRef.current.style.opacity = String(phaseRef.current === "scroll" ? scrollShade : 0.72 * (1 - z));
       if (vignetteRef.current) vignetteRef.current.style.opacity = String(1 - z);
-      if (introRef.current) introRef.current.style.opacity = String(1 - ramp(p, ...TIMELINE.introOut));
+      const scrolling = phaseRef.current === "scroll";
+      if (introRef.current) introRef.current.style.opacity = scrolling ? String(1 - ramp(p, ...TIMELINE.introOut)) : "0";
       STEPS.forEach((_, i) => {
         const el = captionRefs.current[i];
         if (!el) return;
         const w = stepWindow(i);
         const enter = ramp(p, ...w.textIn), leave = ramp(p, ...w.textOut);
-        el.style.opacity = String(enter * (1 - leave));
+        el.style.opacity = scrolling ? String(enter * (1 - leave)) : "0";
         el.style.setProperty("--oc-shift", `${(1 - enter) * 28 - leave * 28}px`);
       });
       if (readyRef.current) {
@@ -119,23 +127,52 @@ export function ConceptC({
   }, [itemSteps]);
 
   // "Ready to Start?"가 보일 때 클릭이나 키를 누르면 방 안으로 들어간다
+  // 들어갔으면 true
   const enterRoom = useCallback(() => {
-    if (phaseRef.current !== "scroll" || progressRef.current < TIMELINE.ready[0]) return;
+    if (phaseRef.current !== "scroll" || progressRef.current < TIMELINE.ready[0]) return false;
     phaseRef.current = "zoom";
     zoomStartRef.current = performance.now();
     setPhase("zoom");
+    return true;
   }, []);
 
   useEffect(() => {
     if (phase !== "scroll") return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Enter" || event.key === " ") enterRoom();
+      // 들어가는 데 쓴 키는 엔진에 넘기지 않는다: 엔진도 Enter 로 가까운 문이나 탁자를 연다 (input.js)
+      if ((event.key === "Enter" || event.key === " ") && enterRoom()) event.stopImmediatePropagation();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [phase, enterRoom]);
 
-  const rootClass = phase === "scroll" ? "oc-root" : "oc-root oc-locked";
+  // Esc: 온보딩 끝. 확대 연출 없이 방 안으로 들어간다 (확대가 끝난 시각으로 맞춘다).
+  // 방 안에서는 엔진도 Esc 로 앉기, 상영, 창을 닫는다. 그것은 그대로 두고 둘러보기만 채운다.
+  useEffect(() => {
+    if (skipped) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.isComposing) return;
+      if (phaseRef.current !== "room") {
+        phaseRef.current = "room";
+        zoomStartRef.current = -Infinity;
+        setPhase("room");
+      }
+      setSkipped(true);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [skipped]);
+
+  // 방이 뜨면 대기 화면을 걷는다. HeapRoom 이 자식이라 이 effect 가 돌 때는 .heap-room 이 있다.
+  useEffect(() => {
+    const roomEl = hostRef.current?.querySelector(".heap-room");
+    if (!roomEl) return;
+    const onReady = () => setReady(true);
+    roomEl.addEventListener("heap:ready", onReady, { once: true });
+    return () => roomEl.removeEventListener("heap:ready", onReady);
+  }, []);
+
+  const rootClass = phase === "scroll" && ready ? "oc-root" : "oc-root oc-locked";
 
   return (
     <div ref={rootRef} className={rootClass}>
@@ -157,6 +194,9 @@ export function ConceptC({
               <PixelIcon name="mouse" size={28} />
               <span>Scroll to begin</span>
               <PixelIcon name="chevronDown" size={18} className="oc-bob" />
+              <span className="oc-skip-hint">
+                Press <kbd>Esc</kbd> to skip
+              </span>
             </div>
           </div>
 
@@ -170,7 +210,6 @@ export function ConceptC({
               className={`oc-layer oc-caption ${i % 2 ? "right" : "left"}`}
               style={{ opacity: 0 }}
             >
-              <span className="oc-index oc-pixel">0{i + 1}</span>
               <h2 className="oc-rounded">{step.title}</h2>
               <p>{step.line}</p>
             </div>
@@ -188,12 +227,14 @@ export function ConceptC({
           <RoomTour
             hostRef={hostRef}
             live={phase === "room"}
+            skipped={skipped}
             layoutItems={data.layout.items}
             viewerName={viewerName}
             signedIn={signedIn}
           />
         </div>
       </div>
+      <LoadingScreen leaving={ready} />
     </div>
   );
 }
