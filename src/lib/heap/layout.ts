@@ -69,17 +69,23 @@ function unknownKey(obj: Obj, allowed: readonly string[]): string | null {
 function checkItem(raw: unknown, index: number): Fail | { item: Obj } {
   const at = `items[${index}]`;
   if (!isObj(raw)) return { error: `${at}: 객체가 아니에요.` };
-  const bad = unknownKey(raw, ["type", "x", "z", "rot", "size", "model", "tint", "y", "fn", "lit", "colors"]);
+  const bad = unknownKey(raw, ["type", "x", "z", "rot", "size", "model", "tint", "y", "fn", "lit", "colors", "plant", "style"]);
   if (bad) return { error: `${at}: 알 수 없는 필드 ${bad}` };
 
-  const { type, x, z, rot, size, model, tint, y, fn, lit, colors } = raw;
+  const { type, x, z, rot, size, model, tint, y, fn, lit, colors, plant, style } = raw;
+  // plant: 앨범 책장(shelf) 위 화분을 둘지. false 만 저장한다 (없으면 둔다)
+  if (plant !== undefined && (type !== "shelf" || typeof plant !== "boolean")) return { error: `${at}: plant는 shelf에만 true/false로 쓸 수 있어요.` };
   if (typeof type !== "string" || !(type === "model" || HAND_TYPES.has(type))) {
     return { error: `${at}: 알 수 없는 가구 종류` };
   }
   const max = HEAP_POLICY.layoutCoordMax;
   if (!num(x, -max, max) || !num(z, -max, max)) return { error: `${at}: 좌표가 범위를 벗어났어요.` };
 
+  // style: 앨범 책장의 모양. "low" 는 낮은 두 칸 책장이다 (engine/furniture.js)
+  if (style !== undefined && (type !== "shelf" || style !== "low")) return { error: `${at}: style은 shelf에만 "low"로 쓸 수 있어요.` };
   const item: Obj = { type, x, z };
+  if (plant === false) item.plant = false;
+  if (style === "low") item.style = style;
   if (type === "model") {
     if (typeof model !== "string" || !MODEL_IDS.has(model)) return { error: `${at}: 카탈로그에 없는 모델` };
     item.model = model;
@@ -275,10 +281,15 @@ export function validateLayout(input: unknown): LayoutCheck {
   for (const [key, value] of Object.entries(input)) {
     switch (key) {
       case "room": {
-        if (!isObj(value) || unknownKey(value, ["w", "d"])) return fail("room: 형식이 올바르지 않아요.");
+        if (!isObj(value) || unknownKey(value, ["w", "d", "h"])) return fail("room: 형식이 올바르지 않아요.");
         const { layoutRoomMin: lo, layoutRoomMax: hi } = HEAP_POLICY;
         if (!num(value.w, lo, hi) || !num(value.d, lo, hi)) return fail("room: 크기가 범위를 벗어났어요.");
-        out.room = { w: value.w, d: value.d };
+        const room: Obj = { w: value.w, d: value.d };
+        if (value.h !== undefined) {
+          if (!num(value.h, HEAP_POLICY.layoutWallHMin, HEAP_POLICY.layoutWallHMax)) return fail("room: 벽 높이가 범위를 벗어났어요.");
+          room.h = value.h;
+        }
+        out.room = room;
         break;
       }
       case "palette": {
@@ -297,6 +308,14 @@ export function validateLayout(input: unknown): LayoutCheck {
           palette[name] = color;
         }
         out.palette = palette;
+        break;
+      }
+      case "ground": {
+        // 방 밑 땅의 색 (engine/scene.js). 방이 허공에 뜨지 않고 놓여 보이게 한다. 없으면 땅이 없다
+        if (!isObj(value) || unknownKey(value, ["colour"]) || typeof value.colour !== "string" || !HEX.test(value.colour)) {
+          return fail("ground: { colour: #RRGGBB } 형식이어야 해요.");
+        }
+        out.ground = { colour: value.colour };
         break;
       }
       case "backdrop": {
@@ -338,30 +357,55 @@ export function validateLayout(input: unknown): LayoutCheck {
       case "door":
       case "screen":
       case "guestbook": {
-        const r = checkWallPart(key, value, {});
+        // screen 은 높이(y)를 고를 수 있다. guestbook 은 받침을 뺄 수 있고(stand: false), 그때 공책을 얹을 높이(y)를 준다
+        const hang: Record<string, [number, number]> = { y: [HEAP_POLICY.layoutHangYMin, HEAP_POLICY.layoutHangYMax] };
+        const onTable: Record<string, [number, number]> = { y: [0, HEAP_POLICY.layoutItemYMax] };
+        let extra: Record<string, [number, number]> = {};
+        let stand: unknown;
+        let raw: unknown = value;
+        if (key === "screen" && isObj(value) && value.y !== undefined) extra = hang;
+        if (key === "guestbook" && isObj(value)) {
+          const { stand: s, ...rest } = value;
+          stand = s;
+          raw = rest;
+          if (stand !== undefined && typeof stand !== "boolean") return fail("guestbook: stand는 true/false예요.");
+          if (rest.y !== undefined) extra = onTable;
+        }
+        const r = checkWallPart(key, raw, extra);
         if ("error" in r) return fail(r.error);
-        out[key] = r.part;
+        out[key] = stand === false ? { ...r.part, stand: false } : r.part;
         break;
       }
       case "posters": {
-        if (!isObj(value) || unknownKey(value, ["wall", "at"])) return fail("posters: 형식이 올바르지 않아요.");
+        if (!isObj(value) || unknownKey(value, ["wall", "at", "y"])) return fail("posters: 형식이 올바르지 않아요.");
+        if (value.y !== undefined && !num(value.y, HEAP_POLICY.layoutHangYMin, HEAP_POLICY.layoutHangYMax)) return fail("posters: y가 범위를 벗어났어요.");
         if (typeof value.wall !== "string" || !WALLS.has(value.wall)) return fail("posters: wall이 올바르지 않아요.");
         const at = value.at;
         const max = HEAP_POLICY.layoutCoordMax;
         if (!Array.isArray(at) || at.length > HEAP_POLICY.layoutPostersMax || !at.every((u) => num(u, -max, max))) {
           return fail("posters: at이 올바르지 않아요.");
         }
-        out.posters = { wall: value.wall, at: [...at] };
+        out.posters = value.y === undefined ? { wall: value.wall, at: [...at] } : { wall: value.wall, at: [...at], y: value.y };
         break;
       }
       case "table": {
-        if (!isObj(value) || unknownKey(value, ["x", "z", "projector"])) return fail("table: 형식이 올바르지 않아요.");
+        if (!isObj(value) || unknownKey(value, ["x", "z", "projector", "rug", "phone"])) return fail("table: 형식이 올바르지 않아요.");
         const max = HEAP_POLICY.layoutCoordMax;
         if (!num(value.x, -max, max) || !num(value.z, -max, max)) return fail("table: 좌표가 범위를 벗어났어요.");
         const table: Obj = { x: value.x, z: value.z };
         if (value.projector !== undefined) {
           if (value.projector !== "left" && value.projector !== "right") return fail("table: projector가 올바르지 않아요.");
           table.projector = value.projector;
+        }
+        if (value.rug !== undefined) {
+          const rug = value.rug, { layoutRugMin: lo, layoutRugMax: hi } = HEAP_POLICY;
+          if (!isObj(rug) || unknownKey(rug, ["w", "d"]) || !num(rug.w, lo, hi) || !num(rug.d, lo, hi)) return fail("table: rug가 올바르지 않아요.");
+          table.rug = { w: rug.w, d: rug.d };
+        }
+        // phone: "seat" 면 탁자 위 휴대폰이 방석에 앉은 사람 쪽을 본다 (engine/props.js)
+        if (value.phone !== undefined) {
+          if (value.phone !== "seat") return fail("table: phone이 올바르지 않아요.");
+          table.phone = value.phone;
         }
         out.table = table;
         break;

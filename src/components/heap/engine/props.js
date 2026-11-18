@@ -18,7 +18,8 @@ export function setupProps(ctx) {
     rugTex.needsUpdate = true;
   }
   paintRug();
-  const rug = new THREE.Mesh(new THREE.PlaneGeometry(3.8, 2.9), new THREE.MeshStandardMaterial({ map: rugTex, roughness: 1 }));
+  // 러그 크기: layout.table.rug = { w, d } (방마다). 없으면 원래의 3.8 x 2.9 다
+  const rug = new THREE.Mesh(new THREE.PlaneGeometry(layout.table.rug?.w ?? 3.8, layout.table.rug?.d ?? 2.9), new THREE.MeshStandardMaterial({ map: rugTex, roughness: 1 }));
   rug.material.userData.repaint = paintRug;
   rug.rotation.x = -Math.PI / 2; rug.position.set(TABLE.x, 0.006, TABLE.z + 0.15); rug.receiveShadow = true; scene.add(rug);
   const tableTop = box(TABLE.w, 0.08, TABLE.d, tone(C, 'woodB'), TABLE.x, TABLE.top - 0.04, TABLE.z);
@@ -31,11 +32,15 @@ export function setupProps(ctx) {
   const coffee = new THREE.Mesh(new THREE.CircleGeometry(0.052, 8), flat('#4a2f1e')); coffee.rotation.x = -Math.PI / 2; coffee.position.set(MUG.x, TABLE.top + 0.115, MUG.z); scene.add(coffee);
   const PHONE = { x: TABLE.x + 0.68, z: TABLE.z + 0.62 };
   const phoneBody = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.018, 0.32), tone(C, 'ink', { roughness: 0.5 }));
-  phoneBody.position.set(PHONE.x, TABLE.top + 0.009, PHONE.z); phoneBody.rotation.y = 0.35; phoneBody.castShadow = true;
+  // 휴대폰의 방향: 아래 끝(지역 +z)이 향하는 쪽. layout.table.phone === 'seat' 이면 방석에 앉은 사람 쪽, 아니면 원래의 0.35
+  const phoneA = layout.table.phone === 'seat' ? Math.atan2(SEAT.x - PHONE.x, SEAT.z - PHONE.z) : 0.35;
+  phoneBody.position.set(PHONE.x, TABLE.top + 0.009, PHONE.z); phoneBody.rotation.y = phoneA; phoneBody.castShadow = true;
   const phoneGlow = new THREE.Mesh(new THREE.PlaneGeometry(0.145, 0.29), new THREE.MeshStandardMaterial({ color: '#efe6d6', emissive: '#f3d9b0', emissiveIntensity: 0.6 }));
-  phoneGlow.rotation.set(-Math.PI / 2, 0, 0.35); phoneGlow.position.set(PHONE.x, TABLE.top + 0.0185, PHONE.z);
+  phoneGlow.rotation.set(-Math.PI / 2, 0, phoneA); phoneGlow.position.set(PHONE.x, TABLE.top + 0.0185, PHONE.z);
   const phoneDot = new THREE.Mesh(new THREE.CircleGeometry(0.018, 10), mark(new THREE.MeshBasicMaterial({ color: C.accent }), 'accent'));
-  phoneDot.rotation.set(-Math.PI / 2, 0, 0.35); phoneDot.position.set(PHONE.x + 0.03, TABLE.top + 0.019, PHONE.z - 0.08);
+  // 점은 화면 위쪽(지역 (0.03, -0.08))에 붙어 휴대폰과 함께 돈다. 원래 방향(0.35)은 예전 자리 그대로 둔다
+  const dot = layout.table.phone === 'seat' ? new THREE.Vector3(0.03, 0, -0.08).applyAxisAngle(new THREE.Vector3(0, 1, 0), phoneA) : new THREE.Vector3(0.03, 0, -0.08);
+  phoneDot.rotation.set(-Math.PI / 2, 0, phoneA); phoneDot.position.set(PHONE.x + dot.x, TABLE.top + 0.019, PHONE.z + dot.z);
   scene.add(phoneBody, phoneGlow, phoneDot);
   const phoneParts = [phoneBody, phoneGlow, phoneDot];
 
@@ -44,20 +49,22 @@ export function setupProps(ctx) {
   ctx.bookSpot = null;
   const GB = layout.guestbook ?? (DOOR ? { wall: DOOR.wall, at: DOOR.at - 0.95 } : null);
   if (GB) {
+    // stand: false 면 나무 받침 없이 방명록(펼친 공책과 펜)만 둔다. y 는 공책을 얹을 높이 (그 밑의 탁자는 layout.items 의 가구다)
+    const stand = GB.stand !== false, by = stand ? 0.78 : GB.y ?? 0;
     const g = new THREE.Group();
-    bookParts.push(box(0.5, 0.78, 0.36, tone(C, 'woodB'), 0, 0.39, 0, { parent: g }));
-    const pageL = box(0.22, 0.02, 0.3, tone(C, 'paper'), -0.11, 0.8, 0.02, { parent: g }), pageR = box(0.22, 0.02, 0.3, tone(C, 'paper'), 0.11, 0.8, 0.02, { parent: g });
+    if (stand) bookParts.push(box(0.5, 0.78, 0.36, tone(C, 'woodB'), 0, 0.39, 0, { parent: g }));
+    const pageL = box(0.22, 0.02, 0.3, tone(C, 'paper'), -0.11, by + 0.02, 0.02, { parent: g }), pageR = box(0.22, 0.02, 0.3, tone(C, 'paper'), 0.11, by + 0.02, 0.02, { parent: g });
     pageL.rotation.z = 0.12; pageR.rotation.z = -0.12;
-    const pen = box(0.015, 0.015, 0.16, tone(C, 'accent'), 0.14, 0.83, 0.02, { parent: g }); pen.rotation.y = 0.5;
+    const pen = box(0.015, 0.015, 0.16, tone(C, 'accent'), 0.14, by + 0.05, 0.02, { parent: g }); pen.rotation.y = 0.5;
     bookParts.push(pageL, pageR, pen);
     onWall(GB.wall, GB.at, 0, 0.32, g);
     const p = WALLS[GB.wall].point(GB.at, 0, 0.32);
-    OBST.push({ x: p.x, z: p.z, hw: 0.32, hd: 0.32, rhw: 0.25, rhd: 0.25 });
+    if (stand) OBST.push({ x: p.x, z: p.z, hw: 0.32, hd: 0.32, rhw: 0.25, rhd: 0.25 }); // 받침이 없으면 밑의 탁자가 길을 막는다
     ctx.bookSpot = WALLS[GB.wall].point(GB.at, 0, 0.95);
   }
 
   // 영사기와 스크린
-  const SCR = { wall: layout.screen.wall, at: layout.screen.at, y: 2.4, w: 1.6, h: 0.9 };
+  const SCR = { wall: layout.screen.wall, at: layout.screen.at, y: layout.screen.y ?? 2.4, w: 1.6, h: 0.9 }; // y: 벽이 낮은 방은 내려 건다
   const projC = makeCanvas(640, 360);
   const projTex = canvasTexture(projC);
   const screenIdle = tone(C, 'paper'), screenOn = new THREE.MeshBasicMaterial({ map: projTex });

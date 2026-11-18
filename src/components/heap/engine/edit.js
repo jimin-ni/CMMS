@@ -636,7 +636,8 @@ export function setupEdit(ctx) {
     const m = ed.move, groups = ctx.build.groups, c = m.cand;
     const g = groups[m.i], built = m.builtY ?? (m.base.y || 0);
     // 그룹은 지어진 높이(built)를 이미 안에 지닌다: 끄는 동안 받침에 오르내린 만큼만 그룹을 올리고 내린다
-    if (g) { g.visible = !!c; if (c) { g.position.set(c.x, (c.y || 0) - built, c.z); g.rotation.y = THREE.MathUtils.degToRad(c.rot || 0); } }
+    // 손 가구는 지어진 높이를 그룹 자체(baseY)에 지닌다 (furniture.js). 모델은 baseY 가 0 이다
+    if (g) { g.visible = !!c; if (c) { g.position.set(c.x, (c.y || 0) - built + (g.userData.baseY || 0), c.z); g.rotation.y = THREE.MathUtils.degToRad(c.rot || 0); } }
     if (c) m.kids.forEach((j, n) => {
       const k = kidAt(m.kidsBase[n], m.base, c), kg = groups[j];
       if (kg) { kg.position.set(k.x, (k.y || 0) - (m.kidsBase[n].y || 0), k.z); kg.rotation.y = THREE.MathUtils.degToRad(k.rot || 0); }

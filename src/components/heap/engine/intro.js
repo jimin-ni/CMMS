@@ -77,7 +77,7 @@ export function setupIntro(ctx) {
       if (!g) return;
       const p = unit(d?.items?.[i]), e = easeOutCubic(p);
       g.visible = p > 0.001;
-      g.position.y = (1 - easeOutBounce(p)) * 3.2;
+      g.position.y = (g.userData.baseY || 0) + (1 - easeOutBounce(p)) * 3.2; // baseY: 다른 가구 위에 올린 손 가구의 높이 (furniture.js)
       g.rotation.y = THREE.MathUtils.degToRad(build.items[i]?.rot || 0) + (1 - e) * (i % 2 ? 0.7 : -0.7);
       g.scale.setScalar(0.8 + 0.2 * e);
     });
