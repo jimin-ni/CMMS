@@ -159,6 +159,8 @@ export function HeapRoom({
   // 엔진이 알려 주는 값: 방이 화면에 떴는지(heap:ready), 지금 모드(heap:mode).
   const [ready, setReady] = useState(false);
   const [mode, setMode] = useState("room");
+  // 오른쪽 위 음악 플레이어가 열려 있는지(heap:music). 열려 있으면 배경음악을 줄여 멈춘다.
+  const [musicOn, setMusicOn] = useState(false);
   const [editing, setEditing] = useState(false);
   // 팔로워로 보기 (판정 J7): 꾸미기 화면을 모두 숨기고 방을 팔로워의 구도로 보여 준다. 꾸미기 안에서만 켠다.
   const [preview, setPreview] = useState(false);
@@ -270,9 +272,11 @@ export function HeapRoom({
       }
     };
     const onMode = (e: Event) => setMode((e as CustomEvent<string>).detail);
+    const onMusic = (e: Event) => setMusicOn((e as CustomEvent<boolean>).detail);
     const onRemount = (e: Event) => setResume((e as CustomEvent<EditResume>).detail);
     root.addEventListener("heap:ready", onReady);
     root.addEventListener("heap:mode", onMode);
+    root.addEventListener("heap:music", onMusic);
     root.addEventListener("heap:remount", onRemount);
     // 다시 마운트할 때는 편집 중인 가구, 시간, 팔레트를 저장된 레이아웃 위에 얹어 띄운다. palette가 null이면 기본 색이다.
     const r = resume;
@@ -363,6 +367,8 @@ export function HeapRoom({
       cancelled = true;
       root.removeEventListener("heap:ready", onReady);
       root.removeEventListener("heap:mode", onMode);
+      root.removeEventListener("heap:music", onMusic);
+      setMusicOn(false); // 엔진을 내리면 플레이어도 사라진다
       root.removeEventListener("heap:remount", onRemount);
       dispose?.();
     };
@@ -380,8 +386,8 @@ export function HeapRoom({
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       <link rel="stylesheet" href={FONTS_HREF} precedence="default" />
 
-      {/* 배경음악: 쪽지 트리 모드에서는 캐롤, 영사기로 영상을 보는 동안에는 멈춘다 (room-bgm.tsx) */}
-      <RoomBgm tree={mode === "tree"} paused={mode === "watch"} />
+      {/* 배경음악: 쪽지 트리 모드에서는 캐롤. 영사기로 영상을 보거나 음악 플레이어가 열려 있으면 천천히 줄여 멈춘다 (room-bgm.tsx) */}
+      <RoomBgm tree={mode === "tree"} paused={mode === "watch" || musicOn} />
 
       {/* 엔진이 mount마다 여기에 <canvas id="scene">을 새로 만들고, dispose 때 지운다. */}
       <div id="scene-host" />

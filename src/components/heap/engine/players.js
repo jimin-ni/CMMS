@@ -84,8 +84,8 @@ export function setupPlayers(ctx) {
   function openMusic(fn) {
     const p = opts.parseMusic(fn.url); // 여기서 다시 검사한다: DB 의 레이아웃은 믿지 않는다
     if (!p || !player.hidden || (ctx.musicUrl === fn.url && !dock.hidden)) return;
-    closeMusic(); ctx.musicUrl = fn.url; ctx.musicParsed = p;
-    dock.hidden = false;
+    resetMusic(); ctx.musicUrl = fn.url; ctx.musicParsed = p;
+    dock.hidden = false; announceMusic();
     if (!ctx.embedBlocked && musicFit() >= 200) dockFrame.appendChild(makeFrame(embedSrc(p), '음악 플레이어')); // only a click gets here, and only a video 200 px wide or more is embedded
     layoutMusic();
   }
@@ -105,7 +105,15 @@ export function setupPlayers(ctx) {
       dockNote.style.maxWidth = w + 'px'; root.style.setProperty('--music-w', w + 'px');
     }
   }
-  function closeMusic() { dockFrame.replaceChildren(); dock.hidden = true; ctx.musicUrl = null; ctx.musicParsed = null; root.style.removeProperty('--music-w'); }
+  function resetMusic() { dockFrame.replaceChildren(); dock.hidden = true; ctx.musicUrl = null; ctx.musicParsed = null; root.style.removeProperty('--music-w'); }
+  function closeMusic() { resetMusic(); announceMusic(); }
+  // 음악 플레이어가 열렸는지(heap:music, detail: true | false)를 바뀔 때만 알린다. heap-room.tsx 의 배경음악이 듣고 줄였다가 다시 켠다 (room-bgm.tsx).
+  let musicOn = false;
+  function announceMusic() {
+    if (musicOn === !dock.hidden) return;
+    musicOn = !dock.hidden;
+    root.dispatchEvent(new CustomEvent('heap:music', { detail: musicOn }));
+  }
   on($('music-close'), 'click', closeMusic);
   // 이 호스트가 임베드를 막으면(CSP) 틀을 거두고 원본 링크로 물러선다. 임베드를 쓰는 모든 플랫폼을 함께 본다.
   const EMBED_HOST = /youtube|instagram|tiktok|twitter|x\.com/;
