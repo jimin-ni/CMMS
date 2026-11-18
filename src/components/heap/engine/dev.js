@@ -2,6 +2,7 @@
 //   root.dispatchEvent(new CustomEvent('heap:dev', { detail: { cmd, cb } }))
 //   cmd 'audit'  → cb(list): 같은 평면에 같은 쪽을 보고 겹친 면의 쌍 (깜빡이는 면, z-fighting). 축에 맞춘 Box, Plane 만 본다.
 //   cmd 'export' → cb(ArrayBuffer): 지금 장면 전체를 glTF 바이너리(.glb)로. Blender 에서 열어 보는 용도다 (blender/heap/).
+//   cmd 'exportItems' → cb([{ name, buf }]): 가구를 하나씩 .glb 로 (아래 설명).
 import * as THREE from 'three';
 
 const EPS = 1e-4;
@@ -64,7 +65,27 @@ export function setupDev(ctx) {
     if (cmd === 'audit') cb(audit(ctx.scene));
     else if (cmd === 'export') {
       const { GLTFExporter } = await import('three/examples/jsm/exporters/GLTFExporter.js');
+      // Blender 의 목록에서 알아보도록 가구 묶음에 이름을 붙인다 (엔진은 이름을 쓰지 않는다)
+      ctx.build.groups.forEach((g, i) => { const it = ctx.build.items[i]; if (g && it) g.name = `item${i}-${it.type === 'model' ? it.model : it.type}`; });
+      if (ctx.build.group) ctx.build.group.name = 'furniture';
       new GLTFExporter().parse(ctx.scene, buf => cb(buf), err => cb({ error: String(err?.message || err) }), { binary: true, onlyVisible: true });
+    } else if (cmd === 'exportItems') {
+      // 가구 하나씩: 엔진이 지은 그대로(크기, 재질)를 원점에 놓고 .glb 로. 같은 종류(type, model, size)는 한 번만.
+      // cb([{ name, buf }]). name 은 model 이면 그 id, 손으로 짓는 가구면 type (size 가 있으면 -s<size>)
+      const { GLTFExporter } = await import('three/examples/jsm/exporters/GLTFExporter.js');
+      const ex = new GLTFExporter(), seen = new Set(), out = [];
+      const { items, groups } = ctx.build;
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i], g = groups[i];
+        if (!it || !g) continue;
+        const name = (it.type === 'model' ? it.model : it.type) + (it.size != null && it.size !== 1 ? `-s${it.size}` : '');
+        if (seen.has(name)) continue;
+        seen.add(name);
+        const c = g.clone(true); c.position.set(0, 0, 0); c.rotation.set(0, 0, 0); c.name = name;
+        const buf = await new Promise(res => ex.parse(c, res, err => res({ error: String(err?.message || err) }), { binary: true }));
+        out.push({ name, buf });
+      }
+      cb(out);
     }
   });
 }
