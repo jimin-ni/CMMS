@@ -1,3 +1,11 @@
+// 보류한 기능. false면 화면에서 숨기고 서버도 막는다. 다시 켤 때는 true로 바꾼다. (2026-11-18 보류)
+export const FEATURE_ON = {
+  // 크리에이터끼리 대화하는 크리에이터 톡
+  creatorTalk: false,
+  // 구독자 초안에 대한 AI 반응 미리보기와 크리에이터 성격 설정
+  aiPreview: false,
+} as const;
+
 export type FeatureCard = {
   title: string;
   description: string;
@@ -13,7 +21,7 @@ export type FeatureCard = {
 export const FEATURES: FeatureCard[] = [
   {
     title: "버블 채팅",
-    description: "크리에이터 1명과 구독자 여러 명의 대화방, AI 반응 미리보기",
+    description: "크리에이터 1명과 구독자 여러 명의 대화방",
     owner: "주요 기능 1 (본인)",
     status: "개발 중",
     href: "/bubble",

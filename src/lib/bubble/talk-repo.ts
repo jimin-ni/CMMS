@@ -9,6 +9,7 @@ import {
 } from "@/lib/schema";
 import { avatarUrl } from "@/lib/creator/avatar";
 import type { Viewer } from "@/lib/session";
+import { FEATURE_ON } from "@/lib/features";
 import { UUID_PATTERN, within, type MessageRow } from "./repo";
 
 // 크리에이터 톡: 크리에이터끼리만 쓰는 1:1 또는 그룹 대화.
@@ -33,7 +34,7 @@ export type ChatRow = {
 };
 
 export function canUseTalk(viewer: Viewer): boolean {
-  return viewer.role === "creator";
+  return FEATURE_ON.creatorTalk && viewer.role === "creator";
 }
 
 // LIKE 패턴의 특수 문자를 글자 그대로 찾도록 바꾼다.
