@@ -1,6 +1,6 @@
 "use client";
 
-// 설정 화면 (/settings): 책상 위의 세로 책자 (틀은 book.tsx).
+// 설정 화면 (/settings): 책상 위에 펼친 O링 수첩 (틀은 book.tsx).
 // 고른 값은 이 브라우저에 남는다 (src/lib/settings/prefs.ts).
 import type { ReactNode } from "react";
 import { Book, BookPage } from "./book";

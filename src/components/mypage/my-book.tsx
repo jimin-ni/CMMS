@@ -4,7 +4,7 @@ import { Book, BookPage } from "@/components/settings/book";
 import { SignOutButton } from "@/components/sign-out-button";
 import type { HeapChannelPlatform } from "@/lib/heap/platform";
 
-// 마이페이지 (/mypage): 설정과 같은 책상 위의 세로 책자 (틀은 settings/book.tsx).
+// 마이페이지 (/mypage): 설정과 같은 책상 위에 펼친 O링 수첩 (틀은 settings/book.tsx).
 // 모든 계정: 계정 정보와 로그아웃, 결제 정보. 크리에이터와 관리자: 쪽지, 대화방, 채널, 내 방.
 // 지금은 화면 구성만 잡는다. 상세 기능은 기존 화면(/creator, 방의 꾸미기)으로 보내거나 "준비 중"으로 둔다.
 
