@@ -30,15 +30,19 @@
 - [사실] BudgetPixel에 로그인해 직접 생성한 음원은 요금제별로 상업 이용 범위가 다릅니다(무료 플랜은 비상업). 라이브러리 곡만 씁니다.
 - [미정] Mixkit의 음원 종류별 라이선스 전문(Sound Effects Free License, Stock Music Free License)은 팝업으로만 열려 원문 문구를 받지 못했습니다. 위 판단은 이용약관(mixkit.co/terms)과 요약 페이지 기준입니다.
 
-## 3. 공개 저장소 문제 [미정]
+## 3. 공개 저장소 문제 [결정] (2026-11-18)
 
-공모전은 음원을 포함한 전체 자산을 저장소에 넣으라고 합니다. Mixkit과 Pixabay 원본 파일을 공개 저장소에 그대로 올리면 두 사이트가 금지하는 원본 배포에 해당할 수 있습니다. 선택지는 다음과 같습니다.
+공모전은 음원을 포함한 전체 자산을 저장소에 넣으라고 합니다. Mixkit과 Pixabay 원본 파일을 공개 저장소에 그대로 올리면 두 사이트가 금지하는 원본 배포에 해당할 수 있습니다. 검토한 선택지는 다음과 같습니다.
 
 1. 저장소를 비공개로 바꾸고 Extriver 팀과 공유한다 (공모전 규정이 허용).
-2. Mixkit·Pixabay 파일은 저장소에서 빼고, CC0·CC BY 음원만 넣는다.
+2. Mixkit·Pixabay 파일은 저장소에서 빼고, CC0·CC BY 음원만 넣는다. **← 채택**
 3. 공개 저장소를 유지하되 Mixkit·Pixabay 음원은 대체 음원(CC0 또는 CC BY)으로 바꾼다.
 
-결정 전까지 Mixkit 파일은 로컬에만 두고 커밋하지 않습니다.
+운영 방법:
+
+- 파일 이름에 출처를 넣습니다(`-mixkit-`, `-pixabay-`). `.gitignore`가 `public/audio/` 아래의 이 두 이름을 커밋에서 뺍니다.
+- 이 파일들은 각자 로컬에서만 씁니다. 저장소와 Render 배포본에는 들어가지 않으므로, 앱 코드는 파일이 없어도 오류 없이 넘어가야 합니다.
+- 배포본에서도 소리가 나야 하는 항목은 CC0 또는 CC BY 음원으로 바꿉니다.
 
 ## 4. 받은 파일
 
@@ -50,11 +54,11 @@
 | `sfx/floor-walk-freesound-543685.mp3` | 마룻바닥 걷기 1 | [Freesound 543685](https://freesound.org/s/543685/) (미리듣기 MP3) | 0:24 | CC0 | 불필요 | 함 |
 | `sfx/floor-creak-freesound-347851.mp3` | 마룻바닥 걷기 2 | [Freesound 347851](https://freesound.org/s/347851/) (미리듣기 MP3) | 약 1:21 | CC0 | 불필요 | 함 |
 | `sfx/floor-walk-oga-83765.wav` | 마룻바닥 걷기 3 | [OpenGameArt: Steps in wood floor](https://opengameart.org/node/83765) | 약 3.5초 | CC0 | 불필요 | 함 |
-| `sfx/projector-start-stop-mixkit-3013.mp3` | 영사기 켜기 1 | Mixkit 3013 (Bell & Howell start/stop) | 0:29 | Mixkit Free | 불필요 | 보류 (§3) |
-| `sfx/projector-working-mixkit-1441.mp3` | 영사기 켜기 2 | Mixkit 1441 (Vintage film projector working) | 0:24 | Mixkit Free | 불필요 | 보류 (§3) |
-| `sfx/projector-hum-mixkit-1443.mp3` | 영사기 켜기 3 | Mixkit 1443 (Antique movie projector hum) | 0:30 | Mixkit Free | 불필요 | 보류 (§3) |
-| `bgm/carol-christmas-lullaby-mixkit-985.mp3` | 잔잔한 캐롤 1 | Mixkit 985 (Christmas Lullaby, Michael Ramir C.) | 1:46 | Mixkit Free | 불필요 | 보류 (§3) |
-| `bgm/carol-a-christmas-carol-mixkit-896.mp3` | 잔잔한 캐롤 2 | Mixkit 896 (A Christmas Carol, Michael Ramir C.) | 1:47 | Mixkit Free | 불필요 | 보류 (§3) |
+| `sfx/projector-start-stop-mixkit-3013.mp3` | 영사기 켜기 1 | Mixkit 3013 (Bell & Howell start/stop) | 0:29 | Mixkit Free | 불필요 | 안 함 (§3) |
+| `sfx/projector-working-mixkit-1441.mp3` | 영사기 켜기 2 | Mixkit 1441 (Vintage film projector working) | 0:24 | Mixkit Free | 불필요 | 안 함 (§3) |
+| `sfx/projector-hum-mixkit-1443.mp3` | 영사기 켜기 3 | Mixkit 1443 (Antique movie projector hum) | 0:30 | Mixkit Free | 불필요 | 안 함 (§3) |
+| `bgm/carol-christmas-lullaby-mixkit-985.mp3` | 잔잔한 캐롤 1 | Mixkit 985 (Christmas Lullaby, Michael Ramir C.) | 1:46 | Mixkit Free | 불필요 | 안 함 (§3) |
+| `bgm/carol-a-christmas-carol-mixkit-896.mp3` | 잔잔한 캐롤 2 | Mixkit 896 (A Christmas Carol, Michael Ramir C.) | 1:47 | Mixkit Free | 불필요 | 안 함 (§3) |
 
 Freesound 원본 파일(WAV 등)은 로그인해야 받을 수 있어 미리듣기 MP3(128kbps)를 받았습니다. 음질이 부족하면 로그인 후 원본으로 바꿉니다.
 
@@ -62,7 +66,7 @@ Freesound 원본 파일(WAV 등)은 로그인해야 받을 수 있어 미리듣�
 
 | 항목 | 이유 | 다음 할 일 |
 |---|---|---|
-| Pixabay 곡과 효과음 (배경음악 4·5, 동물의 숲 감성 2곡, 버튼 클릭 3개, 방 문 열기 3개) | 사이트가 자동 접속을 막음 | 브라우저에서 직접 받기. §3 결정 후 커밋 여부 정하기 |
+| Pixabay 곡과 효과음 (배경음악 4·5, 동물의 숲 감성 2곡, 버튼 클릭 3개, 방 문 열기 3개) | 사이트가 자동 접속을 막음 | 브라우저에서 직접 받기. 파일 이름에 `-pixabay-`를 넣어 커밋에서 빼기 (§3) |
 | BudgetPixel: Dusty Porch Memories, "lofi, nostalgic, mellow, warm, piano, wobbly", Christmas Morning Warmth | 라이브러리에서 같은 이름의 곡을 찾지 못함 | 원래 곡 주소 확인. 비슷한 곡: [Nostalgic Tape Lofi Piano](https://budgetpixel.com/background-music/nostalgic-tape-lofi-piano-985a8df4), [Fireside Lofi Christmas](https://budgetpixel.com/background-music/fireside-lofi-christmas-fc1dfad4) |
 | ElevenLabs Book page turning | 로그인 필요. 무료 플랜 조건 미확인 | 무료 플랜 상업 이용 조건 확인 후 받기 |
 | 카펫 걷기, 책장에서 책 꺼내기 | 무료 음원 없음 | Freesound에서 CC0 필터로 재검색 |
