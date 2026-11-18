@@ -333,13 +333,9 @@
   outline: 2px dashed var(--oc-clay);
   outline-offset: 1px;
 }
+/* 로그인한 사람의 이름: 누르면 마이페이지 */
 .oc-nav-name {
   color: var(--oc-clay);
-  cursor: default;
-}
-.oc-nav-name:hover {
-  background: transparent;
-  transform: none;
 }
 
 /* 7. 로그인 팝업 */

@@ -1,30 +1,21 @@
-/* 설정 화면: 책상 위에 세로로 긴 책자 장들. .sb-root 아래에만 적용한다.
+/* 설정·마이페이지: 책상 위에 펼친 O링 수첩 (book.tsx). .sb-root 아래에만 적용한다.
    (.oc-root 의 스크롤 틀, .ob-root 의 종이 색·결 변수와 책상(.ob-desk)을 함께 쓴다) */
 .sb-root {
   --gap: clamp(16px, 3.4vw, 56px);
-  /* 장 수. settings-book.tsx 의 장 수와 맞춘다 */
-  --n: 4;
-  /* 장 크기 (세로 A 판형 1:1.414). 두 장이 가로로 들어가고, 위 막대(72px) 아래에서 장의 80% 만 보이는 크기 중 작은 쪽 */
-  --pw: min(calc((100dvh - 72px) / 0.8 / 1.414), calc((100vw - 3 * var(--gap)) / 2));
-  --ph: calc(var(--pw) * 1.414);
+  /* 걸음 수와 O링 수. book.tsx 가 style 로 넣는다 */
+  --steps: 2;
+  --rings: 9;
+  /* 한 걸음의 스크롤 거리. book.tsx 의 STEP 과 맞춘다 */
+  --step: 80dvh;
+  /* 위 막대(72px)와 아래 쪽 넘김 막대(64px) 사이에 들어가는 쪽 크기. 쪽은 세로 1:1.38, 펼치면 두 쪽 */
+  --pw: min(calc((100dvh - 72px - 64px - 24px) / 1.38), calc((100vw - 2 * var(--gap) - 48px) / 2));
+  --ph: calc(var(--pw) * 1.38);
 }
 
-/* 세로 스크롤 길이 = 장들을 끝까지 옮기는 가로 거리: (장 n 개 + 틈 n+1 개) - 화면 너비 */
+/* 세로 스크롤 길이 = 화면 + 걸음 수 x 한 걸음 */
 .sb-scroll {
-  height: calc(100dvh + var(--n) * var(--pw) + (var(--n) + 1) * var(--gap) - 100vw);
+  height: calc(100dvh + var(--steps) * var(--step));
 }
-
-/* 장 줄: 아래쪽 20% 가 화면 밖으로 나가도록 둔다 */
-.sb-track {
-  position: absolute;
-  left: 0;
-  top: calc(100dvh - var(--ph) * 0.8);
-  display: flex;
-  gap: var(--gap);
-  padding-inline: var(--gap);
-  will-change: transform;
-}
-
 /* 위 막대: 제목, 스크롤 안내, 닫기 */
 .sb-top {
   position: absolute;
@@ -72,28 +63,172 @@
 .sb-close:hover { background: rgba(0, 0, 0, 0.32); }
 .sb-close:focus-visible { outline: 2px solid var(--cream); outline-offset: 3px; }
 
-/* ---------- 장 (cqw = 장 너비의 1%) ---------- */
-.sb-page {
-  position: relative;
-  flex: none;
+/* ---------- 수첩 ---------- */
+.nb-stage3d {
+  position: absolute;
+  inset: 72px 0 64px;
+  perspective: 2600px;
+  pointer-events: none;
+}
+/* 펼친 두 쪽 크기. 가운데(50%)가 O링 줄이다 */
+.nb-book {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--pw) * 2);
+  height: var(--ph);
+  margin: calc(var(--ph) / -2) 0 0 calc(var(--pw) * -1);
+  transform-style: preserve-3d;
+  will-change: transform;
+  pointer-events: auto;
+}
+/* 하드커버: 종이보다 조금 크다. 양쪽 끝에 종이 단면이 겹친 듯한 선 */
+.nb-board {
+  position: absolute;
+  inset: calc(var(--pw) * -0.035) calc(var(--pw) * -0.04);
+  border-radius: 8px;
+  background-color: #3b3428;
+  background-image:
+    var(--grain),
+    linear-gradient(90deg, rgba(0, 0, 0, 0) 47%, rgba(0, 0, 0, 0.35) 50%, rgba(0, 0, 0, 0) 53%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 34px 60px rgba(0, 0, 0, 0.45),
+    0 6px 14px rgba(20, 12, 4, 0.35);
+}
+
+/* 장: O링 줄(왼쪽 끝)을 축으로 돈다. 처음에는 오른쪽 절반에 놓인다 */
+.nb-leaf {
+  --shade: 0;
+  position: absolute;
+  left: 50%;
+  top: 0;
   width: var(--pw);
   height: var(--ph);
+  transform-origin: 0 50%;
+  transform-style: preserve-3d;
+}
+.nb-face { position: absolute; inset: 0; }
+.nb-leaf[data-side="front"] .nb-back,
+.nb-leaf[data-side="back"] .nb-front { display: none; }
+/* 뒷면은 넘어가면 좌우가 뒤집혀 보이므로 미리 뒤집어 둔다 */
+.nb-back { transform: scaleX(-1); }
+.nb-shade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(40, 28, 12, var(--shade)), rgba(40, 28, 12, calc(var(--shade) * 0.3)));
+}
+
+/* 쪽 (cqw = 쪽 너비의 1%). O링 구멍 쪽(앞면은 왼쪽, 뒷면은 오른쪽)은 여백을 넓게 */
+.sb-page {
+  position: relative;
+  width: 100%;
+  height: 100%;
   container-type: size;
   box-sizing: border-box;
-  padding: 7cqw 8cqw;
-  border-radius: 6px;
+  overflow: hidden;
+  padding: 7cqw 7cqw 7cqw 12cqw;
   color: var(--ink);
   background-color: var(--cream);
   background-image: var(--grain), var(--blotch);
+  border-radius: 2px 6px 6px 2px;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.7),
     inset 0 0 0 1px rgba(120, 96, 60, 0.08),
-    0 30px 50px rgba(0, 0, 0, 0.4),
-    0 4px 10px rgba(20, 12, 4, 0.3);
+    1px 1px 2px rgba(40, 28, 12, 0.2);
 }
-.sb-page:nth-child(even) { background-color: #f6ecdb; }
-.sb-tape { top: -1.6cqw; left: 50%; width: 14cqw; height: 3.6cqw; transform: translateX(-50%) rotate(-3deg); }
-.sb-page:nth-child(even) .sb-tape { transform: translateX(-50%) rotate(4deg); }
+.nb-back .sb-page {
+  padding: 7cqw 12cqw 7cqw 7cqw;
+  border-radius: 6px 2px 2px 6px;
+  background-color: #f6ecdb;
+}
+/* 구멍 줄과 O링 쪽으로 드리운 그늘 */
+.sb-page::before,
+.sb-page::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+.sb-page::before {
+  left: 0;
+  width: 9cqw;
+  background: linear-gradient(90deg, rgba(60, 44, 20, 0.22), rgba(60, 44, 20, 0));
+}
+.sb-page::after {
+  left: 2.6cqw;
+  width: 3.2cqw;
+  background: radial-gradient(circle closest-side, #2a251d 0 62%, rgba(0, 0, 0, 0.18) 72%, transparent 80%) 0 0 / 100% calc(100% / var(--rings)) repeat-y;
+}
+.nb-back .sb-page::before { left: auto; right: 0; transform: scaleX(-1); }
+.nb-back .sb-page::after { left: auto; right: 2.6cqw; }
+/* 뒷면에 쪽이 없을 때 (쪽 수가 홀수) */
+.nb-blank { background-image: var(--grain), repeating-linear-gradient(180deg, transparent 0 calc(8cqw - 1px), rgba(90, 120, 150, 0.16) calc(8cqw - 1px) 8cqw); }
+
+/* O링: 가운데 줄에서 두 쪽의 구멍을 잇는 은색 고리 */
+.nb-rings {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  transform: translateZ(40px);
+  pointer-events: none;
+}
+.nb-ring {
+  flex: 1;
+  position: relative;
+}
+.nb-ring::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(var(--pw) * 0.11);
+  height: calc(var(--pw) * 0.045);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: max(2px, calc(var(--pw) * 0.009)) solid #c9ced4;
+  border-color: #f2f4f6 #8b9097 #6c7178 #b9bec4;
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(0, 0, 0, 0.3);
+  /* 고리의 아래 반은 종이 아래로 들어간다 */
+  clip-path: inset(0 0 45% 0);
+}
+
+/* 아래 쪽 넘김 막대: ‹ p.02–03 / 06 › */
+.nb-pager {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transform: translateX(-50%);
+  color: var(--cream);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+.nb-pager button {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1.5px solid rgba(250, 242, 228, 0.5);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--cream);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.nb-pager button:hover:not(:disabled) { background: rgba(0, 0, 0, 0.32); }
+.nb-pager button:disabled { opacity: 0.35; cursor: default; }
+.nb-pager button:focus-visible { outline: 2px solid var(--cream); outline-offset: 3px; }
+
 .sb-no { margin: 0; font-size: max(10px, 1.9cqw); }
 .sb-title {
   margin: 3cqw 0 4.5cqw;
@@ -245,15 +380,125 @@
 }
 .sb-slider input:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
 
-/* 좁은 화면: 한 장과 다음 장의 끝이 보이게. 장 너비가 좁으니 판형 대신 화면 높이에 맞춰 세로로 길게 (아래 20% 는 그대로 잘린다) */
+/* 좁은 화면: 한 쪽이 화면 너비를 거의 채운다. 수첩은 화면보다 넓고, book.tsx 가 보는 쪽을 가운데로 옮긴다 */
 @media (max-width: 700px) {
   .sb-root {
-    --pw: calc(100vw - 2 * var(--gap) - 40px);
-    --ph: calc((100dvh - 72px) / 0.8);
+    --pw: min(calc(100vw - 2 * var(--gap) - 16px), calc((100dvh - 72px - 64px - 24px) / 1.38));
   }
   .sb-hint span { display: none; }
+  /* 글자가 최소 크기에 걸려 쪽이 붐비므로 사진과 제목 여백을 줄인다 */
+  .sb-title { margin-bottom: 3cqw; }
+  .sb-sky { aspect-ratio: 3 / 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .sb-choice { transition: none; }
+}
+
+/* ---------- 마이페이지 (mypage/my-book.tsx). 설정 장과 같은 종이, cqw 단위 ---------- */
+.sb-page h3.sb-legend { margin: 0 0 2.6cqw; font-weight: normal; }
+.sb-page h3.sb-legend:not(:first-of-type) { margin-top: 6cqw; }
+
+/* 이름: 값 목록 (밑줄 친 공책 줄) */
+.mp-list { margin: 0; }
+.mp-row {
+  display: flex;
+  align-items: baseline;
+  gap: 3cqw;
+  padding: 2.2cqw 0;
+  border-bottom: 1.5px dashed rgba(90, 70, 40, 0.22);
+  font-size: max(13px, 3cqw);
+}
+.mp-row dt { flex: none; width: 26cqw; color: var(--ink-soft); }
+.mp-row dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+
+/* 단추: 고르기 칸과 같은 테두리. 로그아웃 단추(button)와 링크(a)가 함께 쓴다 */
+.mp-actions { display: flex; flex-wrap: wrap; gap: 2.4cqw; margin-top: 4cqw; }
+.mp-btn {
+  display: inline-block;
+  padding: 1.8cqw 4.4cqw;
+  border: 2px solid var(--clay);
+  border-radius: 999px;
+  background: #fffaf0;
+  color: var(--clay);
+  font: inherit;
+  font-family: var(--font-oc-rounded), var(--font-oc-body), sans-serif;
+  font-size: max(13px, 3cqw);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.mp-btn:hover { background: var(--clay); color: #fff8ec; }
+.mp-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+.mp-box > .mp-btn { margin-top: 2.4cqw; }
+
+.mp-box {
+  padding: 3.4cqw 4cqw;
+  border: 2px solid rgba(90, 70, 40, 0.18);
+  border-radius: 1.6cqw;
+  background: rgba(255, 253, 248, 0.75);
+  font-size: max(13px, 3cqw);
+}
+.mp-empty { color: var(--ink-soft); }
+.mp-line { display: flex; align-items: center; gap: 1.6cqw; margin: 0; }
+.mp-line b { font-weight: normal; font-size: max(14px, 3.6cqw); }
+.mp-sub { color: var(--ink-soft); font-size: max(11px, 2.4cqw); }
+.mp-accent { color: var(--clay); font-weight: normal; }
+.mp-link { color: var(--clay); text-underline-offset: 0.2em; overflow-wrap: anywhere; }
+.mp-soon { margin: 3cqw 0 0; font-size: max(12px, 2.6cqw); }
+
+/* 큰 숫자 두 칸 */
+.mp-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 3.6cqw; }
+.mp-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6cqw;
+  padding: 3cqw 2cqw;
+  border: 2px solid rgba(90, 70, 40, 0.18);
+  border-radius: 1.6cqw;
+  background: rgba(255, 253, 248, 0.75);
+}
+.mp-stat:nth-child(odd) { transform: rotate(-1deg); }
+.mp-stat-value { font-size: max(22px, 9cqw); line-height: 1; color: var(--clay); }
+.mp-stat b { font-weight: normal; font-size: max(13px, 3cqw); }
+.mp-stat small { font-size: max(10px, 2.2cqw); color: var(--ink-soft); letter-spacing: 0.04em; }
+
+/* 대화방 열림 점 */
+.mp-dot { width: max(8px, 2cqw); height: max(8px, 2cqw); border-radius: 50%; background: rgba(90, 70, 40, 0.3); }
+.mp-dot.on { background: #6a9a5b; box-shadow: 0 0 0 0.8cqw rgba(106, 154, 91, 0.2); }
+
+/* 등록된 카드 자리: 점선 카드 */
+.mp-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  aspect-ratio: 1.586;
+  max-height: 30cqw;
+  box-sizing: border-box;
+  padding: 3.4cqw 4cqw;
+  border: 2px dashed rgba(90, 70, 40, 0.3);
+  border-radius: 2.4cqw;
+  font-size: max(12px, 2.8cqw);
+}
+.mp-card-chip { width: 9cqw; height: 6.6cqw; border-radius: 1cqw; background: rgba(90, 70, 40, 0.14); }
+
+/* 채널 */
+.mp-channels { margin: 0; padding: 0; list-style: none; }
+.mp-channels li {
+  display: flex;
+  align-items: baseline;
+  gap: 3cqw;
+  padding: 2.2cqw 0;
+  border-bottom: 1.5px dashed rgba(90, 70, 40, 0.22);
+  font-size: max(13px, 3cqw);
+}
+.mp-channels b { flex: none; width: 24cqw; font-weight: normal; }
+.mp-platforms { display: flex; flex-wrap: wrap; gap: 1.6cqw; margin: 3.4cqw 0 0; }
+.mp-tag {
+  padding: 0.8cqw 2.4cqw;
+  border-radius: 999px;
+  background: rgba(166, 97, 60, 0.1);
+  color: var(--ink-soft);
+  font-size: max(10px, 2.2cqw);
 }

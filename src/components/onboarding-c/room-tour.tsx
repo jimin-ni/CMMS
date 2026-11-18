@@ -15,6 +15,8 @@ const LOGIN_REASON = "Sign in to leave your mark in this room.";
 const CHAT_LOGIN_REASON = "Sign in to chat with the creator.";
 // 설정 버튼이 여는 곳 (settings-book.tsx)
 const SETTINGS_HREF = "/settings";
+// 로그인한 사람의 이름 버튼이 여는 곳 (mypage/my-book.tsx)
+const MYPAGE_HREF = "/mypage";
 // 가운데 안내 팝업이 아래로 내려가기까지
 const GUIDE_CENTER_MS = 3000;
 
@@ -198,10 +200,16 @@ export function RoomTour({
             </button>
           ))}
           {signedIn ? (
-            <span className="oc-nav-btn oc-nav-name">
+            <button
+              type="button"
+              className="oc-nav-btn oc-nav-name"
+              onClick={() => router.push(MYPAGE_HREF)}
+              tabIndex={navOpen ? 0 : -1}
+              title="My page"
+            >
               <PixelIcon name="user" size={NAV_ICON} />
               <span>{viewerName}</span>
-            </span>
+            </button>
           ) : (
             <button
               type="button"
