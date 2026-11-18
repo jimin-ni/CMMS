@@ -16,7 +16,7 @@ export default function CreatorTalkPage({
 }) {
   return (
     <main className="mx-auto w-full max-w-2xl px-6 py-10">
-      <Suspense fallback={<p className="text-sm text-key-stone">불러오는 중...</p>}>
+      <Suspense fallback={<p className="text-sm text-ash">불러오는 중...</p>}>
         <CreatorTalkContent searchParams={searchParams} />
       </Suspense>
     </main>
@@ -41,15 +41,15 @@ async function CreatorTalkContent({
   ]);
 
   return (
-    <section className="flex flex-col rounded-2xl bg-white">
+    <section className="flex flex-col rounded-sm bg-white">
       <header className="px-5 pt-5 pb-3">
-        <h1 className="text-xl font-bold text-gray-900">채팅</h1>
+        <h1 className="text-xl font-medium text-ink">채팅</h1>
       </header>
       <ChatTabs active="creators" />
 
-      <h2 className="px-5 pt-3 pb-1 text-sm font-semibold text-key-brown">내 대화</h2>
+      <h2 className="px-5 pt-3 pb-1 text-sm font-medium text-ink">내 대화</h2>
       {chats.length === 0 ? (
-        <p className="px-5 pb-4 text-sm text-key-stone">
+        <p className="px-5 pb-4 text-sm text-ash">
           아직 크리에이터 대화가 없어요. 아래에서 크리에이터를 골라 대화를 시작하세요.
         </p>
       ) : (
@@ -60,12 +60,12 @@ async function CreatorTalkContent({
               <li key={chat.id}>
                 <Link
                   href={`/bubble/talk/${chat.id}`}
-                  className="flex items-center gap-3 px-5 py-3 hover:bg-key-mist/60"
+                  className="flex items-center gap-3 px-5 py-3 hover:bg-cream"
                 >
                   <Avatar name={name} url={chat.avatar_url} size={44} />
                   <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate font-medium text-gray-900">{name}</span>
-                    <span className="truncate text-xs text-key-stone">
+                    <span className="truncate font-medium text-ink">{name}</span>
+                    <span className="truncate text-xs text-ash">
                       {chat.member_count > 2 ? `그룹 · ${chat.member_count}명` : "1:1"}
                       {chat.title && ` · ${chat.other_names.join(", ")}`}
                     </span>
@@ -77,7 +77,7 @@ async function CreatorTalkContent({
         </ul>
       )}
 
-      <h2 className="border-t border-key-mist px-5 pt-4 pb-2 text-sm font-semibold text-key-brown">
+      <h2 className="border-t border-hairline px-5 pt-4 pb-2 text-sm font-medium text-ink">
         크리에이터 찾기
       </h2>
       <form action="/bubble/talk" className="flex gap-2 px-5 pb-3" role="search">
@@ -91,9 +91,9 @@ async function CreatorTalkContent({
           defaultValue={query}
           maxLength={50}
           placeholder="닉네임으로 검색"
-          className="flex-1 rounded-lg border border-key-stone/50 px-3 py-2 text-sm"
+          className="flex-1 rounded-sm border border-ash px-3 py-2 text-sm"
         />
-        <button type="submit" className="rounded-lg bg-key-mist px-4 py-2 text-sm text-key-brown">
+        <button type="submit" className="rounded-sm bg-cream px-4 py-2 text-sm text-ink">
           검색
         </button>
       </form>

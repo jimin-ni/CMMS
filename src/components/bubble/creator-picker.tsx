@@ -30,7 +30,7 @@ export function CreatorPicker({ creators, maxPick }: { creators: CreatorCard[]; 
   }
 
   if (creators.length === 0) {
-    return <p className="px-5 py-6 text-sm text-key-stone">찾는 크리에이터가 없어요.</p>;
+    return <p className="px-5 py-6 text-sm text-ash">찾는 크리에이터가 없어요.</p>;
   }
 
   return (
@@ -41,8 +41,8 @@ export function CreatorPicker({ creators, maxPick }: { creators: CreatorCard[]; 
           return (
             <li key={creator.id}>
               <label
-                className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-key-brown ${
-                  checked ? "border-key-brown bg-key-mist" : "border-key-stone/30 hover:bg-key-mist/50"
+                className={`flex cursor-pointer items-center gap-3 rounded-sm border p-3 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ink ${
+                  checked ? "border-ink bg-cream" : "border-hairline hover:bg-cream"
                 }`}
               >
                 <input
@@ -55,15 +55,15 @@ export function CreatorPicker({ creators, maxPick }: { creators: CreatorCard[]; 
                 />
                 <Avatar name={creator.name} url={creator.avatar_url} size={48} />
                 <span className="flex min-w-0 flex-1 items-center gap-2">
-                  <span className="truncate font-medium text-gray-900">{creator.name}</span>
-                  <span className="shrink-0 rounded-full bg-key-blue/30 px-2 py-0.5 text-[10px] text-key-brown">
+                  <span className="truncate font-medium text-ink">{creator.name}</span>
+                  <span className="shrink-0 rounded-sm border border-ash px-1.5 py-0.5 text-[10px] font-bold uppercase text-ash">
                     크리에이터
                   </span>
                 </span>
                 <span
                   aria-hidden
                   className={`h-5 w-5 shrink-0 rounded-full border-2 ${
-                    checked ? "border-key-brown bg-key-brown" : "border-key-stone/60"
+                    checked ? "border-ink bg-ink" : "border-ash"
                   }`}
                 />
               </label>
@@ -72,17 +72,17 @@ export function CreatorPicker({ creators, maxPick }: { creators: CreatorCard[]; 
         })}
       </ul>
 
-      <div className="sticky bottom-0 flex flex-col gap-2 border-t border-key-mist bg-white px-5 py-3">
+      <div className="sticky bottom-0 flex flex-col gap-2 border-t border-hairline bg-white px-5 py-3">
         {picked.length > 1 && (
           <input
             name="title"
             maxLength={50}
             placeholder="그룹 대화 이름 (선택)"
-            className="rounded-lg border border-key-stone/50 px-3 py-2 text-sm"
+            className="rounded-sm border border-ash px-3 py-2 text-sm"
           />
         )}
         <div className="flex items-center justify-between gap-3">
-          <span className="text-sm text-key-stone">
+          <span className="text-sm text-ash">
             {picked.length === 0
               ? "대화할 크리에이터를 골라 주세요."
               : picked.length === 1
@@ -92,7 +92,7 @@ export function CreatorPicker({ creators, maxPick }: { creators: CreatorCard[]; 
           <button
             type="submit"
             disabled={pending || picked.length === 0}
-            className="rounded-full bg-key-brown px-5 py-2 text-sm text-key-mist disabled:opacity-50"
+            className="inline-flex h-[35px] items-center justify-center rounded-sm border border-black bg-ink px-3 text-sm font-bold uppercase text-white hover:bg-ink-soft disabled:opacity-50"
           >
             {pending ? "여는 중..." : "대화 시작"}
           </button>

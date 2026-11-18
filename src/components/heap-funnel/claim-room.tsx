@@ -58,33 +58,33 @@ export function ClaimRoom({
       <div aria-hidden className="absolute inset-0 bg-black/60" />
 
       {!open ? (
-        <div className="relative max-w-md text-center text-key-mist">
-          <h1 className="text-3xl font-bold">아직 내 미니홈이 없어요</h1>
-          <p className="mt-3 text-key-mist/80">
+        <div className="relative max-w-md text-center text-white">
+          <h1 className="text-3xl font-medium">아직 내 미니홈이 없어요</h1>
+          <p className="mt-3 text-white/80">
             템플릿을 고르고 주소를 정하면 바로 내 방이 열려요. 영상은 나중에 채널을 연결하면 쌓여요.
           </p>
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="mt-8 rounded-full bg-key-brown px-7 py-3 text-lg font-medium text-key-mist shadow-sm transition hover:bg-key-brown/90"
+            className="mt-8 inline-flex h-10 items-center justify-center rounded-sm border border-ink bg-ink px-4 text-base font-bold uppercase text-white hover:bg-ink-soft"
           >
             내 미니홈 만들기
           </button>
         </div>
       ) : (
-        <form onSubmit={submit} className="relative flex w-full max-w-lg flex-col gap-5 rounded-2xl bg-white p-8 shadow-sm">
-          <h1 className="text-2xl font-bold text-key-brown">내 미니홈 만들기</h1>
+        <form onSubmit={submit} className="relative flex w-full max-w-lg flex-col gap-5 rounded-sm border border-hairline bg-white p-8">
+          <h1 className="text-[32px] leading-[1.2] font-medium text-ink">내 미니홈 만들기</h1>
 
           <fieldset className="flex flex-col gap-2">
-            <legend className="mb-1 text-sm text-key-brown">템플릿</legend>
+            <legend className="mb-1 text-sm text-ink">템플릿</legend>
             {templates.map((template) => (
               <label
                 key={template.id}
-                className={`flex cursor-pointer flex-col rounded-xl border px-4 py-3 text-sm transition ${
-                  template.id === templateId ? "border-key-brown bg-key-mist" : "border-key-stone/50 hover:bg-key-mist/60"
+                className={`flex cursor-pointer flex-col rounded-sm border px-4 py-3 text-sm transition ${
+                  template.id === templateId ? "border-ink bg-cream" : "border-ash hover:bg-cream"
                 }`}
               >
-                <span className="flex items-center gap-2 font-medium text-key-brown">
+                <span className="flex items-center gap-2 font-medium text-ink">
                   <input
                     type="radio"
                     name="template"
@@ -94,7 +94,7 @@ export function ClaimRoom({
                   />
                   {template.label}
                 </span>
-                <span className="mt-1 text-xs text-key-stone">{template.blurb}</span>
+                <span className="mt-1 text-xs text-ash">{template.blurb}</span>
               </label>
             ))}
           </fieldset>
@@ -107,17 +107,17 @@ export function ClaimRoom({
               onChange={(event) => setName(event.target.value)}
               required
               autoComplete="off"
-              className="rounded-lg border border-key-stone/50 px-3 py-2"
+              className="rounded-sm border border-ash px-3 py-2"
             />
-            <span className="text-xs text-key-stone">
+            <span className="text-xs text-ash">
               {charCount(name.trim())} / {HEAP_FUNNEL_POLICY.roomNameMaxChars}자 · 나중에 바꿀 수 있어요.
             </span>
           </label>
 
           <label className="flex flex-col gap-1 text-sm">
             방 주소
-            <span className="flex items-center gap-1 rounded-lg border border-key-stone/50 px-3 py-2">
-              <span className="text-key-stone">/room/</span>
+            <span className="flex items-center gap-1 rounded-sm border border-ash px-3 py-2">
+              <span className="text-ash">/room/</span>
               <input
                 name="slug"
                 value={slug}
@@ -132,7 +132,7 @@ export function ClaimRoom({
             {slugProblem ? (
               <span className="text-xs text-red-700">{slugProblem}</span>
             ) : (
-              <span className="text-xs text-key-stone">
+              <span className="text-xs text-ash">
                 영문 소문자, 숫자, 하이픈. {HEAP_FUNNEL_POLICY.slugMinChars}~{HEAP_FUNNEL_POLICY.slugMaxChars}자. 만든 뒤에는 바꿀 수 없어요.
               </span>
             )}
@@ -163,7 +163,7 @@ export function ClaimRoom({
             <button
               type="submit"
               disabled={!canSubmit}
-              className="rounded-full bg-key-brown px-5 py-2 text-key-mist disabled:opacity-60"
+              className="inline-flex h-[35px] items-center justify-center rounded-sm border border-black bg-ink px-3 text-sm font-bold uppercase text-white hover:bg-ink-soft disabled:opacity-60"
             >
               {pending ? "만드는 중..." : "방 만들기"}
             </button>
@@ -171,7 +171,7 @@ export function ClaimRoom({
               type="button"
               onClick={() => setOpen(false)}
               disabled={pending}
-              className="rounded-full px-5 py-2 text-key-brown disabled:opacity-60"
+              className="inline-flex h-[35px] items-center justify-center rounded-sm border border-ink bg-white px-3 text-sm font-bold uppercase text-ink hover:bg-cream disabled:opacity-60"
             >
               닫기
             </button>

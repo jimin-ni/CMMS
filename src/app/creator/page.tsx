@@ -13,7 +13,7 @@ import { AvatarForm } from "@/components/creator/avatar-form";
 export default function CreatorPage() {
   return (
     <main className="mx-auto w-full max-w-2xl px-6 py-10">
-      <Suspense fallback={<p className="text-sm text-key-stone">불러오는 중...</p>}>
+      <Suspense fallback={<p className="text-sm text-ash">불러오는 중...</p>}>
         <CreatorContent />
       </Suspense>
     </main>
@@ -36,26 +36,26 @@ async function CreatorContent() {
 
   return (
     <div className="flex flex-col gap-8">
-      <section className="flex flex-col gap-3 rounded-2xl bg-white p-6">
-        <h1 className="text-xl font-bold text-key-brown">크리에이터 페이지</h1>
+      <section className="flex flex-col gap-3 rounded-sm bg-white p-6">
+        <h1 className="text-xl font-medium text-ink">크리에이터 페이지</h1>
         {openRoom ? (
           <>
-            <p className="text-sm text-key-stone">
+            <p className="text-sm text-ash">
               지금 열린 대화방입니다. 새 대화방은 이 방을 닫은 뒤에 열 수 있어요.
             </p>
-            <div className="flex items-center justify-between gap-3 rounded-xl bg-key-mist/60 px-4 py-3 text-sm">
+            <div className="flex items-center justify-between gap-3 rounded-sm bg-cream px-4 py-3 text-sm">
               <Link href={`/bubble/${openRoom.id}`} className="min-w-0 flex-1">
-                <span className="block truncate font-medium text-key-brown underline">
+                <span className="block truncate font-medium text-ink underline">
                   {openRoom.title}
                 </span>
-                <span className="text-xs text-key-stone">참여 {openRoom.member_count}명</span>
+                <span className="text-xs text-ash">참여 {openRoom.member_count}명</span>
               </Link>
               <CloseRoomButton roomId={openRoom.id} />
             </div>
           </>
         ) : (
           <>
-            <p className="text-sm text-key-stone">
+            <p className="text-sm text-ash">
               {viewer.name}님의 대화방을 엽니다. 구독자가 직접 참여하고, 내 메시지는 참여한 모든
               구독자에게 보여요.
             </p>
@@ -64,32 +64,32 @@ async function CreatorContent() {
         )}
       </section>
 
-      <section className="flex flex-col gap-3 rounded-2xl bg-white p-6">
-        <h2 className="text-lg font-medium text-key-brown">프로필 사진</h2>
+      <section className="flex flex-col gap-3 rounded-sm bg-white p-6">
+        <h2 className="text-lg font-medium text-ink">프로필 사진</h2>
         <AvatarForm name={viewer.name} currentUrl={avatarUrl} maxBytes={AVATAR_MAX_BYTES} />
       </section>
 
-      <section className="flex flex-col gap-3 rounded-2xl bg-white p-6">
-        <h2 className="text-lg font-medium text-key-brown">AI 반응 미리보기 설정</h2>
-        <p className="text-sm text-key-stone">
+      <section className="flex flex-col gap-3 rounded-sm bg-white p-6">
+        <h2 className="text-lg font-medium text-ink">AI 반응 미리보기 설정</h2>
+        <p className="text-sm text-ash">
           구독자가 메시지를 보내기 전에 내 예상 반응을 이모지로 미리 보여줘요. AI가 아래 성격을
           참고합니다. 성격은 다른 사람에게 보이지 않아요.
         </p>
         <PersonaForm initialPersona={persona} maxChars={PERSONA_MAX} />
       </section>
 
-      <section className="flex flex-col gap-3 rounded-2xl bg-white p-6">
-        <h2 className="text-lg font-medium text-key-brown">닫힌 대화방</h2>
+      <section className="flex flex-col gap-3 rounded-sm bg-white p-6">
+        <h2 className="text-lg font-medium text-ink">닫힌 대화방</h2>
         {closedRooms.length === 0 && (
-          <p className="text-sm text-key-stone">아직 닫은 대화방이 없어요.</p>
+          <p className="text-sm text-ash">아직 닫은 대화방이 없어요.</p>
         )}
-        <ul className="flex flex-col divide-y divide-key-stone/20">
+        <ul className="flex flex-col divide-y divide-hairline">
           {closedRooms.map((room) => (
             <li key={room.id} className="flex items-center justify-between py-3 text-sm">
-              <Link href={`/bubble/${room.id}`} className="font-medium text-key-brown underline">
+              <Link href={`/bubble/${room.id}`} className="font-medium text-ink underline">
                 {room.title}
               </Link>
-              <span className="text-xs text-key-stone">참여 {room.member_count}명</span>
+              <span className="text-xs text-ash">참여 {room.member_count}명</span>
             </li>
           ))}
         </ul>

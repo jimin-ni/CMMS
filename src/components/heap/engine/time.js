@@ -75,7 +75,7 @@ export function setupTime(ctx) {
   function toneHud(topColour) {
     if (!hudWho) return;
     if (lumOf(topColour) > 0.62) {
-      hudWho.style.setProperty('--paper', '#2f2c24'); hudWho.style.setProperty('--paper-dim', 'rgba(47, 44, 36, 0.78)');
+      hudWho.style.setProperty('--paper', '#451400'); hudWho.style.setProperty('--paper-dim', 'rgba(69, 20, 0, 0.78)');
       hudWho.style.textShadow = '0 1px 3px rgba(255, 255, 255, 0.55)';
     } else {
       hudWho.style.removeProperty('--paper'); hudWho.style.removeProperty('--paper-dim');
