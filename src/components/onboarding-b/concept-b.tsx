@@ -2,11 +2,11 @@
 
 // 온보딩 컨셉 B: 책상 위 바인더 노트(링이 아래) → 스크롤하면 아랫장이 링을 지나 위로 넘어와 앞장 위에 덮인다(3D)
 // → 마지막 장 뒤에 하드보드 표지가 덮여 앨범 한 권이 되고, 책 등이 보이게 세워진다
-// → 책상이 걷히며 2번 방이 보이고, 카메라가 책장으로 다가가 앨범이 꽂힌 뒤 다시 물러난다
+// → 책상이 걷히며 러브쑤 방이 보이고, 카메라가 책장으로 다가가 앨범이 꽂힌 뒤 다시 물러난다
 // → "Ready to Start?" → 방 안 둘러보기 (컨셉 C와 같은 room-tour.tsx).
 // settings: 설정 화면(/settings)으로 쓴다. 첫 장의 큰 제목만 "setting"이고, 스크롤 연출은 같다.
-//   스크롤하는 동안 노트 바깥을 누르면 홈(/home: 온보딩이 끝난 2번 방)으로 간다.
-// 2번 방은 /room/dname 과 같은 HeapRoom 이다. 엔진에는 heap:intro(카메라 줌, 꽂힌 앨범)와 heap:introquery(앨범 자리의 화면 좌표)만 쓴다.
+//   스크롤하는 동안 노트 바깥을 누르면 홈(/home: 온보딩이 끝난 러브쑤 방)으로 간다.
+// 러브쑤 방은 /room/lovesoo 와 같은 HeapRoom 이다. 엔진에는 heap:intro(카메라 줌, 꽂힌 앨범)와 heap:introquery(앨범 자리의 화면 좌표)만 쓴다.
 import "../onboarding-c/onboarding-c.css";
 import "./onboarding-b.css";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -249,7 +249,7 @@ export function ConceptB({
       </svg>
       <div style={{ height: `${SCROLL_SCREENS * 100}vh` }}>
         <div className="oc-stage" onClick={onStageClick}>
-          {/* 실제 2번 방. 책상 아래에 깔려 있다가 표지가 덮일 때부터 보인다. */}
+          {/* 실제 러브쑤 방. 책상 아래에 깔려 있다가 표지가 덮일 때부터 보인다. */}
           <div ref={hostRef} className={phase === "room" ? "oc-room-host live" : "oc-room-host"}>
             <HeapRoom roomId={ONBOARDING_ROOM_ID} data={data} viewerName={viewerName} signedIn={signedIn} signInHere />
           </div>

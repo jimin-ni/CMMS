@@ -27,7 +27,7 @@
 .ob-rounded { font-family: var(--font-oc-rounded), var(--font-oc-body), sans-serif; }
 .ob-hand { font-family: var(--font-oc-rounded), var(--font-oc-body), sans-serif; color: var(--clay); }
 
-/* 책상: 올리브 갈색 위에 양옆으로 은은한 주황빛. 표지가 덮이면 걷혀 2번 방이 보인다 */
+/* 책상: 올리브 갈색 위에 양옆으로 은은한 주황빛. 표지가 덮이면 걷혀 러브쑤 방이 보인다 */
 .ob-desk {
   inset: 0;
   background:

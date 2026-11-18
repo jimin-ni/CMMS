@@ -1,7 +1,7 @@
-// 온보딩 컨셉 C의 글, 스크롤 시간표, 둘러보기 대상. 방은 실제 2번 방을 힙 엔진으로 띄운다 (concept-c.tsx).
+// 온보딩 컨셉 C의 글, 스크롤 시간표, 둘러보기 대상. 방은 실제 러브쑤 방을 힙 엔진으로 띄운다 (concept-c.tsx).
 
-// 온보딩이 띄우는 방: 2번 방 (public/heap/rooms/index.json 의 두 번째, DB slug "dname")
-export const ONBOARDING_ROOM_ID = "dname";
+// 온보딩이 띄우는 방: 러브쑤 방 (public/heap/rooms/index.json 의 첫 번째, DB slug "lovesoo")
+export const ONBOARDING_ROOM_ID = "lovesoo";
 
 type LayoutItem = { type?: unknown; model?: unknown; fn?: { kind?: unknown } | null };
 
@@ -35,9 +35,14 @@ export const STEPS: Step[] = [
     match: (it) => it.type === "lamp" || /lamp|speaker|radio|television|tv/i.test(model(it)),
   },
   {
+    title: "A Taste of Home",
+    line: "Something is always cooking here.",
+    match: (it) => /kitchen|fridge|stove|hood|toaster|microwave|coffee/i.test(model(it)),
+  },
+  {
     title: "Stay a While",
     line: "No rush. Make yourself at home.",
-    match: (it) => it.type === "bed" || it.type === "books" || /bed|sofa|couch|chair|rug|books/i.test(model(it)),
+    match: (it) => it.type === "bed" || it.type === "books" || /bed|sofa|couch|chair|rug|books|desk|laptop/i.test(model(it)),
   },
   {
     title: "Grown Together",
@@ -61,13 +66,13 @@ export const TIMELINE = {
   introOut: [0.025, 0.065] as const, // "Memories"와 스크롤 안내가 사라지는 구간
   reveal: [0.05, 0.16] as const, // 어둠이 걷히고 창문 빛과 빈 방이 보이는 구간
   stepsStart: 0.17,
-  stepSpan: 0.13, // 한 단계: 글 → 가구 → 글이 사라짐
+  stepSpan: 0.11, // 한 단계: 글 → 가구 → 글이 사라짐. 마지막 단계가 dark 전에 끝나야 한다 (0.17 + 6 × 0.11 = 0.83)
   dark: [0.85, 0.93] as const, // 배경이 다시 어두워지는 구간
   ready: [0.9, 0.95] as const, // "Ready to Start?"가 나타나는 구간
 };
 
 // 스크롤 전체 높이 (화면 높이의 배수)
-export const SCROLL_SCREENS = 8;
+export const SCROLL_SCREENS = 9;
 
 export const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 // a에서 0, b에서 1로 올라가는 값

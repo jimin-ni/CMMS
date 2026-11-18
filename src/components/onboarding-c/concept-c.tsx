@@ -1,6 +1,6 @@
 "use client";
 
-// 온보딩 컨셉 C. 방은 실제 2번 방이다: /room/dname 과 같은 HeapRoom(힙 엔진)을 띄우고, 그 위에 온보딩을 얹는다.
+// 온보딩 컨셉 C. 방은 실제 러브쑤 방이다: /room/lovesoo 와 같은 HeapRoom(힙 엔진)을 띄우고, 그 위에 온보딩을 얹는다.
 // 어두운 화면 → 창문 빛과 빈 방 → 스크롤마다 글과 가구가 번갈아 쌓임 → "Ready to Start?" → 방이 화면 가득 확대
 // → 방 안 둘러보기(room-tour.tsx: 안내 팝업, 진행 점, 내비게이션 바, 로그인 팝업).
 // 방(힙 엔진)이 뜰 때(heap:ready)까지 대기 화면(loading-screen.tsx)을 덮는다.
@@ -183,7 +183,7 @@ export function ConceptC({
       <PaperFilters />
       <div style={{ height: `${SCROLL_SCREENS * 100}vh` }}>
         <div className="oc-stage" onClick={() => phaseRef.current === "scroll" && enterRoom()}>
-          {/* 실제 2번 방. 스크롤하는 동안에는 누를 수 없고, 방 안에 들어오면 /room/dname 과 똑같이 움직인다. */}
+          {/* 실제 러브쑤 방. 스크롤하는 동안에는 누를 수 없고, 방 안에 들어오면 /room/lovesoo 와 똑같이 움직인다. */}
           <div ref={hostRef} className={phase === "room" ? "oc-room-host live" : "oc-room-host"}>
             <HeapRoom roomId={ONBOARDING_ROOM_ID} data={data} viewerName={viewerName} signedIn={signedIn} signInHere />
           </div>
