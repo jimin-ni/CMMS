@@ -23,6 +23,7 @@ import { usePrefs } from "@/lib/settings/prefs";
 import type { HeapChannelPlatform } from "@/lib/heap/platform";
 import type { ReelClass } from "@/lib/heap/caps";
 import { toEngineNote } from "./engine/tree-ids";
+import { RoomBgm } from "./room-bgm";
 import { RoomEditor } from "./room-editor";
 import { SetupChecklist, setupFlags, type ChecklistAction } from "./setup-checklist";
 import { ShareButton } from "./share-button";
@@ -378,6 +379,9 @@ export function HeapRoom({
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       <link rel="stylesheet" href={FONTS_HREF} precedence="default" />
+
+      {/* 배경음악: 쪽지 트리 모드에서는 캐롤, 영사기로 영상을 보는 동안에는 멈춘다 (room-bgm.tsx) */}
+      <RoomBgm tree={mode === "tree"} paused={mode === "watch"} />
 
       {/* 엔진이 mount마다 여기에 <canvas id="scene">을 새로 만들고, dispose 때 지운다. */}
       <div id="scene-host" />

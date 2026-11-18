@@ -50,17 +50,25 @@
 
 | 파일 | 항목 | 원본 | 길이 | 라이선스 | 출처 표기 | 커밋 |
 |---|---|---|---|---|---|---|
-| `bgm/bgm-warm-retro-soul-backbeat-budgetpixel.mp3` | 배경음악 1 | [Warm Retro Soul Backbeat](https://budgetpixel.com/background-music/warm-retro-soul-backbeat-13196076) | 45.1초 | CC BY 4.0 | 필요 | 함 |
+| `bgm/bgm-warm-retro-soul-backbeat-budgetpixel.mp3` | 배경음악 1 (방의 기본 배경음악) | [Warm Retro Soul Backbeat](https://budgetpixel.com/background-music/warm-retro-soul-backbeat-13196076) | 45.1초 | CC BY 4.0 | 필요 | 함 |
 | `sfx/floor-walk-freesound-543685.mp3` | 마룻바닥 걷기 1 | [Freesound 543685](https://freesound.org/s/543685/) (미리듣기 MP3) | 0:24 | CC0 | 불필요 | 함 |
 | `sfx/floor-creak-freesound-347851.mp3` | 마룻바닥 걷기 2 | [Freesound 347851](https://freesound.org/s/347851/) (미리듣기 MP3) | 약 1:21 | CC0 | 불필요 | 함 |
 | `sfx/floor-walk-oga-83765.wav` | 마룻바닥 걷기 3 | [OpenGameArt: Steps in wood floor](https://opengameart.org/node/83765) | 약 3.5초 | CC0 | 불필요 | 함 |
 | `sfx/projector-start-stop-mixkit-3013.mp3` | 영사기 켜기 1 | Mixkit 3013 (Bell & Howell start/stop) | 0:29 | Mixkit Free | 불필요 | 안 함 (§3) |
 | `sfx/projector-working-mixkit-1441.mp3` | 영사기 켜기 2 | Mixkit 1441 (Vintage film projector working) | 0:24 | Mixkit Free | 불필요 | 안 함 (§3) |
 | `sfx/projector-hum-mixkit-1443.mp3` | 영사기 켜기 3 | Mixkit 1443 (Antique movie projector hum) | 0:30 | Mixkit Free | 불필요 | 안 함 (§3) |
-| `bgm/carol-christmas-lullaby-mixkit-985.mp3` | 잔잔한 캐롤 1 | Mixkit 985 (Christmas Lullaby, Michael Ramir C.) | 1:46 | Mixkit Free | 불필요 | 안 함 (§3) |
-| `bgm/carol-a-christmas-carol-mixkit-896.mp3` | 잔잔한 캐롤 2 | Mixkit 896 (A Christmas Carol, Michael Ramir C.) | 1:47 | Mixkit Free | 불필요 | 안 함 (§3) |
+| `bgm/carol-christmas-lullaby-mixkit-985.mp3` | 잔잔한 캐롤 1 (쪽지 트리 모드 배경음악) | Mixkit 985 (Christmas Lullaby, Michael Ramir C.) | 1:46 | Mixkit Free | 불필요 | 안 함 (§3) |
 
 Freesound 원본 파일(WAV 등)은 로그인해야 받을 수 있어 미리듣기 MP3(128kbps)를 받았습니다. 음질이 부족하면 로그인 후 원본으로 바꿉니다.
+
+A Christmas Carol(Mixkit 896)은 2026-11-18에 쓰지 않기로 하고 지웠습니다.
+
+### 쓰는 곳 (`src/components/heap/room-bgm.tsx`)
+
+- 방에서는 기본 배경음악을 반복 재생합니다. 쪽지 트리 모드에 들어가면 캐롤로 바꿔 반복 재생하고, 나오면 기본 배경음악으로 돌아갑니다.
+- 영사기로 영상을 보는 동안에는 배경음악을 멈춥니다.
+- 소리 크기는 설정의 배경음악 값을 따릅니다.
+- 캐롤 파일이 없으면(저장소와 배포본) 트리 모드에서도 기본 배경음악을 계속 틉니다.
 
 ## 5. 받지 못한 파일
 
