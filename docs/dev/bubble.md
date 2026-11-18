@@ -1,6 +1,7 @@
 # 버블, 크리에이터 톡, AI 반응 미리보기 개발 메모
 
 - 상태: 1차 개발이 main에 머지됨 (PR #16, #23, #24). 이슈 #4 닫음. 크리에이터 톡과 프로필 사진은 PR #27 (`jimins-claude/feature-main1-creator-talk`, 머지 전). 남은 작업은 #19, #21, #22 (2026-11-12)
+- 보류 (2026-11-18): 크리에이터 톡과 AI 미리보기는 `src/lib/features.ts`의 `FEATURE_ON`으로 꺼 두었습니다. 화면에서 숨기고 서버도 막습니다
 - 기획 근거: `docs/planning/02-features.md` 3-1~3-4절
 - 버전: Next.js 16.4.6, `drizzle-orm` 0.45.4, PostgreSQL 16.15, Jev `jev-latest` (전체 표는 `docs/planning/03-tech-stack.md` 1-1절)
 
