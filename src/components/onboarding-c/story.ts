@@ -47,7 +47,7 @@ export const STEPS: Step[] = [
   {
     title: "Grown Together",
     line: "Every visit leaves this room a little more alive.",
-    match: (it) => it.type === "plant" || it.type === "snake" || /plant/i.test(model(it)),
+    match: (it) => it.type === "plant" || it.type === "snake" || it.fn?.kind === "tree" || /plant/i.test(model(it)),
   },
 ];
 
@@ -91,7 +91,7 @@ export function stepWindow(index: number) {
 // ---------- 방 안에서 둘러볼 곳 ----------
 // 엔진이 알려 주는 것으로 센다: 모드(heap:mode)와 열린 창(overlay 의 hidden 이 풀림). 엔진을 고치지 않고 읽기만 한다.
 
-export type SpotId = "pile" | "projector" | "shelf" | "phone" | "guestbook" | "door" | "pc" | "keepsake" | "calendar" | "music";
+export type SpotId = "pile" | "projector" | "shelf" | "phone" | "guestbook" | "door" | "pc" | "keepsake" | "calendar" | "music" | "tree";
 
 export const SPOTS: Record<SpotId, { name: string; story: string }> = {
   pile: { name: "The Polaroid Pile", story: "You sat down to dig. Pick one up, flip it, or feed it to the projector." },
@@ -104,10 +104,11 @@ export const SPOTS: Record<SpotId, { name: string; story: string }> = {
   keepsake: { name: "A Keepsake", story: "Something they wanted to keep, and share with you." },
   calendar: { name: "The Calendar", story: "Dates they want you to remember." },
   music: { name: "The Music", story: "The room's own soundtrack. Stay and listen." },
+  tree: { name: "The Note Tree", story: "Leave a note on a branch. It stays here for them to read." },
 };
 
-// 엔진 모드 → 둘러본 곳
-export const MODE_SPOT: Partial<Record<string, SpotId>> = { sit: "pile", watch: "projector", sort: "shelf" };
+// 엔진 모드 → 둘러본 곳 (tree: 쪽지 트리를 눌러 들어간 모드)
+export const MODE_SPOT: Partial<Record<string, SpotId>> = { sit: "pile", watch: "projector", sort: "shelf", tree: "tree" };
 // 엔진이 여는 창의 id (heap-room.tsx) → 둘러본 곳
 export const PANEL_SPOT: Record<string, SpotId> = {
   phone: "phone",
@@ -128,7 +129,7 @@ export function spotsFor(items: unknown): SpotId[] {
   const spots: SpotId[] = ["pile", "projector"];
   if (list.some((it) => it?.type === "shelf")) spots.push("shelf");
   spots.push("phone", "guestbook", "door");
-  for (const kind of ["pc", "keepsake", "calendar", "music"] as const) if (kinds.has(kind)) spots.push(kind);
+  for (const kind of ["pc", "keepsake", "calendar", "music", "tree"] as const) if (kinds.has(kind)) spots.push(kind);
   return spots;
 }
 
