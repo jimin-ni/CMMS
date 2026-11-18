@@ -125,6 +125,7 @@ async function run(ctx) {
   setupEditCamera(ctx); // 꾸미기의 카메라: 맞춤, 확대, 이동, 평면도 (loop.js 의 ROOM_CAM 을 쓴다)
   setupRecolour(ctx); // 팔레트를 다시 마운트하지 않고 바꾼다 (ctx.recolour, edit.js 가 쓴다)
   setupEdit(ctx); // 꾸미기. 포인터를 방 루트의 capture 단계에서 먼저 받으므로 input.js 뒤에 세워도 된다
+  if (process.env.NODE_ENV !== 'production') (await import('./dev.js')).setupDev(ctx); // 개발 전용: 겹친 면 검사, .glb 내보내기 (heap:dev)
 
   await fontsReady(ctx.CARD_FONT, ctx.cardArtReady); // 썸네일은 기다리지 않는다: buildHeap() 이 줄을 세우고 카드는 그림이 오는 대로 채워진다
   if (ctx.disposed) return;

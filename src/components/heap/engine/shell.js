@@ -7,34 +7,39 @@ export function setupShell(ctx) {
   const { layout, C, WALLS, box, WALL_H, onWall, RX, RZ, scene, rand } = ctx;
 
   const WIN = layout.window && { ...layout.window, u0: layout.window.at - layout.window.w / 2, u1: layout.window.at + layout.window.w / 2, y0: layout.window.y - layout.window.h / 2, y1: layout.window.y + layout.window.h / 2 };
-  const DOOR = layout.door && { ...layout.door, u0: layout.door.at - 0.5, u1: layout.door.at + 0.5, y0: 0, y1: 2.15 };
+  // 깊이 층: 벽 안쪽 면 0, 걸레받이 앞면 TRIM_D, 문틀 앞면 FRAME_D. 두 면이 한 평면에 겹치면 깜빡이므로(z-fighting) 층마다 다르다.
+  // 벽 두께는 WALL_T 이고 벽은 방 밖(off -WALL_T..0)에 선다. 뚫린 곳(창, 문)의 벽 두께는 문틀이나 문턱, 창 상자로 덮는다.
+  const WALL_T = 0.2, TRIM_D = 0.06, FRAME_D = 0.08, DOOR_FRAME = 0.06;
+  // 문: 구멍은 at ± 0.5. 걸레받이는 문틀 바깥 끝(± 0.5 + DOOR_FRAME)에서 멈춘다 (tu0, tu1)
+  const DOOR = layout.door && { ...layout.door, u0: layout.door.at - 0.5, u1: layout.door.at + 0.5, tu0: layout.door.at - 0.5 - DOOR_FRAME, tu1: layout.door.at + 0.5 + DOOR_FRAME, y0: 0, y1: 2.15 };
   const wallMat = tone(C, 'wall'), trimMat = tone(C, 'trim');
   function buildWall(wall) {
     const openings = [WIN, DOOR].filter(o => o && o.wall === wall).sort((a, b) => a.u0 - b.u0);
     const slab = (u0, u1, y0, y1) => {
       if (u1 - u0 < 0.01 || y1 - y0 < 0.01) return;
-      const p = WALLS[wall].point((u0 + u1) / 2, (y0 + y1) / 2, -0.1);
-      if (wall === 'back') box(u1 - u0, y1 - y0, 0.2, wallMat, p.x, p.y, p.z);
-      else box(0.2, y1 - y0, u1 - u0, wallMat, p.x, p.y, p.z);
+      const p = WALLS[wall].point((u0 + u1) / 2, (y0 + y1) / 2, -WALL_T / 2);
+      if (wall === 'back') box(u1 - u0, y1 - y0, WALL_T, wallMat, p.x, p.y, p.z);
+      else box(WALL_T, y1 - y0, u1 - u0, wallMat, p.x, p.y, p.z);
     };
     const trim = (u0, u1) => {
       if (u1 - u0 < 0.01) return;
-      const p = WALLS[wall].point((u0 + u1) / 2, 0.45, 0.03);
-      if (wall === 'back') box(u1 - u0, 0.9, 0.06, trimMat, p.x, p.y, p.z, { cast: false });
-      else box(0.06, 0.9, u1 - u0, trimMat, p.x, p.y, p.z, { cast: false });
+      const p = WALLS[wall].point((u0 + u1) / 2, 0.45, TRIM_D / 2);
+      if (wall === 'back') box(u1 - u0, 0.9, TRIM_D, trimMat, p.x, p.y, p.z, { cast: false });
+      else box(TRIM_D, 0.9, u1 - u0, trimMat, p.x, p.y, p.z, { cast: false });
     };
     const H = WALLS[wall].half;
-    let cur = -H - 0.2, tcur = wall === 'back' ? -H + 0.06 : -H;
+    // 모서리 기둥(벽 두께 x 벽 두께)은 뒷벽이 갖는다. 왼벽까지 덮으면 두 벽이 같은 자리에 겹쳐 윗면이 깜빡인다
+    let cur = wall === 'back' ? -H - WALL_T : -H, tcur = wall === 'back' ? -H + TRIM_D : -H;
     for (const o of openings) {
       slab(cur, o.u0, 0, WALL_H); slab(o.u0, o.u1, 0, o.y0); slab(o.u0, o.u1, o.y1, WALL_H);
       cur = o.u1;
-      if (o.y0 < 0.9) { trim(tcur, o.u0); tcur = o.u1; }
+      if (o.y0 < 0.9) { trim(tcur, o.tu0 ?? o.u0); tcur = o.tu1 ?? o.u1; }
     }
     slab(cur, H, 0, WALL_H); trim(tcur, H);
   }
   buildWall('back'); buildWall('left');
 
-  // 창: 틀, 유리, 해 질 녘 배경, 바깥의 나무. 햇빛이 창으로 들어온다
+  // 창: 틀, 유리, 창밖 하늘 상자. 햇빛이 창으로 들어온다
   const frameMat = tone(C, 'paper');
   ctx.sunDir = new THREE.Vector3(1.6, -2.55, 3.5).normalize(); ctx.shaftCorners = null;
   ctx.sunHeading = new THREE.Vector3(1.6, 0, 3.5); ctx.skyTex = null; // sunHeading: 해의 수평 방향(창에 묶인다). 높이는 applyTime 이 정한다
@@ -43,8 +48,9 @@ export function setupShell(ctx) {
     const g = new THREE.Group();
     box(ww + 0.16, 0.08, 0.3, frameMat, 0, -wh / 2 - 0.02, 0.08, { parent: g });
     box(ww + 0.16, 0.08, 0.22, frameMat, 0, wh / 2 + 0.02, 0.02, { parent: g });
-    for (const sx of [-ww / 2 - 0.04, 0, ww / 2 + 0.04]) box(0.07, wh, 0.12, frameMat, sx, 0, -0.1, { parent: g });
-    box(ww, 0.05, 0.1, frameMat, 0, 0, -0.1, { parent: g });
+    // 옆 기둥은 구멍 안쪽 가장자리에 붙는다 (전에는 ± (ww/2 + 0.04) 라 벽 속에 묻혀 보이지 않았다)
+    for (const sx of [-ww / 2 + 0.035, 0, ww / 2 - 0.035]) box(0.07, wh, 0.12, frameMat, sx, 0, -0.1, { parent: g });
+    box(ww - 0.14, 0.05, 0.1, frameMat, 0, 0, -0.1, { parent: g }); // 가로살은 두 옆 기둥 사이에만 (끝면이 기둥 바깥 면과 겹치지 않게)
     const glass = new THREE.Mesh(new THREE.PlaneGeometry(ww, wh), new THREE.MeshStandardMaterial({ color: '#ffd9a8', transparent: true, opacity: 0.12, roughness: 0.1 }));
     glass.position.z = -0.1; g.add(glass);
     onWall(WIN.wall, WIN.at, WIN.y, 0, g);
@@ -52,15 +58,28 @@ export function setupShell(ctx) {
     { const sg = skyC.getContext('2d'), gr = sg.createLinearGradient(0, 0, 0, 128);
       gr.addColorStop(0, '#f2c48f'); gr.addColorStop(0.55, '#e9a46b'); gr.addColorStop(1, '#8a7a55'); sg.fillStyle = gr; sg.fillRect(0, 0, 4, 128); }
     ctx.skyTex = canvasTexture(skyC);
-    onWall(WIN.wall, WIN.at, 0.9, -3.5, new THREE.Mesh(new THREE.PlaneGeometry(2 * W.half, 3.6), new THREE.MeshBasicMaterial({ map: ctx.skyTex })));
-    const out = new THREE.Mesh(new THREE.PlaneGeometry(2 * W.half, 3.4), flat('#6b6a4a')); out.rotation.x = -Math.PI / 2;
-    const og = new THREE.Group(); og.add(out); out.position.set(0, -0.12, 0); onWall(WIN.wall, WIN.at, 0, -1.9, og);
-    const tree = new THREE.Group();
-    box(0.18, 1.6, 0.18, tone(C, 'woodDark'), 0, 0.7, 0, { parent: tree });
-    for (const [x, y, z, s] of [[0, 1.9, 0, 0.75], [-0.5, 1.6, 0.2, 0.55], [0.5, 1.7, -0.1, 0.6]]) {
-      const c = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 0), tone(C, 'leaf')); c.position.set(x, y, z); c.castShadow = true; tree.add(c);
+    // 창밖: 창 구멍 바로 뒤에 붙은 닫힌 상자. 안쪽 다섯 면에 하늘을 칠한다 (time.js 가 skyTex 를 시간에 맞춰 다시 칠한다).
+    // 상자는 벽 길이와 벽 높이 안에 잘라 두어서, 방 밖에서 비추는 카메라(온보딩)에도 벽 뒤로 삐져나오지 않는다.
+    // 그림자를 드리우지 않는다: 해는 이 상자를 지나 창으로 들어온다.
+    {
+      const M = 0.1, D = 0.35;
+      const bu0 = Math.max(WIN.u0 - M, -W.half), bu1 = Math.min(WIN.u1 + M, W.half);
+      const by0 = Math.max(WIN.y0 - M, 0), by1 = Math.min(WIN.y1 + M, WALL_H);
+      const bw = bu1 - bu0, bh = by1 - by0;
+      const skyMat = new THREE.MeshBasicMaterial({ map: ctx.skyTex, side: THREE.DoubleSide });
+      const vb = new THREE.Group();
+      const face = (w, h, x, y, z, rx, ry, v) => {
+        const geo = new THREE.PlaneGeometry(w, h);
+        if (v != null) { const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, 0.5, v); } // 위아래 면은 하늘의 한 줄 색만
+        const m = new THREE.Mesh(geo, skyMat); m.position.set(x, y, z); m.rotation.set(rx, ry, 0); vb.add(m);
+      };
+      face(bw, bh, 0, 0, -D, 0, 0);
+      face(D, bh, -bw / 2, 0, -D / 2, 0, Math.PI / 2);
+      face(D, bh, bw / 2, 0, -D / 2, 0, -Math.PI / 2);
+      face(bw, D, 0, bh / 2, -D / 2, Math.PI / 2, 0, 0.98);
+      face(bw, D, 0, -bh / 2, -D / 2, -Math.PI / 2, 0, 0.02);
+      onWall(WIN.wall, (bu0 + bu1) / 2, (by0 + by1) / 2, -WALL_T, vb); // 상자는 제 가운데에 대해 대칭이라 벽의 방향과 상관없다
     }
-    onWall(WIN.wall, WIN.at + 0.5, 0, -2.2, tree);
     const toCentre = Math.sign(-WIN.at) || 1;
     ctx.sunHeading = W.n.clone().multiplyScalar(3.5).addScaledVector(W.axis, 1.6 * toCentre);
     ctx.sunDir = ctx.sunHeading.clone().add(new THREE.Vector3(0, -2.55, 0)).normalize();
@@ -104,9 +123,14 @@ export function setupShell(ctx) {
   ctx.doorSpot = null;
   if (DOOR) {
     const g = new THREE.Group();
-    const panel = box(0.92, 2.1, 0.06, tone(C, 'accent'), 0, 1.05, -0.1, { parent: g });
-    for (const sx of [-0.52, 0.52]) box(0.08, 2.2, 0.24, frameMat, sx, 1.1, -0.06, { parent: g });
-    box(1.12, 0.1, 0.24, frameMat, 0, 2.2, -0.06, { parent: g });
+    // 문틀(기둥, 머리)은 벽 두께의 거의 끝(-0.18)부터 FRAME_D 까지 나와서 걸레받이(TRIM_D)보다 앞에 선다.
+    // 기둥은 구멍 안으로 0.02 들어오고(안쪽 면 ± 0.48), 머리는 구멍 위 끝(2.15)보다 0.01 내려온다: 벽의 잘린 면과 겹치는 평면이 없다.
+    const fz0 = -WALL_T + 0.02, fd = FRAME_D - fz0, fz = (fz0 + FRAME_D) / 2, fw = 0.02 + DOOR_FRAME, headY0 = DOOR.y1 - 0.01;
+    for (const s of [-1, 1]) box(fw, headY0, fd, frameMat, s * (0.48 + fw / 2), headY0 / 2, fz, { parent: g }); // 기둥 윗면은 머리 밑면에 닿는다 (겹치지 않는다)
+    box(0.96 + 2 * fw, 0.1, fd, frameMat, 0, headY0 + 0.05, fz, { parent: g });
+    // 문짝은 문턱에서 머리 밑까지 막는다. 문턱은 벽 두께를 가로질러 바닥 높이(윗면 y 0)에 깔린다: 문 밑으로 벽 너머가 보이지 않는다
+    const panel = box(0.96, headY0, 0.06, tone(C, 'accent'), 0, headY0 / 2, -WALL_T / 2, { parent: g });
+    box(0.96, 0.1, WALL_T, tone(C, 'woodDark'), 0, -0.05, -WALL_T / 2, { parent: g, cast: false });
     const knob = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), flat('#d8b27a', { metalness: 0.4, roughness: 0.4 })); knob.position.set(0.34, 1.0, -0.04); g.add(knob);
     const sign = makeCanvas(256, 96);
     const st = canvasTexture(sign);
