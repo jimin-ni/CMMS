@@ -21,10 +21,11 @@
   align-items: center;
   justify-content: center;
   margin: 0;
-  font-family: var(--font-oc-pixel), var(--font-oc-body), sans-serif;
+  font-family: var(--font-display);
+  font-weight: 500;
   font-size: clamp(72px, 21vw, 340px);
   line-height: 1;
-  text-transform: lowercase;
+  text-transform: uppercase;
   white-space: nowrap;
   color: rgba(243, 234, 219, 0.09);
   user-select: none;

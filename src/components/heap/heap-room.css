@@ -14,6 +14,17 @@
   --ink: #451400;
   --ui: var(--font-text);
   --hand: var(--font-display);
+  /* 치폴레 디자인 가이드(chipotle.design.md)의 토큰. 단추, 안내 줄, 창(.panel), 쪽지 쓰기 조작 줄이 쓴다.
+     글꼴은 사이트 공통 변수다: 제목 --font-display(Oswald, 양진체), 단추와 본문 --font-text(Nunito, Pretendard).
+     루트 레이아웃이 <html> 에 붙인 글꼴 클래스가 정한다 (src/app/fonts/brand.ts, globals.css). */
+  --cp-ink: #451400;
+  --cp-ink-soft: #6b321b;
+  --cp-ash: #786259;
+  --cp-hair: #d4cbc7;
+  --cp-white: #ffffff;
+  --cp-cream: #f2f2f2;
+  --cp-display: var(--font-display);
+  --cp-ui: var(--font-text);
   /* fills what the header leaves of the viewport: body is a min-h-full flex column */
   position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; container-type: size;
   background: var(--olive); color: var(--paper); font-family: var(--ui);
@@ -48,37 +59,45 @@
 .heap-room .bottom { align-self: center; display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 100%; }
 .heap-room .row { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 .heap-room .row[hidden] { display: none; }
-.heap-room .hint { margin: 0; padding: 6px 12px; border-radius: 4px; background: rgba(243, 234, 219, 0.9); color: var(--ink); font-size: 13px; text-align: center; text-wrap: balance; }
-.heap-room .btn { pointer-events: auto; font: 600 14px var(--ui); color: var(--paper); background: var(--clay); border: 0; border-radius: 4px; padding: 9px 16px; cursor: pointer; text-decoration: none; }
-.heap-room .btn.ghost { background: rgba(47, 44, 36, 0.78); }
-.heap-room .btn.paper { background: var(--paper); color: var(--ink); }
+.heap-room .hint { margin: 0; padding: 6px 12px; border: 1px solid var(--cp-ink); border-radius: 4px; background: var(--cp-white); color: var(--cp-ink); font: 600 13px/1.4 var(--cp-ui); text-align: center; text-wrap: balance; }
+/* 단추: 가이드의 button-primary (짙은 갈색 바탕, 흰 글자, 4px 모서리, 35px 높이, 대문자 Nunito Extra Bold) */
+.heap-room .btn { pointer-events: auto; display: inline-flex; align-items: center; justify-content: center; height: 33px; font: 800 15px/1 var(--cp-ui); text-transform: uppercase; letter-spacing: 0.02em; color: var(--cp-white); background: var(--cp-ink); border: 1px solid #000; border-radius: 4px; padding: 0 12px; cursor: pointer; text-decoration: none; white-space: nowrap; }
+.heap-room .btn:hover:not(:disabled):not([aria-disabled="true"]) { background: var(--cp-ink-soft); }
+/* 보조 단추: 가이드의 button-secondary-outline (흰 바탕, 갈색 글자와 테두리) */
+.heap-room .btn.ghost { background: var(--cp-white); color: var(--cp-ink); border-color: var(--cp-ink); }
+.heap-room .btn.paper { background: var(--cp-cream); color: var(--cp-ink); border-color: var(--cp-ink); }
+.heap-room .btn.ghost:hover:not(:disabled):not([aria-disabled="true"]), .heap-room .btn.paper:hover:not(:disabled):not([aria-disabled="true"]) { background: var(--cp-cream); }
 .heap-room .btn[hidden] { display: none; }
-.heap-room .btn:focus-visible { outline: 3px solid var(--paper); outline-offset: 2px; }
+.heap-room .btn:focus-visible { outline: 2px solid var(--cp-white); outline-offset: 2px; box-shadow: 0 0 0 4px var(--cp-ink); }
 .heap-room .btn .k { opacity: 0.6; margin-right: 6px; font-variant-numeric: tabular-nums; }
 /* 쪽지 트리: 나온 쪽지 옆의 ‹ › (tree.js). HUD 는 pointer-events 가 꺼져 있어 단추만 받는다. */
-.heap-room .tree-step { position: absolute; top: 50%; transform: translateY(-50%); pointer-events: auto; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 4px; font: 600 28px/1 var(--ui); color: var(--paper); background: rgba(47, 44, 36, 0.78); cursor: pointer; }
+.heap-room .tree-step { position: absolute; top: 50%; transform: translateY(-50%); pointer-events: auto; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 1px solid var(--cp-ink); border-radius: 4px; font: 700 28px/1 var(--cp-ui); color: var(--cp-ink); background: var(--cp-white); cursor: pointer; }
 .heap-room .tree-step.prev { left: max(16px, env(safe-area-inset-left, 0px)); }
 .heap-room .tree-step.next { right: max(16px, env(safe-area-inset-right, 0px)); }
 .heap-room .tree-step[hidden] { display: none; }
-.heap-room .tree-step:focus-visible { outline: 3px solid var(--paper); outline-offset: 2px; }
+.heap-room .tree-step:focus-visible { outline: 2px solid var(--cp-white); outline-offset: 2px; box-shadow: 0 0 0 4px var(--cp-ink); }
 
 .heap-room #toast { position: absolute; top: 70px; left: 50%; transform: translateX(-50%); margin: 0; font-family: var(--hand); font-size: 26px; line-height: 1.2; color: var(--ink); background: var(--paper); padding: 4px 18px 6px; border: 1px solid var(--clay); border-radius: 4px; pointer-events: none; text-align: center; }
 .heap-room #toast:empty { display: none; }
-.heap-room .gb-list { display: flex; flex-direction: column; gap: 6px; }
-.heap-room .gb-row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid #d4cbc7; font-size: 14px; }
-.heap-room .gb-row span:first-child { font-family: var(--hand); font-size: 22px; line-height: 1; }
-.heap-room .gb-row small { color: rgba(47, 44, 36, 0.62); font-variant-numeric: tabular-nums; }
-.heap-room .gb-row.owner span:first-child { color: var(--clay); }
-.heap-room .gb-form { display: flex; gap: 8px; }
-.heap-room .gb-form input { flex: 1; min-width: 0; font: 15px var(--ui); padding: 8px 10px; border-radius: 4px; border: 1px solid rgba(86, 83, 68, 0.3); background: #fff8ec; color: var(--ink); }
-.heap-room .gb-form input:focus-visible { outline: 2px solid var(--clay); }
+/* 방명록: 가이드의 text-input 과 hairline-divider */
+.heap-room .gb-list { display: flex; flex-direction: column; border-top: 1px solid var(--cp-ink); }
+.heap-room .gb-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--cp-hair); font: 400 16px/1.5 var(--cp-ui); }
+.heap-room .gb-row span:first-child { font-weight: 700; overflow-wrap: anywhere; }
+.heap-room .gb-row small { flex: none; font: 600 13px/1.4 var(--cp-ui); color: var(--cp-ash); font-variant-numeric: tabular-nums; }
+.heap-room .gb-row.owner small { color: var(--cp-ink); }
+.heap-room .gb-form { display: flex; gap: 10px; }
+.heap-room .gb-form input { flex: 1; min-width: 0; height: 38px; font: 400 16px var(--cp-ui); padding: 0 16px; border-radius: 4px; border: 1px solid var(--cp-ash); background: var(--cp-white); color: var(--cp-ink); }
+.heap-room .gb-form input::placeholder { color: var(--cp-ash); }
+.heap-room .gb-form input:focus-visible { outline: 2px solid var(--cp-ink); outline-offset: 1px; }
+.heap-room .gb-form .btn { height: 38px; padding: 0 16px; }
 
-.heap-room .overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; background: rgba(30, 28, 22, 0.45); }
+.heap-room .overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; background: rgba(28, 10, 2, 0.5); }
 .heap-room .overlay[hidden] { display: none; }
-.heap-room .panel { width: min(420px, 100%); max-height: calc(100cqh - 48px); display: flex; flex-direction: column; border-radius: 12px; background: var(--paper); color: var(--ink); overflow: hidden; }
-.heap-room .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; background: var(--olive); color: var(--paper); }
-.heap-room .panel-head b { font-size: 15px; }
-.heap-room .panel-body { padding: 14px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+/* 창: 가이드의 menu-category-tile (흰 바탕, 1px 갈색 테두리, 4px 모서리). 제목은 대문자 Oswald */
+.heap-room .panel { width: min(420px, 100%); max-height: calc(100cqh - 48px); display: flex; flex-direction: column; border: 1px solid var(--cp-ink); border-radius: 4px; background: var(--cp-white); color: var(--cp-ink); font-family: var(--cp-ui); overflow: hidden; box-shadow: 0 0 40px rgba(0, 0, 0, 0.06); }
+.heap-room .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px; background: var(--cp-white); color: var(--cp-ink); border-bottom: 1px solid var(--cp-ink); }
+.heap-room .panel-head b { font: 500 24px/1.2 var(--cp-display); text-transform: uppercase; letter-spacing: 0.01em; }
+.heap-room .panel-body { padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 13px; }
 
 .heap-room #player { position: absolute; left: 50%; top: calc(50% - 40px); transform: translate(-50%, -50%); display: flex; flex-direction: column; gap: 8px; }
 .heap-room #player[hidden] { display: none; }
@@ -141,14 +160,20 @@
 .heap-room .tag.mine { background: rgba(166, 97, 60, 0.18); }
 .heap-room .stat { display: flex; justify-content: space-between; font-size: 15px; font-variant-numeric: tabular-nums; }
 .heap-room .big { font-family: var(--hand); font-size: 48px; text-align: center; color: var(--clay); line-height: 1; }
-.heap-room .note { margin: 0; font-size: 12px; color: rgba(47, 44, 36, 0.62); line-height: 1.5; }
-.heap-room .roomlist { display: flex; flex-direction: column; gap: 8px; }
-.heap-room .roomlist button { display: flex; justify-content: space-between; align-items: center; gap: 12px; text-align: left; font: 15px var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.2); border-radius: 12px; padding: 12px 14px; cursor: pointer; }
-.heap-room .roomlist button:disabled { opacity: 0.6; cursor: default; }
-.heap-room .roomlist b { font-family: var(--hand); font-size: 26px; font-weight: 400; color: var(--clay); }
-.heap-room .roomlist small { color: rgba(47, 44, 36, 0.62); }
+.heap-room .note { margin: 0; font: 600 13px/1.4 var(--cp-ui); color: var(--cp-ash); }
+.heap-room .note a { color: var(--cp-ink); font-weight: 800; }
+/* 다른 방 목록: 가이드의 menu-category-tile. 방 이름은 24px 대문자 Oswald */
+.heap-room .roomlist { display: flex; flex-direction: column; gap: 10px; }
+.heap-room .roomlist button { display: flex; justify-content: space-between; align-items: center; gap: 16px; text-align: left; font: 400 15px/1.5 var(--cp-ui); color: var(--cp-ink); background: var(--cp-white); border: 1px solid var(--cp-ink); border-radius: 4px; padding: 16px 20px; cursor: pointer; }
+.heap-room .roomlist button:hover:not(:disabled) { background: var(--cp-cream); }
+.heap-room .roomlist button:focus-visible { outline: 2px solid var(--cp-ink); outline-offset: 2px; }
+.heap-room .roomlist button:disabled { border-color: var(--cp-hair); background: var(--cp-cream); cursor: default; }
+.heap-room .roomlist b { font: 500 24px/1.2 var(--cp-display); text-transform: uppercase; color: var(--cp-ink); }
+.heap-room .roomlist small { font: 600 13px/1.4 var(--cp-ui); color: var(--cp-ash); }
+.heap-room .roomlist button > small { flex: none; font-weight: 800; text-transform: uppercase; color: var(--cp-ink); }
+.heap-room .roomlist button:disabled > small { color: var(--cp-ash); }
 /* 다녀간 뒤 바뀐 방의 점 */
-.heap-room .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--clay); margin-left: 8px; vertical-align: middle; }
+.heap-room .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--cp-ink); margin-left: 8px; vertical-align: middle; }
 .heap-room .note .dot { margin: 0 6px 0 0; }
 
 .heap-room #fade { position: absolute; inset: 0; background: var(--olive); opacity: 0; pointer-events: none; transition: opacity 0.35s; }
@@ -162,7 +187,7 @@
 .heap-room { --ed-top: 52px; --ed-dock: 150px; }
 .heap-room.editing #scene { top: var(--ed-top); height: calc(100% - var(--ed-top) - var(--ed-dock)); }
 .heap-room.editing .hud, .heap-room.editing #toast { display: none; }
-.heap-room .btn.small { font-size: 12px; padding: 6px 11px; }
+.heap-room .btn.small { height: 27px; font-size: 12px; padding: 0 10px; }
 .heap-room .btn:disabled { opacity: 0.45; cursor: default; }
 .heap-room .ed-top {
   position: absolute; top: 0; left: 0; right: 0; height: var(--ed-top); box-sizing: border-box; z-index: 3;
@@ -196,7 +221,7 @@
   .heap-room .ed-top .ed-save { display: none; }
 }
 .heap-room .ed-top .ed-sp { flex: 1 1 0; }
-.heap-room .ed-top .btn.ghost[aria-pressed="true"] { background: var(--clay); } /* 켜진 위에서 보기 */
+.heap-room .ed-top .btn.ghost[aria-pressed="true"] { background: var(--cp-ink); color: var(--cp-white); } /* 켜진 위에서 보기 */
 .heap-room .ed-save { font-size: 13px; color: rgba(47, 44, 36, 0.62); }
 .heap-room .ed-save.dirty { color: var(--clay); font-weight: 600; }
 .heap-room .ed-leave { position: absolute; top: calc(var(--ed-top) + 8px); right: 12px; width: min(300px, calc(100% - 24px)); z-index: 7; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3); }
@@ -404,7 +429,6 @@
 }
 .heap-room .share-pop p { margin: 0 0 8px; }
 .heap-room .share-actions { display: flex; flex-wrap: wrap; gap: 6px; }
-.heap-room .share-pop .btn.ghost { color: var(--paper); }
 .heap-room .share-pop .share-note { margin: 8px 0 0; font-size: 12px; color: #4f6a2a; overflow-wrap: anywhere; }
 
 /* 채널 탭 (J6, channel-tab.tsx): 왼쪽은 연결과 채널, 오른쪽은 가져온 영상 목록. 글줄이 많아 이 탭에서만 독을 높인다 */
@@ -460,31 +484,32 @@
 .heap-room #ts-text { position: absolute; margin: 0; padding: 0; border: 0; outline: 0; resize: none; overflow: hidden; background: transparent; color: #2e2a24; caret-color: var(--clay); pointer-events: auto; word-break: keep-all; overflow-wrap: anywhere; scrollbar-width: none; touch-action: manipulation; }
 .heap-room #ts-text::placeholder { color: rgba(46, 42, 36, 0.38); }
 .heap-room #ts-text[hidden] { display: none; }
-.heap-room .ts-ctl, .heap-room .ts-drag { position: absolute; left: 50%; bottom: max(12px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); width: min(460px, calc(100% - 24px)); display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; background: rgba(47, 44, 36, 0.86); color: var(--paper); pointer-events: auto; }
+.heap-room .ts-ctl, .heap-room .ts-drag { position: absolute; left: 50%; bottom: max(12px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); width: min(460px, calc(100% - 24px)); display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 13px 16px; border: 1px solid var(--cp-ink); border-radius: 4px; background: var(--cp-white); color: var(--cp-ink); font-family: var(--cp-ui); pointer-events: auto; }
 .heap-room .ts-ctl[hidden], .heap-room .ts-drag[hidden] { display: none; }
 .heap-room .ts-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; }
-.heap-room .ts-lab { font-size: 11px; font-weight: 600; letter-spacing: 0.02em; color: var(--paper-dim); }
-.heap-room .ts-drag p { margin: 0; font-size: 13px; text-align: center; text-wrap: balance; }
+.heap-room .ts-lab { font: 700 12px/13px var(--cp-ui); text-transform: uppercase; letter-spacing: 0.02em; color: var(--cp-ash); }
+.heap-room .ts-drag p { margin: 0; font: 600 13px/1.4 var(--cp-ui); text-align: center; text-wrap: balance; }
 .heap-room .ts-tints { display: flex; gap: 6px; }
-.heap-room .ts-tints button { width: 26px; height: 26px; padding: 0; border-radius: 50%; border: 2px solid rgba(243, 234, 219, 0.35); cursor: pointer; }
-.heap-room .ts-tints button[aria-pressed="true"] { border-color: var(--clay); box-shadow: 0 0 0 2px var(--paper); }
+.heap-room .ts-tints button { width: 26px; height: 26px; padding: 0; border-radius: 50%; border: 1px solid var(--cp-hair); cursor: pointer; }
+.heap-room .ts-tints button[aria-pressed="true"] { border-color: var(--cp-white); box-shadow: 0 0 0 2px var(--cp-ink); }
 .heap-room .ts-swatches button { width: 22px; height: 22px; }
-.heap-room .ts-size { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--paper-dim); }
-.heap-room .ts-size input { width: 120px; accent-color: var(--clay); }
+.heap-room .ts-size { display: flex; align-items: center; gap: 6px; font: 600 13px var(--cp-ui); color: var(--cp-ash); }
+.heap-room .ts-size input { width: 120px; accent-color: var(--cp-ink); }
 .heap-room .ts-sig { position: absolute; display: flex; align-items: baseline; margin: 0; padding: 0; color: #4a4034; pointer-events: none; white-space: pre; }
 .heap-room .ts-sig[hidden] { display: none; }
 .heap-room .ts-sig input { flex: 1; min-width: 0; margin: 0; padding: 0; border: 0; outline: 0; background: transparent; color: inherit; font: inherit; line-height: inherit; caret-color: var(--clay); pointer-events: auto; border-bottom: 1px dashed rgba(74, 64, 52, 0.28); }
 .heap-room .ts-sig input:focus { border-bottom-color: var(--clay); }
 .heap-room .ts-sig input::placeholder { color: rgba(74, 64, 52, 0.45); }
-.heap-room .ts-seg { display: flex; border-radius: 4px; overflow: hidden; border: 1px solid rgba(243, 234, 219, 0.35); }
-.heap-room .ts-seg button { font: 600 13px var(--ui); color: var(--paper); background: transparent; border: 0; padding: 6px 12px; cursor: pointer; max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.heap-room .ts-seg button[aria-pressed="true"] { background: var(--clay); }
+.heap-room .ts-seg { display: flex; border-radius: 4px; overflow: hidden; border: 1px solid var(--cp-ink); }
+.heap-room .ts-seg button { font: 700 13px var(--cp-ui); color: var(--cp-ink); background: transparent; border: 0; padding: 6px 12px; cursor: pointer; max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.heap-room .ts-seg button + button { border-left: 1px solid var(--cp-ink); }
+.heap-room .ts-seg button[aria-pressed="true"] { background: var(--cp-ink); color: var(--cp-white); }
 .heap-room .ts-fonts { display: flex; gap: 6px; max-width: 100%; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
-.heap-room .ts-fonts button { flex: none; font-size: 20px; line-height: 1.1; color: var(--ink); background: var(--paper); border: 2px solid transparent; border-radius: 4px; padding: 3px 10px; cursor: pointer; }
-.heap-room .ts-fonts button[aria-pressed="true"] { border-color: var(--clay); }
-.heap-room .ts-count { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--paper-dim); margin-right: auto; }
-.heap-room .ts-count.full { color: #f0b090; }
-.heap-room .ts-ctl button:focus-visible, .heap-room .ts-drag button:focus-visible { outline: 3px solid var(--paper); outline-offset: 2px; }
+.heap-room .ts-fonts button { flex: none; font-size: 20px; line-height: 1.1; color: var(--cp-ink); background: var(--cp-white); border: 1px solid var(--cp-hair); border-radius: 4px; padding: 3px 10px; cursor: pointer; }
+.heap-room .ts-fonts button[aria-pressed="true"] { border-color: var(--cp-ink); box-shadow: inset 0 0 0 1px var(--cp-ink); }
+.heap-room .ts-count { font: 600 13px var(--cp-ui); font-variant-numeric: tabular-nums; color: var(--cp-ash); margin-right: auto; }
+.heap-room .ts-count.full { color: var(--cp-ink); font-weight: 800; }
+.heap-room .ts-ctl button:focus-visible, .heap-room .ts-drag button:focus-visible { outline: 2px solid var(--cp-ink); outline-offset: 2px; }
 /* 열린 쪽지 아래의 단추 줄 (tree-owner.js 가 top 을 정한다) */
 .heap-room #tree-tools { position: absolute; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; pointer-events: none; }
 .heap-room #tree-tools[hidden], .heap-room #tree-tools .btn[hidden] { display: none; }
@@ -499,11 +524,11 @@
 /* 답장 조작 줄은 쪽지 쓰기 판의 줄(.ts-ctl)과 같은 모양이다: 아래 가운데 */
 /* 쪽지함 목록 (tree-box.js) */
 .heap-room .tb-list { display: flex; flex-direction: column; gap: 6px; }
-.heap-room .tb-row { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 8px 12px; text-align: left; font: 400 14px var(--ui); color: var(--ink); background: #fff8ea; border: 1px solid rgba(86, 83, 68, 0.25); border-radius: 4px; cursor: pointer; }
-.heap-room .tb-row:hover { border-color: var(--clay); }
+.heap-room .tb-row { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 8px 12px; text-align: left; font: 400 14px var(--cp-ui); color: var(--cp-ink); background: var(--cp-white); border: 1px solid var(--cp-hair); border-radius: 4px; cursor: pointer; }
+.heap-room .tb-row:hover { border-color: var(--cp-ink); }
 .heap-room .tb-row[aria-disabled="true"] { opacity: 0.55; cursor: default; }
-.heap-room .tb-row:focus-visible { outline: 3px solid var(--clay); outline-offset: 2px; }
-.heap-room .tb-meta { font-size: 12px; color: rgba(46, 42, 36, 0.65); }
+.heap-room .tb-row:focus-visible { outline: 2px solid var(--cp-ink); outline-offset: 2px; }
+.heap-room .tb-meta { font: 600 13px var(--cp-ui); color: var(--cp-ash); }
 .heap-room .tb-text { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .heap-room .panel.confirm { width: min(300px, 100%); padding: 18px 16px 14px; gap: 14px; align-items: center; }
 .heap-room .panel.confirm p { margin: 0; font-size: 15px; text-align: center; }

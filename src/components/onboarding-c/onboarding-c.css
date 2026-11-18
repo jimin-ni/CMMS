@@ -27,6 +27,12 @@
 .oc-pixel {
   font-family: var(--font-oc-pixel), var(--font-oc-body), sans-serif;
 }
+/* "memories" 표기. 사이트 제목 글꼴 --font-display(Oswald)를 쓴다 (src/app/fonts/brand.ts) */
+.oc-display {
+  font-family: var(--font-display);
+  font-weight: 500;
+  text-transform: uppercase; /* 가이드: 제목 글꼴은 늘 대문자 */
+}
 .oc-rounded {
   font-family: var(--font-oc-rounded), var(--font-oc-body), sans-serif;
 }

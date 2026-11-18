@@ -144,10 +144,12 @@ export function RoomTour({
   const navOpen = countFound >= NAV_AFTER;
   const activeSpot = active ? SPOTS[active] : null;
   const spot: GuideSpot = skipped && guideSpot === "center" ? "hidden" : guideSpot;
-  // 앉기, 상영, 책장, 열린 창에서는 엔진의 단추와 창을 쓰므로 안내 팝업을 잠시 내린다
-  const guideShown = spot !== "hidden" && engineMode === "room" && !panelOpen;
+  const allFound = countFound >= spots.length;
+  // 앉기, 상영, 책장, 열린 창에서는 엔진의 단추와 창을 쓰므로 안내 팝업을 잠시 내린다.
+  // 모든 곳을 둘러보면 안내 팝업은 닫는다.
+  const guideShown = spot !== "hidden" && engineMode === "room" && !panelOpen && !allFound;
   const progressNote =
-    countFound >= spots.length
+    allFound
       ? "You found every story here."
       : navOpen
         ? "A menu just opened at the top."
@@ -156,7 +158,7 @@ export function RoomTour({
   return (
     <>
       {/* 왼쪽 위 방 이름(엔진의 #cname) 대신 서비스 이름. 이름 칸은 CSS 가 자리만 남기고 감춘다. */}
-      <span className="oc-corner oc-pixel">memories</span>
+      <span className="oc-corner oc-display">memories</span>
 
       <div
         className={`oc-guide${guideShown ? (spot === "center" ? " open center" : " open") : ""}`}
