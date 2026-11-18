@@ -30,12 +30,14 @@ export function setupShell(ctx) {
     const H = WALLS[wall].half;
     // 모서리 기둥(벽 두께 x 벽 두께)은 뒷벽이 갖는다. 왼벽까지 덮으면 두 벽이 같은 자리에 겹쳐 윗면이 깜빡인다
     let cur = wall === 'back' ? -H - WALL_T : -H, tcur = wall === 'back' ? -H + TRIM_D : -H;
+    // 벽은 땅(ctx.groundY, scene.js)까지 내려온다. 땅이 없으면 0 이다. 문 밑(구멍이 바닥부터)은 문턱이 막으므로 비운다
+    const B = ctx.groundY ?? 0;
     for (const o of openings) {
-      slab(cur, o.u0, 0, WALL_H); slab(o.u0, o.u1, 0, o.y0); slab(o.u0, o.u1, o.y1, WALL_H);
+      slab(cur, o.u0, B, WALL_H); slab(o.u0, o.u1, o.y0 > 0 ? B : 0, o.y0); slab(o.u0, o.u1, o.y1, WALL_H);
       cur = o.u1;
       if (o.y0 < 0.9) { trim(tcur, o.tu0 ?? o.u0); tcur = o.tu1 ?? o.u1; }
     }
-    slab(cur, H, 0, WALL_H); trim(tcur, H);
+    slab(cur, H, B, WALL_H); trim(tcur, H);
   }
   buildWall('back'); buildWall('left');
 

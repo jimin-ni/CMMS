@@ -310,6 +310,14 @@ export function validateLayout(input: unknown): LayoutCheck {
         out.palette = palette;
         break;
       }
+      case "ground": {
+        // 방 밑 땅의 색 (engine/scene.js). 방이 허공에 뜨지 않고 놓여 보이게 한다. 없으면 땅이 없다
+        if (!isObj(value) || unknownKey(value, ["colour"]) || typeof value.colour !== "string" || !HEX.test(value.colour)) {
+          return fail("ground: { colour: #RRGGBB } 형식이어야 해요.");
+        }
+        out.ground = { colour: value.colour };
+        break;
+      }
       case "backdrop": {
         // 방 뒤의 배경. { mode: "time" }(시간 따라, 없을 때와 같다) 또는 { mode: "colour", top, bottom? } (bottom이 있으면 위에서 아래로 그라데이션)
         if (!isObj(value) || typeof value.mode !== "string") return fail("backdrop: 형식이 올바르지 않아요.");
