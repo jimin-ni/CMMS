@@ -52,28 +52,17 @@ function Tape({ spot }: { spot: Spot }) {
   return <span className="oc-tape ob-tape" style={at(spot)} aria-hidden="true" />;
 }
 
-// 장이 받는 값. title: 첫 장의 큰 제목(LOVE SOO)을 이 글로 바꾼다 (설정 화면이 "setting"으로 쓴다)
-export type PageProps = { title?: string };
-
-export function PageOne({ title }: PageProps) {
+export function PageOne() {
   return (
     <>
       <Bit spot={{ t: 4, l: 3 }} className="ob-tiny">p.01 — hello!</Bit>
       <Bit spot={{ t: 4, l: 80, r: 4 }} className="ob-tiny ob-hand">warm · funny · real</Bit>
       <Bit spot={{ t: 10, l: 5, r: -3 }} className="ob-rounded ob-s">hello, meet</Bit>
-      {title ? (
-        <Bit spot={{ t: 16, l: 4 }} className="ob-pixel ob-xl ob-title-alt">
-          {title}
-        </Bit>
-      ) : (
-        <>
-          <Bit spot={{ t: 14, l: 4 }} className="ob-pixel ob-xl">LOVE</Bit>
-          <Bit spot={{ t: 37, l: 12 }} className="ob-pixel ob-xl ob-ink-clay">
-            SOO
-            <DoodleCircle className="ob-wrap-circle" />
-          </Bit>
-        </>
-      )}
+      <Bit spot={{ t: 14, l: 4 }} className="ob-pixel ob-xl">LOVE</Bit>
+      <Bit spot={{ t: 37, l: 12 }} className="ob-pixel ob-xl ob-ink-clay">
+        SOO
+        <DoodleCircle className="ob-wrap-circle" />
+      </Bit>
       <Bit spot={{ t: 13, l: 37, r: 12 }} className="ob-c-gold"><DoodleStar className="ob-w4" /></Bit>
       <Bit spot={{ t: 58, l: 4, r: -2, w: 27 }}>
         <Sticker tone="yellow" tape>
@@ -184,4 +173,4 @@ export function PageThree() {
   );
 }
 
-export const PAGES: ((props: PageProps) => JSX.Element)[] = [PageOne, PageTwo, PageThree];
+export const PAGES: (() => JSX.Element)[] = [PageOne, PageTwo, PageThree];

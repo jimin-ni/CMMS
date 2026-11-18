@@ -19,6 +19,7 @@ import { HEAP_POLICY } from "@/lib/heap/policy";
 import { parsePieceUrl } from "@/lib/heap/platform";
 import { isEmailAddress, isSafeLink, isWebLink, parseMusicUrl } from "@/lib/heap/slots";
 import { SHELL_KEYS } from "@/lib/heap/template-move";
+import { usePrefs } from "@/lib/settings/prefs";
 import type { HeapChannelPlatform } from "@/lib/heap/platform";
 import type { ReelClass } from "@/lib/heap/caps";
 import { toEngineNote } from "./engine/tree-ids";
@@ -231,6 +232,16 @@ export function HeapRoom({
     rootRef.current?.dispatchEvent(new CustomEvent("heap:edit", { detail: editing }));
   }, [editing]);
 
+  // 보는 사람이 설정 화면에서 고른 방 시간대 (engine/time.js 의 heap:viewtime). 꾸미는 동안에는 방 주인이 고른 시간대를 보여 준다.
+  // 엔진이 새로 뜰 때(heap:ready)도 다시 보낸다: 팔레트를 바꾸면 엔진을 다시 마운트한다.
+  const roomTimePref = usePrefs().roomTime;
+  const viewTime = editing ? null : roomTimePref;
+  const viewTimeRef = useRef(viewTime);
+  useEffect(() => {
+    viewTimeRef.current = viewTime;
+    rootRef.current?.dispatchEvent(new CustomEvent("heap:viewtime", { detail: viewTime }));
+  }, [viewTime]);
+
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
@@ -249,6 +260,7 @@ export function HeapRoom({
     // 엔진이 뜨는 동안(dynamic import, setupLive 전) 새 스냅샷이 오면 그 heap:reels 는 듣는 이가 없다. 뜬 뒤에 최신 목록을 한 번 더 보낸다.
     const onReady = () => {
       setReady(true);
+      root.dispatchEvent(new CustomEvent("heap:viewtime", { detail: viewTimeRef.current }));
       const now = latest.current;
       // 엔진이 뜬 data 와 다르면 보낸다. 이미 받은 목록이면 엔진에서 아무 일도 없다.
       if (now !== data) {

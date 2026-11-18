@@ -118,18 +118,31 @@ export function setupTime(ctx) {
     ctx.shadeNow = k.shadeI;
     for (const l of ctx.build.lamps) for (const s of l.shades) s.emissiveIntensity = l.off ? 0 : ctx.shadeNow;
   }
+  // 보는 사람이 설정 화면에서 고른 시간대 (heap:viewtime, heap-room.tsx). 있으면 방의 시간대(timeSpec) 대신 쓴다.
+  // 방의 선택(ctx.timeChoice)은 바꾸지 않는다: 꾸미기가 저장하는 시간이 보는 사람의 설정으로 바뀌지 않게. 꾸미는 동안에는 heap-room.tsx 가 null 을 보낸다.
+  let viewSpec = null;
+  const spec = () => viewSpec ?? timeSpec;
   function tickClock() { // auto 만: frame() 이 부르므로 rAF 루프와 함께 dispose 에서 멈춘다 (자기 타이머는 없다)
-    if (timeSpec !== 'auto' || Date.now() < nextClock) return;
+    if (spec() !== 'auto' || Date.now() < nextClock) return;
     nextClock = Date.now() + 60000;
     applyTime(seoulHour());
   }
-  if (timeSpec === 'auto') tickClock(); else applyTime(timeSpec);
+  function applySpec() {
+    nextClock = 0;
+    if (spec() === 'auto') tickClock(); else applyTime(spec());
+  }
+  applySpec();
   // 다시 불러오지 않고 바꾸기: root.dispatchEvent(new CustomEvent('heap:time', { detail: 'dusk' | 6.5 | 'auto' }))
   on(root, 'heap:time', e => {
-    const spec = parseTime(e.detail);
-    if (spec == null) return;
-    timeSpec = spec; ctx.timeChoice = e.detail; nextClock = 0;
-    if (timeSpec === 'auto') tickClock(); else applyTime(timeSpec);
+    const s = parseTime(e.detail);
+    if (s == null) return;
+    timeSpec = s; ctx.timeChoice = e.detail;
+    applySpec();
+  });
+  // 보는 사람의 시간대: root.dispatchEvent(new CustomEvent('heap:viewtime', { detail: 'night' | 'auto' | null })). null 이면 방의 시간대로 돌아간다
+  on(root, 'heap:viewtime', e => {
+    viewSpec = e.detail == null ? null : parseTime(e.detail);
+    applySpec();
   });
 
   Object.assign(ctx, { tickClock, setBackdrop });
