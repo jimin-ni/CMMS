@@ -6,23 +6,25 @@
 .heap-room {
   color-scheme: dark;
   --olive: #565344;
-  --clay: #A6613C;
-  --paper: #F3EADB;
-  --paper-dim: rgba(243, 234, 219, 0.74);
-  --ink: #2f2c24;
-  --ui: "IBM Plex Sans KR", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --hand: "Nanum Pen Script", "IBM Plex Sans KR", cursive;
+  /* 사이트 디자인 기준 (Chipotle DESIGN.md, globals.css). clay 자리는 ink, 종이 자리는 흰 바탕.
+     ui 는 본문 글꼴(Nunito, Pretendard), hand 는 제목 글꼴(Oswald, 양진체) */
+  --clay: #451400;
+  --paper: #FFFFFF;
+  --paper-dim: rgba(255, 255, 255, 0.74);
+  --ink: #451400;
+  --ui: var(--font-text);
+  --hand: var(--font-display);
   /* 치폴레 디자인 가이드(chipotle.design.md)의 토큰. 단추, 안내 줄, 창(.panel), 쪽지 쓰기 조작 줄이 쓴다.
-     제목 글꼴 Trade Gothic LT Bold 는 유료라 Oswald 500, 본문과 단추는 Nunito. 한글은 Pretendard 로 넘어간다.
-     글꼴 변수는 heap-room.tsx 가 루트에 붙인 next/font 클래스가 정한다 (src/app/fonts/onboarding.ts). */
+     글꼴은 사이트 공통 변수다: 제목 --font-display(Oswald, 양진체), 단추와 본문 --font-text(Nunito, Pretendard).
+     루트 레이아웃이 <html> 에 붙인 글꼴 클래스가 정한다 (src/app/fonts/brand.ts, globals.css). */
   --cp-ink: #451400;
   --cp-ink-soft: #6b321b;
   --cp-ash: #786259;
   --cp-hair: #d4cbc7;
   --cp-white: #ffffff;
   --cp-cream: #f2f2f2;
-  --cp-display: var(--font-oc-display), var(--font-oc-body), "Helvetica Neue", Arial, sans-serif;
-  --cp-ui: var(--font-oc-ui), var(--font-oc-body), "Helvetica Neue", Arial, sans-serif;
+  --cp-display: var(--font-display);
+  --cp-ui: var(--font-text);
   /* fills what the header leaves of the viewport: body is a min-h-full flex column */
   position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; container-type: size;
   background: var(--olive); color: var(--paper); font-family: var(--ui);
@@ -47,13 +49,13 @@
 .heap-room .hud {
   position: absolute; inset: 0; pointer-events: none;
   display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start;
-  padding-left: max(16px, env(safe-area-inset-left, 0px));
-  padding-right: max(16px, env(safe-area-inset-right, 0px));
-  padding-block: 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(20px, env(safe-area-inset-left, 0px));
+  padding-right: max(20px, env(safe-area-inset-right, 0px));
+  padding-block: 20px calc(20px + env(safe-area-inset-bottom, 0px));
 }
-.heap-room .who { display: flex; flex-direction: column; gap: 2px; }
-.heap-room .who .name { font-family: var(--hand); font-size: 42px; line-height: 1; color: var(--paper); }
-.heap-room .who .meta { font-size: 13px; letter-spacing: 0.02em; color: var(--paper-dim); font-variant-numeric: tabular-nums; }
+.heap-room .who { display: flex; flex-direction: column; gap: 5px; }
+.heap-room .who .name { font-family: var(--hand); font-size: 40px; font-weight: 500; line-height: 48px; text-transform: uppercase; color: var(--paper); }
+.heap-room .who .meta { font-size: 13px; font-weight: 600; color: var(--paper-dim); font-variant-numeric: tabular-nums; }
 .heap-room .bottom { align-self: center; display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 100%; }
 .heap-room .row { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 .heap-room .row[hidden] { display: none; }
@@ -75,7 +77,7 @@
 .heap-room .tree-step[hidden] { display: none; }
 .heap-room .tree-step:focus-visible { outline: 2px solid var(--cp-white); outline-offset: 2px; box-shadow: 0 0 0 4px var(--cp-ink); }
 
-.heap-room #toast { position: absolute; top: 70px; left: 50%; transform: translateX(-50%); margin: 0; font-family: var(--hand); font-size: 26px; line-height: 1.2; color: var(--ink); background: var(--paper); padding: 4px 18px 6px; border: 2px solid var(--clay); border-radius: 999px; box-shadow: 0 3px 10px rgba(47, 44, 36, 0.35); pointer-events: none; text-align: center; }
+.heap-room #toast { position: absolute; top: 70px; left: 50%; transform: translateX(-50%); margin: 0; font-family: var(--hand); font-size: 26px; line-height: 1.2; color: var(--ink); background: var(--paper); padding: 4px 18px 6px; border: 1px solid var(--clay); border-radius: 4px; pointer-events: none; text-align: center; }
 .heap-room #toast:empty { display: none; }
 /* 방명록: 가이드의 text-input 과 hairline-divider */
 .heap-room .gb-list { display: flex; flex-direction: column; border-top: 1px solid var(--cp-ink); }
@@ -105,7 +107,7 @@
 .heap-room .player-bar span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .heap-room #player-frame { background: #000; }
 .heap-room #player-frame iframe, .heap-room #music-frame iframe { display: block; width: 100%; height: 100%; border: 0; }
-.heap-room #player-note { margin: 0; max-width: 300px; padding: 10px 12px; border-radius: 10px; background: rgba(47, 44, 36, 0.85); font-size: 13px; line-height: 1.5; }
+.heap-room #player-note { margin: 0; max-width: 300px; padding: 10px 12px; border-radius: 4px; background: rgba(47, 44, 36, 0.85); font-size: 13px; line-height: 1.5; }
 .heap-room #player-note[hidden] { display: none; }
 
 /* 음악 플레이어: 방 오른쪽 위, 방 이름의 반대편. 안에 영상 말고는 아무것도 겹치지 않는다.
@@ -128,33 +130,33 @@
 .heap-room .phone-head .who2 { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .heap-room .phone-head small { color: rgba(47, 44, 36, 0.62); font-size: 12px; overflow-wrap: anywhere; }
 .heap-room .phone-feed { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-.heap-room .chip { align-self: center; font-size: 11px; color: rgba(47, 44, 36, 0.6); background: rgba(86, 83, 68, 0.1); padding: 3px 10px; border-radius: 999px; }
-.heap-room .bubble { align-self: flex-start; max-width: 85%; padding: 10px 12px; border-radius: 4px 16px 16px 16px; background: var(--paper); box-shadow: 0 1px 0 rgba(86,83,68,0.15); display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.heap-room .chip { align-self: center; font-size: 11px; color: rgba(47, 44, 36, 0.6); background: rgba(86, 83, 68, 0.1); padding: 3px 10px; border-radius: 4px; }
+.heap-room .bubble { align-self: flex-start; max-width: 85%; padding: 10px 12px; border-radius: 4px; background: var(--paper); box-shadow: 0 1px 0 rgba(86,83,68,0.15); display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
 .heap-room .bubble a { color: var(--clay); font-weight: 600; text-decoration: none; overflow-wrap: anywhere; }
 .heap-room .bubble small { color: rgba(47, 44, 36, 0.62); font-size: 12px; overflow-wrap: anywhere; }
-.heap-room .bubble img { width: 120px; border-radius: 8px; }
-.heap-room .bubble .copy { align-self: flex-start; font: 600 12px var(--ui); border: 1px solid var(--clay); color: var(--clay); background: none; border-radius: 999px; padding: 4px 10px; cursor: pointer; }
+.heap-room .bubble img { width: 120px; border-radius: 4px; }
+.heap-room .bubble .copy { align-self: flex-start; font: 600 12px var(--ui); border: 1px solid var(--clay); color: var(--clay); background: none; border-radius: 4px; padding: 4px 10px; cursor: pointer; }
 .heap-room .email { user-select: all; }
 /* PC 링크 목록과 기념품 패널: 말풍선 꼴의 줄을 패널 폭에 맞춘다 */
 .heap-room .pc-list .bubble { align-self: stretch; max-width: none; }
-.heap-room .ks-pic { width: 100%; max-height: 260px; object-fit: cover; border-radius: 8px; background: #ddd; }
+.heap-room .ks-pic { width: 100%; max-height: 260px; object-fit: cover; border-radius: 4px; background: #ddd; }
 .heap-room .ks-pic.tall { width: auto; max-width: 100%; align-self: center; }
 .heap-room .ks-meta { font-size: 13px; color: rgba(47, 44, 36, 0.62); font-variant-numeric: tabular-nums; }
 .heap-room .ks-caption { margin: 0; font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; }
 .heap-room #ks-body .btn { align-self: flex-start; }
 /* 달력 패널: 날짜, 설명, 며칠 남았는지 */
-.heap-room .cal-row { display: flex; align-items: baseline; gap: 10px; padding: 8px 0; border-bottom: 1px dashed rgba(86, 83, 68, 0.25); font-size: 14px; }
+.heap-room .cal-row { display: flex; align-items: baseline; gap: 10px; padding: 8px 0; border-bottom: 1px solid #d4cbc7; font-size: 14px; }
 .heap-room .cal-row b { font-variant-numeric: tabular-nums; color: var(--clay); flex: none; }
 .heap-room .cal-row span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .heap-room .cal-row small { color: rgba(47, 44, 36, 0.62); flex: none; }
 
 .heap-room .grid-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
 .heap-room .gitem { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 12px; }
-.heap-room .gitem img { width: 100%; aspect-ratio: 9 / 16; object-fit: cover; border-radius: 6px; background: #ddd; }
+.heap-room .gitem img { width: 100%; aspect-ratio: 9 / 16; object-fit: cover; border-radius: 4px; background: #ddd; }
 .heap-room .gitem.wide img { aspect-ratio: 16 / 9; }
 .heap-room .gitem span { overflow-wrap: anywhere; }
 .heap-room .gitem a { color: var(--clay); font-weight: 600; text-decoration: none; }
-.heap-room .tag { align-self: flex-start; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: rgba(86, 83, 68, 0.12); }
+.heap-room .tag { align-self: flex-start; font-size: 11px; padding: 1px 7px; border-radius: 4px; background: rgba(86, 83, 68, 0.12); }
 .heap-room .tag.mine { background: rgba(166, 97, 60, 0.18); }
 .heap-room .stat { display: flex; justify-content: space-between; font-size: 15px; font-variant-numeric: tabular-nums; }
 .heap-room .big { font-family: var(--hand); font-size: 48px; text-align: center; color: var(--clay); line-height: 1; }
@@ -201,9 +203,9 @@
 /* 위 막대의 ⋯ 메뉴: 막대 아래에 펼친다 (막대는 넘치면 가로로 넘겨서 그 안에 두면 잘린다) */
 .heap-room .ed-menu {
   position: absolute; top: calc(var(--ed-top) + 4px); z-index: 8; width: 220px; box-sizing: border-box;
-  display: flex; flex-direction: column; padding: 4px; border-radius: 10px; background: var(--paper); border: 2px solid var(--olive); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  display: flex; flex-direction: column; padding: 4px; border-radius: 4px; background: var(--paper); border: 2px solid var(--olive); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }
-.heap-room .ed-menu button { display: flex; justify-content: space-between; align-items: center; font: 600 13px var(--ui); color: var(--ink); background: none; border: 0; border-radius: 7px; padding: 7px 10px; text-align: left; cursor: pointer; }
+.heap-room .ed-menu button { display: flex; justify-content: space-between; align-items: center; font: 600 13px var(--ui); color: var(--ink); background: none; border: 0; border-radius: 4px; padding: 7px 10px; text-align: left; cursor: pointer; }
 .heap-room .ed-menu button:hover:not(:disabled) { background: rgba(86, 83, 68, 0.12); }
 .heap-room .ed-menu button:disabled { opacity: 0.45; cursor: default; }
 .heap-room .ed-menu button:focus-visible { outline: 2px solid var(--clay); }
@@ -233,7 +235,7 @@
   font: 600 18px var(--ui); color: #a23a2a; background: rgba(246, 217, 204, 0.92);
 }
 .heap-room .ed-tabs { flex: none; display: flex; align-items: center; gap: 4px; padding: 6px 10px 0; overflow-x: auto; }
-.heap-room .ed-tab { flex: none; font: 600 13px var(--ui); color: rgba(47, 44, 36, 0.7); background: none; border: 0; border-radius: 8px 8px 0 0; padding: 5px 11px; cursor: pointer; white-space: nowrap; }
+.heap-room .ed-tab { flex: none; font: 600 13px var(--ui); color: rgba(47, 44, 36, 0.7); background: none; border: 0; border-radius: 4px 8px 0 0; padding: 5px 11px; cursor: pointer; white-space: nowrap; }
 .heap-room .ed-tab[aria-selected="true"] { background: var(--olive); color: var(--paper); }
 .heap-room .ed-tab:focus-visible, .heap-room .ed-tile:focus-visible, .heap-room .ed-chip:focus-visible, .heap-room .ed-palcard:focus-visible { outline: 2px solid var(--clay); outline-offset: 1px; }
 .heap-room .ed-count { margin-left: auto; padding-left: 12px; font-size: 12px; color: rgba(47, 44, 36, 0.62); white-space: nowrap; }
@@ -242,32 +244,32 @@
 /* 탭 하나의 내용: 왼쪽에 칩(가구) 또는 색 칸(색·무늬), 오른쪽에 가로로 넘기는 줄 */
 .heap-room .ed-pane { flex: 1 1 0; min-height: 0; display: flex; gap: 10px; padding: 6px 10px; border-top: 2px solid var(--olive); overflow: hidden; }
 .heap-room .ed-chips { flex: 0 1 380px; min-width: 200px; display: flex; flex-wrap: wrap; align-content: flex-start; gap: 4px; overflow-y: auto; }
-.heap-room .ed-search { width: 170px; font: 12.5px var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 8px; padding: 2px 8px; }
-.heap-room .ed-chip { font: 12.5px var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 999px; padding: 1px 9px; cursor: pointer; white-space: nowrap; }
+.heap-room .ed-search { width: 170px; font: 12.5px var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 4px; padding: 2px 8px; }
+.heap-room .ed-chip { font: 12.5px var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 4px; padding: 1px 9px; cursor: pointer; white-space: nowrap; }
 .heap-room .ed-chip[aria-pressed="true"] { background: var(--olive); color: var(--paper); border-color: var(--olive); }
 .heap-room .ed-strip { flex: 1 1 0; min-width: 0; display: flex; align-items: flex-start; gap: 6px; overflow-x: auto; overflow-y: hidden; padding-bottom: 2px; scrollbar-width: thin; scrollbar-color: var(--olive) transparent; }
 .heap-room .ed-tile {
   position: relative; flex: none; width: 86px; height: 86px; box-sizing: border-box; padding: 3px; display: flex; flex-direction: column; align-items: center; gap: 1px;
-  text-align: center; word-break: keep-all; font: 600 11.5px/1.2 var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 10px; cursor: pointer;
+  text-align: center; word-break: keep-all; font: 600 11.5px/1.2 var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 4px; cursor: pointer;
 }
 .heap-room .ed-tile img, .heap-room .ed-tile .ed-pic { flex: none; width: 76px; height: 56px; display: block; }
-.heap-room .ed-tile .ed-pic { border-radius: 6px; background: rgba(86, 83, 68, 0.08); }
+.heap-room .ed-tile .ed-pic { border-radius: 4px; background: rgba(86, 83, 68, 0.08); }
 .heap-room .ed-tile .ed-name { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.heap-room .ed-tile .ed-tag { position: absolute; right: 3px; top: 3px; padding: 0 4px; border-radius: 6px; background: var(--clay); color: #fff; font-size: 10.5px; line-height: 1.5; }
+.heap-room .ed-tile .ed-tag { position: absolute; right: 3px; top: 3px; padding: 0 4px; border-radius: 4px; background: var(--clay); color: #fff; font-size: 10.5px; line-height: 1.5; }
 .heap-room .ed-tile:hover { border-color: var(--clay); }
 .heap-room .ed-tile[aria-pressed="true"] { border: 2px solid var(--clay); color: var(--clay); background: #fff; }
 .heap-room .ed-tile:disabled { opacity: 0.5; cursor: default; }
 /* 기능 탭의 카드 */
-.heap-room .ed-fncard { flex: none; width: 230px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 10px; background: #fff8ec; }
+.heap-room .ed-fncard { flex: none; width: 230px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 4px; background: #fff8ec; }
 .heap-room .ed-fncard.set { border-color: #7d9a4a; }
 .heap-room .ed-fncard b { font-size: 13.5px; }
 .heap-room .ed-fncard small { font-size: 12px; color: rgba(47, 44, 36, 0.66); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .heap-room .ed-fncard .btn { align-self: flex-start; margin-top: 2px; }
 /* 색·무늬 탭: 프리셋 카드(여섯 칸)와 직접 고르는 네 칸 */
-.heap-room .ed-palcard { flex: none; width: 112px; box-sizing: border-box; padding: 6px; text-align: left; font: 12.5px var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 10px; cursor: pointer; }
+.heap-room .ed-palcard { flex: none; width: 112px; box-sizing: border-box; padding: 6px; text-align: left; font: 12.5px var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 4px; cursor: pointer; }
 .heap-room .ed-palcard[aria-pressed="true"] { border: 2px solid var(--clay); padding: 5px; }
 .heap-room .ed-palcard:disabled { opacity: 0.5; cursor: default; }
-.heap-room .ed-sw { display: flex; height: 34px; border-radius: 6px; overflow: hidden; margin-bottom: 4px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08); }
+.heap-room .ed-sw { display: flex; height: 34px; border-radius: 4px; overflow: hidden; margin-bottom: 4px; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08); }
 .heap-room .ed-sw i { flex: 1; }
 .heap-room .ed-wells { flex: none; display: grid; grid-template-columns: auto auto; align-content: start; gap: 4px 10px; font-size: 12.5px; color: rgba(47, 44, 36, 0.75); }
 .heap-room .ed-wells-h { grid-column: 1 / -1; font-weight: 600; }
@@ -282,27 +284,27 @@
 .heap-room .ed-brand, .heap-room .ed-backdrop { flex: none; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; font-size: 12.5px; color: rgba(47, 44, 36, 0.75); }
 .heap-room .ed-brandrow { display: flex; align-items: center; gap: 4px; }
 .heap-room .ed-brandrow input[type="color"], .heap-room .ed-dot { width: 26px; height: 22px; padding: 0; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 4px; background: none; cursor: pointer; }
-.heap-room .ed-brandrow input[type="text"] { width: 66px; font: 12px var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 6px; padding: 1px 5px; }
+.heap-room .ed-brandrow input[type="text"] { width: 66px; font: 12px var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 4px; padding: 1px 5px; }
 .heap-room .ed-brandrow .ed-x { margin-left: 0; width: 20px; height: 20px; font-size: 15px; }
 .heap-room .ed-link { padding: 0; border: 0; background: none; font: 600 12px var(--ui); color: var(--clay); cursor: pointer; }
 .heap-room .ed-link:disabled, .heap-room .ed-dot:disabled { opacity: 0.5; cursor: default; }
 .heap-room .ed-bdmodes, .heap-room .ed-bdrow { display: flex; align-items: center; gap: 4px; }
 .heap-room .ed-dot { width: 20px; height: 20px; border-radius: 50%; }
-.heap-room .ed-busy { position: absolute; left: 50%; top: calc(var(--ed-top) + 16px); transform: translateX(-50%); z-index: 6; margin: 0; padding: 6px 16px; border-radius: 999px; background: var(--ink); color: var(--paper); font-size: 14px; }
+.heap-room .ed-busy { position: absolute; left: 50%; top: calc(var(--ed-top) + 16px); transform: translateX(-50%); z-index: 6; margin: 0; padding: 6px 16px; border-radius: 4px; background: var(--ink); color: var(--paper); font-size: 14px; }
 .heap-room .ed-bar {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, calc(-100% - 10px)); z-index: 4;
-  display: flex; align-items: center; gap: 4px; padding: 4px; border-radius: 10px; background: var(--ink); white-space: nowrap;
+  display: flex; align-items: center; gap: 4px; padding: 4px; border-radius: 4px; background: var(--ink); white-space: nowrap;
 }
 .heap-room .ed-bar .lbl { font-size: 12px; color: var(--paper-dim); padding: 0 6px 0 4px; }
-.heap-room .ed-bar button { font: 600 13px var(--ui); color: var(--paper); background: #4a4338; border: 0; border-radius: 7px; padding: 5px 10px; cursor: pointer; }
+.heap-room .ed-bar button { font: 600 13px var(--ui); color: var(--paper); background: #4a4338; border: 0; border-radius: 4px; padding: 5px 10px; cursor: pointer; }
 .heap-room .ed-bar button:hover, .heap-room .ed-bar button.fn { background: var(--clay); }
 .heap-room .ed-bar button:focus-visible { outline: 2px solid var(--paper); outline-offset: 1px; }
 /* 모양 바꾸기: 막대 위에 뜨는 같은 기능의 모양들 */
-.heap-room .ed-bar .ed-swap { position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%); display: flex; gap: 6px; max-width: min(560px, 90cqw); overflow-x: auto; padding: 6px; border-radius: 10px; background: var(--paper); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3); }
-.heap-room .ed-bar .ed-swap .ed-tile { color: var(--ink); background: #fff8ec; padding: 3px; font: 600 11.5px/1.2 var(--ui); border-radius: 10px; }
+.heap-room .ed-bar .ed-swap { position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%); display: flex; gap: 6px; max-width: min(560px, 90cqw); overflow-x: auto; padding: 6px; border-radius: 4px; background: var(--paper); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3); }
+.heap-room .ed-bar .ed-swap .ed-tile { color: var(--ink); background: #fff8ec; padding: 3px; font: 600 11.5px/1.2 var(--ui); border-radius: 4px; }
 .heap-room .ed-bar .ed-swap .ed-tile:hover { background: #fff; }
 /* 가구 하나만 칠하기 (색 묶음 C2, piece-colour.tsx): 막대 위에 뜨는 부분별 줄 */
-.heap-room .ed-bar .ed-paint { position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%); display: grid; gap: 4px; width: max-content; max-width: min(620px, 92cqw); padding: 6px 8px; border-radius: 10px; background: var(--paper); color: var(--ink); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3); white-space: nowrap; }
+.heap-room .ed-bar .ed-paint { position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%); display: grid; gap: 4px; width: max-content; max-width: min(620px, 92cqw); padding: 6px 8px; border-radius: 4px; background: var(--paper); color: var(--ink); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3); white-space: nowrap; }
 .heap-room .ed-bar .ed-paint[data-below="1"] { bottom: auto; top: calc(100% + 6px); }
 .heap-room .ed-bar .ed-prow { display: flex; align-items: center; gap: 6px; overflow-x: auto; }
 .heap-room .ed-bar .ed-plbl { display: inline-flex; align-items: center; gap: 5px; width: 5.2em; flex: none; font: 600 12px var(--ui); }
@@ -313,7 +315,7 @@
 .heap-room .ed-bar .ed-paint .ed-pdot:hover { outline: 2px solid var(--clay); outline-offset: 1px; }
 .heap-room .ed-bar .ed-paint .ed-pdot[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 1px; }
 .heap-room .ed-bar .ed-paint input[type="color"] { flex: none; width: 28px; height: 22px; padding: 0; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 4px; background: none; cursor: pointer; }
-.heap-room .ed-bar .ed-paint .ed-preset { flex: none; padding: 2px 8px; font: 600 11.5px var(--ui); color: var(--clay); background: none; border: 1px solid var(--clay); border-radius: 999px; }
+.heap-room .ed-bar .ed-paint .ed-preset { flex: none; padding: 2px 8px; font: 600 11.5px var(--ui); color: var(--clay); background: none; border: 1px solid var(--clay); border-radius: 4px; }
 .heap-room .ed-bar .ed-paint .ed-preset:hover { color: var(--paper); background: var(--clay); }
 .heap-room .ed-bar .ed-pnote { flex: none; font-size: 11px; color: rgba(47, 44, 36, 0.55); }
 /* 기능 표: 가구 윗면 위. 채운 표는 쓰는 중, 점선 + 는 달 수 있는 빈 가구 */
@@ -336,61 +338,61 @@
 .heap-room .ed-bubble .ed-fn { padding-top: 0; border-top: 0; }
 .heap-room .ed-bubble .note { margin: 0; }
 .heap-room .ed-ok { color: #4f6a2a; }
-.heap-room .ed-why { position: absolute; z-index: 5; padding: 3px 9px; border-radius: 8px; background: #c2452d; color: #fff; font: 600 13px var(--ui); white-space: nowrap; pointer-events: none; }
+.heap-room .ed-why { position: absolute; z-index: 5; padding: 3px 9px; border-radius: 4px; background: #c2452d; color: #fff; font: 600 13px var(--ui); white-space: nowrap; pointer-events: none; }
 .heap-room .ed-why[hidden] { display: none; }
 /* 안내(아래)와 알림(위)을 한 줄기로 쌓는다. 둘 중 하나가 두 줄이 되어도 겹치지 않는다 */
 .heap-room .ed-float {
   position: absolute; left: 50%; bottom: calc(var(--ed-dock) + 10px); transform: translateX(-50%); z-index: 6; width: max-content; max-width: calc(100% - 32px);
   display: flex; flex-direction: column-reverse; align-items: center; gap: 8px; pointer-events: none;
 }
-.heap-room .ed-hint { margin: 0; max-width: 100%; padding: 4px 14px; border-radius: 999px; background: rgba(47, 44, 36, 0.82); color: var(--paper); font-size: 12.5px; text-align: center; }
+.heap-room .ed-hint { margin: 0; max-width: 100%; padding: 4px 14px; border-radius: 4px; background: rgba(47, 44, 36, 0.82); color: var(--paper); font-size: 12.5px; text-align: center; }
 .heap-room .ed-toast {
   pointer-events: auto; max-width: 100%; box-sizing: border-box;
-  display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 14px; border-radius: 10px; background: var(--ink); color: var(--paper); font-size: 14px;
+  display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 14px; border-radius: 4px; background: var(--ink); color: var(--paper); font-size: 14px;
 }
 .heap-room .ed-toast span { text-wrap: balance; }
 .heap-room .ed-toast button { flex: none; }
-.heap-room .ed-toast button { font: 600 13px var(--ui); color: var(--paper); background: var(--clay); border: 0; border-radius: 7px; padding: 4px 10px; cursor: pointer; }
+.heap-room .ed-toast button { font: 600 13px var(--ui); color: var(--paper); background: var(--clay); border: 0; border-radius: 4px; padding: 4px 10px; cursor: pointer; }
 /* 꾸미기: 고른 가구에 기능을 달아 내용을 적는 칸 */
-.heap-room .ed-fn { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px dashed rgba(86, 83, 68, 0.25); }
+.heap-room .ed-fn { display: flex; flex-direction: column; gap: 8px; padding-top: 10px; border-top: 1px solid #d4cbc7; }
 .heap-room .ed-fn b { font-size: 13px; }
 .heap-room .ed-field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: rgba(47, 44, 36, 0.7); }
-.heap-room .ed-field input, .heap-room .ed-field textarea { font: 13px var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 8px; padding: 6px 8px; }
+.heap-room .ed-field input, .heap-room .ed-field textarea { font: 13px var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 4px; padding: 6px 8px; }
 .heap-room .ed-field textarea { resize: vertical; min-height: 54px; }
 .heap-room .ed-field.ed-check { flex-direction: row; align-items: center; gap: 8px; }
 .heap-room .ed-field.ed-check input { padding: 0; }
-.heap-room .ed-linkrow { display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 10px; background: rgba(86, 83, 68, 0.07); }
-.heap-room .ed-linkrow input { font: 13px var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 8px; padding: 6px 8px; }
+.heap-room .ed-linkrow { display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 4px; background: rgba(86, 83, 68, 0.07); }
+.heap-room .ed-linkrow input { font: 13px var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 4px; padding: 6px 8px; }
 .heap-room .ed-bad { color: #a23a2a; }
 /* 오류 줄은 늘 한 줄 자리를 차지한다: 나타나고 사라져도 아래 칸이 밀리지 않는다 */
 .heap-room .ed-slot { display: block; min-height: 1.5em; }
 .heap-room .ed-fn-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.heap-room .ed-calrow { display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 10px; background: rgba(86, 83, 68, 0.07); }
-.heap-room .ed-calrow input { font: 13px var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 8px; padding: 6px 8px; }
+.heap-room .ed-calrow { display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 4px; background: rgba(86, 83, 68, 0.07); }
+.heap-room .ed-calrow input { font: 13px var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 4px; padding: 6px 8px; }
 /* 위 막대의 방 이름: 누르면 그 자리에서 고친다 (B8) */
-.heap-room button.ed-room { background: none; border: 0; padding: 2px 4px; border-radius: 6px; cursor: text; }
+.heap-room button.ed-room { background: none; border: 0; padding: 2px 4px; border-radius: 4px; cursor: text; }
 .heap-room button.ed-room:hover { background: rgba(166, 97, 60, 0.12); }
 .heap-room button.ed-room:focus-visible { outline: 2px solid var(--clay); }
 .heap-room .ed-name { position: relative; display: flex; align-items: center; gap: 6px; }
-.heap-room .ed-name input { width: 220px; font: 22px/1 var(--hand); color: var(--clay); background: #fff8ec; border: 1px solid var(--clay); border-radius: 8px; padding: 2px 8px; }
+.heap-room .ed-name input { width: 220px; font: 22px/1 var(--hand); color: var(--clay); background: #fff8ec; border: 1px solid var(--clay); border-radius: 4px; padding: 2px 8px; }
 .heap-room .ed-name input[aria-invalid="true"] { border-color: #c2452d; }
 .heap-room .ed-name small { font-size: 11.5px; color: rgba(47, 44, 36, 0.62); font-variant-numeric: tabular-nums; }
 .heap-room .ed-name small.ed-bad { color: #a23a2a; }
-.heap-room .ed-name-err { position: fixed; z-index: 8; margin-top: 46px; padding: 3px 9px; border-radius: 8px; background: #c2452d; color: #fff; font-size: 12.5px; white-space: nowrap; }
+.heap-room .ed-name-err { position: fixed; z-index: 8; margin-top: 46px; padding: 3px 9px; border-radius: 4px; background: #c2452d; color: #fff; font-size: 12.5px; white-space: nowrap; }
 /* 팔로워로 보기 (B8): 캔버스가 방 전체로 돌아가고 방 위의 글자(이름, 방문 수)가 보인다. 꾸미기 화면은 그리지 않는다 (room-editor.tsx). */
 .heap-room.editing.previewing #scene { top: 0; height: 100%; }
 .heap-room.editing.previewing .hud { display: flex; }
 .heap-room.editing.previewing .hud .hint { display: none; } /* 걷기 안내는 이 화면에서 통하지 않는다 */
 .heap-room .ed-preview {
   position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 8; display: flex; align-items: center; gap: 10px;
-  padding: 6px 6px 6px 14px; border-radius: 999px; background: rgba(47, 44, 36, 0.88); color: var(--paper); font-size: 13px; white-space: nowrap; max-width: calc(100% - 32px);
+  padding: 6px 6px 6px 14px; border-radius: 4px; background: rgba(47, 44, 36, 0.88); color: var(--paper); font-size: 13px; white-space: nowrap; max-width: calc(100% - 32px);
 }
 .heap-room .ed-preview span { overflow: hidden; text-overflow: ellipsis; }
 /* 템플릿 탭 (B9) */
-.heap-room .ed-tplcard { flex: none; width: 170px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px; padding: 5px; text-align: left; font: 12.5px var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 10px; cursor: pointer; }
+.heap-room .ed-tplcard { flex: none; width: 170px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px; padding: 5px; text-align: left; font: 12.5px var(--ui); color: var(--ink); background: #fff8ec; border: 1px solid rgba(86, 83, 68, 0.3); border-radius: 4px; cursor: pointer; }
 .heap-room .ed-tplcard:hover { border-color: var(--clay); }
 .heap-room .ed-tplcard:disabled { opacity: 0.5; cursor: default; }
-.heap-room .ed-tplcard img { width: 100%; height: 52px; object-fit: cover; border-radius: 6px; display: block; }
+.heap-room .ed-tplcard img { width: 100%; height: 52px; object-fit: cover; border-radius: 4px; display: block; }
 .heap-room .ed-tplcard small { font-size: 11px; color: rgba(47, 44, 36, 0.66); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .heap-room .ed-tplnote { flex: none; width: 240px; white-space: normal; }
 /* 첫 방 열기 체크리스트 (B9, setup-checklist.tsx): 방에서는 방 이름 아래, 꾸미기에서는 위 막대 아래 왼쪽 */
@@ -398,7 +400,7 @@
 .heap-room.editing .setup-check, .heap-room.editing .setup-pill { left: 12px; top: calc(var(--ed-top) + 10px); }
 .heap-room .setup-check { width: 236px; box-sizing: border-box; padding: 10px 10px 8px; border-radius: 12px; background: rgba(243, 234, 219, 0.96); color: var(--ink); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25); }
 .heap-room .setup-check h3 { margin: 0 0 6px; font-size: 14px; display: flex; align-items: center; gap: 4px; }
-.heap-room .setup-check h3 button { border: 0; background: none; cursor: pointer; color: rgba(47, 44, 36, 0.62); font: 12px var(--ui); padding: 1px 4px; border-radius: 6px; }
+.heap-room .setup-check h3 button { border: 0; background: none; cursor: pointer; color: rgba(47, 44, 36, 0.62); font: 12px var(--ui); padding: 1px 4px; border-radius: 4px; }
 .heap-room .setup-check h3 button:first-of-type { margin-left: auto; }
 .heap-room .setup-check h3 button:hover { background: rgba(86, 83, 68, 0.12); }
 .heap-room .setup-meter { height: 5px; border-radius: 3px; background: rgba(86, 83, 68, 0.18); overflow: hidden; margin-bottom: 6px; }
@@ -410,13 +412,13 @@
 .heap-room .setup-check li.done .setup-dot { background: var(--olive); color: var(--paper); }
 .heap-room .setup-label { min-width: 0; display: flex; flex-direction: column; }
 .heap-room .setup-label small { font-size: 11px; color: rgba(47, 44, 36, 0.55); overflow-wrap: anywhere; }
-.heap-room .setup-check li button { margin-left: auto; flex: none; border: 0; background: var(--clay); color: #fff; border-radius: 6px; padding: 1px 8px; cursor: pointer; font: 600 12px var(--ui); }
+.heap-room .setup-check li button { margin-left: auto; flex: none; border: 0; background: var(--clay); color: #fff; border-radius: 4px; padding: 1px 8px; cursor: pointer; font: 600 12px var(--ui); }
 /* 완료 안내: 4초 보인 뒤 0.6초에 걸쳐 사라진다 (setup-checklist.tsx 의 DONE_SHOW_MS, DONE_FADE_MS) */
 .heap-room .setup-done p { margin: 2px 0 0; font-size: 13px; line-height: 1.45; }
 .heap-room .setup-done { animation: setup-done-in 0.25s ease-out; transition: opacity 0.6s ease, transform 0.6s ease; }
 .heap-room .setup-done.leaving { opacity: 0; transform: translateY(-6px); }
 @keyframes setup-done-in { from { opacity: 0; transform: translateY(4px); } }
-.heap-room .setup-pill { position: absolute; overflow: hidden; border: 0; border-radius: 999px; padding: 6px 14px 8px; background: rgba(243, 234, 219, 0.96); color: var(--ink); font: 600 13px var(--ui); cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); }
+.heap-room .setup-pill { position: absolute; overflow: hidden; border: 0; border-radius: 4px; padding: 6px 14px 8px; background: rgba(243, 234, 219, 0.96); color: var(--ink); font: 600 13px var(--ui); cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); }
 .heap-room .setup-pill i { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--olive); }
 
 /* 공유 (J5, share-button.tsx): 아래 단추 줄 위에 뜨는 작은 판 */
@@ -444,7 +446,7 @@
 .heap-room .ch-list .ed-chip { margin-left: auto; flex: none; }
 /* 게시물 링크 붙여넣기 (판정 J12): 여러 줄 입력과 줄마다의 결과 */
 .heap-room .ch-paste { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
-.heap-room .ch-paste textarea { width: 100%; box-sizing: border-box; min-height: 56px; max-height: 160px; resize: vertical; font: inherit; font-size: 12px; line-height: 1.45; padding: 5px 8px; border: 1px solid rgba(86, 83, 68, 0.35); border-radius: 6px; background: rgba(255, 255, 255, 0.6); color: inherit; }
+.heap-room .ch-paste textarea { width: 100%; box-sizing: border-box; min-height: 56px; max-height: 160px; resize: vertical; font: inherit; font-size: 12px; line-height: 1.45; padding: 5px 8px; border: 1px solid rgba(86, 83, 68, 0.35); border-radius: 4px; background: rgba(255, 255, 255, 0.6); color: inherit; }
 .heap-room .ch-paste .ch-paste-row { display: flex; gap: 6px; align-items: center; }
 .heap-room .ch-paste .ch-paste-row small { font-size: 11.5px; color: rgba(47, 44, 36, 0.62); }
 .heap-room .ch-rows { list-style: none; margin: 0; padding: 0; max-height: 150px; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
@@ -459,7 +461,7 @@
 .heap-room .ch-tools { display: flex; align-items: center; gap: 6px; flex: none; }
 .heap-room .ch-tools small { font-size: 12px; color: rgba(47, 44, 36, 0.62); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .heap-room .ch-reels { list-style: none; margin: 0; padding: 0; overflow-y: auto; min-height: 0; flex: 1 1 0; scrollbar-width: thin; scrollbar-color: var(--olive) transparent; }
-.heap-room .ch-reels li { display: flex; align-items: center; gap: 8px; padding: 2px 4px; border-bottom: 1px dashed rgba(86, 83, 68, 0.2); font-size: 12.5px; }
+.heap-room .ch-reels li { display: flex; align-items: center; gap: 8px; padding: 2px 4px; border-bottom: 1px solid #d4cbc7; font-size: 12.5px; }
 .heap-room .ch-reels li.out { opacity: 0.6; }
 .heap-room .ch-reels li.out .ch-title { text-decoration: line-through; }
 .heap-room .ch-kind { flex: none; width: 4.5em; font-size: 11px; color: var(--clay); font-weight: 600; }

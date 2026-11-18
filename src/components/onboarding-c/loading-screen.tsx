@@ -1,4 +1,3 @@
-import { oswald } from "@/app/fonts/onboarding";
 import "./loading-screen.css";
 
 // 온보딩 대기 화면. 뒤에 큰 대문자 "MEMORIES"(Oswald), 그 위에서 덮인 책이 펼쳐졌다 덮이는 3D 로우폴리 아이콘.
@@ -7,7 +6,7 @@ import "./loading-screen.css";
 // leaving: 준비가 끝나 사라지는 중 (투명해진 뒤 누를 수 없다)
 export function LoadingScreen({ leaving = false }: { leaving?: boolean }) {
   return (
-    <div className={`${oswald.variable} ${leaving ? "ol-root leaving" : "ol-root"}`} role="status" aria-live="polite" aria-busy={!leaving}>
+    <div className={leaving ? "ol-root leaving" : "ol-root"} role="status" aria-live="polite" aria-busy={!leaving}>
       <p className="ol-word" aria-hidden="true">
         memories
       </p>

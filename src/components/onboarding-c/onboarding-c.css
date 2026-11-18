@@ -27,9 +27,9 @@
 .oc-pixel {
   font-family: var(--font-oc-pixel), var(--font-oc-body), sans-serif;
 }
-/* "memories" 표기. 요소에 oswald.variable 클래스를 함께 붙인다 (src/app/fonts/onboarding.ts) */
+/* "memories" 표기. 사이트 제목 글꼴 --font-display(Oswald)를 쓴다 (src/app/fonts/brand.ts) */
 .oc-display {
-  font-family: var(--font-oc-display), "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-display);
   font-weight: 500;
   text-transform: uppercase; /* 가이드: 제목 글꼴은 늘 대문자 */
 }
@@ -65,11 +65,14 @@
 .oc-room-host .heap-room .who .name { visibility: hidden; }
 .oc-corner {
   position: absolute;
-  top: 16px;
-  left: max(16px, env(safe-area-inset-left, 0px));
-  font-size: 34px;
-  line-height: 42px;
-  color: #f7ecd8;
+  top: 20px;
+  left: max(20px, env(safe-area-inset-left, 0px));
+  font-family: var(--font-display);
+  font-size: 40px;
+  font-weight: 500;
+  line-height: 48px;
+  text-transform: uppercase;
+  color: #ffffff;
   pointer-events: none;
 }
 /* 방 둘레를 어둡게: 방은 가운데에서 밝고 가장자리는 밤처럼 */
@@ -94,19 +97,23 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 18px;
+  gap: 20px;
 }
 .oc-intro h1 {
-  font-size: clamp(44px, 8vw, 104px);
-  letter-spacing: 0.04em;
-  color: #f7ecd8;
-  text-shadow: 0 0 24px rgba(255, 207, 148, 0.25);
+  font-family: var(--font-display);
+  font-size: clamp(48px, 8vw, 104px);
+  font-weight: 500;
+  line-height: 1;
+  text-transform: uppercase;
+  color: #ffffff;
   margin: 0;
 }
 .oc-intro p {
-  font-size: 15px;
-  letter-spacing: 0.08em;
-  color: rgba(243, 234, 219, 0.7);
+  font-family: var(--font-text);
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.74);
   margin: 0;
 }
 .oc-scroll-hint {
@@ -117,22 +124,24 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
+  font-family: var(--font-text);
   font-size: 12px;
-  letter-spacing: 0.24em;
+  font-weight: 700;
   text-transform: uppercase;
-  color: rgba(243, 234, 219, 0.72);
+  color: rgba(255, 255, 255, 0.72);
 }
 .oc-skip-hint {
   margin-top: 10px;
-  font-size: 11px;
-  letter-spacing: 0.2em;
-  color: rgba(243, 234, 219, 0.5);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
 }
 .oc-skip-hint kbd {
   padding: 1px 6px;
-  border: 1px solid rgba(243, 234, 219, 0.45);
-  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 4px;
   font: inherit;
   letter-spacing: 0.08em;
 }
@@ -154,16 +163,23 @@
 .oc-caption.left { left: max(4vw, 24px); text-align: left; }
 .oc-caption.right { right: max(4vw, 24px); text-align: left; }
 .oc-caption h2 {
-  margin: 0 0 12px;
-  font-size: clamp(31px, 3.12vw, 46px);
-  line-height: 1.15;
-  color: #f7ecd8;
+  margin: 0 0 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.5);
+  font-family: var(--font-display);
+  font-size: clamp(32px, 3.2vw, 48px);
+  font-weight: 500;
+  line-height: 1.2;
+  text-transform: uppercase;
+  color: #ffffff;
 }
 .oc-caption p {
   margin: 0;
-  font-size: 19px;
-  line-height: 1.55;
-  color: rgba(243, 234, 219, 0.78);
+  font-family: var(--font-text);
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 /* 3. Ready to Start? */
@@ -177,32 +193,42 @@
 }
 .oc-ready button {
   pointer-events: auto;
-  background: none;
-  border: 0;
-  color: #f7ecd8;
-  font-size: clamp(34px, 5vw, 64px);
+  padding: 10px 32px;
+  border: 1px solid #ffffff;
+  border-radius: 4px;
+  background: var(--color-ink);
+  color: #ffffff;
+  font-family: var(--font-display);
+  font-size: clamp(32px, 4.4vw, 48px);
+  font-weight: 500;
+  line-height: 1.2;
+  text-transform: uppercase;
   cursor: pointer;
-  text-shadow: 0 0 30px rgba(255, 183, 103, 0.35);
+}
+.oc-ready button:hover {
+  background: var(--color-ink-soft);
 }
 .oc-ready button:focus-visible {
-  outline: 2px dashed var(--oc-paper);
-  outline-offset: 8px;
+  outline: 2px solid #ffffff;
+  outline-offset: 4px;
 }
 .oc-ready span {
-  font-size: 13px;
-  letter-spacing: 0.2em;
+  font-family: var(--font-text);
+  font-size: 12px;
+  font-weight: 700;
   text-transform: uppercase;
-  color: rgba(243, 234, 219, 0.6);
+  color: rgba(255, 255, 255, 0.6);
   animation: oc-pulse 2s ease-in-out infinite;
 }
 @keyframes oc-pulse {
   50% { opacity: 0.35; }
 }
 
-/* 종이 판 */
+/* 종이 판: 종이 바탕과 테이프는 그대로, 안쪽은 사이트 디자인 기준(globals.css 의 ink 토큰, 글꼴 묶음)을 따른다 */
 .oc-paper {
   position: relative;
-  color: var(--oc-ink);
+  color: var(--color-ink);
+  font-family: var(--font-text);
   isolation: isolate;
 }
 .oc-paper-bg {
@@ -252,15 +278,19 @@
   padding: 22px 26px 18px;
 }
 .oc-guide h3 {
-  margin: 0 0 6px;
-  font-size: 22px;
-  color: var(--oc-ink);
+  margin: 0 0 8px;
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-transform: uppercase;
+  color: var(--color-ink);
 }
 .oc-guide p {
   margin: 0;
-  font-size: 15px;
-  line-height: 1.55;
-  color: var(--oc-ink-soft);
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--color-ink);
 }
 .oc-guide .oc-swap {
   animation: oc-swap 0.45s ease both;
@@ -277,16 +307,17 @@
   padding-top: 12px;
   gap: 6px 12px;
   flex-wrap: wrap;
-  border-top: 1px dashed rgba(47, 44, 36, 0.25);
+  border-top: 1px solid var(--color-hairline);
   font-size: 13px;
-  color: var(--oc-ink-soft);
+  font-weight: 600;
+  color: var(--color-ash);
 }
 .oc-dots {
   display: flex;
   gap: 7px;
   font-size: 15px;
   letter-spacing: 0;
-  color: var(--oc-clay);
+  color: var(--color-ink);
 }
 .oc-dots .on {
   animation: oc-pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1) both;
@@ -313,35 +344,36 @@
   gap: 6px;
   padding: 10px 14px;
 }
+/* nav-link: 바탕 없음, 13~14px 600. 올리거나 고르면 2px ink 밑줄 */
 .oc-nav-btn {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 12px 6px 8px;
+  padding: 10px 12px 10px 8px;
   border: 0;
-  border-radius: 4px;
+  border-radius: 0;
   background: transparent;
-  color: var(--oc-ink);
+  color: var(--color-ink);
   font: inherit;
-  font-family: var(--font-oc-rounded), var(--font-oc-body), sans-serif;
-  font-size: 15px;
+  font-family: var(--font-text);
+  font-size: 14px;
+  font-weight: 600;
   white-space: nowrap;
   text-decoration: none;
   cursor: pointer;
-  transition: background 0.2s, transform 0.2s;
+  transition: box-shadow 0.15s;
 }
 .oc-nav-btn:hover,
 .oc-nav-btn:focus-visible {
-  background: rgba(166, 97, 60, 0.12);
-  transform: translateY(-1px);
+  box-shadow: inset 0 -2px 0 var(--color-ink);
 }
 .oc-nav-btn:focus-visible {
-  outline: 2px dashed var(--oc-clay);
+  outline: 2px solid var(--color-ink);
   outline-offset: 1px;
 }
 /* 로그인한 사람의 이름: 누르면 마이페이지 */
 .oc-nav-name {
-  color: var(--oc-clay);
+  font-weight: 800;
 }
 
 /* 7. 로그인 팝업 */
@@ -370,67 +402,90 @@
   padding: 30px 28px 24px;
 }
 .oc-modal h3 {
-  margin: 0 0 4px;
-  font-size: 26px;
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-transform: uppercase;
 }
 .oc-modal .oc-sub {
-  margin: 0 0 18px;
-  font-size: 14px;
-  color: var(--oc-ink-soft);
+  margin: 0 0 20px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--color-ash);
 }
+/* 칸 이름은 작은 대문자, 입력 칸은 text-input (흰 바탕, 1px ash 테두리, 4px, 높이 40px) */
 .oc-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 14px;
-  font-size: 13px;
-  color: var(--oc-ink-soft);
+  gap: 5px;
+  margin-bottom: 16px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--color-ash);
 }
 .oc-field input {
-  padding: 8px 2px;
-  border: 0;
-  border-bottom: 1.5px solid rgba(47, 44, 36, 0.35);
-  background: transparent;
+  height: 40px;
+  box-sizing: border-box;
+  padding: 0 16px;
+  border: 1px solid var(--color-ash);
+  border-radius: 4px;
+  background: #ffffff;
   font: inherit;
-  font-size: 15px;
-  color: var(--oc-ink);
+  font-size: 16px;
+  font-weight: 400;
+  text-transform: none;
+  color: var(--color-ink);
 }
 .oc-field input:focus {
-  outline: none;
-  border-bottom-color: var(--oc-clay);
+  outline: 2px solid var(--color-ink);
+  outline-offset: -1px;
+  border-color: var(--color-ink);
 }
 .oc-error {
   margin: 0 0 10px;
   font-size: 13px;
   color: #a23a2a;
 }
+/* button-primary-wide: ink 바탕, 1px 검은 테두리, 4px, 높이 40px, 16/700 대문자 */
 .oc-primary {
   width: 100%;
+  height: 40px;
   margin-top: 4px;
-  padding: 11px;
-  border: 0;
-  border-radius: 999px;
-  background: var(--oc-clay);
-  color: var(--oc-cream);
-  font-size: 15px;
+  padding: 0 16px;
+  border: 1px solid #000000;
+  border-radius: 4px;
+  background: var(--color-ink);
+  color: #ffffff;
+  font-family: var(--font-text);
+  font-size: 16px;
+  font-weight: 700;
+  text-transform: uppercase;
   cursor: pointer;
+}
+.oc-primary:hover:not(:disabled) {
+  background: var(--color-ink-soft);
 }
 .oc-primary:disabled {
   opacity: 0.6;
 }
 .oc-primary:focus-visible {
-  outline: 2px dashed var(--oc-olive);
+  outline: 2px solid var(--color-ink);
   outline-offset: 3px;
 }
 .oc-modal .oc-foot {
   margin: 14px 0 0;
   font-size: 13px;
-  color: var(--oc-ink-soft);
+  font-weight: 600;
+  color: var(--color-ash);
   text-align: center;
 }
 .oc-modal .oc-foot a {
-  color: var(--oc-clay);
-  font-weight: 600;
+  color: var(--color-ink);
+  font-weight: 800;
+  text-underline-offset: 3px;
 }
 .oc-close {
   position: absolute;
@@ -439,7 +494,7 @@
   padding: 4px;
   border: 0;
   background: none;
-  color: var(--oc-ink-soft);
+  color: var(--color-ink);
   cursor: pointer;
 }
 
@@ -458,10 +513,10 @@
   /* 한 줄에 다 들어가지 않으면 두 줄로 */
   .oc-nav { width: max-content; max-width: calc(100vw - 32px); }
   .oc-nav .oc-paper-body { flex-wrap: wrap; justify-content: center; gap: 2px; padding: 8px 10px; }
-  .oc-nav-btn { padding: 5px 8px 5px 6px; font-size: 14px; }
+  .oc-nav-btn { padding: 6px 8px 6px 6px; font-size: 13px; }
   /* 왼쪽 위 "memories"와 방 정보 줄 아래로 내린다 */
-  .oc-nav { top: 84px; }
-  .oc-corner { font-size: 28px; }
+  .oc-nav { top: 100px; }
+  .oc-corner { font-size: 32px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

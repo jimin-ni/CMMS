@@ -14,7 +14,6 @@ import { PaperFilters } from "./paper";
 import { PixelIcon } from "./icons";
 import { RoomTour } from "./room-tour";
 import { LoadingScreen } from "./loading-screen";
-import { oswald } from "@/app/fonts/onboarding";
 
 type Phase = "scroll" | "zoom" | "room";
 
@@ -193,7 +192,7 @@ export function ConceptC({
 
           {/* 1. 첫 화면 */}
           <div ref={introRef} className="oc-layer oc-intro">
-            <h1 className={`${oswald.variable} oc-display`}>Memories</h1>
+            <h1 className="oc-display">Memories</h1>
             <p className="oc-rounded">a room full of the moments you loved</p>
             <div className="oc-scroll-hint">
               <PixelIcon name="mouse" size={28} />
@@ -222,7 +221,7 @@ export function ConceptC({
 
           {/* 3. Ready to Start? */}
           <div ref={readyRef} className="oc-layer oc-ready" style={{ opacity: 0, visibility: "hidden" }}>
-            <button type="button" className={`${oswald.variable} oc-display`} onClick={enterRoom} tabIndex={phase === "scroll" ? 0 : -1}>
+            <button type="button" className="oc-display" onClick={enterRoom} tabIndex={phase === "scroll" ? 0 : -1}>
               Ready to Start?
             </button>
             <span>Click anywhere to step inside</span>

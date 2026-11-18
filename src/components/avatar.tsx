@@ -19,7 +19,7 @@ export function Avatar({
   return (
     <span
       aria-hidden
-      className={`${shape} flex items-center justify-center bg-key-blue/40 font-semibold text-key-brown`}
+      className={`${shape} flex items-center justify-center bg-cream font-semibold text-ink`}
       style={{ width: size, height: size, fontSize: Math.round(size * 0.38) }}
     >
       {Array.from(name)[0] ?? "?"}

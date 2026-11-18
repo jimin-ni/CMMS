@@ -5,7 +5,6 @@
 // 온보딩 컨셉 B와 C가 함께 쓴다. 둘러보기는 엔진의 모드(heap:mode)와 열린 창(overlay 의 hidden)을 읽어서 센다. 엔진은 고치지 않는다.
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useRouter } from "next/navigation";
-import { oswald } from "@/app/fonts/onboarding";
 import { MODE_SPOT, NAV_AFTER, PANEL_IDS, PANEL_SPOT, SPOTS, spotsFor, type SpotId } from "./story";
 import { Paper } from "./paper";
 import { PixelIcon, type PixelIconName } from "./icons";
@@ -159,7 +158,7 @@ export function RoomTour({
   return (
     <>
       {/* 왼쪽 위 방 이름(엔진의 #cname) 대신 서비스 이름. 이름 칸은 CSS 가 자리만 남기고 감춘다. */}
-      <span className={`${oswald.variable} oc-corner oc-display`}>memories</span>
+      <span className="oc-corner oc-display">memories</span>
 
       <div
         className={`oc-guide${guideShown ? (spot === "center" ? " open center" : " open") : ""}`}

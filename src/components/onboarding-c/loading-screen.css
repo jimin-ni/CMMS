@@ -21,7 +21,7 @@
   align-items: center;
   justify-content: center;
   margin: 0;
-  font-family: var(--font-oc-display), "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-display);
   font-weight: 500;
   font-size: clamp(72px, 21vw, 340px);
   line-height: 1;

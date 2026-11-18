@@ -54,14 +54,14 @@ export function FollowedRooms({
   return (
     <section data-dots={dotsOn ? "on" : "off"} className="group/dots">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold text-key-brown">{title}</h2>
+        <h2 className="text-lg font-medium text-ink">{title}</h2>
         {hasDots && (
           <button
             type="button"
             role="switch"
             aria-checked={dotsOn}
             onClick={() => writeDotsOn(!dotsOn)}
-            className="rounded-full bg-white px-3 py-1 text-xs text-key-brown shadow-sm"
+            className="rounded-sm border border-ink bg-white px-3 py-1 text-xs font-bold uppercase text-ink hover:bg-cream"
           >
             새 소식 점 {dotsOn ? "끄기" : "켜기"}
           </button>

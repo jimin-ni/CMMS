@@ -81,7 +81,7 @@ export function RoomChat(props: Props) {
       <div className="flex flex-1 flex-col-reverse overflow-y-auto px-3 py-2">
         <ul className="flex flex-col gap-1">
           {messages.length === 0 && (
-            <li className="py-6 text-center text-sm text-gray-600">아직 메시지가 없어요.</li>
+            <li className="py-6 text-center text-sm text-ash">아직 메시지가 없어요.</li>
           )}
           {messages.map((message, index) => {
             const mine = message.sender_id === viewerId;
@@ -89,15 +89,15 @@ export function RoomChat(props: Props) {
             const firstOfRun = index === 0 || messages[index - 1].sender_id !== message.sender_id;
             const bubble = (
               <p
-                className={`max-w-[70vw] whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-sm sm:max-w-sm ${
-                  mine ? "bg-talk-yellow" : "bg-white"
-                } ${message.deleted_at ? "italic text-gray-500" : "text-gray-900"}`}
+                className={`max-w-[70vw] whitespace-pre-wrap break-words rounded-sm border px-3 py-2 text-sm sm:max-w-sm ${
+                  mine ? "border-ink bg-ink" : "border-hairline bg-white"
+                } ${message.deleted_at ? (mine ? "italic text-white/70" : "italic text-ash") : mine ? "text-white" : "text-ink"}`}
               >
                 {message.deleted_at ? "삭제된 메시지입니다." : message.body}
               </p>
             );
             const time = (
-              <time className="shrink-0 text-[10px] text-gray-600">
+              <time className="shrink-0 text-[10px] text-ash">
                 {formatTime(message.created_at)}
               </time>
             );
@@ -132,7 +132,7 @@ export function RoomChat(props: Props) {
                 </div>
                 <div className="flex flex-col items-start">
                   {firstOfRun && (
-                    <span className="mb-1 text-xs text-gray-700">{message.sender_name}</span>
+                    <span className="mb-1 text-xs text-ink">{message.sender_name}</span>
                   )}
                   <div className="flex items-end gap-1">
                     {bubble}
@@ -154,7 +154,7 @@ export function RoomChat(props: Props) {
           onSent={sync}
         />
       ) : (
-        <p className="bg-white px-4 py-3 text-center text-sm text-gray-500">
+        <p className="bg-white px-4 py-3 text-center text-sm text-ash">
           {props.closedNotice}
         </p>
       )}

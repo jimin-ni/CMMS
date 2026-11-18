@@ -14,10 +14,10 @@ export function ChatTabs({ active }: { active: "subscribers" | "creators" }) {
           key={tab.key}
           href={tab.href}
           aria-current={tab.key === active ? "page" : undefined}
-          className={`rounded-full px-4 py-1.5 text-sm ${
+          className={`rounded-sm border border-ink px-4 py-1.5 text-sm font-bold uppercase ${
             tab.key === active
-              ? "bg-key-brown text-key-mist"
-              : "bg-key-mist text-key-brown hover:bg-key-mist/70"
+              ? "bg-ink text-white"
+              : "bg-white text-ink hover:bg-cream"
           }`}
         >
           {tab.label}
