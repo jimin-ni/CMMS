@@ -59,11 +59,14 @@
 .oc-room-host .heap-room .who .name { visibility: hidden; }
 .oc-corner {
   position: absolute;
-  top: 16px;
-  left: max(16px, env(safe-area-inset-left, 0px));
-  font-size: 34px;
-  line-height: 42px;
-  color: #f7ecd8;
+  top: 20px;
+  left: max(20px, env(safe-area-inset-left, 0px));
+  font-family: var(--font-display);
+  font-size: 40px;
+  font-weight: 500;
+  line-height: 48px;
+  text-transform: uppercase;
+  color: #ffffff;
   pointer-events: none;
 }
 /* 방 둘레를 어둡게: 방은 가운데에서 밝고 가장자리는 밤처럼 */
@@ -88,19 +91,23 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 18px;
+  gap: 20px;
 }
 .oc-intro h1 {
-  font-size: clamp(44px, 8vw, 104px);
-  letter-spacing: 0.04em;
-  color: #f7ecd8;
-  text-shadow: 0 0 24px rgba(255, 207, 148, 0.25);
+  font-family: var(--font-display);
+  font-size: clamp(48px, 8vw, 104px);
+  font-weight: 500;
+  line-height: 1;
+  text-transform: uppercase;
+  color: #ffffff;
   margin: 0;
 }
 .oc-intro p {
-  font-size: 15px;
-  letter-spacing: 0.08em;
-  color: rgba(243, 234, 219, 0.7);
+  font-family: var(--font-text);
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.74);
   margin: 0;
 }
 .oc-scroll-hint {
@@ -111,22 +118,24 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
+  font-family: var(--font-text);
   font-size: 12px;
-  letter-spacing: 0.24em;
+  font-weight: 700;
   text-transform: uppercase;
-  color: rgba(243, 234, 219, 0.72);
+  color: rgba(255, 255, 255, 0.72);
 }
 .oc-skip-hint {
   margin-top: 10px;
-  font-size: 11px;
-  letter-spacing: 0.2em;
-  color: rgba(243, 234, 219, 0.5);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
 }
 .oc-skip-hint kbd {
   padding: 1px 6px;
-  border: 1px solid rgba(243, 234, 219, 0.45);
-  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 4px;
   font: inherit;
   letter-spacing: 0.08em;
 }
@@ -148,16 +157,23 @@
 .oc-caption.left { left: max(4vw, 24px); text-align: left; }
 .oc-caption.right { right: max(4vw, 24px); text-align: left; }
 .oc-caption h2 {
-  margin: 0 0 12px;
-  font-size: clamp(31px, 3.12vw, 46px);
-  line-height: 1.15;
-  color: #f7ecd8;
+  margin: 0 0 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.5);
+  font-family: var(--font-display);
+  font-size: clamp(32px, 3.2vw, 48px);
+  font-weight: 500;
+  line-height: 1.2;
+  text-transform: uppercase;
+  color: #ffffff;
 }
 .oc-caption p {
   margin: 0;
-  font-size: 19px;
-  line-height: 1.55;
-  color: rgba(243, 234, 219, 0.78);
+  font-family: var(--font-text);
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 /* 3. Ready to Start? */
@@ -171,22 +187,31 @@
 }
 .oc-ready button {
   pointer-events: auto;
-  background: none;
-  border: 0;
-  color: #f7ecd8;
-  font-size: clamp(34px, 5vw, 64px);
+  padding: 10px 32px;
+  border: 1px solid #ffffff;
+  border-radius: 4px;
+  background: var(--color-ink);
+  color: #ffffff;
+  font-family: var(--font-display);
+  font-size: clamp(32px, 4.4vw, 48px);
+  font-weight: 500;
+  line-height: 1.2;
+  text-transform: uppercase;
   cursor: pointer;
-  text-shadow: 0 0 30px rgba(255, 183, 103, 0.35);
+}
+.oc-ready button:hover {
+  background: var(--color-ink-soft);
 }
 .oc-ready button:focus-visible {
-  outline: 2px dashed var(--oc-paper);
-  outline-offset: 8px;
+  outline: 2px solid #ffffff;
+  outline-offset: 4px;
 }
 .oc-ready span {
-  font-size: 13px;
-  letter-spacing: 0.2em;
+  font-family: var(--font-text);
+  font-size: 12px;
+  font-weight: 700;
   text-transform: uppercase;
-  color: rgba(243, 234, 219, 0.6);
+  color: rgba(255, 255, 255, 0.6);
   animation: oc-pulse 2s ease-in-out infinite;
 }
 @keyframes oc-pulse {
@@ -484,8 +509,8 @@
   .oc-nav .oc-paper-body { flex-wrap: wrap; justify-content: center; gap: 2px; padding: 8px 10px; }
   .oc-nav-btn { padding: 6px 8px 6px 6px; font-size: 13px; }
   /* 왼쪽 위 "memories"와 방 정보 줄 아래로 내린다 */
-  .oc-nav { top: 84px; }
-  .oc-corner { font-size: 28px; }
+  .oc-nav { top: 100px; }
+  .oc-corner { font-size: 32px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

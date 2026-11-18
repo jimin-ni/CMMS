@@ -17,10 +17,10 @@ async function MyRoomContent() {
   if (viewer.role !== "creator") {
     return (
       <main className="mx-auto w-full max-w-md px-6 py-12">
-        <div className="flex flex-col gap-4 rounded-2xl bg-white p-8 shadow-sm">
-          <h1 className="text-2xl font-bold text-key-brown">내 미니홈</h1>
-          <p className="text-sm text-key-stone">크리에이터 계정만 미니홈을 만들 수 있어요. 다른 크리에이터의 방은 둘러볼 수 있어요.</p>
-          <Link href="/rooms" className="w-fit rounded-full bg-key-brown px-5 py-2 text-key-mist">
+        <div className="flex flex-col gap-4 rounded-sm border border-hairline bg-white p-8">
+          <h1 className="text-[32px] leading-[1.2] font-medium text-ink">내 미니홈</h1>
+          <p className="text-sm text-ash">크리에이터 계정만 미니홈을 만들 수 있어요. 다른 크리에이터의 방은 둘러볼 수 있어요.</p>
+          <Link href="/rooms" className="w-fit inline-flex h-[35px] items-center justify-center rounded-sm border border-black bg-ink px-3 text-sm font-bold uppercase text-white hover:bg-ink-soft">
             미니홈 둘러보기
           </Link>
         </div>

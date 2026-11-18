@@ -34,27 +34,27 @@ export default function LoginPage() {
 
   return (
     <main className="mx-auto w-full max-w-md px-6 py-12">
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4 rounded-2xl bg-white p-8 shadow-sm">
-        <h1 className="text-2xl font-bold text-key-brown">로그인</h1>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4 rounded-sm border border-hairline bg-white p-8">
+        <h1 className="text-[32px] leading-[1.2] font-medium text-ink">로그인</h1>
         <label className="flex flex-col gap-1 text-sm">
           이메일
-          <input name="email" type="email" required className="rounded-lg border border-key-stone/50 px-3 py-2" />
+          <input name="email" type="email" required className="rounded-sm border border-ash px-3 py-2" />
         </label>
         <label className="flex flex-col gap-1 text-sm">
           비밀번호
-          <input name="password" type="password" required className="rounded-lg border border-key-stone/50 px-3 py-2" />
+          <input name="password" type="password" required className="rounded-sm border border-ash px-3 py-2" />
         </label>
         {errorMessage && <p className="text-sm text-red-700">{errorMessage}</p>}
         <button
           type="submit"
           disabled={pending}
-          className="rounded-full bg-key-brown px-5 py-2 text-key-mist disabled:opacity-60"
+          className="inline-flex h-[35px] items-center justify-center rounded-sm border border-black bg-ink px-3 text-sm font-bold uppercase text-white hover:bg-ink-soft disabled:opacity-60"
         >
           {pending ? "확인 중..." : "로그인"}
         </button>
-        <p className="text-sm text-key-stone">
+        <p className="text-sm text-ash">
           계정이 없나요?{" "}
-          <Link href="/signup" className="font-medium text-key-brown underline">
+          <Link href="/signup" className="font-medium text-ink underline">
             회원가입
           </Link>
         </p>

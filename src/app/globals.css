@@ -36,3 +36,14 @@ body {
   color: var(--color-ink);
   font-family: var(--font-text);
 }
+
+/* 제목은 display 글꼴 대문자, 굵기 500 (크기로 위계를 준다). 레이어 안이라 화면별 CSS 와 Tailwind 클래스가 이긴다 */
+@layer base {
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 500;
+    text-transform: uppercase;
+  }
+}

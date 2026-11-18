@@ -52,14 +52,14 @@ export function AvatarForm({
               setTooLarge(!!file && file.size > maxBytes);
               setPreview(file ? URL.createObjectURL(file) : null);
             }}
-            className="w-full text-sm file:mr-3 file:rounded-full file:border-0 file:bg-key-mist file:px-4 file:py-1.5 file:text-key-brown"
+            className="w-full text-sm file:mr-3 file:rounded-sm file:border file:border-ink file:bg-white file:px-3 file:py-1.5 file:font-bold file:uppercase file:text-ink"
           />
         </label>
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="submit"
             disabled={pending || !preview || tooLarge}
-            className="rounded-full bg-key-brown px-5 py-2 text-sm text-key-mist disabled:opacity-60"
+            className="inline-flex h-[35px] items-center justify-center rounded-sm border border-black bg-ink px-3 text-sm font-bold uppercase text-white hover:bg-ink-soft disabled:opacity-60"
           >
             {pending ? "올리는 중..." : "사진 저장"}
           </button>
@@ -74,19 +74,19 @@ export function AvatarForm({
                   else setDeleteError(result.error);
                 })
               }
-              className="text-sm text-key-stone underline"
+              className="text-sm text-ash underline"
             >
               사진 지우기
             </button>
           )}
         </div>
-        <p className="text-xs text-key-stone">
+        <p className="text-xs text-ash">
           PNG, JPEG, WebP, GIF · {Math.round(maxBytes / 1024)}KB 이하. 다른 크리에이터와 구독자에게 보여요.
         </p>
         {tooLarge && (
           <p className="text-sm text-red-700">사진은 {Math.round(maxBytes / 1024)}KB까지 올릴 수 있어요.</p>
         )}
-        {state?.ok && <p className="text-sm text-key-stone">저장했어요.</p>}
+        {state?.ok && <p className="text-sm text-ash">저장했어요.</p>}
         {state && !state.ok && <p className="text-sm text-red-700">{state.error}</p>}
         {deleteError && <p className="text-sm text-red-700">{deleteError}</p>}
       </div>

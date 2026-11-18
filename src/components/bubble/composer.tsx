@@ -78,12 +78,12 @@ export function Composer({
   return (
     <div className="flex flex-col gap-2 bg-white p-3">
       {preview?.status === "ok" && (
-        <div className="flex items-center gap-2 rounded-lg bg-key-mist px-3 py-2 text-sm">
+        <div className="flex items-center gap-2 rounded-sm bg-cream px-3 py-2 text-sm">
           <ReactionView reaction={preview.reaction} size={28} />
-          <span className="text-xs text-key-stone">예상 반응 (AI 참고용)</span>
+          <span className="text-xs text-ash">예상 반응 (AI 참고용)</span>
         </div>
       )}
-      {previewLoading && <p className="text-xs text-key-stone">예상 반응을 확인하는 중...</p>}
+      {previewLoading && <p className="text-xs text-ash">예상 반응을 확인하는 중...</p>}
 
       <form ref={formRef} action={formAction} className="flex flex-col gap-1">
         <input type="hidden" name={target.name} value={target.value} />
@@ -111,13 +111,13 @@ export function Composer({
           <button
             type="submit"
             disabled={pending || length === 0}
-            className="rounded-md bg-talk-yellow px-3 py-2 text-sm font-medium text-gray-900 disabled:bg-key-mist disabled:text-key-stone"
+            className="inline-flex h-10 items-center rounded-sm border border-black bg-ink px-3 text-sm font-bold uppercase text-white hover:bg-ink-soft disabled:border-hairline disabled:bg-cream disabled:text-ash"
           >
             {pending ? "..." : "전송"}
           </button>
         </div>
         <div className="flex items-center justify-between text-xs">
-          <span className={length > maxChars ? "text-red-700" : "text-key-stone"}>
+          <span className={length > maxChars ? "text-red-700" : "text-ash"}>
             {length} / {maxChars}자
           </span>
           {state && !state.ok && <span className="text-red-700">{state.error}</span>}

@@ -22,7 +22,7 @@ function UpdateDot() {
     <span
       role="img"
       aria-label="새 소식"
-      className="absolute top-1.5 right-1.5 h-3 w-3 rounded-full bg-orange-500 ring-2 ring-white group-data-[dots=off]/dots:hidden"
+      className="absolute top-1.5 right-1.5 h-3 w-3 rounded-full bg-ink ring-2 ring-white group-data-[dots=off]/dots:hidden"
     />
   );
 }
@@ -41,7 +41,7 @@ export function RoomCard({
   return (
     <Link
       href={`/room/${room.slug}`}
-      className={`group flex flex-col overflow-hidden rounded-2xl bg-white shadow-sm transition hover:shadow-md ${
+      className={`group flex flex-col overflow-hidden rounded-sm border border-hairline bg-white transition hover:border-ink ${
         compact ? "w-40 shrink-0" : ""
       }`}
     >
@@ -55,9 +55,9 @@ export function RoomCard({
         {changed && <UpdateDot />}
       </div>
       <div className="flex flex-1 flex-col p-3">
-        <p className="truncate text-sm font-semibold text-key-brown">{room.name}</p>
-        <p className="mt-0.5 truncate text-xs text-key-stone">{room.creatorName}</p>
-        {!compact && room.blurb && <p className="mt-2 line-clamp-2 text-xs text-key-stone">{room.blurb}</p>}
+        <p className="truncate text-sm font-semibold text-ink">{room.name}</p>
+        <p className="mt-0.5 truncate text-xs text-ash">{room.creatorName}</p>
+        {!compact && room.blurb && <p className="mt-2 line-clamp-2 text-xs text-ash">{room.blurb}</p>}
       </div>
     </Link>
   );
