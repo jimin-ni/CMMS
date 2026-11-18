@@ -30,7 +30,7 @@ export function DeleteMessageButton({
             else setError(result.error);
           })
         }
-        className="text-key-stone underline"
+        className="text-ash underline"
       >
         삭제
       </button>
@@ -56,7 +56,7 @@ export function CloseRoomButton({ roomId }: { roomId: string }) {
             else setError(result.error);
           })
         }
-        className="rounded-full border border-key-stone/60 px-3 py-1 text-xs text-key-brown"
+        className="rounded-sm border border-ink bg-white px-3 py-1 text-xs font-bold uppercase text-ink hover:bg-cream"
       >
         대화방 닫기
       </button>

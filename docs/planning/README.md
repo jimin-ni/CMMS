@@ -14,6 +14,7 @@ CMMS(Creator Message Management System, 가제)의 기획 문서 모음입니다
 | [08-design.md](./08-design.md) | 현재 화면의 디자인 토큰, 컴포넌트, 사용자 흐름, Figma 파일 구조 |
 | [09-heap-room.md](./09-heap-room.md) | 크리에이터 방의 오브제별 기능, 디자인 결정과 이유, 쪽지 트리, 팬 작품 |
 | [10-audio.md](./10-audio.md) | 배경음악·효과음 출처, 라이선스, 공모전 음원 규정 대조 |
+| [11-design-palette-v2.md](./11-design-palette-v2.md) | 디자인 시안 v2: Chipotle 팔레트·글꼴·컴포넌트 규칙 반영, v1 클래스 대응표 |
 
 ## 표기 규칙
 

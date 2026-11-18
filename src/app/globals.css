@@ -10,10 +10,40 @@
   /* 버블 대화방 (카카오톡 느낌의 임시 색) */
   --color-talk-bg: #b2c7da;
   --color-talk-yellow: #fee500;
+
+  /* 사이트 디자인 기준 (Chipotle DESIGN.md).
+     ink 한 색이 글자와 1px 테두리를 함께 맡는다. gold 와 red 는 화면마다 한 곳에만 쓴다. */
+  --color-ink: #451400;
+  --color-ink-soft: #6b321b;
+  --color-ash: #786259;
+  --color-hairline: #d4cbc7;
+  --color-cream: #f2f2f2;
+  --color-brand-gold: #b68207;
+  --color-brand-gold-deep: #976500;
+  --color-rewards-red: #ad2118;
+  --color-rewards-red-deep: #9c1f16;
+}
+
+/* 글꼴 묶음 (src/app/fonts/brand.ts). 영문 글꼴이 먼저, 한글은 뒤 글꼴이 맡는다.
+   display: 제목 (대문자로 쓴다). text: 본문, 단추, 링크. */
+:root {
+  --font-display: var(--font-oswald), var(--font-yangjin), "Helvetica Neue", Arial, sans-serif;
+  --font-text: var(--font-nunito), var(--font-oc-body), "Helvetica Neue", Arial, sans-serif;
 }
 
 body {
-  background: var(--color-key-mist);
-  color: #2b2b2b;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: #ffffff;
+  color: var(--color-ink);
+  font-family: var(--font-text);
+}
+
+/* 제목은 display 글꼴 대문자, 굵기 500 (크기로 위계를 준다). 레이어 안이라 화면별 CSS 와 Tailwind 클래스가 이긴다 */
+@layer base {
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 500;
+    text-transform: uppercase;
+  }
 }

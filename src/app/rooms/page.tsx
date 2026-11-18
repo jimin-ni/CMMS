@@ -32,9 +32,9 @@ function SearchForm({ query }: { query: string }) {
         placeholder="크리에이터 이름이나 방 이름으로 찾기"
         aria-label="미니홈 검색"
         autoComplete="off"
-        className="min-w-0 flex-1 rounded-full border border-key-stone/50 bg-white px-4 py-2 text-sm"
+        className="min-w-0 flex-1 h-10 rounded-sm border border-ash bg-white px-4 text-sm"
       />
-      <button type="submit" className="rounded-full bg-key-brown px-5 py-2 text-sm text-key-mist">
+      <button type="submit" className="inline-flex h-[35px] items-center justify-center rounded-sm border border-black bg-ink px-3 text-sm font-bold uppercase text-white hover:bg-ink-soft">
         검색
       </button>
     </form>
@@ -69,13 +69,13 @@ async function RoomsContent({ searchParams }: RoomsPageProps) {
     <>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-key-brown">미니홈 · 크리에이터의 방</h1>
-          <p className="mt-1 text-key-stone">
+          <h1 className="text-[32px] leading-[1.2] font-medium text-ink">미니홈 · 크리에이터의 방</h1>
+          <p className="mt-1 text-ash">
             크리에이터가 지난 영상을 쌓아 둔 방입니다. 방에 들어가 둘러보고 방명록을 남겨 보세요.
           </p>
         </div>
         {viewer?.role === "creator" && (
-          <Link href="/room/me" className="rounded-full bg-key-brown px-5 py-2 text-sm text-key-mist">
+          <Link href="/room/me" className="inline-flex h-[35px] items-center justify-center rounded-sm border border-black bg-ink px-3 text-sm font-bold uppercase text-white hover:bg-ink-soft">
             내 미니홈
           </Link>
         )}
@@ -85,11 +85,11 @@ async function RoomsContent({ searchParams }: RoomsPageProps) {
 
       {results && (
         <section className="mt-8">
-          <h2 className="text-lg font-semibold text-key-brown">검색 결과</h2>
+          <h2 className="text-lg font-medium text-ink">검색 결과</h2>
           {results.length > 0 ? (
             <RoomGrid rooms={results} />
           ) : (
-            <p className="mt-3 text-sm text-key-stone">찾는 방이 없어요. 다른 이름으로 검색해 보세요.</p>
+            <p className="mt-3 text-sm text-ash">찾는 방이 없어요. 다른 이름으로 검색해 보세요.</p>
           )}
         </section>
       )}
@@ -107,7 +107,7 @@ async function RoomsContent({ searchParams }: RoomsPageProps) {
                 ))}
               </div>
             ) : (
-              <p className="mt-3 text-sm text-key-stone">
+              <p className="mt-3 text-sm text-ash">
                 아직 따라가는 방이 없어요. 크리에이터의 버블에 참여하거나 방을 한 번 방문하면 여기에 모여요.
               </p>
             )}
@@ -116,11 +116,11 @@ async function RoomsContent({ searchParams }: RoomsPageProps) {
       )}
 
       <section className="mt-10">
-        <h2 className="text-lg font-semibold text-key-brown">추천 방</h2>
+        <h2 className="text-lg font-medium text-ink">추천 방</h2>
         {featured.length > 0 ? (
           <RoomGrid rooms={featured} />
         ) : (
-          <p className="mt-3 text-sm text-key-stone">추천 방이 아직 없어요.</p>
+          <p className="mt-3 text-sm text-ash">추천 방이 아직 없어요.</p>
         )}
       </section>
     </>

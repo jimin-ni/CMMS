@@ -16,18 +16,18 @@ export function PersonaForm({ initialPersona, maxChars }: { initialPersona: stri
           maxLength={maxChars}
           rows={3}
           placeholder="예: 어떤 메시지에도 밝고 다정하게 반응하는 ENFP"
-          className="resize-none rounded-lg border border-key-stone/50 px-3 py-2"
+          className="resize-none rounded-sm border border-ash px-3 py-2"
         />
       </label>
       <div className="flex items-center gap-3">
         <button
           type="submit"
           disabled={pending}
-          className="rounded-full bg-key-brown px-5 py-2 text-sm text-key-mist disabled:opacity-60"
+          className="inline-flex h-[35px] items-center justify-center rounded-sm border border-black bg-ink px-3 text-sm font-bold uppercase text-white hover:bg-ink-soft disabled:opacity-60"
         >
           {pending ? "저장 중..." : "저장"}
         </button>
-        {state?.ok && <span className="text-sm text-key-stone">저장했어요.</span>}
+        {state?.ok && <span className="text-sm text-ash">저장했어요.</span>}
         {state && !state.ok && <span className="text-sm text-red-700">{state.error}</span>}
       </div>
     </form>

@@ -9,23 +9,26 @@ async function HeaderNav() {
   const session = await auth.api.getSession({ headers: await headers() });
 
   return (
-    <nav className="flex items-center gap-4 text-sm">
+    <nav className="flex items-center gap-4 text-[13px] font-semibold">
       {session ? (
         <>
-          <Link href="/features" className="hover:underline">
+          <Link href="/features" className="px-1 py-2.5 underline-offset-8 hover:underline hover:decoration-2">
             기능
           </Link>
-          <span className="rounded-full bg-key-blue px-2.5 py-0.5 text-key-brown">
+          <span className="rounded-[4px] border border-ash px-2 py-0.5 text-xs font-bold uppercase text-ash">
             {roleLabel(session.user.role)}
           </span>
           <SignOutButton />
         </>
       ) : (
         <>
-          <Link href="/login" className="hover:underline">
+          <Link href="/login" className="px-1 py-2.5 underline-offset-8 hover:underline hover:decoration-2">
             로그인
           </Link>
-          <Link href="/signup" className="hover:underline">
+          <Link
+            href="/signup"
+            className="inline-flex h-[35px] items-center rounded-[4px] border border-black bg-ink px-3 text-[13px] font-bold uppercase text-white hover:bg-ink-soft"
+          >
             회원가입
           </Link>
         </>
@@ -36,9 +39,9 @@ async function HeaderNav() {
 
 export function Header() {
   return (
-    <header className="bg-key-brown text-key-mist">
-      <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-        <Link href="/" className="text-lg font-bold tracking-tight">
+    <header className="border-b border-ink bg-white text-ink">
+      <div className="mx-auto flex h-[60px] max-w-5xl items-center justify-between px-5">
+        <Link href="/" className="font-[family-name:var(--font-display)] text-2xl font-medium uppercase">
           CMMS
         </Link>
         <Suspense fallback={<div className="h-5 w-40" />}>

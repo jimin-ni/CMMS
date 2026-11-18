@@ -18,7 +18,7 @@ import { deleteMessageAction, sendMessageAction } from "@/lib/bubble/actions";
 export default function RoomPage({ params }: { params: Promise<{ roomId: string }> }) {
   return (
     <main className="mx-auto w-full max-w-2xl px-4 py-6">
-      <Suspense fallback={<p className="text-sm text-key-stone">불러오는 중...</p>}>
+      <Suspense fallback={<p className="text-sm text-ash">불러오는 중...</p>}>
         <RoomContent params={params} />
       </Suspense>
     </main>
@@ -42,19 +42,19 @@ async function RoomContent({ params }: { params: Promise<{ roomId: string }> }) 
   const canClose = isOpen && (viewer.role === "admin" || viewer.id === room.creator_id);
 
   return (
-    <div className="flex h-[calc(100vh-9rem)] min-h-[28rem] flex-col overflow-hidden rounded-2xl bg-talk-bg shadow-sm">
-      <header className="flex items-center gap-3 bg-talk-bg px-4 py-3">
-        <Link href="/bubble" aria-label="버블 목록으로" className="text-xl text-gray-800">
+    <div className="flex h-[calc(100vh-9rem)] min-h-[28rem] flex-col overflow-hidden rounded-sm border border-ink bg-cream">
+      <header className="flex items-center gap-3 border-b border-ink bg-white px-4 py-3">
+        <Link href="/bubble" aria-label="버블 목록으로" className="text-xl text-ink">
           ‹
         </Link>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate font-semibold text-gray-900">
+          <h1 className="truncate font-medium text-ink">
             {room.title}
             {viewer.role === "admin" && (
-              <span className="ml-2 text-xs font-normal text-gray-600">(관리자 보기)</span>
+              <span className="ml-2 text-xs font-normal text-ash">(관리자 보기)</span>
             )}
           </h1>
-          <p className="truncate text-xs text-gray-700">
+          <p className="truncate text-xs text-ink">
             {seesAllMessages(room, viewer)
               ? `참여 ${room.member_count}명 · 모든 구독자의 메시지가 보여요`
               : `${room.creator_name} · 내 메시지는 크리에이터에게만 보여요`}

@@ -25,13 +25,13 @@ export function OpenRoomForm() {
           required
           maxLength={50}
           placeholder="구독자에게 보일 대화방 이름"
-          className="rounded-lg border border-key-stone/50 px-3 py-2"
+          className="rounded-sm border border-ash px-3 py-2"
         />
       </label>
       <button
         type="submit"
         disabled={pending}
-        className="self-start rounded-full bg-key-brown px-5 py-2 text-sm text-key-mist disabled:opacity-60"
+        className="self-start inline-flex h-[35px] items-center justify-center rounded-sm border border-black bg-ink px-3 text-sm font-bold uppercase text-white hover:bg-ink-soft disabled:opacity-60"
       >
         {pending ? "여는 중..." : "대화방 열기"}
       </button>
@@ -58,7 +58,7 @@ export function JoinRoomButton({ roomId }: { roomId: string }) {
             else setError(result.error);
           })
         }
-        className="rounded-full bg-talk-yellow px-3 py-1 text-xs font-medium text-gray-900 disabled:opacity-60"
+        className="rounded-sm border border-black bg-ink px-3 py-1 text-xs font-bold uppercase text-white hover:bg-ink-soft disabled:opacity-60"
       >
         {pending ? "참여 중..." : "참여"}
       </button>
