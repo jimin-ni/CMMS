@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import "./globals.css";
 import { Header } from "@/components/header";
+import { nunito, oswald, yangjin } from "@/app/fonts/brand";
+import { pretendard } from "@/app/fonts/onboarding";
 
 export const metadata: Metadata = {
   title: "CMMS",
@@ -13,7 +15,10 @@ const GTM_ID = "GTM-K8CFR6CF";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ko" className="h-full antialiased">
+    <html
+      lang="ko"
+      className={`${oswald.variable} ${nunito.variable} ${yangjin.variable} ${pretendard.variable} h-full antialiased`}
+    >
       <head>
         <Script
           id="google-tag"
