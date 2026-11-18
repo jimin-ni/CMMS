@@ -9,6 +9,7 @@ import { PersonaForm } from "@/components/creator/persona-form";
 import { getPersona, PERSONA_MAX } from "@/lib/creator/profile";
 import { AVATAR_MAX_BYTES, getAvatarUrl } from "@/lib/creator/avatar";
 import { AvatarForm } from "@/components/creator/avatar-form";
+import { FEATURE_ON } from "@/lib/features";
 
 export default function CreatorPage() {
   return (
@@ -27,7 +28,7 @@ async function CreatorContent() {
 
   const [rooms, persona, avatarUrl] = await Promise.all([
     listRoomsFor(viewer),
-    getPersona(viewer.id),
+    FEATURE_ON.aiPreview ? getPersona(viewer.id) : "",
     getAvatarUrl(viewer.id),
   ]);
   // 크리에이터는 열린 방을 하나만 가질 수 있다.
@@ -69,14 +70,16 @@ async function CreatorContent() {
         <AvatarForm name={viewer.name} currentUrl={avatarUrl} maxBytes={AVATAR_MAX_BYTES} />
       </section>
 
-      <section className="flex flex-col gap-3 rounded-sm bg-white p-6">
-        <h2 className="text-lg font-medium text-ink">AI 반응 미리보기 설정</h2>
-        <p className="text-sm text-ash">
-          구독자가 메시지를 보내기 전에 내 예상 반응을 이모지로 미리 보여줘요. AI가 아래 성격을
-          참고합니다. 성격은 다른 사람에게 보이지 않아요.
-        </p>
-        <PersonaForm initialPersona={persona} maxChars={PERSONA_MAX} />
-      </section>
+      {FEATURE_ON.aiPreview && (
+        <section className="flex flex-col gap-3 rounded-sm bg-white p-6">
+          <h2 className="text-lg font-medium text-ink">AI 반응 미리보기 설정</h2>
+          <p className="text-sm text-ash">
+            구독자가 메시지를 보내기 전에 내 예상 반응을 이모지로 미리 보여줘요. AI가 아래 성격을
+            참고합니다. 성격은 다른 사람에게 보이지 않아요.
+          </p>
+          <PersonaForm initialPersona={persona} maxChars={PERSONA_MAX} />
+        </section>
+      )}
 
       <section className="flex flex-col gap-3 rounded-sm bg-white p-6">
         <h2 className="text-lg font-medium text-ink">닫힌 대화방</h2>

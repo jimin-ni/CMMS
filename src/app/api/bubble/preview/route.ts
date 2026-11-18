@@ -4,8 +4,12 @@ import { canSendInRoom, getRoom, recentMessagesForPreview } from "@/lib/bubble/r
 import { previewReaction } from "@/lib/bubble/ai-preview";
 import { getPersona } from "@/lib/creator/profile";
 import { getViewer } from "@/lib/session";
+import { FEATURE_ON } from "@/lib/features";
 
 export async function POST(request: Request) {
+  if (!FEATURE_ON.aiPreview) {
+    return NextResponse.json({ error: "AI 반응 미리보기는 지금 쓰지 않아요." }, { status: 404 });
+  }
   const viewer = await getViewer();
   if (!viewer) {
     return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });

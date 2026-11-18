@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { BUBBLE_POLICY, maxCharsFor } from "@/lib/bubble/policy";
+import { FEATURE_ON } from "@/lib/features";
 import {
   canAccessRoom,
   canSendInRoom,
@@ -77,7 +78,11 @@ async function RoomContent({ params }: { params: Promise<{ roomId: string }> }) 
         memberCount={seesAllMessages(room, viewer) ? room.member_count : null}
         canSend={canSendInRoom(room, viewer)}
         maxChars={maxCharsFor(viewer.role)}
-        previewRoomId={viewer.role === "public" && viewer.id !== room.creator_id ? room.id : null}
+        previewRoomId={
+          FEATURE_ON.aiPreview && viewer.role === "public" && viewer.id !== room.creator_id
+            ? room.id
+            : null
+        }
         closedNotice={isOpen ? "이 대화방에서는 메시지를 보낼 수 없어요." : "닫힌 대화방입니다."}
       />
     </div>

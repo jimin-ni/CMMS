@@ -6,6 +6,7 @@ import { getViewer } from "@/lib/session";
 import { JoinRoomButton } from "@/components/bubble/room-forms";
 import { ChatTabs } from "@/components/bubble/chat-tabs";
 import { Avatar } from "@/components/avatar";
+import { canUseTalk } from "@/lib/bubble/talk-repo";
 
 export default function BubbleListPage() {
   return (
@@ -33,7 +34,7 @@ async function BubbleListContent() {
           </Link>
         )}
       </header>
-      {viewer.role === "creator" && <ChatTabs active="subscribers" />}
+      {canUseTalk(viewer) && <ChatTabs active="subscribers" />}
       {rooms.length === 0 && (
         <p className="px-5 pb-6 text-sm text-ash">
           {viewer.role === "creator" ? "아직 연 대화방이 없어요." : "열린 대화방이 없어요."}
