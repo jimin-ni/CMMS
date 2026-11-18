@@ -2,7 +2,7 @@
    (.oc-root 의 스크롤 틀, .ob-root 의 종이 색·결 변수와 책상(.ob-desk)을 함께 쓴다) */
 .sb-root {
   --gap: clamp(16px, 3.4vw, 56px);
-  /* 장 수. settings-book.tsx 의 장 수와 맞춘다 */
+  /* 장 수. book.tsx 가 실제 장 수로 덮어쓴다 (style 의 --n) */
   --n: 4;
   /* 장 크기 (세로 A 판형 1:1.414). 두 장이 가로로 들어가고, 위 막대(72px) 아래에서 장의 80% 만 보이는 크기 중 작은 쪽 */
   --pw: min(calc((100dvh - 72px) / 0.8 / 1.414), calc((100vw - 3 * var(--gap)) / 2));
@@ -256,4 +256,112 @@
 
 @media (prefers-reduced-motion: reduce) {
   .sb-choice { transition: none; }
+}
+
+/* ---------- 마이페이지 (mypage/my-book.tsx). 설정 장과 같은 종이, cqw 단위 ---------- */
+.sb-page h3.sb-legend { margin: 0 0 2.6cqw; font-weight: normal; }
+.sb-page h3.sb-legend:not(:first-of-type) { margin-top: 6cqw; }
+
+/* 이름: 값 목록 (밑줄 친 공책 줄) */
+.mp-list { margin: 0; }
+.mp-row {
+  display: flex;
+  align-items: baseline;
+  gap: 3cqw;
+  padding: 2.2cqw 0;
+  border-bottom: 1.5px dashed rgba(90, 70, 40, 0.22);
+  font-size: max(13px, 3cqw);
+}
+.mp-row dt { flex: none; width: 26cqw; color: var(--ink-soft); }
+.mp-row dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+
+/* 단추: 고르기 칸과 같은 테두리. 로그아웃 단추(button)와 링크(a)가 함께 쓴다 */
+.mp-actions { display: flex; flex-wrap: wrap; gap: 2.4cqw; margin-top: 4cqw; }
+.mp-btn {
+  display: inline-block;
+  padding: 1.8cqw 4.4cqw;
+  border: 2px solid var(--clay);
+  border-radius: 999px;
+  background: #fffaf0;
+  color: var(--clay);
+  font: inherit;
+  font-family: var(--font-oc-rounded), var(--font-oc-body), sans-serif;
+  font-size: max(13px, 3cqw);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.mp-btn:hover { background: var(--clay); color: #fff8ec; }
+.mp-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+.mp-box > .mp-btn { margin-top: 2.4cqw; }
+
+.mp-box {
+  padding: 3.4cqw 4cqw;
+  border: 2px solid rgba(90, 70, 40, 0.18);
+  border-radius: 1.6cqw;
+  background: rgba(255, 253, 248, 0.75);
+  font-size: max(13px, 3cqw);
+}
+.mp-empty { color: var(--ink-soft); }
+.mp-line { display: flex; align-items: center; gap: 1.6cqw; margin: 0; }
+.mp-line b { font-weight: normal; font-size: max(14px, 3.6cqw); }
+.mp-sub { color: var(--ink-soft); font-size: max(11px, 2.4cqw); }
+.mp-accent { color: var(--clay); font-weight: normal; }
+.mp-link { color: var(--clay); text-underline-offset: 0.2em; overflow-wrap: anywhere; }
+.mp-soon { margin: 3cqw 0 0; font-size: max(12px, 2.6cqw); }
+
+/* 큰 숫자 두 칸 */
+.mp-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 3.6cqw; }
+.mp-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6cqw;
+  padding: 3cqw 2cqw;
+  border: 2px solid rgba(90, 70, 40, 0.18);
+  border-radius: 1.6cqw;
+  background: rgba(255, 253, 248, 0.75);
+}
+.mp-stat:nth-child(odd) { transform: rotate(-1deg); }
+.mp-stat-value { font-size: max(22px, 9cqw); line-height: 1; color: var(--clay); }
+.mp-stat b { font-weight: normal; font-size: max(13px, 3cqw); }
+.mp-stat small { font-size: max(10px, 2.2cqw); color: var(--ink-soft); letter-spacing: 0.04em; }
+
+/* 대화방 열림 점 */
+.mp-dot { width: max(8px, 2cqw); height: max(8px, 2cqw); border-radius: 50%; background: rgba(90, 70, 40, 0.3); }
+.mp-dot.on { background: #6a9a5b; box-shadow: 0 0 0 0.8cqw rgba(106, 154, 91, 0.2); }
+
+/* 등록된 카드 자리: 점선 카드 */
+.mp-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  aspect-ratio: 1.586;
+  max-height: 30cqw;
+  box-sizing: border-box;
+  padding: 3.4cqw 4cqw;
+  border: 2px dashed rgba(90, 70, 40, 0.3);
+  border-radius: 2.4cqw;
+  font-size: max(12px, 2.8cqw);
+}
+.mp-card-chip { width: 9cqw; height: 6.6cqw; border-radius: 1cqw; background: rgba(90, 70, 40, 0.14); }
+
+/* 채널 */
+.mp-channels { margin: 0; padding: 0; list-style: none; }
+.mp-channels li {
+  display: flex;
+  align-items: baseline;
+  gap: 3cqw;
+  padding: 2.2cqw 0;
+  border-bottom: 1.5px dashed rgba(90, 70, 40, 0.22);
+  font-size: max(13px, 3cqw);
+}
+.mp-channels b { flex: none; width: 24cqw; font-weight: normal; }
+.mp-platforms { display: flex; flex-wrap: wrap; gap: 1.6cqw; margin: 3.4cqw 0 0; }
+.mp-tag {
+  padding: 0.8cqw 2.4cqw;
+  border-radius: 999px;
+  background: rgba(166, 97, 60, 0.1);
+  color: var(--ink-soft);
+  font-size: max(10px, 2.2cqw);
 }

@@ -660,3 +660,22 @@ export async function setNoteReveal(
   await db.update(heapRooms).set({ noteRevealAt: revealAt }).where(eq(heapRooms.id, roomId));
   return { ok: true, noteRevealAt: revealAt };
 }
+
+export type HeapNoteCounts = { received: number; unread: number; replied: number };
+
+// 마이페이지의 쪽지 수: 받은 쪽지(방 주인이 쓴 것과 숨긴 것 빼고), 그중 안 읽은 것, 답장한 것.
+// 방 주인인지는 부르는 쪽이 정한다 (자기 방 id 만 넘긴다).
+export async function getNoteCounts(roomId: string, ownerId: string): Promise<HeapNoteCounts> {
+  if (!isUuid(roomId)) return { received: 0, unread: 0, replied: 0 };
+  const rows = await db
+    .select({
+      received: sql<number>`count(*)::int`,
+      unread: sql<number>`(count(*) filter (where ${heapNotes.ownerReadAt} is null))::int`,
+      replied: sql<number>`count(${heapNoteReplies.noteId})::int`,
+    })
+    .from(heapNotes)
+    .leftJoin(heapNoteReplies, eq(heapNoteReplies.noteId, heapNotes.id))
+    .where(and(eq(heapNotes.roomId, roomId), isNull(heapNotes.hiddenAt), ne(heapNotes.authorId, ownerId)));
+  const row = rows[0];
+  return { received: Number(row.received), unread: Number(row.unread), replied: Number(row.replied) };
+}
