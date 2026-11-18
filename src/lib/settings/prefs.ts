@@ -4,6 +4,7 @@
 // - roomTime: 방의 빛. 엔진(heap/engine/time.js)의 시간 이름을 그대로 쓴다. auto 는 한국 시간의 지금 시각(실시간)이다.
 //   heap-room.tsx 가 꾸미기 밖에서 heap:viewtime 으로 엔진에 넘긴다. 아직 고르지 않았으면(null) 방 주인이 정한 시간대 그대로다.
 // - language, theme, volume: 고르면 저장만 한다. 아직 화면에 반영하는 곳이 없다 (다국어, 다크 모드, 소리 재생이 아직 없다).
+//   예외: volume.music 은 방의 배경음악(heap/room-bgm.tsx)이 쓴다.
 import { useSyncExternalStore } from "react";
 
 export const LANGUAGES = ["ko", "en"] as const;
