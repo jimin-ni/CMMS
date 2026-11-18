@@ -18,7 +18,8 @@ export function setupProps(ctx) {
     rugTex.needsUpdate = true;
   }
   paintRug();
-  const rug = new THREE.Mesh(new THREE.PlaneGeometry(3.8, 2.9), new THREE.MeshStandardMaterial({ map: rugTex, roughness: 1 }));
+  // 러그 크기: layout.table.rug = { w, d } (방마다). 없으면 원래의 3.8 x 2.9 다
+  const rug = new THREE.Mesh(new THREE.PlaneGeometry(layout.table.rug?.w ?? 3.8, layout.table.rug?.d ?? 2.9), new THREE.MeshStandardMaterial({ map: rugTex, roughness: 1 }));
   rug.material.userData.repaint = paintRug;
   rug.rotation.x = -Math.PI / 2; rug.position.set(TABLE.x, 0.006, TABLE.z + 0.15); rug.receiveShadow = true; scene.add(rug);
   const tableTop = box(TABLE.w, 0.08, TABLE.d, tone(C, 'woodB'), TABLE.x, TABLE.top - 0.04, TABLE.z);
@@ -57,7 +58,7 @@ export function setupProps(ctx) {
   }
 
   // 영사기와 스크린
-  const SCR = { wall: layout.screen.wall, at: layout.screen.at, y: 2.4, w: 1.6, h: 0.9 };
+  const SCR = { wall: layout.screen.wall, at: layout.screen.at, y: layout.screen.y ?? 2.4, w: 1.6, h: 0.9 }; // y: 벽이 낮은 방은 내려 건다
   const projC = makeCanvas(640, 360);
   const projTex = canvasTexture(projC);
   const screenIdle = tone(C, 'paper'), screenOn = new THREE.MeshBasicMaterial({ map: projTex });

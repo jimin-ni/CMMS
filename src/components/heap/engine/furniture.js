@@ -59,7 +59,7 @@ export function setupFurniture(ctx) {
         for (let b = 0; b < 6; b++) { const h = 0.35 + ctx.irand() * 0.15; add(box(0.16, h, 0.3, tone(C, `book:${s * 6 + b}`), 0.6 - b * 0.22, 0.3 + s * 0.7 + h / 2, 0.02, { parent: g })); }
       }
       add(box(1.6, 0.05, 0.5, wood, 0, 2.2, 0, { parent: g }));
-      pottedPlant(g, 0, 0, 2.22, 0.7);
+      if (it.plant !== false) pottedPlant(g, 0, 0, 2.22, 0.7); // plant: false 면 선반 위 화분을 두지 않는다 (벽이 낮은 방)
       if (it.fn?.kind === 'keepsake') ctx.keepsakeObject(g, it, build, 'standee', 0.52, 2.225, 0.06); // 선반 위의 기념품
       ctx.shelf = { group: g, albums: [] };
       ALBUMS.forEach((a, i) => {
@@ -243,8 +243,10 @@ export function setupFurniture(ctx) {
       ctx.irand = first ? rand : mulberry32(7919 * (i + 1));
       const g = new THREE.Group(), rot = THREE.MathUtils.degToRad(it.rot || 0);
       const fp = BUILD[it.type]?.(g, it, build); if (!fp) return;
-      g.position.set(it.x, 0, it.z); g.rotation.y = rot; g.userData.itemIndex = i; build.groups[i] = g; build.group.add(g); g.updateMatrixWorld(true);
-      if (!fp.hw) return; // 모델은 읽힌 뒤에 자기 장애물을 더한다
+      // 손으로 짓는 가구는 y(다른 가구 위에 올린 높이)를 묶음에 준다. 모델은 안쪽 hold 에 준다 (위 model). baseY 는 intro.js 가 떨어뜨릴 때 더한다
+      const baseY = it.type !== 'model' ? it.y || 0 : 0;
+      g.position.set(it.x, baseY, it.z); g.userData.baseY = baseY; g.rotation.y = rot; g.userData.itemIndex = i; build.groups[i] = g; build.group.add(g); g.updateMatrixWorld(true);
+      if (!fp.hw || it.y) return; // 모델은 읽힌 뒤에 자기 장애물을 더한다. 다른 가구 위에 올린 것은 길을 막지 않는다
       const swap = Math.round((it.rot || 0) / 90) % 2 !== 0;
       const ohw = swap ? fp.hd : fp.hw, ohd = swap ? fp.hw : fp.hd;
       build.obst.push({ x: it.x, z: it.z, hw: ohw, hd: ohd, rhw: Math.max(0.1, ohw - 0.2), rhd: Math.max(0.1, ohd - 0.2), owner: it });

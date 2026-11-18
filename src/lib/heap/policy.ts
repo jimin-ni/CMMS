@@ -25,6 +25,13 @@ export const HEAP_POLICY = {
   // 방 크기는 엔진의 roomDim 범위(6..12)와 같다. 가구 좌표는 가장 큰 방(12)의 반쪽에 여유를 둔 값.
   layoutRoomMin: 6,
   layoutRoomMax: 12,
+  // 벽 높이(room.h)와 액자·스크린 가운데 높이(posters.y, screen.y). 없으면 엔진의 4, 2.5, 2.4다. 러그(table.rug)의 한 변.
+  layoutWallHMin: 2.4,
+  layoutWallHMax: 4,
+  layoutHangYMin: 1,
+  layoutHangYMax: 3.5,
+  layoutRugMin: 1,
+  layoutRugMax: 6,
   layoutCoordMax: 8,
   layoutItemSizeMin: 0.3,
   layoutItemSizeMax: 3,
