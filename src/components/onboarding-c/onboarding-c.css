@@ -39,7 +39,7 @@
   width: 100%;
   overflow: hidden;
 }
-/* 실제 2번 방(HeapRoom). 스크롤하는 동안에는 누를 수 없다. */
+/* 실제 러브쑤 방(HeapRoom). 스크롤하는 동안에는 누를 수 없다. */
 .oc-room-host {
   position: absolute;
   inset: 0;

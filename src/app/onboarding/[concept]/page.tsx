@@ -23,8 +23,8 @@ async function ConceptContent({ params }: OnboardingPageProps) {
     notFound();
   }
 
-  // 컨셉 B: 바인더 노트를 넘기다 앨범으로 접어 2번 방 책장에 꽂는 온보딩.
-  // 컨셉 C: 실제 2번 방 위에 얹은 온보딩. 둘 다 화면 전체를 덮으므로 위의 헤더는 가려진다.
+  // 컨셉 B: 바인더 노트를 넘기다 앨범으로 접어 러브쑤 방 책장에 꽂는 온보딩.
+  // 컨셉 C: 실제 러브쑤 방 위에 얹은 온보딩. 둘 다 화면 전체를 덮으므로 위의 헤더는 가려진다.
   if (concept.id === "b" || concept.id === "c") {
     return (
       <Suspense fallback={concept.id === "c" ? <LoadingScreen /> : <div className="fixed inset-0 z-[60] bg-[#0c0a08]" />}>
