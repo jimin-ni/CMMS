@@ -1,0 +1,259 @@
+/* 설정 화면: 책상 위에 세로로 긴 책자 장들. .sb-root 아래에만 적용한다.
+   (.oc-root 의 스크롤 틀, .ob-root 의 종이 색·결 변수와 책상(.ob-desk)을 함께 쓴다) */
+.sb-root {
+  --gap: clamp(16px, 3.4vw, 56px);
+  /* 장 수. settings-book.tsx 의 장 수와 맞춘다 */
+  --n: 4;
+  /* 장 크기 (세로 A 판형 1:1.414). 두 장이 가로로 들어가고, 위 막대(72px) 아래에서 장의 80% 만 보이는 크기 중 작은 쪽 */
+  --pw: min(calc((100dvh - 72px) / 0.8 / 1.414), calc((100vw - 3 * var(--gap)) / 2));
+  --ph: calc(var(--pw) * 1.414);
+}
+
+/* 세로 스크롤 길이 = 장들을 끝까지 옮기는 가로 거리: (장 n 개 + 틈 n+1 개) - 화면 너비 */
+.sb-scroll {
+  height: calc(100dvh + var(--n) * var(--pw) + (var(--n) + 1) * var(--gap) - 100vw);
+}
+
+/* 장 줄: 아래쪽 20% 가 화면 밖으로 나가도록 둔다 */
+.sb-track {
+  position: absolute;
+  left: 0;
+  top: calc(100dvh - var(--ph) * 0.8);
+  display: flex;
+  gap: var(--gap);
+  padding-inline: var(--gap);
+  will-change: transform;
+}
+
+/* 위 막대: 제목, 스크롤 안내, 닫기 */
+.sb-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-inline: var(--gap);
+  color: var(--cream);
+  pointer-events: none;
+}
+.sb-top h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: normal;
+  letter-spacing: 0.08em;
+}
+.sb-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(250, 242, 228, 0.82);
+}
+.sb-close {
+  pointer-events: auto;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1.5px solid rgba(250, 242, 228, 0.5);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--cream);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.sb-close:hover { background: rgba(0, 0, 0, 0.32); }
+.sb-close:focus-visible { outline: 2px solid var(--cream); outline-offset: 3px; }
+
+/* ---------- 장 (cqw = 장 너비의 1%) ---------- */
+.sb-page {
+  position: relative;
+  flex: none;
+  width: var(--pw);
+  height: var(--ph);
+  container-type: size;
+  box-sizing: border-box;
+  padding: 7cqw 8cqw;
+  border-radius: 6px;
+  color: var(--ink);
+  background-color: var(--cream);
+  background-image: var(--grain), var(--blotch);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    inset 0 0 0 1px rgba(120, 96, 60, 0.08),
+    0 30px 50px rgba(0, 0, 0, 0.4),
+    0 4px 10px rgba(20, 12, 4, 0.3);
+}
+.sb-page:nth-child(even) { background-color: #f6ecdb; }
+.sb-tape { top: -1.6cqw; left: 50%; width: 14cqw; height: 3.6cqw; transform: translateX(-50%) rotate(-3deg); }
+.sb-page:nth-child(even) .sb-tape { transform: translateX(-50%) rotate(4deg); }
+.sb-no { margin: 0; font-size: max(10px, 1.9cqw); }
+.sb-title {
+  margin: 3cqw 0 4.5cqw;
+  font-size: 11cqw;
+  font-weight: normal;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+.sb-field {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.sb-legend {
+  padding: 0;
+  margin-bottom: 3.5cqw;
+  font-size: max(16px, 4.6cqw);
+}
+.sb-legend small,
+.sb-choice small,
+.sb-slider small {
+  margin-left: 0.6em;
+  font-family: var(--font-oc-body), sans-serif;
+  font-size: max(11px, 2.2cqw);
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+}
+.sb-note {
+  margin: 5cqw 0 0;
+  font-size: max(12px, 2.6cqw);
+}
+.sb-or {
+  margin: 2cqw 0;
+  font-size: max(12px, 2.8cqw);
+  text-align: center;
+}
+
+/* 고르기 칸: 라디오는 숨기되 키보드로 고를 수 있다 */
+.sb-choice {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8cqw;
+  border: 2px solid rgba(90, 70, 40, 0.18);
+  border-radius: 1.6cqw;
+  background: rgba(255, 253, 248, 0.75);
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.sb-choice input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+.sb-choice b { font-weight: normal; font-size: max(14px, 3.6cqw); }
+.sb-choice small { margin-left: 0; }
+.sb-choice:hover { border-color: rgba(166, 97, 60, 0.5); }
+.sb-choice:has(input:checked) {
+  border-color: var(--clay);
+  background: #fffaf0;
+  box-shadow: 0 1.2cqw 2.4cqw rgba(40, 30, 15, 0.18);
+  transform: rotate(-1.2deg);
+}
+/* 고른 칸의 손그림 체크 */
+.sb-choice:has(input:checked)::after {
+  content: "✓";
+  position: absolute;
+  top: -2.4cqw;
+  right: -1.6cqw;
+  display: grid;
+  place-items: center;
+  width: 5.6cqw;
+  height: 5.6cqw;
+  min-width: 20px;
+  min-height: 20px;
+  border-radius: 50% 46% 52% 48%;
+  background: var(--clay);
+  color: #fff8ec;
+  font-size: max(11px, 2.8cqw);
+}
+.sb-choice:has(input:focus-visible) { outline: 2px solid var(--ink); outline-offset: 3px; }
+
+.sb-row { display: flex; gap: 4cqw; }
+.sb-row > .sb-choice { flex: 1; }
+.sb-chip { padding: 3.4cqw 4cqw; }
+.sb-wide { width: 100%; box-sizing: border-box; }
+.sb-card { padding: 2.4cqw 2.4cqw 3cqw; align-items: center; text-align: center; }
+
+/* 테마 견본 */
+.sb-swatch {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 1cqw;
+  margin-bottom: 1.6cqw;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+.sb-swatch-light { background: radial-gradient(circle at 70% 30%, #f6d08e 0 12%, transparent 13%), linear-gradient(180deg, #fffaf0, #efe5d2); }
+.sb-swatch-dark { background: radial-gradient(circle at 70% 30%, #e9e0cc 0 12%, transparent 13%), linear-gradient(180deg, #2a3347, #1b2233); }
+
+/* 방 시간대: 폴라로이드처럼 하늘색 사진 */
+.sb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3.6cqw; }
+.sb-polaroid { padding: 1.8cqw 1.8cqw 2.4cqw; }
+.sb-polaroid:nth-child(odd):not(:has(input:checked)) { transform: rotate(1.2deg); }
+.sb-sky {
+  display: block;
+  width: 100%;
+  aspect-ratio: 5 / 2;
+  margin-bottom: 1.4cqw;
+  background-image: var(--grain);
+  box-shadow: inset 0 0 2cqw rgba(0, 0, 0, 0.22);
+}
+
+/* 소리: 손으로 그은 듯한 막대 */
+.sb-slider { display: block; margin-bottom: 6cqw; }
+.sb-slider-head { display: flex; align-items: baseline; gap: 1.2cqw; margin-bottom: 2cqw; }
+.sb-slider-head b { font-weight: normal; font-size: max(14px, 3.6cqw); }
+.sb-slider-head output { margin-left: auto; font-size: max(13px, 3.4cqw); color: var(--clay); }
+.sb-slider input {
+  --fill: 50%;
+  width: 100%;
+  height: max(10px, 2cqw);
+  margin: 0;
+  appearance: none;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--clay) var(--fill), rgba(90, 70, 40, 0.16) var(--fill));
+  cursor: pointer;
+}
+.sb-slider input::-webkit-slider-thumb {
+  appearance: none;
+  width: max(22px, 4.4cqw);
+  height: max(22px, 4.4cqw);
+  border-radius: 50% 46% 52% 48%;
+  border: 2px solid var(--clay);
+  background: #fffaf0;
+  box-shadow: 0 2px 4px rgba(40, 30, 15, 0.3);
+}
+.sb-slider input::-moz-range-thumb {
+  width: max(22px, 4.4cqw);
+  height: max(22px, 4.4cqw);
+  border-radius: 50% 46% 52% 48%;
+  border: 2px solid var(--clay);
+  background: #fffaf0;
+  box-shadow: 0 2px 4px rgba(40, 30, 15, 0.3);
+}
+.sb-slider input:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
+
+/* 좁은 화면: 한 장과 다음 장의 끝이 보이게. 장 너비가 좁으니 판형 대신 화면 높이에 맞춰 세로로 길게 (아래 20% 는 그대로 잘린다) */
+@media (max-width: 700px) {
+  .sb-root {
+    --pw: calc(100vw - 2 * var(--gap) - 40px);
+    --ph: calc((100dvh - 72px) / 0.8);
+  }
+  .sb-hint span { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sb-choice { transition: none; }
+}

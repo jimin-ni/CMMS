@@ -13,7 +13,7 @@ import { LoginPopup } from "./login-popup";
 const LOGIN_REASON = "Sign in to leave your mark in this room.";
 // 휴대폰의 대화를 로그인 전에 누를 때 (엔진의 heap:signin)
 const CHAT_LOGIN_REASON = "Sign in to chat with the creator.";
-// 설정 버튼이 여는 곳 (임시로 컨셉 B 화면)
+// 설정 버튼이 여는 곳 (settings-book.tsx)
 const SETTINGS_HREF = "/settings";
 // 가운데 안내 팝업이 아래로 내려가기까지
 const GUIDE_CENTER_MS = 3000;
