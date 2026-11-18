@@ -26,7 +26,7 @@ import { toEngineNote } from "./engine/tree-ids";
 import { RoomEditor } from "./room-editor";
 import { SetupChecklist, setupFlags, type ChecklistAction } from "./setup-checklist";
 import { ShareButton } from "./share-button";
-import { moneygraphyPixel, moneygraphyRounded, pretendard } from "@/app/fonts/onboarding";
+import { moneygraphyPixel, moneygraphyRounded, nunito, oswald, pretendard } from "@/app/fonts/onboarding";
 import "./heap-room.css";
 
 // 크리에이터 정보(creator.json)는 public/heap/rooms/ 아래의 정적 파일이다. 나머지 방 데이터는 서버가 DB에서 읽어 data로 넘긴다.
@@ -36,7 +36,8 @@ const DATA_BASE = "/heap/rooms/";
 const FONTS_HREF =
   "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600&family=Nanum+Pen+Script&display=swap";
 
-const CARD_FONTS = `${moneygraphyPixel.variable} ${moneygraphyRounded.variable} ${pretendard.variable}`;
+// 단추와 창은 치폴레 디자인 가이드의 글꼴(Oswald, Nunito)을 쓴다 (heap-room.css 의 --cp-display, --cp-ui).
+const CARD_FONTS = `${moneygraphyPixel.variable} ${moneygraphyRounded.variable} ${pretendard.variable} ${oswald.variable} ${nunito.variable}`;
 
 // 쪽지 하나의 전송 모양. notes-repo.ts의 HeapNote에서 Date만 ISO 문자열로 바꾼 것이다 (실시간 읽기의 notes와 같다). 엔진의 tree-ids.js가 엔진 모양으로 바꾼다.
 export type HeapNoteWire = {

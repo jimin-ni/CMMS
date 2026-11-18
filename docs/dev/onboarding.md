@@ -12,11 +12,11 @@
 | `/` | 첫 화면. `/onboarding/c`와 같다 |
 | `/home` | 홈. 온보딩이 끝난 2번 방 (Esc 로 건너뛴 상태와 같다) |
 | `/settings` | 설정 (임시). 컨셉 B 화면, 첫 장 제목만 "setting". 스크롤 연출은 같고, 스크롤 중 노트 바깥을 누르면 `/home` |
-| `/onboarding/c` | 대기 화면(큰 소문자 "memories" 위에서 덮인 책이 펼쳐지는 로우폴리 아이콘, 방이 뜨면 자동으로 넘어감) → 어두운 화면 "Memories" → 창문 빛과 빈 2번 방 → 스크롤마다 글과 가구가 번갈아 떨어져 쌓임 → Ready to Start? → 방이 화면 가득 확대 → 방 안 둘러보기 |
+| `/onboarding/c` | 대기 화면(큰 대문자 "MEMORIES" 위에서 덮인 책이 펼쳐지는 로우폴리 아이콘, 방이 뜨면 자동으로 넘어감) → 어두운 화면 "MEMORIES" → 창문 빛과 빈 2번 방 → 스크롤마다 글과 가구가 번갈아 떨어져 쌓임 → Ready to Start? → 방이 화면 가득 확대 → 방 안 둘러보기 |
 | `/onboarding/b` | 책상 위 바인더 노트(링이 아래) → 스크롤하면 아랫장이 링을 지나 위로 넘어와 덮임(3D) → 하드보드 표지가 덮여 앨범 한 권이 되고 책 등이 보이게 세워짐 → 책상이 걷히고 2번 방이 보임 → 카메라가 책장으로 줌인, 앨범이 꽂힌 뒤 줌아웃 → Ready to Start? → 방 안 둘러보기 |
 | `/plan` | 나만의 방 결제 안내. 가격이 정해지지 않아 결제 버튼은 비활성 |
 
-방 안 둘러보기(B, C 공통): 종이 안내 팝업("Welcome in.")이 화면 가운데에 떴다가 클릭하거나 3초가 지나면 아래로 내려감, 둘러보기 진행 점(2번 방은 6곳), 3곳을 둘러보면 위에 내비게이션 바(홈, 폴라로이드, 챗, 레터, 로그인, 설정). 왼쪽 위에는 방 이름 대신 머니그라피 Pixel 글꼴의 "memories". 버튼은 큰 픽셀 아이콘(28px)과 한 단어입니다.
+방 안 둘러보기(B, C 공통): 종이 안내 팝업("Welcome in.")이 화면 가운데에 떴다가 클릭하거나 3초가 지나면 아래로 내려감, 둘러보기 진행 점(2번 방은 6곳), 3곳을 둘러보면 위에 내비게이션 바(홈, 폴라로이드, 챗, 레터, 로그인, 설정). 왼쪽 위에는 방 이름 대신 Oswald 대문자 "MEMORIES". 버튼은 큰 픽셀 아이콘(28px)과 한 단어입니다.
 
 | 버튼 | 동작 |
 |---|---|
@@ -43,7 +43,7 @@ Esc(컨셉 C): 온보딩 중 언제든 누르면 온보딩을 끝냅니다. 방 
 | 엔진 훅 | `src/components/heap/engine/intro.js` | `heap:intro`, `heap:introquery` |
 | 엔진 훅 | `src/components/heap/engine/nav.js` | `heap:go`. 보내지 않으면 보통 방은 그대로 |
 | 엔진 옵션 | `HeapRoom`의 `signInHere`, 엔진 `opts.askSignIn` | 로그인 전 휴대폰 대화를 누르면 `/login` 대신 방에 `heap:signin`. `/room/[roomId]`는 전과 같음 |
-| 글꼴 | `src/app/fonts/` | 머니그라피 Pixel·Rounded, Pretendard Variable. 온보딩 화면에만 적용 |
+| 글꼴 | `src/app/fonts/` | 머니그라피 Pixel·Rounded, Pretendard Variable. 온보딩 화면에만 적용. "MEMORIES"와 "Ready to Start?", 방 화면의 단추와 창은 치폴레 디자인 가이드에 따라 Oswald 500(제목, 대문자)과 Nunito(단추, 본문) |
 
 ## 변경 사항 (다른 작업자와 AI용 요약)
 

@@ -5,6 +5,7 @@
 // 온보딩 컨셉 B와 C가 함께 쓴다. 둘러보기는 엔진의 모드(heap:mode)와 열린 창(overlay 의 hidden)을 읽어서 센다. 엔진은 고치지 않는다.
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useRouter } from "next/navigation";
+import { oswald } from "@/app/fonts/onboarding";
 import { MODE_SPOT, NAV_AFTER, PANEL_IDS, PANEL_SPOT, SPOTS, spotsFor, type SpotId } from "./story";
 import { Paper } from "./paper";
 import { PixelIcon, type PixelIconName } from "./icons";
@@ -144,10 +145,12 @@ export function RoomTour({
   const navOpen = countFound >= NAV_AFTER;
   const activeSpot = active ? SPOTS[active] : null;
   const spot: GuideSpot = skipped && guideSpot === "center" ? "hidden" : guideSpot;
-  // 앉기, 상영, 책장, 열린 창에서는 엔진의 단추와 창을 쓰므로 안내 팝업을 잠시 내린다
-  const guideShown = spot !== "hidden" && engineMode === "room" && !panelOpen;
+  const allFound = countFound >= spots.length;
+  // 앉기, 상영, 책장, 열린 창에서는 엔진의 단추와 창을 쓰므로 안내 팝업을 잠시 내린다.
+  // 모든 곳을 둘러보면 안내 팝업은 닫는다.
+  const guideShown = spot !== "hidden" && engineMode === "room" && !panelOpen && !allFound;
   const progressNote =
-    countFound >= spots.length
+    allFound
       ? "You found every story here."
       : navOpen
         ? "A menu just opened at the top."
@@ -156,7 +159,7 @@ export function RoomTour({
   return (
     <>
       {/* 왼쪽 위 방 이름(엔진의 #cname) 대신 서비스 이름. 이름 칸은 CSS 가 자리만 남기고 감춘다. */}
-      <span className="oc-corner oc-pixel">memories</span>
+      <span className={`${oswald.variable} oc-corner oc-display`}>memories</span>
 
       <div
         className={`oc-guide${guideShown ? (spot === "center" ? " open center" : " open") : ""}`}
