@@ -63,6 +63,10 @@ export function setupDev(ctx) {
     const { cmd, cb } = e.detail || {};
     if (typeof cb !== 'function') return;
     if (cmd === 'audit') cb(audit(ctx.scene));
+    else if (cmd === 'project') { // detail.at = [x, y, z] (월드) → 화면 좌표(px). 클릭 시험이 물건을 정확히 누르도록
+      const v = new THREE.Vector3(...e.detail.at).project(ctx.camera), r = ctx.canvas.getBoundingClientRect();
+      cb({ x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height });
+    } else if (cmd === 'state') cb({ mode: ctx.mode, slots: ctx.build.slots.map(s => s.fn?.kind), slotMeshes: ctx.build.slotMeshes.length, seatMeshes: ctx.build.seatMeshes.length });
     else if (cmd === 'export') {
       const { GLTFExporter } = await import('three/examples/jsm/exporters/GLTFExporter.js');
       // Blender 의 목록에서 알아보도록 가구 묶음에 이름을 붙인다 (엔진은 이름을 쓰지 않는다)

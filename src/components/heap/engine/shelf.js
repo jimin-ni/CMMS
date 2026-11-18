@@ -13,8 +13,10 @@ export function setupShelf(ctx) {
   function linkShelf() { // 앨범 책장의 카메라와 서는 자리. 가구를 다시 지을 때마다 다시 돈다
     ctx.sortCam = ctx.shelfSpot = ctx.shelfStand = null;
     if (!ctx.shelf) return;
-    const albumsC = shelfLocal(new THREE.Vector3(0, 1.05, 0));
-    ctx.sortCam = { pos: shelfLocal(new THREE.Vector3(-1.6, 2.2, 2.5)), target: albumsC };
+    // view: 책장이 정한 앨범 칸의 가운데와 카메라 자리 (낮은 책장, furniture.js). 없으면 원래의 높은 책장 값이다
+    const v = ctx.shelf.view;
+    const albumsC = shelfLocal(v ? new THREE.Vector3(...v.target) : new THREE.Vector3(0, 1.05, 0));
+    ctx.sortCam = { pos: shelfLocal(v ? new THREE.Vector3(...v.cam) : new THREE.Vector3(-1.6, 2.2, 2.5)), target: albumsC };
     ctx.shelfSpot = shelfLocal(new THREE.Vector3(-0.75, 0, 0.9)); ctx.shelfSpot.y = 0;
     ctx.shelfStand = shelfLocal(new THREE.Vector3(1.0, 0, 0.95)); ctx.shelfStand.y = 0;
     ctx.shelfFacing = ctx.shelf.group.rotation.y + Math.PI;
@@ -31,9 +33,12 @@ export function setupShelf(ctx) {
   // 앨범 책장: 앨범 보기 (정리 라운드는 archive/album-sort/ 에 있다)
   function updateAlbums() {
     if (!ctx.shelf) return;
+    // thick: 앨범 두께 = base + 장 수 x per, max 까지. 낮은 책장은 얇은 범위를 준다 (furniture.js). 이름표는 앨범 두께를 따라간다
+    const T = ctx.shelf.thick ?? { base: 0.13, per: 0.008, max: 0.32 };
     for (const a of ctx.shelf.albums) {
       const n = [...filed.values()].filter(v => v.album === a.key).length;
-      a.mesh.scale.x = Math.min(0.32, 0.13 + n * 0.008);
+      a.mesh.scale.x = Math.min(T.max, T.base + n * T.per);
+      if (ctx.shelf.thick) a.label.scale.x = (a.mesh.scale.x * 0.8) / 0.11;
       const g = a.lc.getContext('2d');
       g.fillStyle = C.paper; g.fillRect(0, 0, 96, 360);
       g.fillStyle = C.ink; g.textAlign = 'center'; g.textBaseline = 'middle';

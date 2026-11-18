@@ -1,11 +1,45 @@
 {
-  "_note": "러브쑤 방 시안 (Yoon 의 blender/heap/rooms/prototypeRoom.blend, 2026-11-18). 개발 서버에서 /room/lovesoo?proto=concept 로 연다 (src/lib/heap/proto.ts). DB 배치는 바꾸지 않는다. 좌표: 엔진 x = blender x + 1.5, 엔진 z = -blender y + 0.85 (방을 가운데로). 침대와 뒤쪽 스탠드는 Yoon 이 메시를 옮겨서 메시 경계의 가운데를 썼다. 뺀 것: TV 장, 그 위 책과 화분, 책상, 책상 의자, 액자, 라디오, 앞 화분. 벽 2.5, 창 1.71 로 내림. 액자 둘과 스크린은 벽 높이에 맞춰 내려 걸었다. 앨범 책장 위 화분은 사진 탁자로 옮겼다.",
-  "room": { "w": 8, "d": 6.3, "h": 2.5 },
-  "window": { "wall": "back", "at": -1.18, "w": 1.3, "h": 1.2, "y": 1.71 },
-  "door": { "wall": "left", "at": 2.31 },
-  "screen": { "wall": "back", "at": 2.35, "y": 1.75 },
-  "posters": { "wall": "left", "at": [-2.05, -1.1], "y": 1.85 },
-  "table": { "x": 1.24, "z": 0.82, "projector": "left", "rug": { "w": 3.0, "d": 2.3 } },
+  "_note": "러브쑤 방 시안 (Yoon 의 blender/heap/rooms/prototypeRoom.blend, 2026-11-18). 개발 서버에서 /room/lovesoo?proto=concept 로 연다 (src/lib/heap/proto.ts). DB 배치는 바꾸지 않는다. 좌표: 엔진 x = blender x + 1.5, 엔진 z = -blender y + 0.85 (방을 가운데로). 침대와 뒤쪽 스탠드는 Yoon 이 메시를 옮겨서 메시 경계의 가운데를 썼다. 뺀 것: TV 장, 그 위 책과 화분, 책상, 책상 의자, 액자, 라디오, 앞 화분. 벽 2.5, 창 1.71 로 내림. 액자 둘과 스크린은 벽 높이에 맞춰 내려 걸었다. 앨범 책장 위 화분은 사진 탁자로 옮겼다. 2차(2026-11-18): 앨범 책장을 낮은 두 칸(style low)으로, 액자 셋을 책장 위 벽에, 왼쪽 스탠드 뺌, 섬 식탁 조명을 책장 위로, 방명록은 받침 없이 작은 탁자 위에, 노트북에 링크 모음(fn pc, DB 방과 같은 링크), 휴대폰은 방석 쪽.",
+  "room": {
+    "w": 8,
+    "d": 6.3,
+    "h": 2.5
+  },
+  "window": {
+    "wall": "back",
+    "at": -1.18,
+    "w": 1.3,
+    "h": 1.2,
+    "y": 1.71
+  },
+  "door": {
+    "wall": "left",
+    "at": 2.31
+  },
+  "screen": {
+    "wall": "back",
+    "at": 2.35,
+    "y": 1.75
+  },
+  "posters": {
+    "wall": "left",
+    "at": [
+      -1.85,
+      -1.0,
+      -0.15
+    ],
+    "y": 1.8
+  },
+  "table": {
+    "x": 1.24,
+    "z": 0.82,
+    "projector": "left",
+    "rug": {
+      "w": 3.0,
+      "d": 2.3
+    },
+    "phone": "seat"
+  },
   "items": [
     { "type": "model", "model": "kitchenFridgeLarge", "x": -3.42, "z": -2.68, "rot": 0 },
     { "type": "model", "model": "kitchenStove", "x": -2.47, "z": -2.64, "rot": 0 },
@@ -22,13 +56,55 @@
     { "type": "model", "model": "kitchenBar", "x": -1.34, "z": -1.0, "rot": 0 },
     { "type": "model", "model": "chairCushion", "x": -2.2, "z": -0.55, "rot": 180 },
     { "type": "model", "model": "chairCushion", "x": -1.34, "z": -0.55, "rot": 180 },
-    { "type": "model", "model": "lampRoundTable", "x": -2.45, "z": -1.0, "rot": 0, "y": 0.84 },
-    { "type": "model", "model": "laptop", "x": -1.7, "z": -1.04, "rot": 0, "y": 0.84 },
+    { "type": "model", "model": "lampRoundTable", "x": -3.7, "z": 0.6, "rot": 0, "y": 0.92 },
+    {
+      "type": "model",
+      "model": "laptop",
+      "x": -1.7,
+      "z": -1.04,
+      "rot": 0,
+      "y": 0.84,
+      "fn": {
+        "kind": "pc",
+        "links": [
+          {
+            "email": "contact.lovesoo@gmail.com",
+            "title": "BUSINESS INQUIRIES"
+          },
+          {
+            "url": "https://www.tiktok.com/@mommytang",
+            "title": "TikTok"
+          },
+          {
+            "url": "https://www.youtube.com/@lovesoostrong",
+            "title": "@lovesoostrong"
+          },
+          {
+            "url": "https://www.youtube.com/@%EB%9F%AC%EB%B8%8C%EC%91%A4%EC%9D%98%EC%9E%91%EC%9D%80%ED%95%98%EB%A3%A8",
+            "title": "러브쑤의 작은 하루"
+          },
+          {
+            "url": "https://www.instagram.com/_love_soo__",
+            "title": "INSTAGRAM"
+          },
+          {
+            "url": "https://linktr.ee/lovesoo",
+            "title": "Linktree"
+          }
+        ]
+      }
+    },
     { "type": "model", "model": "plantSmall1", "x": -1.1, "z": -1.0, "rot": 0, "y": 0.84 },
     { "type": "model", "model": "lampRoundFloor", "x": 3.32, "z": -2.8, "rot": 0 },
     { "type": "model", "model": "bedSingle", "x": 2.23, "z": -1.96, "rot": 0 },
-    { "type": "shelf", "x": -3.7, "z": 0.06, "rot": 90, "plant": false },
-    { "type": "model", "model": "lampRoundFloor", "x": -3.7, "z": -1.09, "rot": 0 },
-    { "type": "plant", "x": 2.2, "z": 0.4, "y": 0.56, "size": 0.7 }
-  ]
+    { "type": "shelf", "x": -3.7, "z": 0.06, "rot": 90, "style": "low" },
+    { "type": "plant", "x": 2.2, "z": 0.4, "y": 0.56, "size": 0.7 },
+    { "type": "model", "model": "tableCoffeeSquare", "x": -3.58, "z": 1.34, "rot": 0 }
+  ],
+  "guestbook": {
+    "wall": "left",
+    "at": 1.34,
+    "stand": false,
+    "y": 0.46
+  }
 }

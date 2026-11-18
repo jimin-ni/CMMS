@@ -41,6 +41,50 @@ export function setupFurniture(ctx) {
       leaf.scale.set(1, 1.5, 0.6); leaf.rotation.set(ctx.irand(), a, ctx.irand() * 0.5); leaf.castShadow = true; parent.add(leaf);
     }
   }
+  // 낮은 앨범 책장 (shelf 의 style: "low"). 짧은 다리 위 두 칸: 아래 칸은 책, 윗칸은 앨범 사이사이에 얇은 책.
+  // 1 단위 = 1 m 로 본 실제 크기다: 책은 높이 0.20~0.28, 두께 0.03~0.05, 앨범은 높이 0.32, 두께 0.05~0.10 (shelf.js 가 장 수로 정한다).
+  // 높이: 다리 0~0.06, 바닥판 0.06~0.10, 가운데 판 0.46~0.50, 윗판 0.88~0.92 (surfaces.ts 의 shelfLow 와 같다).
+  // 판은 옆판 사이에만, 뒤판은 옆판 사이에만 둔다: 같은 평면에 겹치는 면이 없다.
+  const LOW = { w: 1.6, d: 0.5, side: 0.05, legH: 0.06, t: 0.04, floors: [0.06, 0.46, 0.88], top: 0.92, albumH: 0.32, albumD: 0.24, slot: 0.105 };
+  function lowShelf(g, it, build) {
+    const wood = tone(C, 'woodDark'), add = m => { shelfParts.push(m); return m; };
+    const inW = LOW.w - 2 * LOW.side, sx = LOW.w / 2 - LOW.side / 2, bodyH = LOW.top - LOW.legH;
+    for (const s of [-1, 1]) {
+      add(box(LOW.side, bodyH, LOW.d, wood, s * sx, LOW.legH + bodyH / 2, 0, { parent: g }));
+      for (const z of [-1, 1]) add(box(LOW.side, LOW.legH, LOW.side, wood, s * sx, LOW.legH / 2, z * (LOW.d / 2 - LOW.side / 2), { parent: g }));
+    }
+    add(box(inW, bodyH, 0.03, wood, 0, LOW.legH + bodyH / 2, -LOW.d / 2 + 0.015, { parent: g }));
+    for (const y of LOW.floors) add(box(inW, LOW.t, LOW.d - 0.03, wood, 0, y + LOW.t / 2, 0.015, { parent: g }));
+    let n = 0;
+    const book = (x, y0, th) => {
+      const h = 0.2 + ctx.irand() * 0.08;
+      add(box(th, h, 0.18, tone(C, `book:${n++}`), x, y0 + h / 2, -0.02, { parent: g }));
+    };
+    // 아래 칸: 책으로 채우고 끝에 빈자리를 조금 남긴다
+    const y1 = LOW.floors[0] + LOW.t;
+    for (let x = -inW / 2 + 0.01; x < inW / 2 - 0.12;) { const th = 0.03 + ctx.irand() * 0.02; book(x + th / 2, y1, th); x += th + 0.004; }
+    // 윗칸: 책 몇 권, 앨범, 책 몇 권, 앨범, ... 앨범 자리(slot)는 가장 두꺼운 앨범 폭이다
+    const y2 = LOW.floors[1] + LOW.t;
+    ctx.shelf = { group: g, albums: [], thick: { base: 0.05, per: 0.003, max: LOW.slot - 0.005 }, labelH: 0.24,
+      view: { target: [0, y2 + LOW.albumH / 2, 0], cam: [-0.45, 1.5, 1.95] } };
+    let x = -inW / 2 + 0.01;
+    const books = () => { const k = 2 + Math.floor(ctx.irand() * 3); for (let i = 0; i < k; i++) { const th = 0.025 + ctx.irand() * 0.015; book(x + th / 2, y2, th); x += th + 0.004; } };
+    ALBUMS.forEach((a, i) => {
+      books();
+      const lx = x + LOW.slot / 2; x += LOW.slot + 0.004;
+      const m = new THREE.Mesh(new THREE.BoxGeometry(1, LOW.albumH, LOW.albumD), flat(a.color));
+      m.position.set(lx, y2 + LOW.albumH / 2, 0); m.castShadow = m.receiveShadow = true; m.userData.album = a.key;
+      const lc = makeCanvas(96, 360), lt = canvasTexture(lc);
+      const label = new THREE.Mesh(new THREE.PlaneGeometry(0.11, ctx.shelf.labelH), new THREE.MeshStandardMaterial({ map: lt, roughness: 0.9 }));
+      label.material.userData.repaint = () => ctx.updateAlbums();
+      label.position.set(lx, y2 + LOW.albumH / 2, LOW.albumD / 2 + 0.002); label.userData.album = a.key;
+      g.add(m, label); add(m); add(label);
+      ctx.shelf.albums.push({ ...a, mesh: m, label, lc, lt });
+      if (i === ALBUMS.length - 1) while (x < inW / 2 - 0.05) { const th = 0.025 + ctx.irand() * 0.015; book(x + th / 2, y2, th); x += th + 0.004; }
+    });
+    if (it.fn?.kind === 'keepsake') ctx.keepsakeObject(g, it, build, 'standee', 0.52, LOW.top, 0.06);
+    return { hw: 0.85, hd: 0.55 };
+  }
   const BUILD = {
     bed(g) {
       box(2.8, 0.3, 1.4, tone(C, 'woodB'), 0, 0.15, 0, { parent: g });
@@ -50,6 +94,7 @@ export function setupFurniture(ctx) {
       return { hw: 1.6, hd: 0.95 };
     },
     shelf(g, it, build) {
+      if (it.style === 'low') return lowShelf(g, it, build);
       const wood = tone(C, 'woodDark'), add = m => { shelfParts.push(m); return m; };
       add(box(1.6, 2.2, 0.12, wood, 0, 1.1, -0.22, { parent: g }));
       for (const sx of [-0.77, 0.77]) add(box(0.06, 2.2, 0.5, wood, sx, 1.1, 0, { parent: g }));
