@@ -36,7 +36,7 @@ function facesOf(mesh) {
   return out;
 }
 
-function audit(scene) {
+function audit(scene, { RX, RZ } = {}) {
   const meshes = [];
   scene.traverseVisible(o => { if (o.isMesh && o.material?.visible !== false) meshes.push(o); }); // 보이지 않는 재질(바닥 클릭 판)은 그려지지 않는다
   const faces = meshes.flatMap(mesh => facesOf(mesh).map(f => ({ ...f, mesh })));
@@ -51,6 +51,8 @@ function audit(scene) {
     const a = faces[i], b = faces[j];
     if (a.mesh === b.mesh || a.axis !== b.axis || a.sign !== b.sign || Math.abs(a.at - b.at) > EPS) continue;
     if (a.axis === 1 && a.sign === -1 && Math.abs(a.at) < EPS) continue; // 바닥(y 0)에 놓인 밑면은 아래에서 보이지 않는다
+    // 벽 안쪽 면(x -RX, z -RZ)에 붙어 벽을 보는 면은 벽에 가려 보이지 않는다 (걸레받이 뒷면과 벽에 붙인 가구 뒷면)
+    if (a.sign === -1 && ((a.axis === 0 && Math.abs(a.at + RX) < EPS) || (a.axis === 2 && Math.abs(a.at + RZ) < EPS))) continue;
     const w = Math.min(a.r[1], b.r[1]) - Math.max(a.r[0], b.r[0]), h = Math.min(a.r[3], b.r[3]) - Math.max(a.r[2], b.r[2]);
     // sameMat: 같은 재질끼리는 깜빡여도 같은 색이라 거의 보이지 않는다. 다른 재질의 쌍이 먼저 고칠 것이다
     if (w > EPS && h > EPS) hits.push({ sameMat: a.mesh.material === b.mesh.material, axis: 'xyz'[a.axis], sign: a.sign, at: +a.at.toFixed(4), area: +(w * h).toFixed(4), a: label(a.mesh), b: label(b.mesh) });
@@ -59,10 +61,40 @@ function audit(scene) {
 }
 
 export function setupDev(ctx) {
+  // 방이 뜰 때마다 깜빡일 면을 스스로 찾아 알린다: 재질이 다른 두 면이 한 평면에 겹치면 콘솔 경고. 가구를 다시 지으면(꾸미기 저장) 다시 본다.
+  // 같은 재질끼리는 같은 색이라 거의 보이지 않으므로 세지 않는다. 불러오는 모델(glTF)은 축 상자가 아니라 보지 않는다.
+  let auditTimer = 0;
+  const autoAudit = () => {
+    clearTimeout(auditTimer);
+    auditTimer = setTimeout(() => {
+      if (ctx.disposed) return;
+      const hits = audit(ctx.scene, ctx).filter(h => !h.sameMat);
+      if (hits.length) console.warn(`[heap:dev] 깜빡일 면 ${hits.length}쌍 (같은 평면, 다른 재질)`, hits);
+    }, 1500);
+  };
+  ctx.on(ctx.root, 'heap:ready', autoAudit);
+  ctx.on(ctx.root, 'heap:saved', autoAudit);
+  ctx.onDispose(() => clearTimeout(auditTimer));
   ctx.on(ctx.root, 'heap:dev', async e => {
     const { cmd, cb } = e.detail || {};
     if (typeof cb !== 'function') return;
-    if (cmd === 'audit') cb(audit(ctx.scene));
+    if (cmd === 'audit') cb(audit(ctx.scene, ctx));
+    else if (cmd === 'focus') { // detail.at = [x, y, z] 또는 'door', detail.dist: 방 카메라가 그 점으로 다가간다 (온보딩의 책장 줌과 같은 길). at 이 없으면 풀린다
+      const at = e.detail.at === 'door' ? ctx.doorSpot?.clone().setY(0.4) : e.detail.at && new THREE.Vector3(...e.detail.at);
+      Object.assign(ctx.introView, at ? { focus: 1, focusPoint: at, focusDist: e.detail.dist ?? 2 } : { focus: 0, focusPoint: null });
+      cb(at ? at.toArray() : null);
+    }
+    else if (cmd === 'oob') { // 방 바닥(-RX..RX, -RZ..RZ)이나 벽 위(WALL_H)를 넘는 가구: [{ i, name, over: { x0, x1, z0, z1, y1 } }] (넘은 만큼, 미터)
+      const { RX, RZ, WALL_H } = ctx, out = [], bb = new THREE.Box3();
+      ctx.build.groups.forEach((g, i) => {
+        const it = ctx.build.items[i]; if (!g || !it) return;
+        bb.setFromObject(g);
+        const over = { x0: -RX - bb.min.x, x1: bb.max.x - RX, z0: -RZ - bb.min.z, z1: bb.max.z - RZ, y1: bb.max.y - WALL_H };
+        const bad = Object.fromEntries(Object.entries(over).filter(([, v]) => v > 0.01).map(([k, v]) => [k, +v.toFixed(3)]));
+        if (Object.keys(bad).length) out.push({ i, name: it.type === 'model' ? it.model : it.type, x: it.x, z: it.z, over: bad });
+      });
+      cb(out);
+    }
     else if (cmd === 'project') { // detail.at = [x, y, z] (월드) → 화면 좌표(px). 클릭 시험이 물건을 정확히 누르도록
       const v = new THREE.Vector3(...e.detail.at).project(ctx.camera), r = ctx.canvas.getBoundingClientRect();
       cb({ x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height });

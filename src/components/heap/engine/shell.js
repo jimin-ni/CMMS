@@ -6,7 +6,9 @@ import { tone } from './palette.js';
 export function setupShell(ctx) {
   const { layout, C, WALLS, box, WALL_H, onWall, RX, RZ, scene, rand } = ctx;
 
-  const WIN = layout.window && { ...layout.window, u0: layout.window.at - layout.window.w / 2, u1: layout.window.at + layout.window.w / 2, y0: layout.window.y - layout.window.h / 2, y1: layout.window.y + layout.window.h / 2 };
+  // 창 윗선은 벽 윗선에서 0.12 아래까지만 간다. 벽이 4 이던 때 저장한 창(y 2.55)이 2.5 벽을 뚫지 않게 내려 단다
+  const winY = layout.window && Math.min(layout.window.y, WALL_H - 0.12 - layout.window.h / 2);
+  const WIN = layout.window && { ...layout.window, y: winY, u0: layout.window.at - layout.window.w / 2, u1: layout.window.at + layout.window.w / 2, y0: winY - layout.window.h / 2, y1: winY + layout.window.h / 2 };
   // 깊이 층: 벽 안쪽 면 0, 걸레받이 앞면 TRIM_D, 문틀 앞면 FRAME_D. 두 면이 한 평면에 겹치면 깜빡이므로(z-fighting) 층마다 다르다.
   // 벽 두께는 WALL_T 이고 벽은 방 밖(off -WALL_T..0)에 선다. 뚫린 곳(창, 문)의 벽 두께는 문틀이나 문턱, 창 상자로 덮는다.
   const WALL_T = 0.2, TRIM_D = 0.06, FRAME_D = 0.08, DOOR_FRAME = 0.06;
@@ -64,9 +66,11 @@ export function setupShell(ctx) {
     // 상자는 벽 길이와 벽 높이 안에 잘라 두어서, 방 밖에서 비추는 카메라(온보딩)에도 벽 뒤로 삐져나오지 않는다.
     // 그림자를 드리우지 않는다: 해는 이 상자를 지나 창으로 들어온다.
     {
-      const M = 0.1, D = 0.35;
+      // D: 상자 깊이. 상자는 벽 뒷면 너머에 있으므로, 위에서 내려다보는 방 카메라에 윗면이 벽 너머로 보이지 않게
+      // 상자 윗면을 벽 윗선에서 D 이상 내린다 (45 도까지 가린다). 벽이 2.5 로 낮아지며 전의 깊이 0.35 는 벽 위로 드러났다
+      const M = 0.1, D = 0.12;
       const bu0 = Math.max(WIN.u0 - M, -W.half), bu1 = Math.min(WIN.u1 + M, W.half);
-      const by0 = Math.max(WIN.y0 - M, 0), by1 = Math.min(WIN.y1 + M, WALL_H);
+      const by0 = Math.max(WIN.y0 - M, 0), by1 = Math.max(WIN.y1, Math.min(WIN.y1 + M, WALL_H - D));
       const bw = bu1 - bu0, bh = by1 - by0;
       const skyMat = new THREE.MeshBasicMaterial({ map: ctx.skyTex, side: THREE.DoubleSide });
       const vb = new THREE.Group();
@@ -132,7 +136,8 @@ export function setupShell(ctx) {
     box(0.96 + 2 * fw, 0.1, fd, frameMat, 0, headY0 + 0.05, fz, { parent: g });
     // 문짝은 문턱에서 머리 밑까지 막는다. 문턱은 벽 두께를 가로질러 바닥 높이(윗면 y 0)에 깔린다: 문 밑으로 벽 너머가 보이지 않는다
     const panel = box(0.96, headY0, 0.06, tone(C, 'accent'), 0, headY0 / 2, -WALL_T / 2, { parent: g });
-    box(0.96, 0.1, WALL_T, tone(C, 'woodDark'), 0, -0.05, -WALL_T / 2, { parent: g, cast: false });
+    // 문턱은 구멍 폭(1.0) 전체를 덮는다. 0.96 이던 때는 양옆에 0.02 틈이 남아 땅이 없는 방에서 문 밑으로 배경이 보였다
+    box(1.0, 0.1, WALL_T, tone(C, 'woodDark'), 0, -0.05, -WALL_T / 2, { parent: g, cast: false });
     const knob = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), flat('#d8b27a', { metalness: 0.4, roughness: 0.4 })); knob.position.set(0.34, 1.0, -0.04); g.add(knob);
     const sign = makeCanvas(256, 96);
     const st = canvasTexture(sign);

@@ -107,7 +107,8 @@ export function setupSlots(ctx) {
       done(pic);
     }, build.loads);
   }
-  BUILD.frame = (g, it, build) => { keepsakeObject(g, it, build, 'frame', 0, it.y ?? 1.9, 0); return {}; };
+  // 묶음(g)은 furniture.js 가 이미 it.y 로 올려 둔다. 여기서 또 더하면 1.9 에 건 액자가 3.8 에 걸린다 (2.5 벽 위로 떴다)
+  BUILD.frame = (g, it, build) => { keepsakeObject(g, it, build, 'frame', 0, it.y == null ? 1.9 : 0, 0); return {}; };
 
   // 가장 최근 영상: 가장 늦은 게시일, 같은 날이거나 날짜가 없으면 목록 자체의 순서(서버가 최신순으로 준다)
   // TV 화면은 썸네일을 받아 그린다. 썸네일이 없는 카드(붙여 넣은 게시물)는 고르지 않는다.
