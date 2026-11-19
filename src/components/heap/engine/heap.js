@@ -1,20 +1,36 @@
 // 사진 더미: 쌓이는 모양, 떨어지는 움직임, 카드, 벽 포스터.
 import * as THREE from 'three';
 import { viewsNum, hasThumb } from './format.js';
-import { drawFit, NO_PHOTO, makeCanvas, canvasTexture } from './draw.js';
+import { drawFit, NO_PHOTO, canvasTexture } from './draw.js';
 import { tone } from './palette.js';
 
 export function setupHeap(ctx) {
   const {
-    PROJ, MUG, PHONE, TABLE, Yv, Xv, rand, renderer, DIMS, drawFanFront, drawCard, drawFanBack, drawBack,
-    gauss, scene, reels, fanReels, layout, box, C, onWall,
+    Yv, Xv, rand, renderer, DIMS, drawFanFront, drawCard, drawFanBack, drawBack,
+    gauss, scene, reels, fanReels, layout, box, C,
   } = ctx;
 
   // 사진 더미: 모양을 잡아 쌓는다. 카드는 자기 모서리와 가장자리 아래에 있는 것 위에 놓인다.
   const cards = []; // stack order, bottom → top
   const pickables = [];
-  const EXCL = [{ x: PROJ.x, z: PROJ.z, r: 0.42 }, { x: MUG.x, z: MUG.z, r: 0.18 }, { x: PHONE.x, z: PHONE.z, r: 0.26 }];
+  // 더미가 없는 방(HOST null)도 카드는 만든다 (벽 포스터가 카드의 그림을 쓴다). 카드는 보이지 않고 집을 수 없다.
+  const HOST = ctx.HOST ?? { x: 0, z: 0, top: 0, w: 1.2, d: 0.9, box: false, boxW: 1.12, boxD: 0.66, item: null };
+  // 같은 받침 위에 선 다른 물건(휴대폰, 방명록, 좌식 탁자의 머그)은 카드가 비켜 간다
+  const EXCL = [];
+  if (ctx.HOST) for (const o of layout.items || []) {
+    if (o === HOST.item || Math.abs((o.y || 0) - HOST.top) > 0.03 || Math.abs(o.x - HOST.x) > HOST.w / 2 + 0.3 || Math.abs(o.z - HOST.z) > HOST.d / 2 + 0.3) continue;
+    const e = ctx.opts.itemHalfExtents?.(o); if (e) EXCL.push({ x: o.x, z: o.z, r: Math.max(e.hx, e.hz) + 0.08 });
+  }
+  const lowT = ctx.HOST && (layout.items || []).find(o => o.type === 'lowTable' && Math.abs(o.x - HOST.x) < 1.3 && Math.abs(o.z - HOST.z) < 0.9 && Math.abs(HOST.top - 0.56) < 0.03);
+  if (lowT) { const a = THREE.MathUtils.degToRad(lowT.rot || 0); EXCL.push({ x: lowT.x + Math.cos(a) * 1.05 + Math.sin(a) * 0.6, z: lowT.z - Math.sin(a) * 1.05 + Math.cos(a) * 0.6, r: 0.18 }); }
   const GAP = 0.0035, MAX_SLOPE = 0.32;
+  // 더미의 모양: 'pile'(기본, 받침 위에 흩어진 더미) 또는 'box'(열린 신발상자 안에 쌓인 더미, heap 가구의 style "box"). 상자 안쪽 크기와 벽 높이는 BOX_IN.
+  // 상자는 카드가 탁자에 어지럽게 퍼지지 않게 담는다. 카드를 집는 광선은 카드만 보므로 상자 벽이 막지 않는다.
+  const BOX_IN = { w: 1.12, d: 0.66, h: 0.22, wall: 0.018, base: 0.012 };
+  const BOX = HOST.box ? { x: HOST.x, z: HOST.z, ...BOX_IN, w: HOST.boxW, d: HOST.boxD, floor: HOST.top + BOX_IN.base } : null;
+  const BASE = BOX ? BOX.floor : HOST.top;
+  // 흩어진 더미가 퍼지는 넓이: 받침 가장자리에서 m 만큼 안쪽. 가우스 퍼짐(sx, sz)도 받침 크기에 맞춘다 (원래 탁자 2.6 x 1.8 에서 0.42, 0.28)
+  const PM = Math.min(0.18, HOST.w * 0.15, HOST.d * 0.15), SX = Math.min(0.42, HOST.w * 0.16), SZ = Math.min(0.28, HOST.d * 0.155);
   const _inv = new THREE.Quaternion(), _v = new THREE.Vector3(), _n = new THREE.Vector3();
   // 놓여 있는 카드의 (x, z) 위 면 높이. (x, z) 가 카드 밖이면 -Infinity
   function surfaceAt(c, x, z) {
@@ -26,13 +42,14 @@ export function setupHeap(ctx) {
     return Math.abs(_v.x) <= d.w / 2 && Math.abs(_v.y) <= d.h / 2 ? y : -Infinity;
   }
   function supportAt(x, z, below) {
-    let h = TABLE.top;
+    let h = BASE;
     for (const c of below) h = Math.max(h, surfaceAt(c, x, z) + GAP);
     return h;
   }
   const SAMPLES = [-1, 0, 1].flatMap(a => [-1, 0, 1].map(b => [a * 0.47, b * 0.47]));
   const _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion();
   function restPose(card, below) {
+    if (BOX) clampPlace(card.userData.place, card.userData.d); // 다른 파일의 clampPlace 는 카드 크기를 모른다: 넓은 카드도 벽 안에
     const { x, z, yaw, faceUp } = card.userData.place, d = card.userData.d;
     const cs = Math.cos(yaw), sn = Math.sin(yaw);
     const pts = SAMPLES.map(([a, b]) => { const lx = a * d.w, lz = b * d.h; const dx = lx * cs + lz * sn, dz = -lx * sn + lz * cs; return { dx, dz, h: supportAt(x + dx, z + dz, below) }; });
@@ -50,9 +67,16 @@ export function setupHeap(ctx) {
       .multiply(new THREE.Quaternion().setFromAxisAngle(Xv, faceUp ? -Math.PI / 2 : Math.PI / 2));
     return { pos: new THREE.Vector3(x, c + 0.0015, z), quat };
   }
-  function clampPlace(p) {
-    p.x = THREE.MathUtils.clamp(p.x, TABLE.x - TABLE.w / 2 + 0.18, TABLE.x + TABLE.w / 2 - 0.18);
-    p.z = THREE.MathUtils.clamp(p.z, TABLE.z - TABLE.d / 2 + 0.18, TABLE.z + TABLE.d / 2 - 0.18);
+  function clampPlace(p, d = DIMS.tall) {
+    if (BOX) { // 돌린 카드의 반폭이 벽 안에 들도록 가운데를 가둔다. 상자보다 크면 가운데에 둔다
+      const c = Math.abs(Math.cos(p.yaw ?? 0)), s = Math.abs(Math.sin(p.yaw ?? 0));
+      const hx = Math.max(0, BOX.w / 2 - (c * d.w + s * d.h) / 2 - 0.004), hz = Math.max(0, BOX.d / 2 - (s * d.w + c * d.h) / 2 - 0.004);
+      p.x = THREE.MathUtils.clamp(p.x, BOX.x - hx, BOX.x + hx);
+      p.z = THREE.MathUtils.clamp(p.z, BOX.z - hz, BOX.z + hz);
+      return p;
+    }
+    p.x = THREE.MathUtils.clamp(p.x, HOST.x - HOST.w / 2 + PM, HOST.x + HOST.w / 2 - PM);
+    p.z = THREE.MathUtils.clamp(p.z, HOST.z - HOST.d / 2 + PM, HOST.z + HOST.d / 2 - PM);
     for (const e of EXCL) {
       const dx = p.x - e.x, dz = p.z - e.z, dd = Math.hypot(dx, dz);
       if (dd < e.r) { p.x = e.x + (dd ? dx / dd : 1) * e.r; p.z = e.z + (dd ? dz / dd : 0) * e.r; }
@@ -108,46 +132,55 @@ export function setupHeap(ctx) {
     const front = new THREE.Mesh(d.geo, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.5 }));
     const back = new THREE.Mesh(d.geo, new THREE.MeshStandardMaterial({ map: btex, roughness: 0.9 }));
     back.rotation.y = Math.PI; back.position.z = -0.001;
-    for (const m of [front, back]) { m.castShadow = m.receiveShadow = true; m.userData.card = card; pickables.push(m); }
+    for (const m of [front, back]) { m.castShadow = m.receiveShadow = true; m.userData.card = card; if (ctx.HOST) pickables.push(m); }
     card.add(front, back);
     // img: the best picture the card has so far (a fan piece is its own drawing) · tier: that picture's tier, -1 before any lands · asked: tiers already requested
-    Object.assign(card.userData, { reel, d, img: fan ? frontC : null, tier: -1, asked: [], front: tex, place: clampPlace({ x: TABLE.x + gauss() * 0.42, z: TABLE.z + gauss() * 0.28, yaw: rand() * Math.PI * 2, faceUp: rand() > 0.1 }) });
+    Object.assign(card.userData, { reel, d, img: fan ? frontC : null, tier: -1, asked: [], front: tex, place: clampPlace(BOX
+      ? { x: BOX.x + gauss() * BOX.w * 0.2, z: BOX.z + gauss() * BOX.d * 0.2, yaw: rand() * Math.PI * 2, faceUp: rand() > 0.1 }
+      : { x: HOST.x + gauss() * SX, z: HOST.z + gauss() * SZ, yaw: rand() * Math.PI * 2, faceUp: rand() > 0.1 }, d) });
+    if (!ctx.HOST) card.visible = false; // 더미가 없는 방: 포스터에 그림만 빌려준다
     cards.push(card); scene.add(card);
     return card;
   }
+  // 열린 상자: 바닥 판과 네 벽
+  function buildBox() {
+    const g = new THREE.Group(); g.name = 'heap-box';
+    const { w, d, h, wall: t } = BOX, mat = tone(C, 'woodDark'), y = HOST.top;
+    box(w + 2 * t, BOX.floor - y, d + 2 * t, mat, 0, (BOX.floor - y) / 2, 0, { parent: g });
+    box(w + 2 * t, h, t, mat, 0, h / 2, -(d + t) / 2, { parent: g });
+    box(w + 2 * t, h, t, mat, 0, h / 2, (d + t) / 2, { parent: g });
+    box(t, h, d, mat, -(w + t) / 2, h / 2, 0, { parent: g });
+    box(t, h, d, mat, (w + t) / 2, h / 2, 0, { parent: g });
+    g.position.set(BOX.x, y, BOX.z);
+    scene.add(g);
+    ctx.heapBoxParts = g.children; // 상자를 누르면 더미 앞으로 걸어가 선다 (input.js)
+  }
   function buildHeap() {
+    if (BOX) buildBox();
     const made = reels.map(reel => makeCard(reel));
     for (const p of fanReels) { const c = makeCard(p); c.userData.place.faceUp = true; }
     settle(true);
     ctx.requestPile(ctx.FAR);
-    // 포스터: 가장 많이 본 쇼츠 셋. 각각 자기 카드의 그림으로 그려서, 그 카드의 단계가 오는 대로 채워지고 선명해진다.
-    const top3 = topShorts(made);
-    (layout.posters?.at || []).forEach((u, k) => {
-      const card = top3[k];
-      if (!card) return;
-      const t = card.userData.poster = canvasTexture(makeCanvas(202, 360)); // 202 x 360 은 가까운 단계 그림의 크기
-      posterSlots.push(t);
-      paintPoster(card); ctx.request(card, ctx.NEAR);
-      const g = new THREE.Group();
-      box(0.74, 1.2, 0.05, tone(C, 'woodDark'), 0, 0, 0.025, { cast: false, parent: g });
-      const p = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 1.07), new THREE.MeshStandardMaterial({ map: t, roughness: 0.6 })); p.position.z = 0.055; g.add(p);
-      onWall(layout.posters.wall, u, layout.posters.y ?? 2.5, 0, g); // y: 액자 가운데 높이 (벽이 낮은 방은 내려 건다)
-    });
+    paintPosters(made);
   }
-  // 포스터 액자에 걸린 텍스처 (만든 순서). 액자는 방이 뜰 때 한 번 짓고, 영상 목록이 바뀌면 그림만 갈아 끼운다 (refreshPosters).
-  const posterSlots = [];
-  // 포스터는 썸네일이 있는 세로 영상에서만 고른다 (그림 없는 카드를 걸면 액자가 빈다)
-  const topShorts = list => list.filter(c => hasThumb(c.userData.reel) && !c.userData.reel.wide).sort((a, b) => viewsNum(b.userData.reel.views) - viewsNum(a.userData.reel.views)).slice(0, 3);
-  // 영상 목록이 바뀐 뒤(live.js 의 replaceReels): 남은 카드에서 다시 고른 쇼츠를 액자에 건다. 고를 카드가 없는 액자는 비운다.
-  function refreshPosters() {
+  // 포스터: 포스터 가구(fixtures.js)마다 가장 많이 본 쇼츠 하나씩, 목록 순서대로. 각각 자기 카드의 그림으로 그려서, 그 카드의 단계가 오는 대로 채워지고 선명해진다.
+  // 텍스처는 ctx.posterTexAt(k) 이다 (가구를 다시 지어도 같은 텍스처). 고를 카드가 없는 포스터는 빈 그림이다.
+  function paintPosters(list) {
     for (const c of cards) delete c.userData.poster;
-    const top = topShorts(cards);
-    posterSlots.forEach((t, k) => {
-      const card = top[k];
-      if (card) { card.userData.poster = t; paintPoster(card); ctx.request(card, ctx.NEAR); return; }
+    const n = (ctx.build.items || []).filter(o => o.type === 'poster').length;
+    const top = topShorts(list).slice(0, Math.max(3, n));
+    for (let k = 0; k < Math.max(n, ctx.posterTex.length); k++) {
+      const t = ctx.posterTexAt(k), card = top[k];
+      if (card) { card.userData.poster = t; paintPoster(card); ctx.request(card, ctx.NEAR); continue; }
       const g = t.image.getContext('2d'); g.fillStyle = NO_PHOTO; g.fillRect(0, 0, t.image.width, t.image.height); t.needsUpdate = true;
-    });
+    }
   }
+  // 포스터는 썸네일이 있는 세로 영상에서만 고른다 (그림 없는 카드를 걸면 액자가 빈다)
+  const topShorts = list => list.filter(c => hasThumb(c.userData.reel) && !c.userData.reel.wide).sort((a, b) => viewsNum(b.userData.reel.views) - viewsNum(a.userData.reel.views));
+  // 영상 목록이 바뀐 뒤(live.js 의 replaceReels): 남은 카드에서 다시 고른 쇼츠를 액자에 건다. 고를 카드가 없는 액자는 비운다.
+  // 영상 목록이나 포스터 가구가 바뀐 뒤(live.js 의 replaceReels, 꾸미기): 남은 카드에서 다시 고른 쇼츠를 건다
+  const refreshPosters = () => paintPosters(cards);
+
   function paintPoster(card) {
     const { poster, img } = card.userData, W = poster.image.width, H = poster.image.height, g = poster.image.getContext('2d');
     if (img) drawFit(g, img, 0, 0, W, H, true); else { g.fillStyle = NO_PHOTO; g.fillRect(0, 0, W, H); }

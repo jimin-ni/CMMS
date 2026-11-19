@@ -1,119 +1,48 @@
-// 고정 소품: 탁자, 러그, 머그, 휴대폰, 방명록 받침대, 스크린과 영사기.
+// 사진 더미의 자리(HOST)와 그것을 보는 자리(SEAT).
+// 예전의 고정 소품(탁자, 러그, 방석, 머그, 휴대폰, 방명록, 스크린, 영사기)은 이제 가구다 (fixtures.js, docs/dev/heap-room-v2.md).
 import * as THREE from 'three';
-import { flat, drawFit, makeCanvas, canvasTexture } from './draw.js';
-import { tone, mark } from './palette.js';
 
 export function setupProps(ctx) {
-  const { layout, C, scene, box, OBST, DOOR, onWall, WALLS } = ctx;
+  const { layout, OBST } = ctx;
+  const items = layout.items || [];
 
-  // 탁자, 러그, 방석, 머그, 휴대폰 (위치는 layout.table 기준)
-  const TABLE = { x: layout.table.x, z: layout.table.z, w: 2.6, d: 1.8, top: 0.56 };
-  const rugC = makeCanvas(256, 192);
-  const rugTex = canvasTexture(rugC);
-  // 러그 무늬는 팔레트 색으로 그린다. 팔레트가 바뀌면 recolour.js 가 userData.repaint 로 다시 그린다
-  function paintRug() {
-    const g = rugC.getContext('2d'); g.fillStyle = C.paper; g.fillRect(0, 0, 256, 192);
-    [[C.accent, 14, 16], [C.olive, 40, 6], [C.accent, 150, 10], [C.olive, 168, 4]].forEach(([c, y, h]) => { g.fillStyle = c; g.fillRect(0, y, 256, h); });
-    for (let i = 0; i < 2000; i++) { g.fillStyle = `rgba(80,60,40,${Math.random() * 0.06})`; g.fillRect(Math.random() * 256, Math.random() * 192, 2, 1); }
-    rugTex.needsUpdate = true;
-  }
-  paintRug();
-  // 러그 크기: layout.table.rug = { w, d } (방마다). 없으면 원래의 3.8 x 2.9 다
-  const rug = new THREE.Mesh(new THREE.PlaneGeometry(layout.table.rug?.w ?? 3.8, layout.table.rug?.d ?? 2.9), new THREE.MeshStandardMaterial({ map: rugTex, roughness: 1 }));
-  rug.material.userData.repaint = paintRug;
-  rug.rotation.x = -Math.PI / 2; rug.position.set(TABLE.x, 0.006, TABLE.z + 0.15); rug.receiveShadow = true; scene.add(rug);
-  const tableTop = box(TABLE.w, 0.08, TABLE.d, tone(C, 'woodB'), TABLE.x, TABLE.top - 0.04, TABLE.z);
-  for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(0.12, TABLE.top - 0.08, 0.12, tone(C, 'woodDark'), TABLE.x + sx * (TABLE.w / 2 - 0.15), (TABLE.top - 0.08) / 2, TABLE.z + sz * (TABLE.d / 2 - 0.15));
-  OBST.unshift({ x: TABLE.x, z: TABLE.z, hw: TABLE.w / 2 + 0.25, hd: TABLE.d / 2 + 0.25, rhw: TABLE.w / 2, rhd: TABLE.d / 2 });
-  const SEAT = new THREE.Vector3(TABLE.x, 0, TABLE.z + TABLE.d / 2 + 0.5);
-  box(0.75, 0.1, 0.75, tone(C, 'accent'), SEAT.x, 0.05, SEAT.z, { cast: false });
-  const MUG = { x: TABLE.x + 1.05, z: TABLE.z + 0.6 };
-  const mug = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.055, 0.12, 8), tone(C, 'paper')); mug.position.set(MUG.x, TABLE.top + 0.06, MUG.z); mug.castShadow = true; scene.add(mug);
-  const coffee = new THREE.Mesh(new THREE.CircleGeometry(0.052, 8), flat('#4a2f1e')); coffee.rotation.x = -Math.PI / 2; coffee.position.set(MUG.x, TABLE.top + 0.115, MUG.z); scene.add(coffee);
-  const PHONE = { x: TABLE.x + 0.68, z: TABLE.z + 0.62 };
-  const phoneBody = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.018, 0.32), tone(C, 'ink', { roughness: 0.5 }));
-  // 휴대폰의 방향: 아래 끝(지역 +z)이 향하는 쪽. layout.table.phone === 'seat' 이면 방석에 앉은 사람 쪽, 아니면 원래의 0.35
-  const phoneA = layout.table.phone === 'seat' ? Math.atan2(SEAT.x - PHONE.x, SEAT.z - PHONE.z) : 0.35;
-  phoneBody.position.set(PHONE.x, TABLE.top + 0.009, PHONE.z); phoneBody.rotation.y = phoneA; phoneBody.castShadow = true;
-  const phoneGlow = new THREE.Mesh(new THREE.PlaneGeometry(0.145, 0.29), new THREE.MeshStandardMaterial({ color: '#efe6d6', emissive: '#f3d9b0', emissiveIntensity: 0.6 }));
-  phoneGlow.rotation.set(-Math.PI / 2, 0, phoneA); phoneGlow.position.set(PHONE.x, TABLE.top + 0.0185, PHONE.z);
-  const phoneDot = new THREE.Mesh(new THREE.CircleGeometry(0.018, 10), mark(new THREE.MeshBasicMaterial({ color: C.accent }), 'accent'));
-  // 점은 화면 위쪽(지역 (0.03, -0.08))에 붙어 휴대폰과 함께 돈다. 원래 방향(0.35)은 예전 자리 그대로 둔다
-  const dot = layout.table.phone === 'seat' ? new THREE.Vector3(0.03, 0, -0.08).applyAxisAngle(new THREE.Vector3(0, 1, 0), phoneA) : new THREE.Vector3(0.03, 0, -0.08);
-  phoneDot.rotation.set(-Math.PI / 2, 0, phoneA); phoneDot.position.set(PHONE.x + dot.x, TABLE.top + 0.019, PHONE.z + dot.z);
-  scene.add(phoneBody, phoneGlow, phoneDot);
-  const phoneParts = [phoneBody, phoneGlow, phoneDot];
-
-  // guestbook stand (방명록) beside the door
-  const bookParts = [];
-  ctx.bookSpot = null;
-  const GB = layout.guestbook ?? (DOOR ? { wall: DOOR.wall, at: DOOR.at - 0.95 } : null);
-  if (GB) {
-    // stand: false 면 나무 받침 없이 방명록(펼친 공책과 펜)만 둔다. y 는 공책을 얹을 높이 (그 밑의 탁자는 layout.items 의 가구다)
-    const stand = GB.stand !== false, by = stand ? 0.78 : GB.y ?? 0;
-    const g = new THREE.Group();
-    if (stand) bookParts.push(box(0.5, 0.78, 0.36, tone(C, 'woodB'), 0, 0.39, 0, { parent: g }));
-    const pageL = box(0.22, 0.02, 0.3, tone(C, 'paper'), -0.11, by + 0.02, 0.02, { parent: g }), pageR = box(0.22, 0.02, 0.3, tone(C, 'paper'), 0.11, by + 0.02, 0.02, { parent: g });
-    pageL.rotation.z = 0.12; pageR.rotation.z = -0.12;
-    const pen = box(0.015, 0.015, 0.16, tone(C, 'accent'), 0.14, by + 0.05, 0.02, { parent: g }); pen.rotation.y = 0.5;
-    bookParts.push(pageL, pageR, pen);
-    onWall(GB.wall, GB.at, 0, 0.32, g);
-    const p = WALLS[GB.wall].point(GB.at, 0, 0.32);
-    if (stand) OBST.push({ x: p.x, z: p.z, hw: 0.32, hd: 0.32, rhw: 0.25, rhd: 0.25 }); // 받침이 없으면 밑의 탁자가 길을 막는다
-    ctx.bookSpot = WALLS[GB.wall].point(GB.at, 0, 0.95);
+  // HOST: layout.items 의 heap 가구가 놓인 곳. 방에 더미가 없으면 null 이고, 그 방에는 더미 보기가 없다.
+  //   x, z: 더미 가운데 · top: 카드가 놓이는 바닥 높이(가구 위에 올렸으면 그 윗면, 바닥이면 0) · w, d: 카드가 퍼지는 넓이
+  //   box: 열린 신발상자 안에 쌓는다 (heap.style "box"). boxW, boxD: 상자 안쪽 크기 (받침보다 크면 받침에 맞춰 줄인다)
+  // 다른 가구 위에 올렸으면 받침 가구의 윗면 넓이만큼 퍼진다. 바닥에 두면 1.2 x 0.9 다.
+  const heapIt = items.find(it => it?.type === 'heap');
+  let HOST = null, SEAT = null;
+  ctx.seatFace = Math.PI;
+  if (heapIt) {
+    const under = heapIt.y > 0 ? items.find(o => {
+      if (o === heapIt || o.type === 'heap') return false;
+      const e = ctx.opts.itemHalfExtents?.(o);
+      return e && Math.abs(heapIt.x - o.x) <= e.hx && Math.abs(heapIt.z - o.z) <= e.hz;
+    }) : null;
+    const ue = under && ctx.opts.itemHalfExtents(under);
+    // 좌식 탁자의 바닥 크기에는 둘레 여유가 없다 (서버 표 2.6 x 1.8 = 윗판). 다른 받침도 바닥 크기를 윗면으로 본다
+    const w = ue ? 2 * ue.hx : 1.2, d = ue ? 2 * ue.hz : 0.9;
+    HOST = {
+      x: heapIt.x, z: heapIt.z, top: heapIt.y || 0, w, d, box: heapIt.style === 'box', item: heapIt,
+      boxW: Math.min(1.12, ue ? w - 0.12 : 1.12), boxD: Math.min(0.66, ue ? d - 0.12 : 0.66),
+    };
+    if (under?.type === 'lowTable') {
+      // 좌식 탁자 위의 더미는 탁자 앞 방석에 앉아 본다 (방석은 탁자 지역 (0, 0, 1.4), fixtures.js)
+      const a = THREE.MathUtils.degToRad(under.rot || 0);
+      SEAT = new THREE.Vector3(under.x + Math.sin(a) * 1.4, 0, under.z + Math.cos(a) * 1.4);
+      ctx.seatFace = Math.PI + a;
+    } else {
+      // 서서 보는 자리: 더미(받침 가구가 있으면 그 가장자리)에서 0.45 떨어진 옆, 더미를 바라본다. 앞에 서면 보는 카메라가 머리에 막힌다.
+      // 오른쪽, 왼쪽, 뒤, 앞 순으로 벽 안이고 바닥 가구에 막히지 않은 첫 자리. 모두 막히면 오른쪽
+      const hx = ue ? ue.hx : w / 2, hz = ue ? ue.hz : d / 2, cx = ue ? under.x : HOST.x, cz = ue ? under.z : HOST.z;
+      const blocked = (x, z) => Math.abs(x) > ctx.RX - 0.3 || Math.abs(z) > ctx.RZ - 0.3
+        || [...OBST, ...ctx.build.obst].some(o => o.owner !== under && o.owner !== heapIt && Math.abs(x - o.x) < o.hw && Math.abs(z - o.z) < o.hd);
+      const sides = [[cx + hx + 0.45, HOST.z, -Math.PI / 2], [cx - hx - 0.45, HOST.z, Math.PI / 2], [HOST.x, cz - hz - 0.45, 0], [HOST.x, cz + hz + 0.45, Math.PI]];
+      const pick = sides.find(([x, z]) => !blocked(x, z)) ?? sides[0];
+      SEAT = new THREE.Vector3(pick[0], 0, pick[1]);
+      ctx.seatFace = pick[2];
+    }
   }
 
-  // 영사기와 스크린
-  const SCR = { wall: layout.screen.wall, at: layout.screen.at, y: layout.screen.y ?? 2.4, w: 1.6, h: 0.9 }; // y: 벽이 낮은 방은 내려 건다
-  const projC = makeCanvas(640, 360);
-  const projTex = canvasTexture(projC);
-  const screenIdle = tone(C, 'paper'), screenOn = new THREE.MeshBasicMaterial({ map: projTex });
-  const screenG = new THREE.Group();
-  box(SCR.w + 0.14, SCR.h + 0.14, 0.05, tone(C, 'olive'), 0, 0, 0.025, { cast: false, parent: screenG });
-  const screen = new THREE.Mesh(new THREE.PlaneGeometry(SCR.w, SCR.h), screenIdle); screen.position.z = 0.06; screen.receiveShadow = true; screenG.add(screen);
-  onWall(SCR.wall, SCR.at, SCR.y, 0, screenG); screenG.updateMatrixWorld(true);
-  const SCREEN_C = screen.getWorldPosition(new THREE.Vector3());
-  const side = layout.table.projector === 'right' ? 1 : -1;
-  const PROJ = new THREE.Vector3(TABLE.x + side * 0.85, TABLE.top, TABLE.z - 0.5);
-  const proj = new THREE.Group(); proj.position.copy(PROJ);
-  proj.rotation.y = Math.atan2(-(SCREEN_C.x - PROJ.x), -(SCREEN_C.z - PROJ.z));
-  const metal = flat('#3f3d32', { roughness: 0.55, metalness: 0.3 });
-  const pBody = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.2, 0.36), tone(C, 'olive')); pBody.position.y = 0.12;
-  const pLens = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.065, 0.12, 10), metal); pLens.rotation.x = Math.PI / 2; pLens.position.set(0, 0.13, -0.23);
-  const lensGlass = new THREE.Mesh(new THREE.CircleGeometry(0.045, 10), new THREE.MeshBasicMaterial({ color: '#5b5a4a' })); lensGlass.position.set(0, 0.13, -0.291); lensGlass.rotation.y = Math.PI;
-  const pFoot = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.03, 0.3), metal); pFoot.position.y = 0.015;
-  const reelGeo = new THREE.CylinderGeometry(0.09, 0.09, 0.025, 12);
-  const reelA = new THREE.Mesh(reelGeo, tone(C, 'accent')), reelB = new THREE.Mesh(reelGeo, tone(C, 'accent'));
-  reelA.rotation.z = reelB.rotation.z = Math.PI / 2; reelA.position.set(0, 0.33, -0.1); reelB.position.set(0, 0.33, 0.1);
-  const arm = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.12, 0.3), metal); arm.position.set(0, 0.26, 0);
-  const projParts = [pBody, pLens, lensGlass, pFoot, reelA, reelB, arm];
-  for (const m of projParts) { m.castShadow = true; proj.add(m); }
-  scene.add(proj); proj.updateMatrixWorld(true);
-  const LENS = lensGlass.getWorldPosition(new THREE.Vector3());
-  const SLOT = { pos: proj.localToWorld(new THREE.Vector3(0, 0, 0.3)), quat: proj.quaternion.clone() };
-  const beamGeo = new THREE.BufferGeometry();
-  {
-    const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([sx, sy]) => screen.localToWorld(new THREE.Vector3(sx * SCR.w / 2, sy * SCR.h / 2, 0.01)));
-    beamGeo.setAttribute('position', new THREE.Float32BufferAttribute([LENS, ...corners].flatMap(p => [p.x, p.y, p.z]), 3));
-    beamGeo.setIndex([0, 1, 2, 0, 2, 3, 0, 3, 4, 0, 4, 1]);
-  }
-  const beamMat = new THREE.MeshBasicMaterial({ color: '#fff1d6', transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
-  scene.add(new THREE.Mesh(beamGeo, beamMat));
-  const projLight = new THREE.SpotLight(0xfff0d6, 0, 0, 0.22, 0.5, 0);
-  projLight.position.copy(LENS); projLight.target.position.copy(SCREEN_C); scene.add(projLight, projLight.target);
-  function drawProjection(reel, img) {
-    const g = projC.getContext('2d'), W = projC.width, H = projC.height;
-    g.fillStyle = '#1b1812'; g.fillRect(0, 0, W, H);
-    if (img) drawFit(g, img, 0, 0, W, H, !!reel.wide);
-    g.fillStyle = 'rgba(255, 214, 160, 0.08)'; g.fillRect(0, 0, W, H);
-    const vg = g.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, W * 0.62);
-    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.55)');
-    g.fillStyle = vg; g.fillRect(0, 0, W, H);
-    projTex.needsUpdate = true;
-  }
-
-  Object.assign(ctx, {
-    PROJ, MUG, PHONE, TABLE, drawProjection, SEAT, SCREEN_C, SCR, screen, screenOn, screenIdle,
-    projParts, phoneParts, tableTop, bookParts, beamMat, projLight, reelA, reelB, phoneDot, SLOT, GB,
-  });
+  Object.assign(ctx, { HOST, SEAT });
 }

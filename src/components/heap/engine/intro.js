@@ -22,17 +22,20 @@ function easeOutBounce(t) {
 }
 const unit = (v, empty = 1) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : empty);
 
-// 앨범 자리: 책장(furniture.js 의 shelf) 맨 윗칸 왼쪽 끝의 빈 곳. 책장의 지역 좌표.
+// 앨범 자리: 키 큰 책장(furniture.js 의 shelf, style "tall") 맨 윗칸 왼쪽 끝의 빈 곳. 책장의 지역 좌표.
+// 낮은 책장은 제 자리를 ctx.shelf.introSlot 으로 알려 준다.
 // 윗칸 바닥판 윗면 1.695, 천장판 아랫면 2.175. 책은 x 0.6 ~ -0.58 에 있고, 옆판 안쪽은 -0.74 다.
 const ALBUM = { x: -0.665, y: 1.925, z: 0.02, w: 0.07, h: 0.46, d: 0.29 };
 const ALBUM_COLOR = '#A6613C';
+const FORMER = new Set(['lowTable', 'heap', 'phone', 'guestbook', 'screen', 'poster', 'window']);
 
 export function setupIntro(ctx) {
   const { on, root, camera, canvas, onDispose } = ctx;
   ctx.introView = { dist: 1, turn: 0, focus: 0, focusPoint: null, focusDist: 2.4 };
   let pileShown = true, album = null;
 
-  const slotWorld = () => (ctx.shelf ? ctx.shelf.group.localToWorld(new THREE.Vector3(ALBUM.x, ALBUM.y, ALBUM.z)) : null);
+  const slot = () => ctx.shelf?.introSlot ?? ALBUM;
+  const slotWorld = () => (ctx.shelf ? ctx.shelf.group.localToWorld(new THREE.Vector3(slot().x, slot().y, slot().z)) : null);
 
   // 앨범 한 권: 등(+z)에 제목을 그린다. 다른 면은 천 표지 색이다
   function makeAlbum() {
@@ -47,9 +50,9 @@ export function setupIntro(ctx) {
     const cloth = new THREE.MeshStandardMaterial({ color: ALBUM_COLOR, roughness: 0.9 });
     const pages = new THREE.MeshStandardMaterial({ color: '#f3eadb', roughness: 1 });
     // BoxGeometry 면 순서: +x, -x, +y, -y, +z(등), -z(책 안쪽 끝)
-    const m = new THREE.Mesh(new THREE.BoxGeometry(ALBUM.w, ALBUM.h, ALBUM.d), [cloth, cloth, pages, pages, spine, pages]);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(slot().w, slot().h, slot().d), [cloth, cloth, pages, pages, spine, pages]);
     m.castShadow = m.receiveShadow = true;
-    m.position.set(ALBUM.x, ALBUM.y, ALBUM.z);
+    m.position.set(slot().x, slot().y, slot().z);
     return m;
   }
   function setAlbum(show) {
@@ -75,7 +78,8 @@ export function setupIntro(ctx) {
     const build = ctx.build;
     build.groups.forEach((g, i) => {
       if (!g) return;
-      const p = unit(d?.items?.[i]), e = easeOutCubic(p);
+      // 예전 고정 소품이던 가구는 처음부터 제자리에 있다 (온보딩 이야기의 단계에 들지 않는다, docs/dev/heap-room-v2.md)
+      const p = FORMER.has(build.items[i]?.type) ? 1 : unit(d?.items?.[i]), e = easeOutCubic(p);
       g.visible = p > 0.001;
       g.position.y = (g.userData.baseY || 0) + (1 - easeOutBounce(p)) * 3.2; // baseY: 다른 가구 위에 올린 손 가구의 높이 (furniture.js)
       g.rotation.y = THREE.MathUtils.degToRad(build.items[i]?.rot || 0) + (1 - e) * (i % 2 ? 0.7 : -0.7);
@@ -85,7 +89,7 @@ export function setupIntro(ctx) {
     // 다시 나타날 때 카드를 위로 올려 둔다. 프레임 루프가 제자리로 끌어내려 쏟아지는 것처럼 보인다
     if (show && !pileShown) ctx.cards.forEach((c, i) => { c.position.y += 1.4 + (i % 9) * 0.14; });
     pileShown = show;
-    for (const c of ctx.cards) c.visible = show;
+    for (const c of ctx.cards) c.visible = show && !!ctx.HOST; // 더미가 없는 방의 카드는 늘 숨어 있다
   }
 
   // 앨범 자리를 지금 카메라로 화면에 비춘다
@@ -95,7 +99,7 @@ export function setupIntro(ctx) {
     if (!p) return null;
     const r = canvas.getBoundingClientRect();
     const toScreen = w => { v.copy(w).project(camera); return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height }; };
-    const mid = toScreen(p), top = toScreen(p.clone().setY(p.y + ALBUM.h / 2)), bottom = toScreen(p.clone().setY(p.y - ALBUM.h / 2));
+    const mid = toScreen(p), top = toScreen(p.clone().setY(p.y + slot().h / 2)), bottom = toScreen(p.clone().setY(p.y - slot().h / 2));
     return { x: mid.x, y: mid.y, h: Math.abs(bottom.y - top.y) };
   }
 

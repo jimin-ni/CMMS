@@ -21,21 +21,35 @@ export const SURFACE_REST = 0.08;
 const HAND: Record<string, { h: number; tops: number[] }> = {
   bed: { h: 0.64, tops: [0.48] },
   shelf: { h: 2.225, tops: [0.295, 0.995, 1.695, 2.225] },
-  // 낮은 앨범 책장 (shelf 의 style: "low", engine/furniture.js 의 LOW)
+  // 낮은 앨범 책장 (shelf 의 기본 모양, engine/furniture.js 의 LOW). 위의 shelf 는 style: "tall"
   shelfLow: { h: 0.92, tops: [0.1, 0.5, 0.92] },
   books: { h: 0.32, tops: [0.32] },
+  // 방 v2 (docs/dev/heap-room-v2.md): 좌식 탁자는 받침이다. 나머지는 받침이 아니고 키만 있다
+  lowTable: { h: 0.56, tops: [0.56] },
+  heap: { h: 0.12, tops: [] },
+  heapBox: { h: 0.25, tops: [] },
+  phone: { h: 0.02, tops: [] },
+  guestbook: { h: 0.04, tops: [] },
+  // 방명록 받침대째 (style "stand"): 받침 0.78 위에 공책
+  guestbookStand: { h: 0.82, tops: [] },
 };
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
 const entryOf = (it: Obj) => (it.type === "model" ? BY_ID.get(it.model as string) : undefined);
 // 손 가구의 표 이름. 낮은 앨범 책장은 따로 잰다
-const handKey = (it: Obj) => (it.type === "shelf" && it.style === "low" ? "shelfLow" : (it.type as string));
+const handKey = (it: Obj) => {
+  if (it.type === "shelf") return it.style !== "tall" ? "shelfLow" : "shelf";
+  if (it.type === "heap") return it.style === "box" ? "heapBox" : "heap";
+  if (it.type === "guestbook") return it.style === "stand" ? "guestbookStand" : "guestbook";
+  return it.type as string;
+};
 
 // 받침이면 그 윗면 높이들 (가구의 밑면에서, 낮은 것부터). 받침이 아니면 null
 export function surfaceTops(it: Obj): number[] | null {
   const e = entryOf(it);
   if (e) return e.mount ? null : (e.tops ?? null);
-  return HAND[handKey(it)]?.tops ?? null;
+  const tops = HAND[handKey(it)]?.tops;
+  return tops?.length ? tops : null;
 }
 
 // 가구의 키. 모르면 null
@@ -46,7 +60,9 @@ export function itemHeight(it: Obj): number | null {
 }
 
 export function isSmallItem(it: Obj): boolean {
-  if (it.type === "calendar") return true;
+  // 받침 위에 얹는 손 가구: 달력, 휴대폰, 방명록 공책(받침대째는 바닥에 선다), 사진 더미 (더미는 크지만 탁자에 얹는 것이다)
+  if (it.type === "calendar" || it.type === "phone" || it.type === "heap") return true;
+  if (it.type === "guestbook") return it.style !== "stand";
   const e = entryOf(it);
   if (!e || e.mount || e.category === "rug" || SEAT_CATS.has(e.category)) return false;
   return e.w * e.d <= SMALL_AREA && (e.h == null || e.h <= SMALL_H);

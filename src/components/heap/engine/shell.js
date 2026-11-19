@@ -6,7 +6,15 @@ import { tone } from './palette.js';
 export function setupShell(ctx) {
   const { layout, C, WALLS, box, WALL_H, onWall, RX, RZ, scene, rand } = ctx;
 
-  const WIN = layout.window && { ...layout.window, u0: layout.window.at - layout.window.w / 2, u1: layout.window.at + layout.window.w / 2, y0: layout.window.y - layout.window.h / 2, y1: layout.window.y + layout.window.h / 2 };
+  // 창: layout.items 의 창 가구(type "window", fixtures.js). 벽은 rot 로 안다 (90 이면 왼쪽 벽, 아니면 뒷벽). at 은 벽 위의 자리.
+  // 창 윗선은 벽 윗선에서 0.12 아래까지만 간다. 벽이 4 이던 때 저장한 창(y 2.55)이 2.5 벽을 뚫지 않게 내려 단다.
+  // 해의 방향은 첫 창이 정한다 (WIN). 창이 없으면 해는 기본 방향에서 비춘다
+  const WINS = (layout.items || []).filter(it => it?.type === 'window').map(it => {
+    const wall = it.rot === 90 ? 'left' : 'back', at = wall === 'left' ? it.z : it.x, w = it.w ?? 1.3, h = it.h ?? 1.2;
+    const y = Math.min(it.y ?? 1.71, WALL_H - 0.12 - h / 2);
+    return { wall, at, w, h, y, u0: at - w / 2, u1: at + w / 2, y0: y - h / 2, y1: y + h / 2 };
+  });
+  const WIN = WINS[0] ?? null;
   // 깊이 층: 벽 안쪽 면 0, 걸레받이 앞면 TRIM_D, 문틀 앞면 FRAME_D. 두 면이 한 평면에 겹치면 깜빡이므로(z-fighting) 층마다 다르다.
   // 벽 두께는 WALL_T 이고 벽은 방 밖(off -WALL_T..0)에 선다. 뚫린 곳(창, 문)의 벽 두께는 문틀이나 문턱, 창 상자로 덮는다.
   const WALL_T = 0.2, TRIM_D = 0.06, FRAME_D = 0.08, DOOR_FRAME = 0.06;
@@ -14,7 +22,7 @@ export function setupShell(ctx) {
   const DOOR = layout.door && { ...layout.door, u0: layout.door.at - 0.5, u1: layout.door.at + 0.5, tu0: layout.door.at - 0.5 - DOOR_FRAME, tu1: layout.door.at + 0.5 + DOOR_FRAME, y0: 0, y1: 2.15 };
   const wallMat = tone(C, 'wall'), trimMat = tone(C, 'trim');
   function buildWall(wall) {
-    const openings = [WIN, DOOR].filter(o => o && o.wall === wall).sort((a, b) => a.u0 - b.u0);
+    const openings = [...WINS, DOOR].filter(o => o && o.wall === wall).sort((a, b) => a.u0 - b.u0);
     const slab = (u0, u1, y0, y1) => {
       if (u1 - u0 < 0.01 || y1 - y0 < 0.01) return;
       const p = WALLS[wall].point((u0 + u1) / 2, (y0 + y1) / 2, -WALL_T / 2);
@@ -45,8 +53,12 @@ export function setupShell(ctx) {
   const frameMat = tone(C, 'paper');
   ctx.sunDir = new THREE.Vector3(1.6, -2.55, 3.5).normalize(); ctx.shaftCorners = null;
   ctx.sunHeading = new THREE.Vector3(1.6, 0, 3.5); ctx.skyTex = null; // sunHeading: 해의 수평 방향(창에 묶인다). 높이는 applyTime 이 정한다
-  if (WIN) {
-    const W = WALLS[WIN.wall], ww = WIN.w, wh = WIN.h;
+  const skyC = makeCanvas(4, 128);
+  { const sg = skyC.getContext('2d'), gr = sg.createLinearGradient(0, 0, 0, 128);
+    gr.addColorStop(0, '#f2c48f'); gr.addColorStop(0.55, '#e9a46b'); gr.addColorStop(1, '#8a7a55'); sg.fillStyle = gr; sg.fillRect(0, 0, 4, 128); }
+  if (WIN) ctx.skyTex = canvasTexture(skyC); // 모든 창이 같은 하늘을 쓴다
+  for (const WN of WINS) {
+    const W = WALLS[WN.wall], ww = WN.w, wh = WN.h;
     const g = new THREE.Group();
     box(ww + 0.16, 0.08, 0.3, frameMat, 0, -wh / 2 - 0.02, 0.08, { parent: g });
     box(ww + 0.16, 0.08, 0.22, frameMat, 0, wh / 2 + 0.02, 0.02, { parent: g });
@@ -55,18 +67,16 @@ export function setupShell(ctx) {
     box(ww - 0.14, 0.05, 0.1, frameMat, 0, 0, -0.1, { parent: g }); // 가로살은 두 옆 기둥 사이에만 (끝면이 기둥 바깥 면과 겹치지 않게)
     const glass = new THREE.Mesh(new THREE.PlaneGeometry(ww, wh), new THREE.MeshStandardMaterial({ color: '#ffd9a8', transparent: true, opacity: 0.12, roughness: 0.1 }));
     glass.position.z = -0.1; g.add(glass);
-    onWall(WIN.wall, WIN.at, WIN.y, 0, g);
-    const skyC = makeCanvas(4, 128);
-    { const sg = skyC.getContext('2d'), gr = sg.createLinearGradient(0, 0, 0, 128);
-      gr.addColorStop(0, '#f2c48f'); gr.addColorStop(0.55, '#e9a46b'); gr.addColorStop(1, '#8a7a55'); sg.fillStyle = gr; sg.fillRect(0, 0, 4, 128); }
-    ctx.skyTex = canvasTexture(skyC);
+    onWall(WN.wall, WN.at, WN.y, 0, g);
     // 창밖: 창 구멍 바로 뒤에 붙은 닫힌 상자. 안쪽 다섯 면에 하늘을 칠한다 (time.js 가 skyTex 를 시간에 맞춰 다시 칠한다).
     // 상자는 벽 길이와 벽 높이 안에 잘라 두어서, 방 밖에서 비추는 카메라(온보딩)에도 벽 뒤로 삐져나오지 않는다.
     // 그림자를 드리우지 않는다: 해는 이 상자를 지나 창으로 들어온다.
     {
-      const M = 0.1, D = 0.35;
-      const bu0 = Math.max(WIN.u0 - M, -W.half), bu1 = Math.min(WIN.u1 + M, W.half);
-      const by0 = Math.max(WIN.y0 - M, 0), by1 = Math.min(WIN.y1 + M, WALL_H);
+      // D: 상자 깊이. 상자는 벽 뒷면 너머에 있으므로, 위에서 내려다보는 방 카메라에 윗면이 벽 너머로 보이지 않게
+      // 상자 윗면을 벽 윗선에서 D 이상 내린다 (45 도까지 가린다). 벽이 2.5 로 낮아지며 전의 깊이 0.35 는 벽 위로 드러났다
+      const M = 0.1, D = 0.12;
+      const bu0 = Math.max(WN.u0 - M, -W.half), bu1 = Math.min(WN.u1 + M, W.half);
+      const by0 = Math.max(WN.y0 - M, 0), by1 = Math.max(WN.y1, Math.min(WN.y1 + M, WALL_H - D));
       const bw = bu1 - bu0, bh = by1 - by0;
       const skyMat = new THREE.MeshBasicMaterial({ map: ctx.skyTex, side: THREE.DoubleSide });
       const vb = new THREE.Group();
@@ -80,8 +90,9 @@ export function setupShell(ctx) {
       face(D, bh, bw / 2, 0, -D / 2, 0, -Math.PI / 2);
       face(bw, D, 0, bh / 2, -D / 2, Math.PI / 2, 0, 0.98);
       face(bw, D, 0, -bh / 2, -D / 2, -Math.PI / 2, 0, 0.02);
-      onWall(WIN.wall, (bu0 + bu1) / 2, (by0 + by1) / 2, -WALL_T, vb); // 상자는 제 가운데에 대해 대칭이라 벽의 방향과 상관없다
+      onWall(WN.wall, (bu0 + bu1) / 2, (by0 + by1) / 2, -WALL_T, vb); // 상자는 제 가운데에 대해 대칭이라 벽의 방향과 상관없다
     }
+    if (WN !== WIN) continue; // 해와 빛줄기는 첫 창으로만
     const toCentre = Math.sign(-WIN.at) || 1;
     ctx.sunHeading = W.n.clone().multiplyScalar(3.5).addScaledVector(W.axis, 1.6 * toCentre);
     ctx.sunDir = ctx.sunHeading.clone().add(new THREE.Vector3(0, -2.55, 0)).normalize();
@@ -132,7 +143,8 @@ export function setupShell(ctx) {
     box(0.96 + 2 * fw, 0.1, fd, frameMat, 0, headY0 + 0.05, fz, { parent: g });
     // 문짝은 문턱에서 머리 밑까지 막는다. 문턱은 벽 두께를 가로질러 바닥 높이(윗면 y 0)에 깔린다: 문 밑으로 벽 너머가 보이지 않는다
     const panel = box(0.96, headY0, 0.06, tone(C, 'accent'), 0, headY0 / 2, -WALL_T / 2, { parent: g });
-    box(0.96, 0.1, WALL_T, tone(C, 'woodDark'), 0, -0.05, -WALL_T / 2, { parent: g, cast: false });
+    // 문턱은 구멍 폭(1.0) 전체를 덮는다. 0.96 이던 때는 양옆에 0.02 틈이 남아 땅이 없는 방에서 문 밑으로 배경이 보였다
+    box(1.0, 0.1, WALL_T, tone(C, 'woodDark'), 0, -0.05, -WALL_T / 2, { parent: g, cast: false });
     const knob = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), flat('#d8b27a', { metalness: 0.4, roughness: 0.4 })); knob.position.set(0.34, 1.0, -0.04); g.add(knob);
     const sign = makeCanvas(256, 96);
     const st = canvasTexture(sign);
@@ -149,5 +161,5 @@ export function setupShell(ctx) {
     ctx.doorSpot = WALLS[DOOR.wall].point(DOOR.at, 0, 0.85);
   }
 
-  Object.assign(ctx, { sun, WIN, DOOR, doorParts, stepMotes });
+  Object.assign(ctx, { sun, WIN, WINS, DOOR, doorParts, stepMotes });
 }

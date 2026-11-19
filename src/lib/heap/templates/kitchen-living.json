@@ -9,33 +9,9 @@
     "wall": "#EADCC4",
     "accent": "#A6613C"
   },
-  "window": {
-    "h": 1.2,
-    "w": 1.3,
-    "y": 2.55,
-    "at": -2.68,
-    "wall": "back"
-  },
   "door": {
     "at": 2.8,
     "wall": "left"
-  },
-  "screen": {
-    "at": 1,
-    "wall": "back"
-  },
-  "posters": {
-    "at": [
-      -2.9,
-      -1.95,
-      -1
-    ],
-    "wall": "left"
-  },
-  "table": {
-    "x": 1,
-    "z": 0.5,
-    "projector": "left"
   },
   "items": [
     {
@@ -257,6 +233,69 @@
       "rot": 0,
       "type": "model",
       "model": "radio"
+    },
+    {
+      "type": "lowTable",
+      "x": 1,
+      "z": 0.5,
+      "rot": 0
+    },
+    {
+      "type": "heap",
+      "x": 1,
+      "z": 0.5,
+      "y": 0.56
+    },
+    {
+      "type": "phone",
+      "x": 1.68,
+      "z": 1.12,
+      "y": 0.56,
+      "rot": 20
+    },
+    {
+      "type": "screen",
+      "x": 1,
+      "z": -4,
+      "rot": 0,
+      "y": 1.85
+    },
+    {
+      "type": "poster",
+      "x": -5.5,
+      "z": -2.9,
+      "rot": 90,
+      "y": 1.8
+    },
+    {
+      "type": "poster",
+      "x": -5.5,
+      "z": -1.95,
+      "rot": 90,
+      "y": 1.8
+    },
+    {
+      "type": "poster",
+      "x": -5.5,
+      "z": -1,
+      "rot": 90,
+      "y": 1.8
+    },
+    {
+      "type": "window",
+      "x": -2.68,
+      "z": -4,
+      "rot": 0,
+      "y": 1.71,
+      "w": 1.3,
+      "h": 1.2
+    },
+    {
+      "type": "guestbook",
+      "style": "stand",
+      "x": -5.18,
+      "z": 1.85,
+      "rot": 90
     }
   ]
 }

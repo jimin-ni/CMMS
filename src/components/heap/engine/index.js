@@ -14,6 +14,7 @@ import { setupCardArt } from './card-art.js';
 import { setupScene } from './scene.js';
 import { setupShell } from './shell.js';
 import { setupFurniture } from './furniture.js';
+import { setupFixtures } from './fixtures.js';
 import { setupSlots } from './slots.js';
 import { setupModels } from './models.js';
 import { setupShelf } from './shelf.js';
@@ -49,7 +50,7 @@ const HIDDEN = ['cardview', 'visit', 'albumrow', 'stand', 'flip', 'srclink', 'ej
  * `heap:editcmd`(edit.js), `heap:thumb`(dock-thumbs.js), `heap:reels`(live.js: 새 영상 목록으로 더미를 맞춘다), `heap:reveal`(live.js: 쪽지 공개일이 바뀌었다, detail: ISO 또는 null), `heap:capture`(loop.js: 지금 구도를 한 장 그려 준다), `heap:intro`(intro.js: 온보딩 연출), `heap:go`(nav.js: 온보딩 내비게이션 바의 이동).
  * 팔레트와 배경은 그 자리에서 다시 칠한다 (recolour.js, time.js 의 setBackdrop). 꾸미기가 방의 틀(템플릿)을 바꾸면 엔진은 `heap:remount`(detail: 편집 상태)를 보낸다. heap-room.tsx 가 그 상태를 opts.resume 으로 넘겨 다시 마운트한다:
  * resume { edit, items, time, palette, backdrop, brand, shell, name, savedName, hist, future, saved, original, baseLayout } (edit.js 의 remount 참고).
- * 엔진이 `root` 에 직접 보내는 것은 셋이다. `heap:mode`(detail: 'room' | 'sit' | 'watch' | 'sort' | 'tree')는 모드가 정해질 때마다,
+ * 엔진이 `root` 에 직접 보내는 것은 셋이다. `heap:mode`(detail: 'room' | 'sit' | 'sort' | 'tree')는 모드가 정해질 때마다,
  * `heap:ready` 는 방이 화면에 뜬 뒤에 한 번, `heap:music`(detail: true | false)은 오른쪽 위 음악 플레이어가 열리고 닫힐 때 (players.js).
  * `modelBase` 는 가구 모델과 catalogue.json 이 있는 폴더다. 없으면 `dataBase` 옆의 "models/" 다.
  * `data` 는 서버가 DB에서 읽은 값이다 (page.tsx 가 바꿔 넘긴다): { roomUuid, name, serverTime, rooms, layout, reels, pieces, guestbook, visits, creatorVisit }.
@@ -63,7 +64,7 @@ const HIDDEN = ['cardview', 'visit', 'albumrow', 'stand', 'flip', 'srclink', 'ej
  * 쪽지 쓰기(tree-write.js): opts.addNote(input) 는 { ok, note(엔진 모양), evictedId } 또는 { ok: false, reason, message }, opts.deleteNote(id) 는 { ok } 또는 { ok: false, reason, message }, opts.signIn() 은 로그인 화면으로 보내고, opts.openWrite 가 참이면 트리 모드와 쓰기 판을 열고 opts.consumeWrite() 를 부른다.
  * 쪽지 트리: opts.treeNotes (tree-ids.js 의 toEngineNote 로 바꾼 목록, 없으면 빈 트리), opts.noteRevealAt (ISO 또는 null), opts.isOwner, opts.unreadNotes. 폴링(live.js)이 같은 변환으로 합친다.
  * @param {HTMLElement} root
- * @param {{ roomId: string, roomUuid: string, dataBase: string, modelBase?: string, data: any, viewerName: string | null, signedIn: boolean, pollMs: number, bubbleHref: string, navigate: (href: string) => void, parseLink: (url: string) => ({ platform: string, externalId: string, wide: boolean | null } | null), parseMusic: (url: string) => ({ video: string | null, list: string | null } | null), isSafeLink: (v: unknown) => boolean, isWebLink: (v: unknown) => boolean, isEmail: (v: unknown) => boolean, recordVisit: () => Promise<any>, addGuestbook: (name: string) => Promise<any>, onNavigate: (roomId: string) => void, itemHalfExtents: (item: any) => ({ hx: number, hz: number } | null), placementError: (item: any, room: { w: number, d: number }, table: { x: number, z: number }) => (string | null), surfaces?: any, policy: { frameY: number, frameWallMargin: number }, treeNotes?: any[], noteRevealAt?: string | null, isOwner?: boolean, unreadNotes?: number, addNote?: (input: any) => Promise<any>, deleteNote?: (noteId: string) => Promise<any>, replyNote?: (noteId: string, input: any) => Promise<any>, setHidden?: (noteId: string, hidden: boolean) => Promise<any>, markNoteRead?: (noteId: string) => Promise<any>, refetchNotes?: () => Promise<any>, signIn?: () => void, askSignIn?: () => void, openWrite?: boolean, consumeWrite?: () => void, resume?: any }} opts
+ * @param {{ roomId: string, roomUuid: string, dataBase: string, modelBase?: string, data: any, viewerName: string | null, signedIn: boolean, pollMs: number, bubbleHref: string, navigate: (href: string) => void, parseLink: (url: string) => ({ platform: string, externalId: string, wide: boolean | null } | null), parseMusic: (url: string) => ({ video: string | null, list: string | null } | null), isSafeLink: (v: unknown) => boolean, isWebLink: (v: unknown) => boolean, isEmail: (v: unknown) => boolean, recordVisit: () => Promise<any>, addGuestbook: (name: string) => Promise<any>, onNavigate: (roomId: string) => void, itemHalfExtents: (item: any) => ({ hx: number, hz: number } | null), placementError: (item: any, room: { w: number, d: number }, table: { x: number, z: number }) => (string | null), surfaces?: any, policy: { frameY: number, frameWallMargin: number, groundColour?: string }, treeNotes?: any[], noteRevealAt?: string | null, isOwner?: boolean, unreadNotes?: number, addNote?: (input: any) => Promise<any>, deleteNote?: (noteId: string) => Promise<any>, replyNote?: (noteId: string, input: any) => Promise<any>, setHidden?: (noteId: string, hidden: boolean) => Promise<any>, markNoteRead?: (noteId: string) => Promise<any>, refetchNotes?: () => Promise<any>, signIn?: () => void, askSignIn?: () => void, openWrite?: boolean, consumeWrite?: () => void, resume?: any }} opts
  * @returns {() => void}
  */
 export function mountRoom(root, opts) {
@@ -91,6 +92,7 @@ async function run(ctx) {
   setupScene(ctx);
   setupShell(ctx);
   setupFurniture(ctx);
+  setupFixtures(ctx); // 예전 고정 소품을 가구로 (좌식 탁자, 휴대폰, 방명록, 스크린, 포스터, 창)
   setupSlots(ctx);
   setupModels(ctx);
   // 받침 위에 선 작은 가구를 받침의 윗면에 딱 맞춰 짓는다 (surfaces.ts 의 settleItems: 러브쑤 방의 조리대 위 물건 0.9 → 0.84).

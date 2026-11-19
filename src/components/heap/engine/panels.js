@@ -4,7 +4,7 @@ import { el, link, shortUrl, bindOverlay } from './dom.js';
 import { srcUrl, ksDay, seoulDay } from './format.js';
 
 export function setupPanels(ctx) {
-  const { opts, creator, $, keepsakeLook, newestReel, cards, toast, sit, pickUp, feed, openMusic, ROOMS, roomId } = ctx;
+  const { opts, creator, $, keepsakeLook, newestReel, toast, openMusic, ROOMS, roomId } = ctx;
 
   const safeHref = u => (opts.isSafeLink(u) ? u : null); // 서버가 저장 전에 레이아웃 링크를 검사한다. 이것은 DOM 이 받는 값에 하는 같은 검사다
 
@@ -119,16 +119,18 @@ export function setupPanels(ctx) {
   }
   bindOverlay(ctx, 'calendar', 'cal-close', { backdrop: true });
 
-  // TV(fn "latest"): 탁자에 앉아 가장 최근 영상을 집어 영사기에 넣는다. 손으로 하는 것과 같은 단계다.
+  // TV(fn "latest"): 가장 최근 영상을 공식 플레이어로 바로 연다
   function watchLatest() {
     if (ctx.mode !== 'room') return;
-    const reel = newestReel(), card = reel && cards.find(c => c.userData.reel === reel);
-    if (!card) { toast('아직 올라온 영상이 없어요'); return; }
-    sit(); pickUp(card); feed();
+    const reel = newestReel();
+    if (!reel) { toast('아직 올라온 영상이 없어요'); return; }
+    ctx.openPlayer(reel);
   }
   const openSlot = slot => {
     const k = slot.fn.kind;
     if (k === 'tree') { ctx.openTree?.(slot.it, slot.group, slot); return; } // 쪽지 트리: 나중 모듈이 ctx.openTree(item, group, slot) 를 단다
+    if (k === 'phone') { openPhone(); return; } // 휴대폰 가구 (fixtures.js)
+    if (k === 'guestbook') { ctx.openGuestbook(); return; } // 방명록 가구 (fixtures.js)
     if (k === 'pc') openPc(slot.fn); else if (k === 'keepsake') openKeepsake(slot.fn);
     else if (k === 'music') openMusic(slot.fn); else if (k === 'latest') watchLatest(); else if (k === 'calendar') openCalendar(slot.fn);
   };

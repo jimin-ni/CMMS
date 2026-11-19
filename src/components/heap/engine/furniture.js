@@ -41,7 +41,7 @@ export function setupFurniture(ctx) {
       leaf.scale.set(1, 1.5, 0.6); leaf.rotation.set(ctx.irand(), a, ctx.irand() * 0.5); leaf.castShadow = true; parent.add(leaf);
     }
   }
-  // 낮은 앨범 책장 (shelf 의 style: "low"). 짧은 다리 위 두 칸: 아래 칸은 책, 윗칸은 앨범 사이사이에 얇은 책.
+  // 낮은 앨범 책장. shelf 의 기본 모양이다 (style 이 없거나 "low"). 키 큰 책장은 style: "tall". 짧은 다리 위 두 칸: 아래 칸은 책, 윗칸은 앨범 사이사이에 얇은 책.
   // 1 단위 = 1 m 로 본 실제 크기다: 책은 높이 0.20~0.28, 두께 0.03~0.05, 앨범은 높이 0.32, 두께 0.05~0.10 (shelf.js 가 장 수로 정한다).
   // 높이: 다리 0~0.06, 바닥판 0.06~0.10, 가운데 판 0.46~0.50, 윗판 0.88~0.92 (surfaces.ts 의 shelfLow 와 같다).
   // 판은 옆판 사이에만, 뒤판은 옆판 사이에만 둔다: 같은 평면에 겹치는 면이 없다.
@@ -66,7 +66,9 @@ export function setupFurniture(ctx) {
     // 윗칸: 책 몇 권, 앨범, 책 몇 권, 앨범, ... 앨범 자리(slot)는 가장 두꺼운 앨범 폭이다
     const y2 = LOW.floors[1] + LOW.t;
     ctx.shelf = { group: g, albums: [], thick: { base: 0.05, per: 0.003, max: LOW.slot - 0.005 }, labelH: 0.24,
-      view: { target: [0, y2 + LOW.albumH / 2, 0], cam: [-0.45, 1.5, 1.95] } };
+      view: { target: [0, y2 + LOW.albumH / 2, 0], cam: [-0.45, 1.5, 1.95] },
+      // 온보딩이 꽂는 앨범 자리 (intro.js): 아래 칸 오른쪽 끝의 빈 곳. 책은 inW / 2 - 0.07 앞에서 끝난다
+      introSlot: { x: inW / 2 - 0.04, y: y1 + 0.15, z: 0.02, w: 0.07, h: 0.3, d: 0.29 } };
     let x = -inW / 2 + 0.01;
     const books = () => { const k = 2 + Math.floor(ctx.irand() * 3); for (let i = 0; i < k; i++) { const th = 0.025 + ctx.irand() * 0.015; book(x + th / 2, y2, th); x += th + 0.004; } };
     ALBUMS.forEach((a, i) => {
@@ -93,8 +95,10 @@ export function setupFurniture(ctx) {
       box(0.6, 0.16, 0.45, flat('#f7f1e6'), -1.0, 0.56, 0, { parent: g });
       return { hw: 1.6, hd: 0.95 };
     },
+    // 사진 더미 (heap): 카드와 상자는 heap.js 가 HOST 자리에 짓는다. 여기서는 바닥에 둔 더미가 길을 막는 넓이만 돌려준다
+    heap(g, it) { return { hw: 0.6, hd: it.style === 'box' ? 0.37 : 0.45 }; },
     shelf(g, it, build) {
-      if (it.style === 'low') return lowShelf(g, it, build);
+      if (it.style !== 'tall') return lowShelf(g, it, build);
       const wood = tone(C, 'woodDark'), add = m => { shelfParts.push(m); return m; };
       add(box(1.6, 2.2, 0.12, wood, 0, 1.1, -0.22, { parent: g }));
       for (const sx of [-0.77, 0.77]) add(box(0.06, 2.2, 0.5, wood, sx, 1.1, 0, { parent: g }));

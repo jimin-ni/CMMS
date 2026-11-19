@@ -85,6 +85,13 @@ export function setupCardView(ctx) {
 
   // 카드를 누르면 뒤집는다. 뒷면의 링크는 링크로만 동작한다.
   on(host, 'click', ev => { if (!ev.target.closest('a')) ctx.flip(); });
+  // 두 번 누르면 공식 플레이어로 영상을 연다 (영사기 대신). 두 번의 click 이 뒤집기를 두 번 하므로 카드는 처음 면으로 돌아온다.
+  // 팬 작품은 영상이 없어 열지 않는다
+  on(host, 'dblclick', ev => {
+    if (ev.target.closest('a') || !ctx.held) return;
+    const reel = ctx.held.userData.reel;
+    if (reel && reel.kind !== 'fan') ctx.openPlayer(reel);
+  });
 
   // loop.js 가 매 프레임 부른다. arrived: 집어 든 카드가 눈앞 자리에 다 왔다.
   const _c = new THREE.Vector3(), _t = new THREE.Vector3();

@@ -33,17 +33,14 @@ export function setupHud(ctx) {
 
   const hint = $('hint');
   const HINTS = {
-    room: '방향키·WASD 또는 바닥을 눌러 걷기 · 탁자, 책장, 문을 눌러 보세요',
-    near: 'E 또는 탁자를 눌러 앉기',
+    room: '방향키·WASD 또는 바닥을 눌러 걷기 · 사진 더미, 책장, 문을 눌러 보세요',
+    near: 'E 또는 사진 더미를 눌러 보기',
     nearShelf: 'E 또는 책장을 눌러 앨범 정리하기',
     nearDoor: 'E 또는 문을 눌러 다른 방으로',
-    sit: '사진을 눌러 집기 · 끌어서 옮기기 · 휴대폰을 눌러 버블 열기',
-    held: '사진을 눌러 뒤집기 · 영사기를 눌러 상영 · 바깥을 눌러 내려놓기',
+    sit: '사진을 눌러 집기 · 끌어서 옮기기',
+    held: '사진을 눌러 뒤집기 · 두 번 눌러 영상 보기 · 바깥을 눌러 내려놓기',
     drag: '원하는 곳에 놓으세요',
-    needcard: '사진을 먼저 집어 든 다음 영사기를 눌러 보세요',
-    watch: '상영 중 · 스크린을 눌러 다시 재생 · Esc로 사진 꺼내기',
     shelf: '앨범을 눌러 안을 보기 · Esc로 물러나기',
-    nearBook: 'E 또는 방명록을 눌러 이름 남기기',
     nearTree: 'E 또는 트리를 눌러 쪽지 보기',
     tree: '장식을 눌러 쪽지 읽기 · 끌어서 트리 돌리기 · Esc로 물러나기',
     treeNote: '‹ › 로 다른 쪽지 · 바깥을 누르거나 Esc로 접기',
@@ -55,14 +52,13 @@ export function setupHud(ctx) {
   const refreshHint = () => { if (hint.dataset.k) setHint(hint.dataset.k); };
 
   function syncUI() {
-    const seated = ctx.mode === 'sit' || ctx.mode === 'watch';
+    const seated = ctx.mode === 'sit';
     $('stand').hidden = !(seated || ctx.perch);
     $('flip').hidden = !(ctx.mode === 'sit' && ctx.held);
     const isFan = c => c?.userData.reel.kind === 'fan';
     $('srclink').hidden = !(ctx.mode === 'sit' && ctx.held) || isFan(ctx.held);
     if (ctx.held && !isFan(ctx.held)) $('srclink').href = srcUrl(ctx.held.userData.reel);
-    $('eject').hidden = ctx.mode !== 'watch';
-    $('ytlink').hidden = ctx.mode !== 'watch' || isFan(ctx.loaded);
+    $('eject').hidden = true; $('ytlink').hidden = true; // 영사기를 걷어 내며 쓰지 않는다 (마크업은 heap-room.tsx)
     $('sortexit').hidden = ctx.mode !== 'sort';
     $('albumrow').hidden = ctx.mode !== 'sort';
     $('treeexit').hidden = ctx.mode !== 'tree';
