@@ -313,7 +313,7 @@ stateDiagram-v2
 
 | 테이블 | 용도 | 상세 |
 |---|---|---|
-| `bubble_messages`, `heap_notes`, `heap_guestbook` | 글 저장. `screen_status`, `screened_at` 추가 | 12 문서 §9 |
+| `bubble_messages`, `heap_notes`, `heap_guestbook` | 글 저장. `screen_status`, `screened_at`, `status_changed_at`(상태가 바뀐 시각) 추가 | 12 문서 §9, §2-5 |
 | `moderation_events` | 경고 기록. (`surface`, `target_id`) 유니크 | §3 |
 | `sanctions` | 자동·방 단위 차단. `scope = 'auto' / 'room'` | §4, §5 |
 | `sanction_appeals` | 재검토 요청. `sanction_id` 유니크 | §8 |
