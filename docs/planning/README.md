@@ -15,8 +15,7 @@ CMMS(Creator Message Management System, 가제)의 기획 문서 모음입니다
 | [09-heap-room.md](./09-heap-room.md) | 크리에이터 방의 오브제별 기능, 디자인 결정과 이유, 쪽지 트리, 팬 작품 |
 | [10-audio.md](./10-audio.md) | 배경음악·효과음 출처, 라이선스, 공모전 음원 규정 대조 |
 | [11-design-palette-v2.md](./11-design-palette-v2.md) | 디자인 시안 v2: Chipotle 팔레트·글꼴·컴포넌트 규칙 반영, v1 클래스 대응표 |
-| [12-moderation.md](./12-moderation.md) | 커뮤니티 규칙 위반 판정(사전·regex + OpenAI), 경고·자동 차단·신고·재검토, 도배 방지, 개인정보 처리방침 유의 사항 |
-| [13-sanctions.md](./13-sanctions.md) | 제재 상세 명세(기준 문서): 경고, 자동 차단, 방 단위 차단, 계정 정지, 신고, 재검토, 탈퇴 후 90일 보관과 재가입, 채팅 글자 이동 경로 |
+| [12-ai-screening.md](./12-ai-screening.md) | AI 스크리닝 기준 문서: 판정(사전·regex·OpenAI), 경고·자동 차단·신고·재검토, 검토 화면, 도배 방지, 데이터 모델, 구현 범위 |
 | [14-privacy-policy-draft.md](./14-privacy-policy-draft.md) | 개인정보 처리방침 초안 (모더레이션·제재 반영, 법률 검토 전) |
 
 ## 표기 규칙
@@ -65,5 +64,5 @@ CMMS(Creator Message Management System, 가제)의 기획 문서 모음입니다
 - [미정] 쓰지 않게 된 DB 테이블(`creator_chats`, `creator_avatars`) 정리 여부 (03 문서 3절)
 - [미정] 팬 작품 투표 기능의 구현 여부 (09 문서 §4)
 - [미정] 실시간 전달의 배포 환경 확인 (프록시 버퍼링, 연결 유지, 연결 수 한도). 배포 뒤 진행 (#19)
-- [미정] 모더레이션의 자동 차단 범위 등 (12 문서 §12)
-- [유의] 개인정보 처리방침: 위반 글 보관, OpenAI 국외 전송, 자동 차단을 처리방침에 반영해야 함 (12 문서 §11)
+- [논의] AI 스크리닝 위험도 높음 항목 (#82), 판단 필요 항목 (#83)
+- [유의] 개인정보 처리방침: 위반 글 보관, OpenAI 국외 전송, 자동 차단을 처리방침에 반영해야 함 (14 문서, #81)
