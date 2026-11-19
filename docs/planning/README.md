@@ -17,6 +17,7 @@ CMMS(Creator Message Management System, 가제)의 기획 문서 모음입니다
 | [11-design-palette-v2.md](./11-design-palette-v2.md) | 디자인 시안 v2: Chipotle 팔레트·글꼴·컴포넌트 규칙 반영, v1 클래스 대응표 |
 | [12-moderation.md](./12-moderation.md) | 커뮤니티 규칙 위반 판정(사전·regex + OpenAI), 경고·자동 차단·신고·재검토, 도배 방지, 개인정보 처리방침 유의 사항 |
 | [13-sanctions.md](./13-sanctions.md) | 제재 상세 명세(기준 문서): 경고, 자동 차단, 방 단위 차단, 계정 정지, 신고, 재검토, 탈퇴 후 90일 보관과 재가입, 채팅 글자 이동 경로 |
+| [14-privacy-policy-draft.md](./14-privacy-policy-draft.md) | 개인정보 처리방침 초안 (모더레이션·제재 반영, 법률 검토 전) |
 
 ## 표기 규칙
 
