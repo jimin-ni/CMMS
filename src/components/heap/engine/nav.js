@@ -18,7 +18,7 @@ export function setupNav(ctx) {
     for (const id of OVERLAYS) $(id).hidden = true;
     if (ctx.mode === 'tree') ctx.exitTree();
     else if (ctx.mode === 'sort') ctx.exitSort();
-    else if (ctx.mode === 'sit' || ctx.mode === 'watch') ctx.stand();
+    else if (ctx.mode === 'sit') ctx.stand();
     if (ctx.perch) ctx.unperch();
     ctx.walkTo = null; ctx.arrive = null; ctx.waypoints = []; ctx.seatTarget = null;
   }

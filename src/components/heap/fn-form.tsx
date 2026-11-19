@@ -23,6 +23,12 @@ export type Item = {
   lit?: boolean;
   // 가구 하나만 따로 칠한 색 { 부분: "#RRGGBB" } (색 묶음 C2, src/lib/heap/parts.ts). Kenney 모델만
   colors?: Record<string, string>;
+  // 모양: 앨범 책장 "low" | "tall", 사진 더미 "box", 방명록 "stand" (layout.ts)
+  style?: string;
+  // 좌식 탁자(lowTable)의 러그 크기 · 창(window)의 폭과 높이 (방 v2, docs/dev/heap-room-v2.md)
+  rug?: { w: number; d: number };
+  w?: number;
+  h?: number;
 };
 // mount: 벽에 거는 것, 천장에 다는 것, 벽 조각 ("wall" | "ceiling" | "structure"). 벽 조각은 꾸미기 독에 나오지 않는다 (room-editor.tsx).
 // parts: 따로 칠할 수 있는 부분 (catalogue.json, 색 묶음 C2)
@@ -38,6 +44,13 @@ export const HAND_LABEL: Record<string, string> = {
   books: "책 더미",
   frame: "벽 액자",
   calendar: "탁상 달력",
+  heap: "사진 더미",
+  lowTable: "좌식 탁자",
+  phone: "휴대폰",
+  guestbook: "방명록",
+  screen: "스크린",
+  poster: "포스터",
+  window: "창문",
 };
 export const itemLabel = (it: Item, models: Model[]) =>
   (it.type === "model" ? models.find((m) => m.id === it.model)?.label : HAND_LABEL[it.type]) ?? it.model ?? it.type;

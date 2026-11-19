@@ -13,11 +13,26 @@ export type LayoutCheck =
 
 type Obj = Record<string, unknown>;
 type Fail = { error: string };
+// 방 크기. h 는 벽 높이 (없으면 엔진 기본 2.5)
+type Room = { w: number; d: number; h?: number };
 
 // 엔진 BUILD가 직접 만드는 가구. 나머지는 type "model" + 카탈로그 id.
 // frame은 벽에 거는 액자다 (기념품 기능을 달 수 있다). calendar는 책상 위 달력이다 (달력 기능을 단다).
-// heap은 사진 더미다 (방에 하나까지, engine/heap.js). 바닥이나 다른 가구 위에 둔다.
-const HAND_TYPES = new Set(["bed", "shelf", "plant", "snake", "lamp", "books", "frame", "calendar", "heap"]);
+// 방 v2 (docs/dev/heap-room-v2.md): 예전의 고정 소품도 가구다.
+//   heap 사진 더미(방에 하나까지, style "box" 면 신발상자) · lowTable 좌식 탁자(러그, 방석, 머그째, rug 로 러그 크기)
+//   phone 휴대폰 · guestbook 방명록 공책(style "stand" 면 나무 받침째) · screen 벽 스크린 · poster 벽 포스터 · window 창(w, h)
+const HAND_TYPES = new Set([
+  "bed", "shelf", "plant", "snake", "lamp", "books", "frame", "calendar",
+  "heap", "lowTable", "phone", "guestbook", "screen", "poster", "window",
+]);
+// 벽에 거는 손 가구. 바닥을 차지하지 않고, 액자처럼 뒷벽(z = -d/2, 0도)이나 왼쪽 벽(x = -w/2, 90도)에 붙는다.
+// 액자와 달리 높이 y(가운데)를 고른다. 폭과 높이는 엔진(furniture.js, shell.js)이 짓는 틀 포함 크기다. window 는 item.w, item.h 에 틀 0.16 을 더한다.
+export const WALL_HAND: Record<string, { w: number; h: number } | null> = {
+  screen: { w: 1.74, h: 1.04 },
+  poster: { w: 0.74, h: 1.2 },
+  window: null,
+};
+export const isWallHand = (type: unknown): boolean => typeof type === "string" && type in WALL_HAND;
 const MODEL_IDS = new Set(catalogue.models.map((model) => model.id));
 // 손으로 만드는 가구의 바닥 크기(엔진 단위, 회전 전). engine/furniture.js BUILD의 치수에서 읽은 값이고 room-editor.tsx도 이 표를 쓴다.
 // frame은 벽에 걸려서 바닥을 차지하지 않으니 없다. plant는 item.size를 곱한다.
@@ -30,6 +45,9 @@ export const HAND_FOOTPRINT: Record<string, { w: number; d: number }> = {
   books: { w: 0.45, d: 0.35 },
   calendar: { w: 0.46, d: 0.2 },
   heap: { w: 1.2, d: 0.9 },
+  lowTable: { w: 2.6, d: 1.8 },
+  phone: { w: 0.2, d: 0.35 },
+  guestbook: { w: 0.5, d: 0.36 },
 };
 const MODEL_BY_ID = new Map(catalogue.models.map((model) => [model.id, model]));
 // 불을 켜고 끌 수 있는 가구: 손으로 만드는 lamp, 그리고 카탈로그 category가 lamp인 모델
@@ -71,10 +89,10 @@ function unknownKey(obj: Obj, allowed: readonly string[]): string | null {
 function checkItem(raw: unknown, index: number): Fail | { item: Obj } {
   const at = `items[${index}]`;
   if (!isObj(raw)) return { error: `${at}: 객체가 아니에요.` };
-  const bad = unknownKey(raw, ["type", "x", "z", "rot", "size", "model", "tint", "y", "fn", "lit", "colors", "plant", "style"]);
+  const bad = unknownKey(raw, ["type", "x", "z", "rot", "size", "model", "tint", "y", "fn", "lit", "colors", "plant", "style", "rug", "w", "h"]);
   if (bad) return { error: `${at}: 알 수 없는 필드 ${bad}` };
 
-  const { type, x, z, rot, size, model, tint, y, fn, lit, colors, plant, style } = raw;
+  const { type, x, z, rot, size, model, tint, y, fn, lit, colors, plant, style, rug, w, h } = raw;
   // plant: 앨범 책장(shelf) 위 화분을 둘지. false 만 저장한다 (없으면 둔다)
   if (plant !== undefined && (type !== "shelf" || typeof plant !== "boolean")) return { error: `${at}: plant는 shelf에만 true/false로 쓸 수 있어요.` };
   if (typeof type !== "string" || !(type === "model" || HAND_TYPES.has(type))) {
@@ -84,12 +102,32 @@ function checkItem(raw: unknown, index: number): Fail | { item: Obj } {
   if (!num(x, -max, max) || !num(z, -max, max)) return { error: `${at}: 좌표가 범위를 벗어났어요.` };
 
   // style: 앨범 책장(shelf)은 없거나 "low" 면 낮은 두 칸 책장, "tall" 이면 키 큰 책장 (engine/furniture.js).
-  // 사진 더미(heap)는 없으면 흩어진 더미, "box" 면 열린 신발상자 안의 더미 (engine/heap.js)
-  const styleOk = type === "shelf" ? style === "low" || style === "tall" : type === "heap" && style === "box";
-  if (style !== undefined && !styleOk) return { error: `${at}: style이 올바르지 않아요 (shelf는 "low"나 "tall", heap은 "box").` };
+  // 사진 더미(heap)는 없으면 흩어진 더미, "box" 면 열린 신발상자 안의 더미 (engine/heap.js). 방명록(guestbook)은 "stand" 면 나무 받침째
+  const STYLES: Record<string, string[]> = { shelf: ["low", "tall"], heap: ["box"], guestbook: ["stand"] };
+  if (style !== undefined && !STYLES[type]?.includes(style as string)) {
+    return { error: at + ': style이 올바르지 않아요 (shelf는 "low"나 "tall", heap은 "box", guestbook은 "stand").' };
+  }
   const item: Obj = { type, x, z };
   if (plant === false) item.plant = false;
   if (style !== undefined) item.style = style;
+  // rug: 좌식 탁자(lowTable)의 러그 크기 { w, d }. 없으면 엔진의 3.8 x 2.9
+  if (rug !== undefined) {
+    const { layoutRugMin: lo, layoutRugMax: hi } = HEAP_POLICY;
+    if (type !== "lowTable" || !isObj(rug) || unknownKey(rug, ["w", "d"]) || !num(rug.w, lo, hi) || !num(rug.d, lo, hi)) {
+      return { error: at + ": rug는 lowTable에만 { w, d }로 써요." };
+    }
+    item.rug = { w: rug.w, d: rug.d };
+  }
+  // w, h: 창(window)의 폭과 높이. 창에는 둘 다 있어야 한다 (엔진이 벽에 구멍을 낸다)
+  if (type === "window") {
+    if (!num(w, 0.3, 3) || !num(h, 0.3, 2)) return { error: at + ": 창은 w(0.3~3)와 h(0.3~2)가 있어야 해요." };
+    item.w = w;
+    item.h = h;
+  } else if (w !== undefined || h !== undefined) {
+    return { error: at + ": w, h는 창(window)에만 써요." };
+  }
+  // 벽에 거는 손 가구(screen, poster, window)는 가운데 높이 y가 있어야 한다. 범위는 wallHandError가 벽 높이로 본다
+  if (isWallHand(type) && y === undefined) return { error: at + ": 벽에 거는 가구는 높이(y)가 있어야 해요." };
   if (type === "model") {
     if (typeof model !== "string" || !MODEL_IDS.has(model)) return { error: `${at}: 카탈로그에 없는 모델` };
     item.model = model;
@@ -183,9 +221,9 @@ export function itemHalfExtents(item: Obj): { hx: number; hz: number } | null {
 // 가구는 바닥 크기째로 방 안에 있어야 한다. 좌표 범위(layoutCoordMax)만 보면 6 x 6 방에서도 방 밖에 놓을 수 있다.
 // 방 크기가 없으면 엔진 기본(8 x 8)으로 본다. 벽 액자는 벽 자리 검사(frameError)가 따로 본다.
 // 아래 세 검사는 가구 하나를 보고 서버 문구(번호 없이) 또는 null을 돌려준다. 목록 전체는 firstError가 돈다.
-function boundsError(it: Obj, room: { w: number; d: number } | undefined): string | null {
+function boundsError(it: Obj, room: Room | undefined): string | null {
   const w = room?.w ?? 8, d = room?.d ?? 8, eps = 0.05;
-  if (it.type === "frame") return null;
+  if (it.type === "frame" || isWallHand(it.type)) return null;
   const e = itemHalfExtents(it);
   if (!e) return null;
   if (Math.abs(it.x as number) + e.hx > w / 2 + eps || Math.abs(it.z as number) + e.hz > d / 2 + eps) {
@@ -194,32 +232,24 @@ function boundsError(it: Obj, room: { w: number; d: number } | undefined): strin
   return null;
 }
 
-// 앉는 가구(의자, 소파)는 사진 탁자와 겹치면 그 자리에 앉을 길이 막힌다. 탁자는 고정이라 서버가 거른다.
-// 러그는 바닥에 앉는 자리라서 여기서는 보지 않는다 (탁자 밑에 깔 수 있다. 앉을 자리가 탁자 밑이면 엔진이 앉히지 않는다).
-const SEAT_CATEGORIES = new Set(
-  Object.entries(catalogue.seats as Record<string, { floor?: boolean }>)
-    .filter(([, rule]) => !rule.floor)
-    .map(([category]) => category),
-);
-function seatError(it: Obj, table: { x: number; z: number }): string | null {
-  const eps = 0.01;
-  if (it.type !== "model") return null;
-  const model = MODEL_BY_ID.get(it.model as string);
-  if (!model || !SEAT_CATEGORIES.has(model.category)) return null;
-  const e = itemHalfExtents(it);
-  if (!e) return null;
-  if (
-    Math.abs((it.x as number) - table.x) < e.hx + HEAP_POLICY.tableW / 2 - eps &&
-    Math.abs((it.z as number) - table.z) < e.hz + HEAP_POLICY.tableD / 2 - eps
-  ) {
-    return "의자와 소파는 사진 탁자와 겹치게 둘 수 없어요.";
-  }
+// 벽에 거는 손 가구(screen, poster, window): 액자처럼 뒷벽(z = -d/2, 0도) 또는 왼쪽 벽(x = -w/2, 90도)에 붙고,
+// 벽을 따라 폭째로 벽 안에 든다 (모서리에서 0.05). 높이: 아래 끝이 바닥 위 0.3 이상, 위 끝이 벽 윗선 0.08 아래 (러브쑤 시안 2 의 포스터 1.8 이 든다).
+// 벽 높이는 room.h, 없으면 엔진 기본 2.5 (scene.js). 방 크기가 없으면 엔진 기본(8 x 8)으로 본다.
+function wallHandError(it: Obj, room: Room | undefined): string | null {
+  if (!isWallHand(it.type)) return null;
+  const w = room?.w ?? 8, d = room?.d ?? 8, wallH = room?.h ?? 2.5, eps = 0.01;
+  const size = WALL_HAND[it.type as string] ?? { w: (it.w as number) + 0.16, h: (it.h as number) + 0.16 }; // 창은 틀(0.08 씩)을 더한다
+  const x = it.x as number, z = it.z as number, rot = ((it.rot as number | undefined) ?? 0), y = it.y as number;
+  const onBack = Math.abs(z + d / 2) <= eps && rot === 0 && Math.abs(x) + size.w / 2 <= w / 2 - 0.05 + eps;
+  const onLeft = Math.abs(x + w / 2) <= eps && rot === 90 && Math.abs(z) + size.w / 2 <= d / 2 - 0.05 + eps;
+  if (!onBack && !onLeft) return "벽에 거는 가구는 뒷벽이나 왼쪽 벽 안에 붙여 걸어야 해요.";
+  if (y - size.h / 2 < 0.3 - eps || y + size.h / 2 > wallH - 0.08 + eps) return "벽에 거는 가구의 높이가 벽 안에 들지 않아요.";
   return null;
 }
 
 // 벽 액자는 꾸미기가 놓는 자리에만 둘 수 있다: 뒷벽(z = -d/2, 0도) 또는 왼쪽 벽(x = -w/2, 90도), 벽을 따라 모서리에서 margin 이상,
 // 높이는 frameY. 방 크기가 없으면 엔진 기본(8 x 8)으로 본다. 그 밖의 자리에 걸면 바닥을 뚫거나 방 한가운데에 떠 있게 된다.
-function frameError(it: Obj, room: { w: number; d: number } | undefined): string | null {
+function frameError(it: Obj, room: Room | undefined): string | null {
   const w = room?.w ?? 8, d = room?.d ?? 8, margin = HEAP_POLICY.frameWallMargin, eps = 0.01;
   if (it.type !== "frame") return null;
   const x = it.x as number, z = it.z as number, rot = ((it.rot as number | undefined) ?? 0);
@@ -236,7 +266,7 @@ function frameError(it: Obj, room: { w: number; d: number } | undefined): string
 // 모델의 키는 서버가 모르므로 천장을 뚫는지는 보지 않는다 (꾸미기가 모델 크기로 막는다). 허용 오차는 액자와 같다.
 // 천장에 다는 것(mount "ceiling")과 벽 조각(mount "structure")은 여기서 보지 않는다.
 const WALL_MOUNT_IDS = new Set(catalogue.models.filter((model) => "mount" in model && model.mount === "wall").map((model) => model.id));
-function wallMountError(it: Obj, room: { w: number; d: number } | undefined): string | null {
+function wallMountError(it: Obj, room: Room | undefined): string | null {
   if (it.type !== "model" || !WALL_MOUNT_IDS.has(it.model as string)) return null;
   const w = room?.w ?? 8, d = room?.d ?? 8, eps = 0.01;
   if (it.y === undefined) return "벽에 거는 가구는 높이가 있어야 해요.";
@@ -258,15 +288,18 @@ function firstError(items: Obj[] | undefined, check: (it: Obj) => string | null)
   return null;
 }
 
-// 가구 하나의 자리가 서버의 자리 검사(액자 자리, 방 안, 앉는 가구와 사진 탁자)를 통과하는지.
+// 가구 하나의 자리가 서버의 자리 검사(액자 자리, 벽 가구 자리, 방 안)를 통과하는지.
 // 걸리면 서버와 같은 문구(번호 없이)를, 통과하면 null을 돌려준다. 꾸미기(engine/edit.js)가 옮기는 동안 이것으로 미리 본다.
-// 필드 모양은 보지 않는다 (validateLayout이 본다).
-export function itemPlacementError(
-  item: Obj,
-  room: { w: number; d: number } | undefined,
-  table: { x: number; z: number },
-): string | null {
-  return frameError(item, room) ?? wallMountError(item, room) ?? boundsError(item, room) ?? seatError(item, table);
+// 필드 모양은 보지 않는다 (validateLayout이 본다). 예전의 세 번째 인자(사진 탁자 자리)는 탁자가 가구가 되며 쓰지 않는다.
+export function itemPlacementError(item: Obj, room: Room | undefined, _table?: unknown): string | null {
+  void _table;
+  return frameError(item, room) ?? wallMountError(item, room) ?? wallHandError(item, room) ?? boundsError(item, room);
+}
+
+// 온보딩 방(HEAP_POLICY.onboardingRoomSlug)에는 사진 더미가 늘 있어야 한다. 저장 액션(actions.ts)이 그 방에만 부른다.
+export function heapRequiredError(layout: Record<string, unknown>): string | null {
+  const items = Array.isArray(layout.items) ? (layout.items as Obj[]) : [];
+  return items.some((it) => it?.type === "heap") ? null : "이 방에는 사진 더미가 있어야 해요.";
 }
 
 export function validateLayout(input: unknown): LayoutCheck {
@@ -352,66 +385,11 @@ export function validateLayout(input: unknown): LayoutCheck {
         out.brand = [...(value as string[])];
         break;
       }
-      case "window": {
-        const r = checkWallPart("window", value, { w: [0.3, 6], h: [0.3, 3], y: [0, HEAP_POLICY.layoutItemYMax] });
+      case "door": {
+        // 문: 꼭 있어야 하는 단 하나 (다른 방으로 가는 길). 방 v2 에서 예전의 window, screen, guestbook, posters, table 은 가구다
+        const r = checkWallPart("door", value, {});
         if ("error" in r) return fail(r.error);
-        out.window = r.part;
-        break;
-      }
-      case "door":
-      case "screen":
-      case "guestbook": {
-        // screen 은 높이(y)를 고를 수 있다. guestbook 은 받침을 뺄 수 있고(stand: false), 그때 공책을 얹을 높이(y)를 준다
-        const hang: Record<string, [number, number]> = { y: [HEAP_POLICY.layoutHangYMin, HEAP_POLICY.layoutHangYMax] };
-        const onTable: Record<string, [number, number]> = { y: [0, HEAP_POLICY.layoutItemYMax] };
-        let extra: Record<string, [number, number]> = {};
-        let stand: unknown;
-        let raw: unknown = value;
-        if (key === "screen" && isObj(value) && value.y !== undefined) extra = hang;
-        if (key === "guestbook" && isObj(value)) {
-          const { stand: s, ...rest } = value;
-          stand = s;
-          raw = rest;
-          if (stand !== undefined && typeof stand !== "boolean") return fail("guestbook: stand는 true/false예요.");
-          if (rest.y !== undefined) extra = onTable;
-        }
-        const r = checkWallPart(key, raw, extra);
-        if ("error" in r) return fail(r.error);
-        out[key] = stand === false ? { ...r.part, stand: false } : r.part;
-        break;
-      }
-      case "posters": {
-        if (!isObj(value) || unknownKey(value, ["wall", "at", "y"])) return fail("posters: 형식이 올바르지 않아요.");
-        if (value.y !== undefined && !num(value.y, HEAP_POLICY.layoutHangYMin, HEAP_POLICY.layoutHangYMax)) return fail("posters: y가 범위를 벗어났어요.");
-        if (typeof value.wall !== "string" || !WALLS.has(value.wall)) return fail("posters: wall이 올바르지 않아요.");
-        const at = value.at;
-        const max = HEAP_POLICY.layoutCoordMax;
-        if (!Array.isArray(at) || at.length > HEAP_POLICY.layoutPostersMax || !at.every((u) => num(u, -max, max))) {
-          return fail("posters: at이 올바르지 않아요.");
-        }
-        out.posters = value.y === undefined ? { wall: value.wall, at: [...at] } : { wall: value.wall, at: [...at], y: value.y };
-        break;
-      }
-      case "table": {
-        if (!isObj(value) || unknownKey(value, ["x", "z", "projector", "rug", "phone"])) return fail("table: 형식이 올바르지 않아요.");
-        const max = HEAP_POLICY.layoutCoordMax;
-        if (!num(value.x, -max, max) || !num(value.z, -max, max)) return fail("table: 좌표가 범위를 벗어났어요.");
-        const table: Obj = { x: value.x, z: value.z };
-        if (value.projector !== undefined) {
-          if (value.projector !== "left" && value.projector !== "right") return fail("table: projector가 올바르지 않아요.");
-          table.projector = value.projector;
-        }
-        if (value.rug !== undefined) {
-          const rug = value.rug, { layoutRugMin: lo, layoutRugMax: hi } = HEAP_POLICY;
-          if (!isObj(rug) || unknownKey(rug, ["w", "d"]) || !num(rug.w, lo, hi) || !num(rug.d, lo, hi)) return fail("table: rug가 올바르지 않아요.");
-          table.rug = { w: rug.w, d: rug.d };
-        }
-        // phone: "seat" 면 탁자 위 휴대폰이 방석에 앉은 사람 쪽을 본다 (engine/props.js)
-        if (value.phone !== undefined) {
-          if (value.phone !== "seat") return fail("table: phone이 올바르지 않아요.");
-          table.phone = value.phone;
-        }
-        out.table = table;
+        out.door = r.part;
         break;
       }
       case "time": {
@@ -460,18 +438,16 @@ export function validateLayout(input: unknown): LayoutCheck {
   }
   // 벽 액자는 방 크기를 알아야 위치를 볼 수 있어서 모든 필드를 읽은 뒤에 본다.
   const items = out.items as Obj[] | undefined;
-  const room = out.room as { w: number; d: number } | undefined;
+  const room = out.room as Room | undefined;
   const frameFail = firstError(items, (it) => frameError(it, room));
   if (frameFail) return fail(frameFail);
   const wallFail = firstError(items, (it) => wallMountError(it, room));
   if (wallFail) return fail(wallFail);
+  const wallHandFail = firstError(items, (it) => wallHandError(it, room));
+  if (wallHandFail) return fail(wallHandFail);
   const boundsFail = firstError(items, (it) => boundsError(it, room));
   if (boundsFail) return fail(boundsFail);
-  // 엔진이 가드 없이 읽는 필드: table.x/z, screen.wall/at. 빠진 layout은 방을 그리다 멈춘다.
-  if (!out.table) return fail("table이 필요해요.");
-  if (!out.screen) return fail("screen이 필요해요.");
-  const table = out.table as { x: number; z: number };
-  const seatFail = firstError(items, (it) => seatError(it, table));
-  if (seatFail) return fail(seatFail);
+  // 꼭 있어야 하는 것은 문 하나다 (방 v2). 나머지는 모두 가구라 없어도 된다.
+  if (!out.door) return fail("door가 필요해요.");
   return { ok: true, layout: out };
 }

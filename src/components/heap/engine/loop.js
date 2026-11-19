@@ -3,12 +3,12 @@ import * as THREE from 'three';
 
 export function setupLoop(ctx) {
   const {
-    Yv, camera, WALL_H, RX, RZ, HOST, SEAT, SCREEN_C, WALLS, SCR, canvas, renderer, scene, on,
-    onDispose, stepCharacter, controls, me, legL, legR, $, beamMat, projLight, screenOn, reelA, reelB,
-    phoneDot, tickClock, stepMotes, cards, SLOT, inPile, supportAt, restPose, stepAnim,
+    Yv, camera, WALL_H, RX, RZ, HOST, canvas, renderer, scene, on,
+    onDispose, stepCharacter, controls, me, legL, legR, $,
+    tickClock, stepMotes, cards, inPile, supportAt, restPose, stepAnim,
   } = ctx;
 
-  // 카메라 구도: 방(room), 앉기(sit), 영사기 보기(watch)
+  // 카메라 구도: 방(room), 사진 더미 보기(sit)
   const ROOM_CAM = { pos: new THREE.Vector3(9.4, 8.6, 9.4), target: new THREE.Vector3(0, 0.9, 0) };
   // 8 x 8 이 아닌 평면도는 방 카메라를 자기 시선 위에서 뒤로 물린다. needDist 는 바닥 모서리와 벽 윗부분을 담으려면 평범한 절두체 맞춤이
   // 얼마나 물러나야 하는지다. roomFit 은 이 방의 거리를 8 x 8 방의 거리로 나눈 값이라, 8 x 8 방은 전과 똑같이 잡히고
@@ -27,11 +27,14 @@ export function setupLoop(ctx) {
   const roomFit = aspect => needDist(RX, RZ, aspect) / needDist(4, 4, aspect);
   // 더미 보기: 더미(HOST)의 윗면 높이를 보고, 퍼진 넓이에 맞춰 다가간다. 원래 탁자(2.6 x 1.8)는 전과 같은 (0, 2.0, 2.1) 이고,
   // 상자나 작은 탁자는 더 가까이 (최소 0.55 배). 바닥에 둔 더미는 서서 내려다보는 높이다
-  const heapCentre = new THREE.Vector3(HOST.x, HOST.top, HOST.z);
-  const spanW = HOST.box ? 1.7 : HOST.w, spanD = HOST.box ? 1.1 : HOST.d; // 상자는 벽까지 담기게 조금 넉넉히
-  const heapK = THREE.MathUtils.clamp(Math.max(spanW / 2.6, spanD / 1.8), 0.55, 1);
-  const SIT_CAM = { pos: heapCentre.clone().add(new THREE.Vector3(0, 2.0 * heapK, 2.1 * heapK)), target: heapCentre.clone() };
-  const WATCH_CAM = { pos: SEAT.clone().add(new THREE.Vector3(0.7, 1.75, 2.1)), target: SCREEN_C.clone().addScaledVector(WALLS[SCR.wall].n, 1).add(new THREE.Vector3(0, -0.75, 0)) };
+  // 더미가 없는 방은 SIT_CAM 이 null 이다 (modes.js 의 sit 이 막는다)
+  let SIT_CAM = null;
+  if (HOST) {
+    const heapCentre = new THREE.Vector3(HOST.x, HOST.top, HOST.z);
+    const spanW = HOST.box ? HOST.boxW + 0.6 : HOST.w, spanD = HOST.box ? HOST.boxD + 0.45 : HOST.d; // 상자는 벽까지 담기게 조금 넉넉히
+    const heapK = THREE.MathUtils.clamp(Math.max(spanW / 2.6, spanD / 1.8), 0.55, 1);
+    SIT_CAM = { pos: heapCentre.clone().add(new THREE.Vector3(0, 2.0 * heapK, 2.1 * heapK)), target: heapCentre.clone() };
+  }
 
   // 프레임 루프
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -83,7 +86,7 @@ export function setupLoop(ctx) {
       roomCam(a);
     } else {
       camera.up.copy(Yv); // 앉기와 궤도 컨트롤은 Y 가 위인 카메라를 전제한다
-      const seated = ctx.mode === 'sit' || ctx.mode === 'watch';
+      const seated = ctx.mode === 'sit';
       me.position.y = seated ? -0.18 : 0; legL.rotation.x = legR.rotation.x = seated ? -1.2 : 0;
       if (ctx.camGoal) {
         camera.position.lerp(ctx.camGoal.pos, a); controls.target.lerp(ctx.camGoal.target, a); camera.lookAt(controls.target);
@@ -91,12 +94,8 @@ export function setupLoop(ctx) {
       } else if (ctx.mode === 'sit') controls.update();
     }
     if (ctx.toastTimer > 0 && (ctx.toastTimer -= rawDt) <= 0) $('toast').textContent = '';
-    const on = ctx.mode === 'watch';
-    const flick = 0.93 + 0.04 * Math.sin(t * 23) + 0.03 * Math.sin(t * 57);
-    beamMat.opacity += ((on ? 0.07 * flick : 0) - beamMat.opacity) * a;
-    projLight.intensity += ((on ? 2.2 * flick : 0) - projLight.intensity) * a;
-    if (on) { screenOn.color.setScalar(flick); reelA.rotation.x = reelB.rotation.x = t * 3; }
-    phoneDot.visible = Math.sin(t * 3) > -0.2;
+    const blink = Math.sin(t * 3) > -0.2; // 휴대폰 가구의 화면 점 (fixtures.js)
+    for (const d of ctx.build.phoneDots ?? []) d.visible = blink;
     tickClock();
     const lampNow = Math.max(0, ctx.lampBase + Math.sin(t * 1.3) * 0.05);
     for (const l of ctx.build.lamps) if (l.light) l.light.intensity = lampNow;
@@ -113,8 +112,6 @@ export function setupLoop(ctx) {
         want.copy(camera.position).addScaledVector(dir, dist); wantQ.copy(camera.quaternion);
         if (ctx.heldFlipped) wantQ.multiply(FLIP);
         heldArrived = c.position.distanceTo(want) < d.h * 0.03 && c.quaternion.angleTo(wantQ) < 0.03;
-      } else if (c === ctx.loaded) {
-        want.copy(SLOT.pos); want.y += d.h / 2; wantQ.copy(SLOT.quat);
       } else if (c === ctx.dragging) {
         const p = c.userData.place, below = cards.filter(o => o !== c && inPile(o));
         want.set(p.x, supportAt(p.x, p.z, below) + 0.05, p.z);
@@ -148,5 +145,5 @@ export function setupLoop(ctx) {
     e.detail(out);
   });
 
-  Object.assign(ctx, { SIT_CAM, WATCH_CAM, resize, ROOM_CAM, frame });
+  Object.assign(ctx, { SIT_CAM, resize, ROOM_CAM, frame });
 }

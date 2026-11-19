@@ -53,30 +53,22 @@ export function setupWalk(ctx) {
     if (ctx.perch) unperch();
     const from = me.position.clone().setY(0);
     ctx.waypoints = [to]; ctx.arrive = action;
-    if (ctx.crossesTable(from, to)) {
-      const corners = [[ctx.TBOX.x0, ctx.TBOX.z0], [ctx.TBOX.x1, ctx.TBOX.z0], [ctx.TBOX.x0, ctx.TBOX.z1], [ctx.TBOX.x1, ctx.TBOX.z1]].map(([x, z]) => new THREE.Vector3(x, 0, z));
-      const ok = corners.filter(c => !ctx.crossesTable(from, c) && !ctx.crossesTable(c, to));
-      if (ok.length) ctx.waypoints = [ok.sort((p, q) => (from.distanceTo(p) + p.distanceTo(to)) - (from.distanceTo(q) + q.distanceTo(to)))[0], to];
-      else {
-        const near = corners.filter(c => !ctx.crossesTable(from, c)).sort((p, q) => from.distanceTo(p) - from.distanceTo(q))[0];
-        const second = near && corners.filter(c => c !== near && !ctx.crossesTable(near, c) && !ctx.crossesTable(c, to)).sort((p, q) => p.distanceTo(to) - q.distanceTo(to))[0];
-        ctx.waypoints = second ? [near, second, to] : [to];
-      }
-    }
+    // 가구를 돌아가는 길 (path.js 의 A*). 닿을 수 없으면 곧장 간다 (가다가 가구에 막혀 선다)
+    const route = ctx.planPath(from, to);
+    if (route?.length) ctx.waypoints = route;
     ctx.walkTo = ctx.waypoints.shift();
   }
 
-  const nearTable = () => me.position.distanceTo(SEAT) < 1.1;
+  const nearTable = () => !!SEAT && me.position.distanceTo(SEAT) < 1.1; // 사진 더미를 보는 자리 (더미가 없는 방은 없다)
   const nearShelf = () => !!ctx.shelfSpot && me.position.distanceTo(ctx.shelfSpot) < 1.1;
   const nearDoor = () => !!ctx.doorSpot && me.position.distanceTo(ctx.doorSpot) < 0.7;
-  const nearBook = () => !!ctx.bookSpot && me.position.distanceTo(ctx.bookSpot) < 0.7;
   const UP = new THREE.Vector3(-1, 0, -1).normalize(), RIGHT = new THREE.Vector3(1, 0, -1).normalize();
   const mv = new THREE.Vector3();
   let walkPhase = 0;
   function arrived() {
     if (ctx.waypoints.length) { ctx.walkTo = ctx.waypoints.shift(); return; }
     const a = ctx.arrive; ctx.walkTo = null; ctx.arrive = null;
-    if (a === 'sit') ctx.sit(); else if (a === 'sort') enterSort(); else if (a === 'door') ctx.openRooms(); else if (a === 'book') ctx.openGuestbook(); else if (a === 'seat') perchOn(ctx.seatTarget);
+    if (a === 'sit') ctx.sit(); else if (a === 'sort') enterSort(); else if (a === 'door') ctx.openRooms(); else if (a === 'seat') perchOn(ctx.seatTarget);
   }
   const WALK_KEYS = ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
   function stepCharacter(dt) {
@@ -109,7 +101,7 @@ export function setupWalk(ctx) {
       me.position.addScaledVector(mv, 2.4 * dt); ctx.collide(me.position);
       if (ctx.walkTo && me.position.distanceTo(before) < 0.2 * 2.4 * dt) {
         if (ctx.waypoints.length) return arrived();
-        if ((ctx.arrive === 'sit' && nearTable()) || (ctx.arrive === 'sort' && nearShelf()) || (ctx.arrive === 'door' && nearDoor()) || (ctx.arrive === 'book' && nearBook())) return arrived();
+        if ((ctx.arrive === 'sit' && nearTable()) || (ctx.arrive === 'sort' && nearShelf()) || (ctx.arrive === 'door' && nearDoor())) return arrived();
         ctx.walkTo = null; ctx.arrive = null;
       }
       const want = Math.atan2(mv.x, mv.z);
@@ -120,8 +112,8 @@ export function setupWalk(ctx) {
     const swing = Math.sin(walkPhase) * 0.6;
     legL.rotation.x = swing; legR.rotation.x = -swing;
     me.position.y = moving ? Math.abs(Math.sin(walkPhase)) * 0.04 : 0;
-    setHint(nearTable() ? 'near' : nearShelf() ? 'nearShelf' : nearDoor() ? 'nearDoor' : nearBook() ? 'nearBook' : ctx.nearTree?.() ? 'nearTree' : 'room');
+    setHint(nearTable() ? 'near' : nearShelf() ? 'nearShelf' : nearDoor() ? 'nearDoor' : ctx.nearTree?.() ? 'nearTree' : 'room');
   }
 
-  Object.assign(ctx, { unperch, me, nearTable, nearShelf, nearDoor, nearBook, sitOn, walkRoute, stepCharacter, legL, legR });
+  Object.assign(ctx, { unperch, me, nearTable, nearShelf, nearDoor, sitOn, walkRoute, stepCharacter, legL, legR });
 }

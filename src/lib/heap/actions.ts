@@ -1,8 +1,9 @@
 "use server";
 
-import { validateLayout } from "./layout";
+import { heapRequiredError, validateLayout } from "./layout";
+import { HEAP_POLICY } from "./policy";
 import { HEAP_MESSAGES, type HeapReason } from "./messages";
-import { addGuestbookEntry, recordVisit, saveRoomLayout } from "./repo";
+import { addGuestbookEntry, getRoomBySlug, recordVisit, saveRoomLayout } from "./repo";
 import {
   addNote,
   deleteOwnNote,
@@ -84,6 +85,12 @@ export async function saveLayoutAction(
 
   const check = validateLayout(layout);
   if (!check.ok) return { ...fail("invalid-layout"), detail: check.error };
+  // 온보딩 방은 사진 더미를 뺄 수 없다 (방 v2: 다른 방은 더미 없이도 된다)
+  const onboarding = await getRoomBySlug(HEAP_POLICY.onboardingRoomSlug);
+  if (onboarding?.id === roomId) {
+    const heapFail = heapRequiredError(check.layout);
+    if (heapFail) return { ...fail("invalid-layout"), detail: heapFail };
+  }
 
   const result = await saveRoomLayout(roomId, viewer.id, check.layout, newName);
   if (!result.ok) return fail(result.reason);

@@ -2,23 +2,15 @@
 import * as THREE from 'three';
 
 export function setupPath(ctx) {
-  const { TABLE, OBST, RX, RZ } = ctx;
+  const { OBST, RX, RZ } = ctx;
 
   // ---------- 걷기 ----------
-  const TBOX = { x0: TABLE.x - TABLE.w / 2 - 0.45, x1: TABLE.x + TABLE.w / 2 + 0.45, z0: TABLE.z - TABLE.d / 2 - 0.45, z1: TABLE.z + TABLE.d / 2 + 0.45 };
-  function crossesTable(a, b) {
-    for (let i = 1; i < 20; i++) {
-      const x = a.x + (b.x - a.x) * i / 20, z = a.z + (b.z - a.z) * i / 20;
-      if (x > TBOX.x0 + 0.1 && x < TBOX.x1 - 0.1 && z > TBOX.z0 + 0.1 && z < TBOX.z1 - 0.1) return true;
-    }
-    return false;
-  }
   // ---------- 가구에 앉기 (방 모드) ----------
   // 자리는 stand 점 한 곳에서 들어서고, 그곳까지는 모든 걷기 장애물을 돌아 계획한 길로 걷고, 방문자는 도착해야 앉는다.
   // 가운데가 사진 탁자, 방명록 받침대, 다른 가구의 바닥 안에 있는 자리는 거절한다. 가구 속에 들어가 앉는 일이 없게 한다.
   // perchOn / unperch: 자리의 자세는 stepCharacter 가 프레임마다 붙든다. 걷기 키, 바닥 클릭, Esc 는 앉은 사람을 들어선 stand 점에 세운다.
-  // 걷기를 막는 상자: 탁자, 가구들, 방명록 받침대 순서 (충돌은 이 순서로 검사한다)
-  const walkBoxes = () => [OBST[0], ...ctx.build.obst, ...OBST.slice(1)];
+  // 걷기를 막는 상자: 가구들 (좌식 탁자와 방명록 받침대도 이제 가구다), 그리고 OBST 에 남은 것
+  const walkBoxes = () => [...ctx.build.obst, ...OBST];
   const walkFree = (x, z, margin = 0.05) => x > -RX + 0.35 && x < RX - 0.3 && z > -RZ + 0.35 && z < RZ - 0.3 && !walkBoxes().some(o => Math.abs(x - o.x) < o.hw + margin && Math.abs(z - o.z) < o.hd + margin);
   const seatUsable = s => s.pos.x > -RX + 0.2 && s.pos.x < RX - 0.2 && s.pos.z > -RZ + 0.2 && s.pos.z < RZ - 0.2 &&
     !walkBoxes().some(o => o.owner !== s.item && Math.abs(s.pos.x - o.x) < (o.rhw ?? o.hw) + 0.1 && Math.abs(s.pos.z - o.z) < (o.rhd ?? o.hd) + 0.1);
@@ -83,5 +75,5 @@ export function setupPath(ctx) {
     }
   }
 
-  Object.assign(ctx, { TBOX, seatUsable, walkFree, planPath, collide, crossesTable });
+  Object.assign(ctx, { seatUsable, walkFree, planPath, collide });
 }

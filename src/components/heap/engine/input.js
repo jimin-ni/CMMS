@@ -3,10 +3,10 @@ import * as THREE from 'three';
 
 export function setupInput(ctx) {
   const {
-    canvas, camera, projParts, phoneParts, $, on, nearTable, sit, nearShelf, enterSort, nearDoor,
-    openRooms, nearBook, openGuestbook, flip, eject, exitSort, putBack, stand, unperch, HOST, pickables,
-    controls, settle, setHint, clampPlace, toTop, startAnim, player, screen, openPlayer, albumAction,
-    feed, openPhone, pickUp, tableTop, shelfParts, doorParts, bookParts, floor, openSlot, sitOn,
+    canvas, camera, $, on, nearTable, sit, nearShelf, enterSort, nearDoor,
+    openRooms, flip, exitSort, putBack, stand, unperch, HOST, pickables,
+    controls, settle, setHint, clampPlace, toTop, startAnim, albumAction,
+    pickUp, shelfParts, doorParts, floor, openSlot, sitOn,
     walkRoute, SEAT,
   } = ctx;
 
@@ -17,7 +17,6 @@ export function setupInput(ctx) {
     ndc.set(((ev.clientX - b.left) / b.width) * 2 - 1, -((ev.clientY - b.top) / b.height) * 2 + 1);
     ray.setFromCamera(ndc, camera);
   }
-  const isProj = o => projParts.includes(o), isPhone = o => phoneParts.includes(o);
   const keys = new Set();
   const OVERLAYS = ['phone', 'pc', 'keepsake', 'calendar', 'grid', 'rooms', 'guestbook'];
   const anyOverlay = () => OVERLAYS.some(id => !$(id).hidden);
@@ -25,12 +24,11 @@ export function setupInput(ctx) {
     if (ev.target.closest?.('input, textarea')) { if (ev.key === 'Escape') $('guestbook').hidden = true; return; }
     if (ctx.mode === 'edit') return; // 꾸미기 중의 키는 edit.js 가 받는다
     const k = ev.key.toLowerCase(); keys.add(k);
-    if (ctx.mode === 'room' && !anyOverlay() && (k === 'e' || k === 'enter')) { if (nearTable()) sit(); else if (nearShelf()) enterSort(); else if (nearDoor()) openRooms(); else if (nearBook()) openGuestbook(); else if (ctx.nearTree?.()) ctx.enterTree(); }
+    if (ctx.mode === 'room' && !anyOverlay() && (k === 'e' || k === 'enter')) { if (nearTable()) sit(); else if (nearShelf()) enterSort(); else if (nearDoor()) openRooms(); else if (ctx.nearTree?.()) ctx.enterTree(); }
     if (ctx.mode === 'sit' && ctx.held && k === 'f') flip();
     if (k === 'escape') {
       for (const id of OVERLAYS) if (!$(id).hidden) { $(id).hidden = true; return; }
-      if (ctx.mode === 'watch') eject();
-      else if (ctx.mode === 'sort') exitSort();
+      if (ctx.mode === 'sort') exitSort();
       else if (ctx.mode === 'tree') ctx.treeEscape(); // 열린 쪽지를 접고, 한 번 더 누르면 나간다 (tree.js)
       else if (ctx.held) putBack();
       else if (ctx.mode === 'sit') stand();
@@ -41,7 +39,7 @@ export function setupInput(ctx) {
   on(window, 'blur', () => keys.clear());
 
   // 탁자 위에서 카드 끌기(앉은 모드). 궤도 컨트롤이 비켜서도록 capture 단계에 건다.
-  const deskPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(HOST.top + (HOST.box ? 0.15 : 0.12))), _hit = new THREE.Vector3();
+  const deskPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -((HOST?.top ?? 0) + (HOST?.box ? 0.15 : 0.12))), _hit = new THREE.Vector3();
   let down = null, dragOff = new THREE.Vector2();
   canvas.addEventListener('pointerdown', ev => {
     down = { x: ev.clientX, y: ev.clientY, card: null };
@@ -69,7 +67,7 @@ export function setupInput(ctx) {
     if (ctx.mode === 'sort') { canvas.style.cursor = ctx.shelf && ray.intersectObjects(ctx.shelf.albums.flatMap(a => [a.mesh, a.label]), false).length ? 'pointer' : 'default'; return; }
     if (ctx.mode === 'room') { canvas.style.cursor = ray.intersectObjects([...ctx.build.slotMeshes, ...ctx.build.seatMeshes], false).length ? 'pointer' : ''; return; }
     if (ctx.mode !== 'sit' || ctx.camGoal) return;
-    const hit = ray.intersectObjects([...pickables, ...projParts, ...phoneParts], false)[0];
+    const hit = ray.intersectObjects([...pickables, ...ctx.build.slotMeshes], false)[0];
     ctx.hovered = hit && !ctx.held && hit.object.userData.card ? hit.object.userData.card : null;
     canvas.style.cursor = hit ? 'pointer' : 'grab';
   });
@@ -85,29 +83,26 @@ export function setupInput(ctx) {
     if (ctx.mode === 'tree') return; // 트리 모드의 누르기는 tree.js 가 받는다: 아래의 방 걷기로 흘러가면 안 된다
     if (wasDrag || !d || Math.hypot(ev.clientX - d.x, ev.clientY - d.y) > 6) return;
     rayFrom(ev);
-    if (ctx.mode === 'watch') { if (player.hidden && ray.intersectObject(screen, false).length) openPlayer(ctx.loaded.userData.reel); return; }
     if (ctx.camGoal) return;
     if (ctx.mode === 'sort') { const h = ctx.shelf && ray.intersectObjects(ctx.shelf.albums.flatMap(a => [a.mesh, a.label]), false)[0]; if (h) albumAction(h.object.userData.album); return; }
     if (ctx.mode === 'sit') {
-      const hits = ray.intersectObjects([...pickables, ...projParts, ...phoneParts], false);
+      const hits = ray.intersectObjects([...pickables, ...ctx.build.slotMeshes], false);
       if (ctx.held && hits[0]?.object.userData.card === ctx.held) return flip();
       const hit = hits.find(h => h.object.userData.card !== ctx.held);
-      if (hit && isProj(hit.object)) return ctx.held ? feed() : setHint('needcard');
-      if (hit && isPhone(hit.object)) return openPhone();
+      if (hit?.object.userData.slot) return openSlot(hit.object.userData.slot); // 더미 곁의 휴대폰, 방명록
       if (ctx.held) return putBack();
       if (hit) pickUp(hit.object.userData.card);
       return;
     }
-    const hit = ray.intersectObjects([tableTop, ...(ctx.heapBoxParts || []), ...pickables, ...projParts, ...phoneParts, ...ctx.build.slotMeshes, ...ctx.build.seatMeshes, ...shelfParts, ...doorParts, ...bookParts, floor], false)[0];
+    const hit = ray.intersectObjects([...(ctx.heapBoxParts || []), ...pickables, ...ctx.build.slotMeshes, ...ctx.build.seatMeshes, ...shelfParts, ...doorParts, floor], false)[0];
     if (!hit) return;
     if (hit.object.userData.slot) return openSlot(hit.object.userData.slot); // PC, 액자, TV, 라디오, 달력: 방문자가 서 있는 곳에서 바로 동작한다
     if (hit.object.userData.seats) return sitOn(hit.object.userData.seats, hit.point); // 의자, 소파, 러그: 그곳까지 걸어가 앉는다
-    const p = hit.point, onTableFoot = p.x > ctx.TBOX.x0 && p.x < ctx.TBOX.x1 && p.z > ctx.TBOX.z0 && p.z < ctx.TBOX.z1;
+    const p = hit.point;
     if (doorParts.includes(hit.object)) walkRoute(ctx.doorSpot.clone(), 'door');
-    else if (bookParts.includes(hit.object)) walkRoute(ctx.bookSpot.clone(), 'book');
     else if (shelfParts.includes(hit.object)) walkRoute(ctx.shelfSpot.clone(), 'sort');
-    else if (hit.object === floor && !onTableFoot) walkRoute(p.clone().setY(0), null);
-    else walkRoute(SEAT.clone(), 'sit');
+    else if (hit.object === floor) walkRoute(p.clone().setY(0), null);
+    else if (SEAT) walkRoute(SEAT.clone(), 'sit'); // 사진 더미(카드, 상자): 더미를 보는 자리로 걸어가 본다
   });
 
   Object.assign(ctx, { anyOverlay, keys });

@@ -42,9 +42,8 @@ export const HEAP_POLICY = {
   // 방 밑 땅의 색. 방의 layout.ground가 없으면 모든 방이 이 색을 쓴다 (engine/scene.js).
   groundColour: "#CDBFA6",
   frameWallMargin: 0.5,
-  // 사진 탁자의 크기. 엔진의 TABLE과 같다. 앉는 가구(의자, 소파)는 이 탁자와 겹치게 둘 수 없다 (layout.ts).
-  tableW: 2.6,
-  tableD: 1.8,
+  // 온보딩이 띄우는 방의 slug (onboarding-c/story.ts 의 ONBOARDING_ROOM_ID 와 같다). 이 방에는 사진 더미가 늘 있어야 한다 (actions.ts).
+  onboardingRoomSlug: "lovesoo",
 
   // 가구에 붙이는 기능(item.fn). 글자 수는 코드포인트 기준이다. 종류와 허용 가구는 public/heap/models/catalogue.json의 slots.
   // PC(링크 모음): 링크 개수와 한 줄의 길이

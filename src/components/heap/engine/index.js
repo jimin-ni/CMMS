@@ -14,6 +14,7 @@ import { setupCardArt } from './card-art.js';
 import { setupScene } from './scene.js';
 import { setupShell } from './shell.js';
 import { setupFurniture } from './furniture.js';
+import { setupFixtures } from './fixtures.js';
 import { setupSlots } from './slots.js';
 import { setupModels } from './models.js';
 import { setupShelf } from './shelf.js';
@@ -49,7 +50,7 @@ const HIDDEN = ['cardview', 'visit', 'albumrow', 'stand', 'flip', 'srclink', 'ej
  * `heap:editcmd`(edit.js), `heap:thumb`(dock-thumbs.js), `heap:reels`(live.js: 새 영상 목록으로 더미를 맞춘다), `heap:reveal`(live.js: 쪽지 공개일이 바뀌었다, detail: ISO 또는 null), `heap:capture`(loop.js: 지금 구도를 한 장 그려 준다), `heap:intro`(intro.js: 온보딩 연출), `heap:go`(nav.js: 온보딩 내비게이션 바의 이동).
  * 팔레트와 배경은 그 자리에서 다시 칠한다 (recolour.js, time.js 의 setBackdrop). 꾸미기가 방의 틀(템플릿)을 바꾸면 엔진은 `heap:remount`(detail: 편집 상태)를 보낸다. heap-room.tsx 가 그 상태를 opts.resume 으로 넘겨 다시 마운트한다:
  * resume { edit, items, time, palette, backdrop, brand, shell, name, savedName, hist, future, saved, original, baseLayout } (edit.js 의 remount 참고).
- * 엔진이 `root` 에 직접 보내는 것은 셋이다. `heap:mode`(detail: 'room' | 'sit' | 'watch' | 'sort' | 'tree')는 모드가 정해질 때마다,
+ * 엔진이 `root` 에 직접 보내는 것은 셋이다. `heap:mode`(detail: 'room' | 'sit' | 'sort' | 'tree')는 모드가 정해질 때마다,
  * `heap:ready` 는 방이 화면에 뜬 뒤에 한 번, `heap:music`(detail: true | false)은 오른쪽 위 음악 플레이어가 열리고 닫힐 때 (players.js).
  * `modelBase` 는 가구 모델과 catalogue.json 이 있는 폴더다. 없으면 `dataBase` 옆의 "models/" 다.
  * `data` 는 서버가 DB에서 읽은 값이다 (page.tsx 가 바꿔 넘긴다): { roomUuid, name, serverTime, rooms, layout, reels, pieces, guestbook, visits, creatorVisit }.
@@ -91,6 +92,7 @@ async function run(ctx) {
   setupScene(ctx);
   setupShell(ctx);
   setupFurniture(ctx);
+  setupFixtures(ctx); // 예전 고정 소품을 가구로 (좌식 탁자, 휴대폰, 방명록, 스크린, 포스터, 창)
   setupSlots(ctx);
   setupModels(ctx);
   // 받침 위에 선 작은 가구를 받침의 윗면에 딱 맞춰 짓는다 (surfaces.ts 의 settleItems: 러브쑤 방의 조리대 위 물건 0.9 → 0.84).

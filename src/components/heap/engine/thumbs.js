@@ -4,7 +4,7 @@ import { hasThumb } from './format.js';
 import { cropToShape } from './draw.js';
 
 export function setupThumbs(ctx) {
-  const { onDispose, drawCard, paintPoster, drawProjection, cards } = ctx;
+  const { onDispose, drawCard, paintPoster, cards } = ctx;
 
   // 썸네일: 카드는 영상이 고른 썸네일을 세 단계로 보여 준다. 천천히 받아서 그 자리에서 선명해진다.
   //   far    mqdefault (320x180, 약 7 KB): 방이 뜬 뒤 모든 카드, 더미 위쪽부터
@@ -23,7 +23,6 @@ export function setupThumbs(ctx) {
     u.tier = tier; u.img = cropToShape(im, u.reel);
     drawCard(u.reel, u.img, u.front.image); u.front.needsUpdate = true;
     if (u.poster) paintPoster(card);
-    if (card === ctx.loaded) drawProjection(u.reel, u.img);
     if (card === ctx.phonePic?.card) ctx.showPhonePic();
   }
   // 썸네일 한 장: files 를 앞에서부터 시도해 처음 쓸 수 있는 Image 를 done 에 준다. 모두 실패하면 done(null).

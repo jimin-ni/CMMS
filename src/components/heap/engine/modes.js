@@ -1,11 +1,10 @@
 // 방, 앉기, 상영, 책장 모드와 카드 집기.
 import * as THREE from 'three';
-import { srcUrl, PLATFORM_NAME, platformOf } from './format.js';
 
 export function setupModes(ctx) {
   const {
     controls, me, SEAT, setHint, SIT_CAM, syncUI, requestPile, NEAR, settle, request, CLOSE, clampPlace,
-    HOST, gauss, toTop, startAnim, on, $, drawProjection, screen, screenOn, WATCH_CAM, screenIdle,
+    HOST, gauss, toTop, startAnim, on, $,
     unperch,
   } = ctx;
 
@@ -17,13 +16,13 @@ export function setupModes(ctx) {
   const goTo = cam => { ctx.camGoal = cam; controls.enabled = false; };
 
   function sit() {
+    if (!SEAT || !SIT_CAM) return; // 사진 더미가 없는 방
     ctx.mode = 'sit'; ctx.walkTo = null; ctx.arrive = null; ctx.waypoints = []; ctx.perch = null;
     me.position.copy(SEAT); me.rotation.y = ctx.seatFace ?? Math.PI; // 서서 보는 더미는 옆에 서서 더미를 본다 (props.js)
     setHint('sit'); goTo(SIT_CAM); syncUI();
     requestPile(NEAR);
   }
   function stand() {
-    if (ctx.loaded) eject();
     if (ctx.held) putBack();
     ctx.mode = 'room'; ctx.hovered = null; controls.enabled = false; ctx.camGoal = null;
     me.position.copy(SEAT).add(new THREE.Vector3(0.6, 0, 0.5));
@@ -51,23 +50,7 @@ export function setupModes(ctx) {
   function flip() { if (ctx.held) ctx.heldFlipped = !ctx.heldFlipped; }
   on($('flip'), 'click', flip);
 
-  function feed() {
-    ctx.loaded = ctx.held; ctx.held = null; ctx.heldFlipped = false; ctx.mode = 'watch'; glowCard(ctx.loaded, 0);
-    const { reel, img } = ctx.loaded.userData;
-    drawProjection(reel, img); screen.material = screenOn;
-    // 단추 글자도 플랫폼을 따른다 ("YouTube에서 보기", "Instagram에서 보기" …)
-    if (reel.kind !== 'fan') { $('ytlink').href = srcUrl(reel); $('ytlink').textContent = `${PLATFORM_NAME[platformOf(reel)]}에서 보기`; }
-    setHint('watch'); goTo(WATCH_CAM); syncUI();
-    if (reel.kind !== 'fan') ctx.openPlayer(reel); // 팬 작품은 비출 뿐이다
-  }
-  function eject() {
-    ctx.closePlayer();
-    const c = ctx.loaded; ctx.loaded = null; dropOnTop(c); settle(); startAnim(c, 'drop');
-    screen.material = screenIdle;
-    ctx.mode = 'sit'; setHint('sit'); goTo(SIT_CAM); syncUI();
-  }
   on($('stand'), 'click', () => (ctx.perch ? unperch() : stand()));
-  on($('eject'), 'click', eject);
 
-  Object.assign(ctx, { sit, pickUp, feed, goTo, flip, eject, putBack, stand });
+  Object.assign(ctx, { sit, pickUp, goTo, flip, putBack, stand });
 }

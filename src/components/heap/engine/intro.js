@@ -27,6 +27,7 @@ const unit = (v, empty = 1) => (Number.isFinite(v) ? Math.min(1, Math.max(0, v))
 // 윗칸 바닥판 윗면 1.695, 천장판 아랫면 2.175. 책은 x 0.6 ~ -0.58 에 있고, 옆판 안쪽은 -0.74 다.
 const ALBUM = { x: -0.665, y: 1.925, z: 0.02, w: 0.07, h: 0.46, d: 0.29 };
 const ALBUM_COLOR = '#A6613C';
+const FORMER = new Set(['lowTable', 'heap', 'phone', 'guestbook', 'screen', 'poster', 'window']);
 
 export function setupIntro(ctx) {
   const { on, root, camera, canvas, onDispose } = ctx;
@@ -77,7 +78,8 @@ export function setupIntro(ctx) {
     const build = ctx.build;
     build.groups.forEach((g, i) => {
       if (!g) return;
-      const p = unit(d?.items?.[i]), e = easeOutCubic(p);
+      // 예전 고정 소품이던 가구는 처음부터 제자리에 있다 (온보딩 이야기의 단계에 들지 않는다, docs/dev/heap-room-v2.md)
+      const p = FORMER.has(build.items[i]?.type) ? 1 : unit(d?.items?.[i]), e = easeOutCubic(p);
       g.visible = p > 0.001;
       g.position.y = (g.userData.baseY || 0) + (1 - easeOutBounce(p)) * 3.2; // baseY: 다른 가구 위에 올린 손 가구의 높이 (furniture.js)
       g.rotation.y = THREE.MathUtils.degToRad(build.items[i]?.rot || 0) + (1 - e) * (i % 2 ? 0.7 : -0.7);
@@ -87,7 +89,7 @@ export function setupIntro(ctx) {
     // 다시 나타날 때 카드를 위로 올려 둔다. 프레임 루프가 제자리로 끌어내려 쏟아지는 것처럼 보인다
     if (show && !pileShown) ctx.cards.forEach((c, i) => { c.position.y += 1.4 + (i % 9) * 0.14; });
     pileShown = show;
-    for (const c of ctx.cards) c.visible = show;
+    for (const c of ctx.cards) c.visible = show && !!ctx.HOST; // 더미가 없는 방의 카드는 늘 숨어 있다
   }
 
   // 앨범 자리를 지금 카메라로 화면에 비춘다

@@ -112,7 +112,7 @@ export type HeapOwnerData = {
 };
 
 // 꾸미기가 방의 틀을 바꿀 때 엔진이 보내는 편집 상태 (engine/edit.js 의 remount). 다음 마운트에 opts.resume 으로 그대로 넘긴다.
-// shell: 방 크기와 고정된 것의 자리 (템플릿을 깔면 바뀐다) · name: 꾸미는 중인 방 이름 · savedName: 저장된 방 이름
+// shell: 방 크기와 문의 자리 (템플릿을 깔면 바뀐다. 방 v2 에서 나머지 소품은 items 다) · name: 꾸미는 중인 방 이름 · savedName: 저장된 방 이름
 type EditResume = {
   edit: boolean;
   items: unknown[];

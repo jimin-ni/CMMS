@@ -14,7 +14,8 @@
 //   보내는 것 heap:editstate { items, sel, moving, canUndo, canRedo, dirty, time, notice, palette, backdrop, brand, look, mount, placed, busy, view { plan, fitted },
 //                              shell, name, savedName, preview, partColours }  바뀔 때마다 (partColours: 고른 가구의 부분마다 지금 보이는 색, furniture.js)
 //            heap:remount { edit, items, time, palette, backdrop, brand, shell, name, savedName, hist, future, saved, original, baseLayout, plan }  방의 틀이 바뀔 때 (아래 remount)
-// 방의 틀(shell): 방 크기와 고정된 것(창문, 문, 스크린, 방명록, 포스터, 사진 탁자)의 자리. 템플릿을 깔면 바뀌고, 바뀌면 팔레트처럼 다시 마운트한다.
+// 방의 틀(shell): 방 크기와 문의 자리. 템플릿을 깔면 바뀌고, 바뀌면 팔레트처럼 다시 마운트한다. 방 v2 (docs/dev/heap-room-v2.md) 에서 창, 스크린,
+// 방명록, 포스터, 사진 탁자, 휴대폰, 사진 더미는 가구다. 사진 더미와 창은 마운트 때 정해지므로 바뀌면 다시 마운트한다 (rebuild, setLook).
 // 방 이름도 되돌리기 기록에 든다: 이름 하나를 고치는 것이 한 걸음이고, 저장 안 된 변경으로 센다. 화면 왼쪽 위의 이름(hud.js 의 showName)도 바로 바뀐다.
 // 팔로워로 보기(preview): 편집 상태는 그대로 두고, 카메라는 방 카메라로, 발판·격자·막대는 숨기고, 포인터와 키는 받지 않는다 (room-editor.tsx 가 키를 받아 돌아간다).
 // 카메라(B6)는 edit-camera.js 의 ctx.editCam 이다: 휠 확대, 오른쪽 끌기 이동(움직이지 않은 오른쪽 클릭은 취소), T 평면도, Home 또는 0 맞추기.
@@ -25,12 +26,12 @@
 // 새 마운트가 opts.resume 으로 받아 이어 간다. 그 사이 방 안의 상태(앉은 자리, 음악)는 처음으로 돌아간다.
 // 끄는 동안에는 그 가구의 그룹만 프레임마다 옮기고, 놓을 때 한 번 buildItems 로 다시 짓는다 (applyItems, editor-bridge.js).
 // 가구끼리 겹치는 것은 막지 않는다. 막는 것은 서버가 거절하는 자리(opts.placementError = layout.ts 의 itemPlacementError)와,
-// 기능에 닿지 못하게 하는 자리(사진 탁자와 그 앞자리, 문 앞, 방명록 앞, 창문·스크린·문 위의 액자와 벽 가구)뿐이다. 방 밖은 막지 않고 안으로 당긴다.
+// 기능에 닿지 못하게 하는 자리(문 앞, 창문·스크린·문 위의 액자와 벽 가구)뿐이다. 방 밖은 막지 않고 안으로 당긴다.
 // 벽 가구(catalogue.json 의 mount "wall")는 액자처럼 벽을 따라 움직이고 PageUp/PageDown 으로 높이를 바꾼다. 천장 가구(mount "ceiling")는
 // 천장에 매달려 방 안을 움직인다. 아래 "벽·천장 가구" 참고.
 // 작은 가구(라디오, 노트북, 탁상 조명, 책, 작은 화분, 달력 …)는 커서 아래 가구의 윗면에 올라선다 (B7). 높이는 받침의 y + 받침의 윗면 높이(카탈로그의 tops, surfaces.ts)다.
 // 받침을 옮기거나 돌리거나 넣으면 그 위에 선 것이 함께 간다. 아래 "가구 위에 얹기" 참고.
-// 바닥 가구를 들고 있는 동안 비워 둘 바닥(사진 탁자와 앞자리, 문 앞, 방명록 앞)이 옅은 빗금과 이름으로 보인다.
+// 바닥 가구를 들고 있는 동안 비워 둘 바닥(문 앞)이 옅은 빗금과 이름으로 보인다. 벽 손 가구(스크린, 포스터, 창)는 액자처럼 벽을 따르고 PageUp/PageDown 으로 높이를 바꾼다.
 import * as THREE from 'three';
 import { makeCanvas, canvasTexture } from './draw.js';
 
@@ -49,10 +50,18 @@ const WALL_SPOT = [
 ];
 const OK = '#7d9a4a', BAD = '#c2452d', PICKED = '#A6613C';
 // 엔진이 직접 만드는 가구의 이름 (알림 문구용). 모델은 카탈로그의 label 을 쓴다.
-const HAND_LABEL = { bed: '침대', shelf: '앨범 책장', plant: '화분', snake: '산세베리아', lamp: '조명', books: '책 더미', frame: '벽 액자', calendar: '탁상 달력' };
+const HAND_LABEL = {
+  bed: '침대', shelf: '앨범 책장', plant: '화분', snake: '산세베리아', lamp: '조명', books: '책 더미', frame: '벽 액자', calendar: '탁상 달력',
+  heap: '사진 더미', lowTable: '좌식 탁자', phone: '휴대폰', guestbook: '방명록', screen: '스크린', poster: '포스터', window: '창문',
+};
+// 모양 바꾸기(swap)를 하지 않는 손 가구: 하는 일이 그 가구에 묶여 있다
+const NO_SWAP = new Set(['frame', 'calendar', 'heap', 'lowTable', 'phone', 'guestbook', 'screen', 'poster', 'window']);
 const OVERLAYS = ['phone', 'pc', 'keepsake', 'calendar', 'grid', 'rooms', 'guestbook'];
-// 방의 틀의 레이아웃 열쇠. 순서가 비교 문자열(snap)의 순서다.
-const SHELL_KEYS = ['room', 'window', 'door', 'screen', 'guestbook', 'posters', 'table'];
+// 방의 틀의 레이아웃 열쇠. 순서가 비교 문자열(snap)의 순서다. 방 v2 에서 창, 스크린, 방명록, 포스터, 사진 탁자는 가구다 (template-move.ts 와 같다)
+const SHELL_KEYS = ['room', 'door'];
+// 마운트 때 정해지는 가구: 사진 더미(더미 자리, 카드)와 창(벽 구멍, 햇빛). 이것들이 바뀌면 방을 다시 마운트한다 (rebuild)
+const MOUNT_TYPES = new Set(['heap', 'window']);
+const mountKeyOf = items => JSON.stringify((items || []).filter(it => MOUNT_TYPES.has(it?.type)).map(it => [it.type, it.x, it.z, it.y ?? 0, it.rot ?? 0, it.style ?? '', it.w ?? 0, it.h ?? 0]));
 const shellOf = l => Object.fromEntries(SHELL_KEYS.filter(k => l && l[k] !== undefined).map(k => [k, structuredClone(l[k])]));
 
 const r2 = v => Math.round(v * 100) / 100;
@@ -62,10 +71,11 @@ const normRot = r => ((Math.round(r / 90) * 90) % 360 + 360) % 360;
 
 export function setupEdit(ctx) {
   const {
-    root, opts, on, $, canvas, camera, scene, RX, RZ, WALLS, WALL_H, TABLE, DOOR, WIN, SCR, GB, SEAT, me,
-    tableTop, projParts, phoneParts, doorParts, bookParts, screen, getCatalogue,
+    root, opts, on, $, canvas, camera, scene, RX, RZ, WALLS, WALL_H, DOOR, me, doorParts, getCatalogue,
   } = ctx;
-  const room = { w: 2 * RX, d: 2 * RZ }, tableAt = { x: TABLE.x, z: TABLE.z };
+  const room = { w: 2 * RX, d: 2 * RZ, h: WALL_H };
+  // 온보딩 방은 사진 더미를 뺄 수 없다 (서버: actions.ts 의 heapRequiredError)
+  const keepHeap = !!opts.policy.onboardingRoomSlug && opts.roomId === opts.policy.onboardingRoomSlug;
   const FRAME_Y = opts.policy.frameY, FRAME_M = opts.policy.frameWallMargin, Y_MAX = opts.policy.layoutItemYMax;
 
   // 편집 상태. move: 커서에 붙은 가구 { i, isNew, base, rot, kids, kidsBase, grab, cand, why }
@@ -80,6 +90,8 @@ export function setupEdit(ctx) {
     backdrop: null, brand: null,
     // shell: 방의 틀 (위 SHELL_KEYS) · name: 방 이름 · preview: 팔로워로 보기 중
     shell: {}, name: '', preview: false,
+    // mountKey: 이 마운트에서 지은 사진 더미와 창 (mountKeyOf). 지금 목록과 다르면 다시 마운트한다
+    mountKey: mountKeyOf(ctx.layout.items),
   };
   // 이 마운트의 번호. 칠한 색(look)은 ctx.look 이다: 가구 목록의 그림은 그 색으로 그려진다 (dock-thumbs.js)
   const MOUNT = Math.floor(Math.random() * 1e9);
@@ -90,7 +102,20 @@ export function setupEdit(ctx) {
   const isRug = it => entryOf(it)?.category === 'rug';
   const labelOf = it => entryOf(it)?.label ?? HAND_LABEL[it.type] ?? it.model ?? it.type;
   // 바닥에서 차지하는 반쪽 크기 (회전한 뒤). 액자는 벽을 따라 FRAME_M 이다. 크기를 모르는 가구는 0.25 로 본다.
-  const ext = it => (it.type === 'frame' ? { hx: FRAME_M, hz: 0.06 } : opts.itemHalfExtents(it) ?? { hx: 0.25, hz: 0.25 });
+  const ext = it => (isFrameLike(it) ? { hx: alongHalf(it), hz: 0.06 } : opts.itemHalfExtents(it) ?? { hx: 0.25, hz: 0.25 });
+  // ---------- 벽에 거는 손 가구 (방 v2: screen, poster, window) ----------
+  // 액자처럼 벽선 위(뒷벽 z = -RZ 0도, 왼쪽 벽 x = -RX 90도)에 놓이고 벽을 따라 움직인다. 액자와 달리 높이 y(가운데)를 지니고 PageUp/PageDown 으로 바꾼다.
+  // 크기는 틀을 포함한 폭 x 높이 (layout.ts 의 WALL_HAND 와 같다). 창은 item.w, item.h 에 틀 0.16 을 더한다.
+  const WALL_HAND = { screen: { w: 1.74, h: 1.04 }, poster: { w: 0.74, h: 1.2 } };
+  const HAND_Y = { screen: 1.5, poster: 1.55 };
+  const isWallHand = it => it.type === 'screen' || it.type === 'poster' || it.type === 'window';
+  const wallSize = it => (it.type === 'window' ? { w: (it.w ?? 1.3) + 0.16, h: (it.h ?? 1.2) + 0.16 } : WALL_HAND[it.type]);
+  const isFrameLike = it => it.type === 'frame' || isWallHand(it);
+  const alongHalf = it => (it.type === 'frame' ? FRAME_M : wallSize(it).w / 2);
+  const hangY = it => (it.type === 'frame' ? FRAME_Y : it.y ?? FRAME_Y);
+  // 벽 손 가구의 높이 범위: 아래 끝이 바닥 위 0.3, 위 끝이 벽 윗선 0.08 아래 (서버 layout.ts 와 같다)
+  const handYRange = it => { const h = wallSize(it).h; return [r2(0.3 + h / 2), floor2(WALL_H - 0.08 - h / 2)]; };
+  const handDefaultY = it => { const [lo, hi] = handYRange(it); return r2(clamp(it.type === 'window' ? hi : HAND_Y[it.type], lo, hi)); };
   // ---------- 벽·천장 가구 ----------
   // mount 'wall': 뒷벽(0도)이나 왼쪽 벽(90도)에 등을 붙이고 벽을 따라 미끄러진다. 높이는 PageUp/PageDown 으로 바꾼다 (서버: layout.ts 의 wallMountError).
   // mount 'ceiling': 윗면이 천장(WALL_H)에 닿게 매달고, 방 안 어디로든 옮긴다. 바닥의 비워 둘 자리와는 상관없다.
@@ -99,7 +124,7 @@ export function setupEdit(ctx) {
   const mountOf = it => entryOf(it)?.mount ?? null;
   const isHung = it => mountOf(it) === 'wall' || mountOf(it) === 'ceiling';
   const isWallPiece = it => mountOf(it) === 'wall';
-  const onWallType = it => it.type === 'frame' || isWallPiece(it); // 벽을 따라서만 움직이는 것
+  const onWallType = it => isFrameLike(it) || isWallPiece(it); // 벽을 따라서만 움직이는 것
   const wallOf = it => (it.rot === 90 ? 'left' : 'back');
   const heightOf = it => (it.type === 'model' ? ctx.modelSize(it.model)?.y ?? null : null);
   const floor2 = v => Math.floor(v * 100 + 1e-6) / 100;
@@ -128,7 +153,7 @@ export function setupEdit(ctx) {
     const e = ext({ ...it, rot: wall === 'back' ? 0 : 90 }), al = wall === 'back' ? e.hx : e.hz;
     let best = null, gap = EDGE_SNAP;
     ed.items.forEach((o, j) => {
-      if (skip.has(j) || o.type === 'frame' || mountOf(o) === 'ceiling') return;
+      if (skip.has(j) || isFrameLike(o) || mountOf(o) === 'ceiling') return;
       const oe = ext(o), back = wall === 'back';
       const counter = !o.y && entryOf(o)?.category === 'kitchen' && (back ? o.z - oe.hz < -RZ + WALL_SNAP : o.x - oe.hx < -RX + WALL_SNAP);
       const touches = isWallPiece(o) ? wallOf(o) === wall : counter;
@@ -184,7 +209,7 @@ export function setupEdit(ctx) {
       const k = todo.shift(), h = ed.items[k];
       ed.items.forEach((o, j) => {
         // 작은 가구만 딸려 간다 (하부장 높이에 놓인 스피커처럼 큰 것은 제자리에 남는다, codex)
-        if (j === i || parent.has(j) || !(o.y > 0) || o.type === 'frame' || mountOf(o) || !isSmall(o)) return;
+        if (j === i || parent.has(j) || !(o.y > 0) || isFrameLike(o) || mountOf(o) || !isSmall(o)) return;
         if (SURF.restingTop(o, h) == null) return;
         list.push(j); parent.set(j, k);
         if (isHost(o)) todo.push(j);
@@ -194,33 +219,36 @@ export function setupEdit(ctx) {
   }
   const kidsOf = i => kidsTree(i).list;
   const withY = (it, y) => { const o = { ...it }; if (y > 0) o.y = y; else delete o.y; return o; };
-  // 벽의 열린 곳: 액자를 걸 수 없는 자리 (벽을 따라 at 에서 half 안)
-  const OPENINGS = [
-    WIN && { wall: WIN.wall, at: WIN.at, half: WIN.w / 2 + 0.08, name: '창문' },
-    SCR && { wall: SCR.wall, at: SCR.at, half: SCR.w / 2 + 0.07, name: '스크린' },
-    DOOR && { wall: DOOR.wall, at: DOOR.at, half: 0.56, name: '문' },
-  ].filter(Boolean);
-  // 비워 둘 바닥: 사진 탁자, 그 앞의 방석, 문 앞, 방명록 앞. 바닥에 선 가구만 본다 (러그와 가구 위의 물건은 길을 막지 않는다).
+  // 벽의 열린 곳: 액자와 벽 가구를 걸 수 없는 자리 (벽을 따라 at 에서 half 안). 방 v2 에서 창과 스크린은 가구라 지금 목록(ed.items)에서 읽는다.
+  // skip: 지금 옮기는(고른) 가구의 번호. 자기 자신과는 겹쳐도 된다
+  function openings(skip) {
+    const out = [];
+    ed.items.forEach((o, j) => {
+      if (j === skip || (o.type !== 'window' && o.type !== 'screen')) return;
+      const wall = wallOf(o);
+      out.push({ wall, at: wall === 'back' ? o.x : o.z, half: alongHalf(o), name: o.type === 'window' ? '창문' : '스크린' });
+    });
+    if (DOOR) out.push({ wall: DOOR.wall, at: DOOR.at, half: 0.56, name: '문' });
+    return out;
+  }
+  // 비워 둘 바닥: 문 앞. 바닥에 선 가구만 본다 (러그와 가구 위의 물건은 길을 막지 않는다).
   // name 은 꾸미는 동안 바닥에 그리는 짧은 이름, labelY 는 그 이름의 높이 (아래 "비워 둘 바닥 그리기")
   const zoneAt = (wall, at, along, off, why, name) => {
     const p = WALLS[wall].point(at, 0, off);
     return wall === 'back' ? { x: p.x, z: p.z, hx: along, hz: off, why, name } : { x: p.x, z: p.z, hx: off, hz: along, why, name };
   };
   const ZONES = [
-    { x: TABLE.x, z: TABLE.z, hx: TABLE.w / 2, hz: TABLE.d / 2, why: '사진 탁자 자리예요', name: '사진 탁자', labelY: TABLE.top + 0.35 },
-    { x: SEAT.x, z: SEAT.z, hx: 0.4, hz: 0.4, why: '사진 탁자 앞자리는 비워 둬요', name: '앞자리' },
     DOOR && zoneAt(DOOR.wall, DOOR.at, 0.6, 0.6, '문 앞은 비워 둬요', '문 앞'),
-    GB && zoneAt(GB.wall, GB.at, 0.4, 0.6, '방명록 자리예요', '방명록 앞'),
   ].filter(Boolean);
   // 이 자리가 왜 안 되는지, 되면 null. 서버의 문구가 먼저다.
-  function why(it) {
-    const server = opts.placementError(it, room, tableAt);
+  function why(it, skip = ed.move ? ed.move.i : ed.sel) {
+    const server = opts.placementError(it, room);
     if (server) return server;
     if (!isHung(it) && (it.y || 0) > Y_MAX) return '너무 높아요'; // 높이 띄운 받침 위: 서버의 높이 범위(0..layoutItemYMax)를 넘는다
     if (onWallType(it)) { // 액자와 벽 가구: 창문, 스크린, 문 위에는 걸 수 없다 (높이는 보지 않는다). 서로, 그리고 액자와는 겹쳐도 된다
       const wall = wallOf(it), u = wall === 'back' ? it.x : it.z, e = ext(it);
-      const al = it.type === 'frame' ? FRAME_M : wall === 'back' ? e.hx : e.hz;
-      const o = OPENINGS.find(o => o.wall === wall && Math.abs(u - o.at) < al + o.half - 0.02);
+      const al = isFrameLike(it) ? alongHalf(it) : wall === 'back' ? e.hx : e.hz;
+      const o = openings(skip).find(o => o.wall === wall && Math.abs(u - o.at) < al + o.half - 0.02);
       return o ? `${o.name} 자리와 겹쳐요` : null;
     }
     if (it.y || isRug(it) || isHung(it)) return null; // 천장 가구는 바닥의 비워 둘 자리와 상관없다
@@ -240,7 +268,7 @@ export function setupEdit(ctx) {
     for (const k of m.kidsBase) {
       const c = kidAt(k, m.base, cand);
       if ((c.y || 0) > Y_MAX) return `위에 올린 ${labelOf(k)}이(가) 너무 높아져요`;
-      const w = opts.placementError(c, room, tableAt); if (w) return `위에 올린 ${labelOf(k)}: ${w}`;
+      const w = opts.placementError(c, room); if (w) return `위에 올린 ${labelOf(k)}: ${w}`;
     }
     return null;
   };
@@ -343,16 +371,16 @@ export function setupEdit(ctx) {
   }
   function showTile(it, color) {
     tileMat.color.set(color);
-    if (it.type === 'frame' && ctx.editCam.plan) { // 위에서는 벽이 보이지 않으니 벽 앞 바닥에 띠로 그린다
-      const back = it.rot !== 90, w = 2 * FRAME_M + 0.1;
+    if (isFrameLike(it) && ctx.editCam.plan) { // 위에서는 벽이 보이지 않으니 벽 앞 바닥에 띠로 그린다
+      const back = it.rot !== 90, w = 2 * alongHalf(it) + 0.1;
       tile.position.set(back ? it.x : -RX + 0.25, 0.02, back ? -RZ + 0.25 : it.z); tile.scale.set(back ? w : 0.5, back ? 0.5 : w, 1);
       tile.visible = true; wallTile.visible = false;
       return;
     }
-    if (it.type === 'frame') {
-      const wall = it.rot === 90 ? 'left' : 'back';
-      wallTile.position.copy(WALLS[wall].point(wall === 'back' ? it.x : it.z, it.y ?? FRAME_Y, 0.04)); wallTile.rotation.y = WALLS[wall].rotY;
-      wallTile.scale.set(2 * FRAME_M + 0.1, 0.9, 1); wallTile.visible = true; tile.visible = false;
+    if (isFrameLike(it)) {
+      const wall = it.rot === 90 ? 'left' : 'back', h = it.type === 'frame' ? 0.9 : wallSize(it).h + 0.1;
+      wallTile.position.copy(WALLS[wall].point(wall === 'back' ? it.x : it.z, hangY(it), 0.08)); wallTile.rotation.y = WALLS[wall].rotY;
+      wallTile.scale.set(2 * alongHalf(it) + 0.1, h, 1); wallTile.visible = true; tile.visible = false;
       return;
     }
     const e = ext(it), kind = mountOf(it);
@@ -418,7 +446,8 @@ export function setupEdit(ctx) {
       if (ed.brand) ctx.layout.brand = [...ed.brand]; else delete ctx.layout.brand;
     }
     if (look.backdrop !== undefined && palKey(colourBackdrop(look.backdrop)) !== palKey(ed.backdrop)) { ed.backdrop = colourBackdrop(look.backdrop); ctx.setBackdrop(ed.backdrop); }
-    if (shellChanged) { remount(again); return; }
+    // 방의 틀이나 마운트 때 정해지는 가구(더미, 창)가 바뀌었으면 다시 마운트한다 (again 이 false 면 꾸미기 밖으로: 나가며 버리기)
+    if (shellChanged || (ed.on && mountKeyOf(ed.items) !== ed.mountKey)) { remount(again); return; }
     if (palChanged || hovering) { hovering = false; ctx.recolour(pal); }
     rebuild();
   }
@@ -511,6 +540,8 @@ export function setupEdit(ctx) {
   // ed.items (그리고 커서에 붙은 새 가구)로 다시 짓는다. 끄는 중이면 그 가구를 커서 자리에 다시 둔다.
   function rebuild() {
     clearTimeout(ed.fnTimer); ed.fnTimer = 0;
+    // 사진 더미나 창을 넣고, 빼고, 옮기고, 모양을 바꿨으면 다시 마운트한다 (더미 자리와 벽 구멍은 마운트 때 정해진다). 들고 있는 동안은 기다린다
+    if (ed.on && !ed.move && mountKeyOf(ed.items) !== ed.mountKey) { remount(true); return; }
     const list = ed.move?.isNew ? [...ed.items, ed.move.cand ?? ed.move.base] : ed.items;
     ctx.applyItems(list);
     if (ed.move) ed.move.builtY = list[ed.move.i]?.y || 0; // 들고 있는 그룹이 지어진 높이 (끄는 동안 오르내린 만큼만 그룹을 옮긴다: showMove)
@@ -527,10 +558,8 @@ export function setupEdit(ctx) {
     ndc.set(((ev.clientX - b.left) / b.width) * 2 - 1, -((ev.clientY - b.top) / b.height) * 2 + 1);
     ray.setFromCamera(ndc, camera);
   }
-  const FIXED = new Map([
-    ...[tableTop, ...projParts, ...phoneParts].map(m => [m, '사진 탁자는']), ...doorParts.map(m => [m, '문은']),
-    ...bookParts.map(m => [m, '방명록은']), [screen, '스크린은'],
-  ]);
+  // 꾸미기에서 옮기지 않는 것: 문뿐이다 (방 v2: 나머지는 모두 가구)
+  const FIXED = new Map(doorParts.map(m => [m, '문은']));
   // 누른 곳의 가구 번호(item) 또는 고정된 것의 이름(fixed)
   function pick(ev) {
     rayFrom(ev);
@@ -553,8 +582,8 @@ export function setupEdit(ctx) {
     ed.items.forEach((it, i) => {
       let inside, r;
       if (onWallType(it)) { // 액자와 벽 가구: 벽 앞의 띠 (벽 가구는 자기 깊이가 더 깊으면 그만큼)
-        const e = ext(it), al = it.type === 'frame' ? FRAME_M : it.rot === 90 ? e.hz : e.hx;
-        const deep = it.type === 'frame' ? 0.5 : Math.max(0.5, 2 * (it.rot === 90 ? e.hx : e.hz));
+        const e = ext(it), al = isFrameLike(it) ? alongHalf(it) : it.rot === 90 ? e.hz : e.hx;
+        const deep = isFrameLike(it) ? 0.5 : Math.max(0.5, 2 * (it.rot === 90 ? e.hx : e.hz));
         inside = it.rot === 90 ? Math.abs(z - it.z) <= al && x <= -RX + deep : Math.abs(x - it.x) <= al && z <= -RZ + deep;
         r = 100;
       } else {
@@ -570,7 +599,7 @@ export function setupEdit(ctx) {
   // 커서(rayFrom 을 마친 ray)가 가리키는 벽과 벽 위의 자리 { wall, u }, 없으면 null. it 은 벽에 거는 것 (액자, 벽 가구)
   function wallHit(it) {
     if (ctx.editCam.plan) { // 위에서는 액자(벽 가구는 가운데) 높이의 수평면에서 커서가 더 가까운 벽을 따른다
-      framePlane.constant = -(it.type === 'frame' ? FRAME_Y : (it.y || 0) + (heightOf(it) ?? 0) / 2);
+      framePlane.constant = -(isFrameLike(it) ? hangY(it) : (it.y || 0) + (heightOf(it) ?? 0) / 2);
       if (!ray.ray.intersectPlane(framePlane, hitV)) return null;
       const wall = hitV.z + RZ <= hitV.x + RX ? 'back' : 'left';
       return { wall, u: wall === 'back' ? hitV.x : hitV.z };
@@ -587,15 +616,18 @@ export function setupEdit(ctx) {
       if (!hit) return m.cand;
       const wall = hit.wall;
       let u = hit.u;
-      if (it.type !== 'frame') { // 벽 가구: 누른 자리만큼 비켜 따라오고(같은 벽에서), 이웃에 붙거나 격자, 높이는 그대로
+      if (!isFrameLike(it)) { // 벽 가구: 누른 자리만큼 비켜 따라오고(같은 벽에서), 이웃에 붙거나 격자, 높이는 그대로
         if (m.grab.wall === wall) u += m.grab.u;
         if (!ed.alt) u = snapAlong(it, wall, u, new Set([m.isNew ? -1 : m.i])) ?? snapGrid(u);
         return hangAt(it, wall, u);
       }
       const half = WALLS[wall].half;
       if (!ed.alt) u = snapGrid(u);
-      u = r2(clamp(u, -half + FRAME_M, half - FRAME_M));
-      return wall === 'back' ? { ...it, x: u, z: r2(-RZ), rot: 0, y: FRAME_Y } : { ...it, x: r2(-RX), z: u, rot: 90, y: FRAME_Y };
+      // 액자는 모서리에서 FRAME_M, 벽 손 가구(스크린, 포스터, 창)는 제 폭째로 벽 안에 (모서리에서 0.05). 높이는 액자는 FRAME_Y, 나머지는 지닌 높이
+      const al = it.type === 'frame' ? FRAME_M : alongHalf(it) + 0.05;
+      u = r2(clamp(u, -half + al, half - al));
+      const y = hangY(it);
+      return wall === 'back' ? { ...it, x: u, z: r2(-RZ), rot: 0, y } : { ...it, x: r2(-RX), z: u, rot: 90, y };
     }
     // 작은 가구는 커서 아래의 받침 윗면을 먼저 본다 (surfaceUnder). 있으면 그 면 위의 점을 따르고, 없으면 바닥을 따른다.
     // 큰 가구는 전처럼 자기 높이의 평면에서 커서를 따른다 (저장된 높이가 있으면 그대로 둔다).
@@ -612,7 +644,7 @@ export function setupEdit(ctx) {
     if (!ed.alt) {
       x = snapGrid(x); z = snapGrid(z);
       if (!it.y && !on && !isRug(it)) ed.items.forEach((o, j) => { // 이웃의 가장자리에 붙는다 (가구 위에서는 붙지 않는다)
-        if (skip.has(j) || o.y || o.type === 'frame' || isRug(o)) return;
+        if (skip.has(j) || o.y || isFrameLike(o) || isRug(o)) return;
         const oe = ext(o);
         if (Math.abs(z - o.z) < e.hz + oe.hz + 0.1) { const r = o.x + oe.hx + e.hx, l = o.x - oe.hx - e.hx; if (Math.abs(x - r) < EDGE_SNAP) x = r; else if (Math.abs(x - l) < EDGE_SNAP) x = l; }
         if (Math.abs(x - o.x) < e.hx + oe.hx + 0.1) { const f = o.z + oe.hz + e.hz, b = o.z - oe.hz - e.hz; if (Math.abs(z - f) < EDGE_SNAP) z = f; else if (Math.abs(z - b) < EDGE_SNAP) z = b; }
@@ -655,7 +687,10 @@ export function setupEdit(ctx) {
   // 새 가구를 커서에 붙인다. template 은 room-editor.tsx 가 만든 항목 (x, z 는 상관없다)
   function arm(template) {
     endMove(); ed.sel = null;
+    // 사진 더미는 방에 하나까지 (서버: layout.ts)
+    if (template?.type === 'heap' && ed.items.some(o => o.type === 'heap')) { notice('사진 더미는 방에 하나까지예요'); return; }
     const base = { ...template, x: 0, z: 0, rot: normRot(template.rot || 0) };
+    if (isWallHand(base) && base.y == null) base.y = handDefaultY(base);
     // 벽·천장 가구는 모델의 키로 높이를 정한다 (복제는 원래 높이를 지닌다). 모델을 아직 못 읽었으면 임시 높이로 커서에 붙이되
     // 내려놓지는 못하게 하고(pending), 읽은 뒤에 진짜 높이로 고친다. 그 사이 PageUp/PageDown 으로 바꾼 만큼은 그대로 더한다.
     const fresh = isHung(base) && base.y == null;
@@ -685,7 +720,7 @@ export function setupEdit(ctx) {
       rayFrom(press);
       const hit = wallHit(base), wall = wallOf(base);
       if (hit?.wall === wall) grab = { x: 0, z: 0, wall, u: (wall === 'back' ? base.x : base.z) - hit.u };
-    } else if (base.type !== 'frame') {
+    } else if (!isFrameLike(base)) {
       rayFrom(press); floorPlane.constant = -(base.y || 0);
       if (ray.ray.intersectPlane(floorPlane, hitV)) grab = { x: base.x - hitV.x, z: base.z - hitV.z };
     }
@@ -738,7 +773,7 @@ export function setupEdit(ctx) {
     }
     if (ed.sel == null) return;
     const i = ed.sel, base = ed.items[i];
-    if (base.type === 'frame') { notice('액자는 벽을 따라서만 움직여요'); return; }
+    if (isFrameLike(base)) { notice(`${labelOf(base)}은(는) 벽을 따라서만 움직여요`); return; }
     if (isWallPiece(base)) { notice('벽에 거는 가구는 벽을 따라서만 움직여요 · 다른 벽으로 끌면 그 벽을 봐요'); return; }
     const c = { ...base, rot: normRot((base.rot || 0) + 90 * dir) }, e = ext(c);
     if (!c.y || mountOf(c) === 'ceiling') { c.x = r2(clamp(c.x, -RX + e.hx, RX - e.hx)); c.z = r2(clamp(c.z, -RZ + e.hz, RZ - e.hz)); }
@@ -756,6 +791,7 @@ export function setupEdit(ctx) {
   function remove(i, kidList = null) {
     if (ed.move?.isNew) { endMove(); return; }
     const it = ed.items[i]; if (!it) return;
+    if (it.type === 'heap' && keepHeap) { notice('이 방의 사진 더미는 넣어 둘 수 없어요 · 온보딩 방이에요'); rebuild(); return; }
     const kids = new Set(kidList ?? kidsOf(i));
     pushUndo();
     ed.items = ed.items.filter((_, j) => j !== i && !kids.has(j)); ed.sel = null;
@@ -790,16 +826,16 @@ export function setupEdit(ctx) {
   function lift(dir) {
     const m = ed.move;
     if (m) {
-      if (!m.isNew || !isWallPiece(m.base)) return;
-      const [lo, hi] = yRange(m.base), y = r2(clamp((m.base.y || 0) + NUDGE * dir, lo, hi));
+      if (!m.isNew || !(isWallPiece(m.base) || isWallHand(m.base))) return;
+      const [lo, hi] = isWallHand(m.base) ? handYRange(m.base) : yRange(m.base), y = r2(clamp((m.base.y || 0) + NUDGE * dir, lo, hi));
       m.base.y = y; if (m.cand) m.cand = { ...m.cand, y };
       rebuild();
       return;
     }
     const i = ed.sel, it = ed.items[i];
     if (!it) return;
-    if (!isWallPiece(it)) { if (mountOf(it) === 'ceiling') notice('천장 가구는 천장에 붙어 있어요'); return; }
-    const [lo, hi] = yRange(it), y = r2(clamp((it.y || 0) + NUDGE * dir, lo, hi));
+    if (!isWallPiece(it) && !isWallHand(it)) { if (mountOf(it) === 'ceiling') notice('천장 가구는 천장에 붙어 있어요'); return; }
+    const [lo, hi] = isWallHand(it) ? handYRange(it) : yRange(it), y = r2(clamp((it.y || 0) + NUDGE * dir, lo, hi));
     if (y === it.y) { notice(dir > 0 ? '더 올리면 천장에 닿아요' : '더 내리면 바닥에 닿아요'); return; }
     const c = { ...it, y }, w = why(c);
     if (w) { notice(`그 높이엔 걸 수 없어요 · ${w}`); return; }
@@ -815,7 +851,7 @@ export function setupEdit(ctx) {
   function swap(i, to) {
     const it = ed.items[i];
     if (!it || !to || (to.type !== 'model' && to.type !== 'shelf') || (to.type === 'model' && typeof to.model !== 'string')) return;
-    if (it.type === 'frame' || it.type === 'calendar') return; // 벽 액자와 탁상 달력은 모양이 하나뿐이다
+    if (NO_SWAP.has(it.type)) return; // 벽 액자, 탁상 달력, 방 v2 의 손 가구는 모양이 하나뿐이다
     const next = { ...it, type: to.type };
     if (to.type === 'model') next.model = to.model; else delete next.model;
     if (next.type === it.type && next.model === it.model) return;
@@ -888,7 +924,7 @@ export function setupEdit(ctx) {
     if (!it || it.y || (cat !== 'chair' && cat !== 'sofa')) return;
     const e = ext(it);
     const clash = ed.items.some((o, j) => {
-      if (j === i || o.y || o.type === 'frame' || isRug(o)) return false;
+      if (j === i || o.y || isFrameLike(o) || isRug(o)) return false;
       const f = ext(o);
       return Math.abs(it.x - o.x) < e.hx + f.hx - 0.01 && Math.abs(it.z - o.z) < e.hz + f.hz - 0.01;
     });
@@ -929,6 +965,7 @@ export function setupEdit(ctx) {
     ed.hist = resume?.hist ?? []; ed.seq = resume?.seq ?? ed.seq; // 알림과 내려놓기의 번호는 마운트를 건너 이어진다 (room-editor.tsx 가 번호로 새것을 가린다)
     ed.future = resume?.future ?? []; ed.tag = null; ed.notice = null; ed.move = null; ed.press = null;
     // 방의 틀은 지금 지은 방(ctx.layout)의 것이다. 이름은 다시 마운트했으면 그 전 마운트의 것, 아니면 저장된 이름이다.
+    ed.mountKey = mountKeyOf(ctx.layout.items); // 이 마운트의 더미와 창 (rebuild 가 비교한다)
     ed.shell = shellOf(ctx.layout); ed.name = typeof resume?.name === 'string' ? resume.name : ctx.savedName; ctx.showName(ed.name);
     ed.preview = ctx.editPreview = false;
     ed.saved = savedKey();

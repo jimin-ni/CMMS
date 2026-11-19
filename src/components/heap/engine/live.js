@@ -5,7 +5,7 @@ import { toEngineNote } from './tree-ids.js';
 
 export function setupLive(ctx) {
   const {
-    makeCard, HOST, Xv, clampPlace, gauss, settle, startAnim, toast, DATA, $, creator,
+    makeCard, Xv, clampPlace, gauss, settle, startAnim, toast, DATA, $, creator,
     root, on, opts, ac, renderMeta, renderCreatorVisit, fanReels, fanReelOf, onDispose,
     cards, pickables, scene, reels, filed, prepReel, request, FAR, updateAlbums,
   } = ctx;
@@ -43,7 +43,7 @@ export function setupLive(ctx) {
     // 새 카드는 제자리 위에서 시작해 떨어진다
     added.forEach((c, k) => {
       const home = c.userData.home.pos;
-      c.position.set(home.x, HOST.top + 0.9 + k * 0.01, home.z);
+      c.position.set(home.x, (ctx.HOST?.top ?? 0) + 0.9 + k * 0.01, home.z);
       c.quaternion.setFromAxisAngle(Xv, -Math.PI / 2);
       startAnim(c, 'drop'); Object.assign(c.userData.anim, { dur: 0.9, arc: 0.25 });
       request(c, FAR);
@@ -58,9 +58,10 @@ export function setupLive(ctx) {
   // 팬 작품: 방문자가 방에 있는 동안 올라온 것은 탁자 위에서 더미 꼭대기로 떨어진다
   function landPiece(p) {
     const c = makeCard(p);
-    c.position.set(HOST.x, HOST.top + 0.9, HOST.z);
+    const H = ctx.HOST ?? { x: 0, z: 0, top: 0 }; // 더미가 없는 방: 카드는 보이지 않는다 (heap.js 의 makeCard)
+    c.position.set(H.x, H.top + 0.9, H.z);
     c.quaternion.setFromAxisAngle(Xv, -Math.PI / 2);
-    c.userData.place = clampPlace({ x: HOST.x + gauss() * 0.15, z: HOST.z + gauss() * 0.1, yaw: gauss() * 0.5, faceUp: true });
+    c.userData.place = clampPlace({ x: H.x + gauss() * 0.15, z: H.z + gauss() * 0.1, yaw: gauss() * 0.5, faceUp: true });
     settle();
     startAnim(c, 'drop'); Object.assign(c.userData.anim, { dur: 1.1, arc: 0.35 });
     toast(`${p.by}님의 팬 작품이 더미 위에 올라왔어요`);

@@ -98,13 +98,44 @@ const GROUPS = [
   { label: "크리스마스", cats: ["크리스마스"] },
 ];
 const KNOWN = GROUPS.flatMap((g) => g.cats);
-const groupOf = (m: Model) => GROUPS.find((g) => g.cats.includes(m.category)) ?? (m.category === "frame" || m.category === "calendar" ? null : GROUPS[10]);
-// 엔진이 직접 만드는 벽 액자와 책상 달력은 카탈로그에 없어서 한 묶음으로 따로 낸다. 그림은 없고 이름만 보인다.
+const groupOf = (m: Model) => GROUPS.find((g) => g.cats.includes(m.category)) ?? (m.category === "hand" ? null : GROUPS[10]);
+// 엔진이 직접 만드는 가구(벽 액자, 책상 달력, 방 v2 의 방 소품)는 카탈로그에 없어서 한 묶음으로 따로 낸다. 그림은 없고 이름만 보인다
+// (사진 더미는 일반 폴라로이드 그림, HAND_PIC). 방 v2: 사진 더미, 탁자, 휴대폰, 방명록, 스크린, 포스터, 창은 모두 가구다 (docs/dev/heap-room-v2.md).
 const HAND_MODELS: Model[] = [
-  { id: `${HAND_PREFIX}frame`, label: "벽 액자", category: "frame" },
-  { id: `${HAND_PREFIX}calendar`, label: "탁상 달력", category: "calendar" },
+  { id: `${HAND_PREFIX}heap`, label: "사진 더미", category: "hand" },
+  { id: `${HAND_PREFIX}heapBox`, label: "신발상자 더미", category: "hand" },
+  { id: `${HAND_PREFIX}lowTable`, label: "좌식 탁자", category: "hand" },
+  { id: `${HAND_PREFIX}phone`, label: "휴대폰", category: "hand" },
+  { id: `${HAND_PREFIX}guestbook`, label: "방명록", category: "hand" },
+  { id: `${HAND_PREFIX}guestbookStand`, label: "방명록 받침대", category: "hand" },
+  { id: `${HAND_PREFIX}screen`, label: "스크린", category: "hand" },
+  { id: `${HAND_PREFIX}poster`, label: "포스터", category: "hand" },
+  { id: `${HAND_PREFIX}window`, label: "창문", category: "hand" },
+  { id: `${HAND_PREFIX}frame`, label: "벽 액자", category: "hand" },
+  { id: `${HAND_PREFIX}calendar`, label: "탁상 달력", category: "hand" },
 ];
-const HAND_GROUP = "액자·달력";
+const HAND_GROUP = "방 소품";
+// 독의 손 가구 id → 커서에 붙일 항목 (x, z, rot 는 엔진이 정한다). 없는 id 는 { type: id } 다.
+// 벽에 거는 스크린, 포스터, 창의 높이는 엔진이 정한다 (edit.js 의 handDefaultY). 액자는 HEAP_POLICY.frameY 에 건다.
+const HAND_TEMPLATE: Record<string, Partial<Item>> = {
+  heapBox: { type: "heap", style: "box" },
+  guestbookStand: { type: "guestbook", style: "stand" },
+  window: { type: "window", w: 1.3, h: 1.2 },
+  frame: { type: "frame", y: HEAP_POLICY.frameY },
+  calendar: { type: "calendar", fn: { kind: "calendar", entries: [] } },
+};
+const HEAP_IDS = new Set([`${HAND_PREFIX}heap`, `${HAND_PREFIX}heapBox`]);
+// 벽을 따라 움직이고 높이를 바꾸는 손 가구 (벽 가구 모델처럼 ▲▼ 단추를 보인다)
+const WALL_HANDS = new Set(["screen", "poster", "window"]);
+// 사진 더미는 방에 놓였을 때만 더미나 상자 모양이다. 메뉴에서는 일반 폴라로이드 그림이다.
+const POLAROID_PIC =
+  "data:image/svg+xml," +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><g transform="rotate(-8 32 32)"><rect x="14" y="8" width="36" height="44" rx="1.5" fill="#F3EADB" stroke="#565344" stroke-width="2"/><rect x="18" y="12" width="28" height="26" fill="#A6613C"/><circle cx="38" cy="19" r="4" fill="#F3EADB" opacity="0.8"/><path d="M18 38 L27 27 L34 34 L39 29 L46 38 Z" fill="#565344"/></g></svg>',
+  );
+const HAND_PIC: Record<string, string> = { [`${HAND_PREFIX}heap`]: POLAROID_PIC, [`${HAND_PREFIX}heapBox`]: POLAROID_PIC };
+// 카탈로그 이름을 바꿔 부르는 모델 (방 v2: 받침 하나의 원탁을 카페 탁자로)
+const LABEL_OVERRIDE: Record<string, string> = { tableRound: "카페 탁자" };
 
 // 다섯 기능: 독의 기능 탭 순서, 짧은 이름, 칸의 표시, 기본 모양 (붙일 가구가 없을 때 커서에 올린다)
 const FN_ORDER: SlotKind[] = ["music", "latest", "pc", "keepsake", "calendar", "tree"];
@@ -323,7 +354,10 @@ export function RoomEditor({
   const localNote = note && note.seq !== goneNote ? note : null;
   const shownNotice = engineNotice ?? localNote;
 
-  const models = room?.catalogue?.models ?? [];
+  const models = useMemo(
+    () => (room?.catalogue?.models ?? []).map((m) => (LABEL_OVERRIDE[m.id] ? { ...m, label: LABEL_OVERRIDE[m.id] } : m)),
+    [room?.catalogue?.models],
+  );
   // 독에 내놓는 모델: 벽 조각(catalogue.json 의 mount "structure")은 뺀다. 벽에 거는 것("wall")과 천장에 다는 것("ceiling")은 엔진이 벽과 천장에 붙인다.
   // 이미 방에 놓인 것은 그대로 그려지고 고르고 옮기고 넣을 수 있다 (이름은 models 전체에서 찾는다).
   const placeable = models.filter((m) => m.mount !== "structure");
@@ -333,6 +367,10 @@ export function RoomEditor({
   // 고른 가구가 어디에 거는 것인지 ("wall" | "ceiling" | undefined). 벽 가구는 돌리지 않고 높이를 바꾼다.
   const mountOf = (it: Item | undefined) => (it?.type === "model" ? models.find((m) => m.id === it.model)?.mount : undefined);
   const selMount = mountOf(selItem);
+  // 벽을 따라 움직이고 높이를 바꾸는 것: 벽 가구 모델과 방 v2 의 스크린, 포스터, 창
+  const selWall = selMount === "wall" || (!!selItem && WALL_HANDS.has(selItem.type));
+  // 사진 더미는 방에 하나까지 (layout.ts). 있으면 독의 더미는 고를 수 없다
+  const heapTaken = items.some((it) => it.type === "heap");
   const busy = !!st?.busy;
   const bubbleOpen = bubbleFor != null && bubbleFor === sel && !!selItem && !st?.moving && !busy && canCarryFn(selItem);
   // 고른 가구가 바뀌면 모양 바꾸기 목록도 닫는다 (렌더 중에 앞의 값과 견준다)
@@ -542,9 +580,7 @@ export function RoomEditor({
     }
     const hand = m.id.startsWith(HAND_PREFIX) ? m.id.slice(HAND_PREFIX.length) : null;
     const template: Item = hand
-      ? hand === "calendar"
-        ? { type: hand, x: 0, z: 0, rot: 0, fn: { kind: "calendar", entries: [] } }
-        : { type: hand, x: 0, z: 0, rot: 0, y: HEAP_POLICY.frameY }
+      ? { type: hand, ...HAND_TEMPLATE[hand], x: 0, z: 0, rot: 0 }
       : { type: "model", model: m.id, x: 0, z: 0, rot: 0, ...(fn ? { fn } : {}) };
     setArmedId(m.id);
     setBubbleFor(null);
@@ -710,7 +746,7 @@ export function RoomEditor({
       ? "눌러서 놓기 · Shift+클릭 계속 놓기 · R 돌리기 · Alt 스냅 끄기 · Esc 취소"
       : "놓을 곳에서 떼기 · R 돌리기 · Alt 스냅 끄기 · 아래 목록에 놓으면 넣기"
     : selItem
-      ? selMount === "wall"
+      ? selWall
         ? "벽을 따라 끌기 · 다른 벽으로 끌면 그 벽에 걸려요 · PageUp/PageDown 높이 · Del 넣기 · Esc 고르기 취소"
         : "끌어서 옮기기 · R 돌리기 · Del 넣기 · Ctrl+D 복제 · Esc 고르기 취소"
       : "가구를 눌러 고르고 끌어서 옮겨요 · 휠 확대 · 오른쪽 끌기 이동 · T 위에서 보기 · 0 맞추기";
@@ -912,12 +948,12 @@ export function RoomEditor({
       {selItem && !st?.moving && !busy && (
         <div id="ed-bar" className="ed-bar" role="toolbar" aria-label={`${itemLabel(selItem, models)} 고치기`}>
           <span className="lbl">{itemLabel(selItem, models)}</span>
-          {selItem.type !== "frame" && selMount !== "wall" && (
+          {selItem.type !== "frame" && !selWall && (
             <button type="button" onClick={() => cmd({ op: "rotate", dir: 1 })} title="R">
               회전
             </button>
           )}
-          {selMount === "wall" && (
+          {selWall && (
             <>
               <button type="button" onClick={() => cmd({ op: "lift", dir: 1 })} title="높이 올리기 (PageUp)" aria-label="높이 올리기">
                 ▲
@@ -1126,7 +1162,16 @@ export function RoomEditor({
               ) : shownModels.length === 0 ? (
                 <p className="note">{q ? "맞는 가구가 없어요." : "최근에 꺼낸 가구가 아직 없어요."}</p>
               ) : (
-                shownModels.map((m) => <Tile key={m.id} m={m} pic={thumb(m.id)} pressed={armedId === m.id} disabled={busy} onPick={() => arm(m)} />)
+                shownModels.map((m) => (
+                  <Tile
+                    key={m.id}
+                    m={m}
+                    pic={HAND_PIC[m.id] ?? thumb(m.id)}
+                    pressed={armedId === m.id}
+                    disabled={busy || (HEAP_IDS.has(m.id) && heapTaken)}
+                    onPick={() => arm(m)}
+                  />
+                ))
               )}
             </div>
           </div>
