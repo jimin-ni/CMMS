@@ -15,6 +15,11 @@ export function setupHeap(ctx) {
   const pickables = [];
   const EXCL = [{ x: PROJ.x, z: PROJ.z, r: 0.42 }, { x: MUG.x, z: MUG.z, r: 0.18 }, { x: PHONE.x, z: PHONE.z, r: 0.26 }];
   const GAP = 0.0035, MAX_SLOPE = 0.32;
+  // 더미의 모양: 'pile'(기본, 탁자 위에 흩어진 더미) 또는 'box'(열린 신발상자 안에 쌓인 더미). 상자 안쪽 크기와 벽 높이는 BOX_IN.
+  // 상자는 카드가 탁자에 어지럽게 퍼지지 않게 담는다. 카드를 집는 광선은 카드만 보므로 상자 벽이 막지 않는다.
+  const BOX_IN = { w: 1.12, d: 0.66, h: 0.22, wall: 0.018, base: 0.012 };
+  const BOX = layout.table?.heap === 'box' ? { x: TABLE.x, z: TABLE.z, ...BOX_IN, floor: TABLE.top + BOX_IN.base } : null;
+  const BASE = BOX ? BOX.floor : TABLE.top;
   const _inv = new THREE.Quaternion(), _v = new THREE.Vector3(), _n = new THREE.Vector3();
   // 놓여 있는 카드의 (x, z) 위 면 높이. (x, z) 가 카드 밖이면 -Infinity
   function surfaceAt(c, x, z) {
@@ -26,13 +31,14 @@ export function setupHeap(ctx) {
     return Math.abs(_v.x) <= d.w / 2 && Math.abs(_v.y) <= d.h / 2 ? y : -Infinity;
   }
   function supportAt(x, z, below) {
-    let h = TABLE.top;
+    let h = BASE;
     for (const c of below) h = Math.max(h, surfaceAt(c, x, z) + GAP);
     return h;
   }
   const SAMPLES = [-1, 0, 1].flatMap(a => [-1, 0, 1].map(b => [a * 0.47, b * 0.47]));
   const _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion();
   function restPose(card, below) {
+    if (BOX) clampPlace(card.userData.place, card.userData.d); // 다른 파일의 clampPlace 는 카드 크기를 모른다: 넓은 카드도 벽 안에
     const { x, z, yaw, faceUp } = card.userData.place, d = card.userData.d;
     const cs = Math.cos(yaw), sn = Math.sin(yaw);
     const pts = SAMPLES.map(([a, b]) => { const lx = a * d.w, lz = b * d.h; const dx = lx * cs + lz * sn, dz = -lx * sn + lz * cs; return { dx, dz, h: supportAt(x + dx, z + dz, below) }; });
@@ -50,7 +56,14 @@ export function setupHeap(ctx) {
       .multiply(new THREE.Quaternion().setFromAxisAngle(Xv, faceUp ? -Math.PI / 2 : Math.PI / 2));
     return { pos: new THREE.Vector3(x, c + 0.0015, z), quat };
   }
-  function clampPlace(p) {
+  function clampPlace(p, d = DIMS.tall) {
+    if (BOX) { // 돌린 카드의 반폭이 벽 안에 들도록 가운데를 가둔다. 상자보다 크면 가운데에 둔다
+      const c = Math.abs(Math.cos(p.yaw ?? 0)), s = Math.abs(Math.sin(p.yaw ?? 0));
+      const hx = Math.max(0, BOX.w / 2 - (c * d.w + s * d.h) / 2 - 0.004), hz = Math.max(0, BOX.d / 2 - (s * d.w + c * d.h) / 2 - 0.004);
+      p.x = THREE.MathUtils.clamp(p.x, BOX.x - hx, BOX.x + hx);
+      p.z = THREE.MathUtils.clamp(p.z, BOX.z - hz, BOX.z + hz);
+      return p;
+    }
     p.x = THREE.MathUtils.clamp(p.x, TABLE.x - TABLE.w / 2 + 0.18, TABLE.x + TABLE.w / 2 - 0.18);
     p.z = THREE.MathUtils.clamp(p.z, TABLE.z - TABLE.d / 2 + 0.18, TABLE.z + TABLE.d / 2 - 0.18);
     for (const e of EXCL) {
@@ -111,11 +124,26 @@ export function setupHeap(ctx) {
     for (const m of [front, back]) { m.castShadow = m.receiveShadow = true; m.userData.card = card; pickables.push(m); }
     card.add(front, back);
     // img: the best picture the card has so far (a fan piece is its own drawing) · tier: that picture's tier, -1 before any lands · asked: tiers already requested
-    Object.assign(card.userData, { reel, d, img: fan ? frontC : null, tier: -1, asked: [], front: tex, place: clampPlace({ x: TABLE.x + gauss() * 0.42, z: TABLE.z + gauss() * 0.28, yaw: rand() * Math.PI * 2, faceUp: rand() > 0.1 }) });
+    Object.assign(card.userData, { reel, d, img: fan ? frontC : null, tier: -1, asked: [], front: tex, place: clampPlace(BOX
+      ? { x: BOX.x + gauss() * BOX.w * 0.2, z: BOX.z + gauss() * BOX.d * 0.2, yaw: rand() * Math.PI * 2, faceUp: rand() > 0.1 }
+      : { x: TABLE.x + gauss() * 0.42, z: TABLE.z + gauss() * 0.28, yaw: rand() * Math.PI * 2, faceUp: rand() > 0.1 }, d) });
     cards.push(card); scene.add(card);
     return card;
   }
+  // 열린 상자: 바닥 판과 네 벽
+  function buildBox() {
+    const g = new THREE.Group(); g.name = 'heap-box';
+    const { w, d, h, wall: t } = BOX, mat = tone(C, 'woodDark'), y = TABLE.top;
+    box(w + 2 * t, BOX.floor - y, d + 2 * t, mat, 0, (BOX.floor - y) / 2, 0, { parent: g });
+    box(w + 2 * t, h, t, mat, 0, h / 2, -(d + t) / 2, { parent: g });
+    box(w + 2 * t, h, t, mat, 0, h / 2, (d + t) / 2, { parent: g });
+    box(t, h, d, mat, -(w + t) / 2, h / 2, 0, { parent: g });
+    box(t, h, d, mat, (w + t) / 2, h / 2, 0, { parent: g });
+    g.position.set(BOX.x, y, BOX.z);
+    scene.add(g);
+  }
   function buildHeap() {
+    if (BOX) buildBox();
     const made = reels.map(reel => makeCard(reel));
     for (const p of fanReels) { const c = makeCard(p); c.userData.place.faceUp = true; }
     settle(true);

@@ -389,7 +389,7 @@ export function validateLayout(input: unknown): LayoutCheck {
         break;
       }
       case "table": {
-        if (!isObj(value) || unknownKey(value, ["x", "z", "projector", "rug", "phone"])) return fail("table: 형식이 올바르지 않아요.");
+        if (!isObj(value) || unknownKey(value, ["x", "z", "projector", "rug", "phone", "heap"])) return fail("table: 형식이 올바르지 않아요.");
         const max = HEAP_POLICY.layoutCoordMax;
         if (!num(value.x, -max, max) || !num(value.z, -max, max)) return fail("table: 좌표가 범위를 벗어났어요.");
         const table: Obj = { x: value.x, z: value.z };
@@ -401,6 +401,11 @@ export function validateLayout(input: unknown): LayoutCheck {
           const rug = value.rug, { layoutRugMin: lo, layoutRugMax: hi } = HEAP_POLICY;
           if (!isObj(rug) || unknownKey(rug, ["w", "d"]) || !num(rug.w, lo, hi) || !num(rug.d, lo, hi)) return fail("table: rug가 올바르지 않아요.");
           table.rug = { w: rug.w, d: rug.d };
+        }
+        // heap: "box" 면 사진 더미가 탁자 위 열린 신발상자 안에 쌓인다 (engine/heap.js). 없으면 흩어진 더미
+        if (value.heap !== undefined) {
+          if (value.heap !== "box") return fail("table: heap이 올바르지 않아요.");
+          table.heap = value.heap;
         }
         // phone: "seat" 면 탁자 위 휴대폰이 방석에 앉은 사람 쪽을 본다 (engine/props.js)
         if (value.phone !== undefined) {
