@@ -16,7 +16,8 @@ type Fail = { error: string };
 
 // 엔진 BUILD가 직접 만드는 가구. 나머지는 type "model" + 카탈로그 id.
 // frame은 벽에 거는 액자다 (기념품 기능을 달 수 있다). calendar는 책상 위 달력이다 (달력 기능을 단다).
-const HAND_TYPES = new Set(["bed", "shelf", "plant", "snake", "lamp", "books", "frame", "calendar"]);
+// heap은 사진 더미다 (방에 하나까지, engine/heap.js). 바닥이나 다른 가구 위에 둔다.
+const HAND_TYPES = new Set(["bed", "shelf", "plant", "snake", "lamp", "books", "frame", "calendar", "heap"]);
 const MODEL_IDS = new Set(catalogue.models.map((model) => model.id));
 // 손으로 만드는 가구의 바닥 크기(엔진 단위, 회전 전). engine/furniture.js BUILD의 치수에서 읽은 값이고 room-editor.tsx도 이 표를 쓴다.
 // frame은 벽에 걸려서 바닥을 차지하지 않으니 없다. plant는 item.size를 곱한다.
@@ -28,6 +29,7 @@ export const HAND_FOOTPRINT: Record<string, { w: number; d: number }> = {
   lamp: { w: 0.5, d: 0.5 },
   books: { w: 0.45, d: 0.35 },
   calendar: { w: 0.46, d: 0.2 },
+  heap: { w: 1.2, d: 0.9 },
 };
 const MODEL_BY_ID = new Map(catalogue.models.map((model) => [model.id, model]));
 // 불을 켜고 끌 수 있는 가구: 손으로 만드는 lamp, 그리고 카탈로그 category가 lamp인 모델
@@ -81,11 +83,13 @@ function checkItem(raw: unknown, index: number): Fail | { item: Obj } {
   const max = HEAP_POLICY.layoutCoordMax;
   if (!num(x, -max, max) || !num(z, -max, max)) return { error: `${at}: 좌표가 범위를 벗어났어요.` };
 
-  // style: 앨범 책장의 모양. 없거나 "low" 면 낮은 두 칸 책장, "tall" 이면 키 큰 책장이다 (engine/furniture.js)
-  if (style !== undefined && (type !== "shelf" || (style !== "low" && style !== "tall"))) return { error: `${at}: style은 shelf에만 "low"나 "tall"로 쓸 수 있어요.` };
+  // style: 앨범 책장(shelf)은 없거나 "low" 면 낮은 두 칸 책장, "tall" 이면 키 큰 책장 (engine/furniture.js).
+  // 사진 더미(heap)는 없으면 흩어진 더미, "box" 면 열린 신발상자 안의 더미 (engine/heap.js)
+  const styleOk = type === "shelf" ? style === "low" || style === "tall" : type === "heap" && style === "box";
+  if (style !== undefined && !styleOk) return { error: `${at}: style이 올바르지 않아요 (shelf는 "low"나 "tall", heap은 "box").` };
   const item: Obj = { type, x, z };
   if (plant === false) item.plant = false;
-  if (style === "low" || style === "tall") item.style = style;
+  if (style !== undefined) item.style = style;
   if (type === "model") {
     if (typeof model !== "string" || !MODEL_IDS.has(model)) return { error: `${at}: 카탈로그에 없는 모델` };
     item.model = model;
@@ -389,7 +393,7 @@ export function validateLayout(input: unknown): LayoutCheck {
         break;
       }
       case "table": {
-        if (!isObj(value) || unknownKey(value, ["x", "z", "projector", "rug", "phone", "heap"])) return fail("table: 형식이 올바르지 않아요.");
+        if (!isObj(value) || unknownKey(value, ["x", "z", "projector", "rug", "phone"])) return fail("table: 형식이 올바르지 않아요.");
         const max = HEAP_POLICY.layoutCoordMax;
         if (!num(value.x, -max, max) || !num(value.z, -max, max)) return fail("table: 좌표가 범위를 벗어났어요.");
         const table: Obj = { x: value.x, z: value.z };
@@ -401,11 +405,6 @@ export function validateLayout(input: unknown): LayoutCheck {
           const rug = value.rug, { layoutRugMin: lo, layoutRugMax: hi } = HEAP_POLICY;
           if (!isObj(rug) || unknownKey(rug, ["w", "d"]) || !num(rug.w, lo, hi) || !num(rug.d, lo, hi)) return fail("table: rug가 올바르지 않아요.");
           table.rug = { w: rug.w, d: rug.d };
-        }
-        // heap: "box" 면 사진 더미가 탁자 위 열린 신발상자 안에 쌓인다 (engine/heap.js). 없으면 흩어진 더미
-        if (value.heap !== undefined) {
-          if (value.heap !== "box") return fail("table: heap이 올바르지 않아요.");
-          table.heap = value.heap;
         }
         // phone: "seat" 면 탁자 위 휴대폰이 방석에 앉은 사람 쪽을 본다 (engine/props.js)
         if (value.phone !== undefined) {
@@ -426,9 +425,11 @@ export function validateLayout(input: unknown): LayoutCheck {
         if (value.length > HEAP_POLICY.layoutMaxItems) return fail("items: 가구가 너무 많아요.");
         const items: Obj[] = [];
         let trees = 0;
+        let heaps = 0;
         for (let i = 0; i < value.length; i++) {
           const r = checkItem(value[i], i);
           if ("error" in r) return fail(r.error);
+          if (r.item.type === "heap" && ++heaps > 1) return fail(`items[${i}]: 사진 더미는 방에 하나까지예요.`);
           if ((r.item.fn as { kind?: string } | undefined)?.kind === "tree" && ++trees > HEAP_POLICY.treesPerRoom) {
             return fail(`items[${i}].fn: 쪽지 트리는 방에 ${HEAP_POLICY.treesPerRoom}개까지예요.`);
           }

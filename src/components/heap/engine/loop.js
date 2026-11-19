@@ -3,7 +3,7 @@ import * as THREE from 'three';
 
 export function setupLoop(ctx) {
   const {
-    Yv, camera, WALL_H, RX, RZ, TABLE, SEAT, SCREEN_C, WALLS, SCR, canvas, renderer, scene, on,
+    Yv, camera, WALL_H, RX, RZ, HOST, SEAT, SCREEN_C, WALLS, SCR, canvas, renderer, scene, on,
     onDispose, stepCharacter, controls, me, legL, legR, $, beamMat, projLight, screenOn, reelA, reelB,
     phoneDot, tickClock, stepMotes, cards, SLOT, inPile, supportAt, restPose, stepAnim,
   } = ctx;
@@ -25,8 +25,12 @@ export function setupLoop(ctx) {
     return D;
   }
   const roomFit = aspect => needDist(RX, RZ, aspect) / needDist(4, 4, aspect);
-  const tableCentre = new THREE.Vector3(TABLE.x, TABLE.top, TABLE.z);
-  const SIT_CAM = { pos: tableCentre.clone().add(new THREE.Vector3(0, 2.0, 2.1)), target: tableCentre.clone() };
+  // 더미 보기: 더미(HOST)의 윗면 높이를 보고, 퍼진 넓이에 맞춰 다가간다. 원래 탁자(2.6 x 1.8)는 전과 같은 (0, 2.0, 2.1) 이고,
+  // 상자나 작은 탁자는 더 가까이 (최소 0.55 배). 바닥에 둔 더미는 서서 내려다보는 높이다
+  const heapCentre = new THREE.Vector3(HOST.x, HOST.top, HOST.z);
+  const spanW = HOST.box ? 1.7 : HOST.w, spanD = HOST.box ? 1.1 : HOST.d; // 상자는 벽까지 담기게 조금 넉넉히
+  const heapK = THREE.MathUtils.clamp(Math.max(spanW / 2.6, spanD / 1.8), 0.55, 1);
+  const SIT_CAM = { pos: heapCentre.clone().add(new THREE.Vector3(0, 2.0 * heapK, 2.1 * heapK)), target: heapCentre.clone() };
   const WATCH_CAM = { pos: SEAT.clone().add(new THREE.Vector3(0.7, 1.75, 2.1)), target: SCREEN_C.clone().addScaledVector(WALLS[SCR.wall].n, 1).add(new THREE.Vector3(0, -0.75, 0)) };
 
   // 프레임 루프

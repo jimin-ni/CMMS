@@ -6,20 +6,23 @@ import { tone } from './palette.js';
 
 export function setupHeap(ctx) {
   const {
-    PROJ, MUG, PHONE, TABLE, Yv, Xv, rand, renderer, DIMS, drawFanFront, drawCard, drawFanBack, drawBack,
+    PROJ, MUG, PHONE, HOST, Yv, Xv, rand, renderer, DIMS, drawFanFront, drawCard, drawFanBack, drawBack,
     gauss, scene, reels, fanReels, layout, box, C, onWall,
   } = ctx;
 
   // 사진 더미: 모양을 잡아 쌓는다. 카드는 자기 모서리와 가장자리 아래에 있는 것 위에 놓인다.
   const cards = []; // stack order, bottom → top
   const pickables = [];
-  const EXCL = [{ x: PROJ.x, z: PROJ.z, r: 0.42 }, { x: MUG.x, z: MUG.z, r: 0.18 }, { x: PHONE.x, z: PHONE.z, r: 0.26 }];
+  // 고정 탁자 위의 더미만 영사기, 머그, 휴대폰을 피한다
+  const EXCL = HOST.onTable ? [{ x: PROJ.x, z: PROJ.z, r: 0.42 }, { x: MUG.x, z: MUG.z, r: 0.18 }, { x: PHONE.x, z: PHONE.z, r: 0.26 }] : [];
   const GAP = 0.0035, MAX_SLOPE = 0.32;
-  // 더미의 모양: 'pile'(기본, 탁자 위에 흩어진 더미) 또는 'box'(열린 신발상자 안에 쌓인 더미). 상자 안쪽 크기와 벽 높이는 BOX_IN.
+  // 더미의 모양: 'pile'(기본, 받침 위에 흩어진 더미) 또는 'box'(열린 신발상자 안에 쌓인 더미, heap 가구의 style "box"). 상자 안쪽 크기와 벽 높이는 BOX_IN.
   // 상자는 카드가 탁자에 어지럽게 퍼지지 않게 담는다. 카드를 집는 광선은 카드만 보므로 상자 벽이 막지 않는다.
   const BOX_IN = { w: 1.12, d: 0.66, h: 0.22, wall: 0.018, base: 0.012 };
-  const BOX = layout.table?.heap === 'box' ? { x: TABLE.x, z: TABLE.z, ...BOX_IN, floor: TABLE.top + BOX_IN.base } : null;
-  const BASE = BOX ? BOX.floor : TABLE.top;
+  const BOX = HOST.box ? { x: HOST.x, z: HOST.z, ...BOX_IN, floor: HOST.top + BOX_IN.base } : null;
+  const BASE = BOX ? BOX.floor : HOST.top;
+  // 흩어진 더미가 퍼지는 넓이: 받침 가장자리에서 m 만큼 안쪽. 가우스 퍼짐(sx, sz)도 받침 크기에 맞춘다 (원래 탁자 2.6 x 1.8 에서 0.42, 0.28)
+  const PM = Math.min(0.18, HOST.w * 0.15, HOST.d * 0.15), SX = Math.min(0.42, HOST.w * 0.16), SZ = Math.min(0.28, HOST.d * 0.155);
   const _inv = new THREE.Quaternion(), _v = new THREE.Vector3(), _n = new THREE.Vector3();
   // 놓여 있는 카드의 (x, z) 위 면 높이. (x, z) 가 카드 밖이면 -Infinity
   function surfaceAt(c, x, z) {
@@ -64,8 +67,8 @@ export function setupHeap(ctx) {
       p.z = THREE.MathUtils.clamp(p.z, BOX.z - hz, BOX.z + hz);
       return p;
     }
-    p.x = THREE.MathUtils.clamp(p.x, TABLE.x - TABLE.w / 2 + 0.18, TABLE.x + TABLE.w / 2 - 0.18);
-    p.z = THREE.MathUtils.clamp(p.z, TABLE.z - TABLE.d / 2 + 0.18, TABLE.z + TABLE.d / 2 - 0.18);
+    p.x = THREE.MathUtils.clamp(p.x, HOST.x - HOST.w / 2 + PM, HOST.x + HOST.w / 2 - PM);
+    p.z = THREE.MathUtils.clamp(p.z, HOST.z - HOST.d / 2 + PM, HOST.z + HOST.d / 2 - PM);
     for (const e of EXCL) {
       const dx = p.x - e.x, dz = p.z - e.z, dd = Math.hypot(dx, dz);
       if (dd < e.r) { p.x = e.x + (dd ? dx / dd : 1) * e.r; p.z = e.z + (dd ? dz / dd : 0) * e.r; }
@@ -126,14 +129,14 @@ export function setupHeap(ctx) {
     // img: the best picture the card has so far (a fan piece is its own drawing) · tier: that picture's tier, -1 before any lands · asked: tiers already requested
     Object.assign(card.userData, { reel, d, img: fan ? frontC : null, tier: -1, asked: [], front: tex, place: clampPlace(BOX
       ? { x: BOX.x + gauss() * BOX.w * 0.2, z: BOX.z + gauss() * BOX.d * 0.2, yaw: rand() * Math.PI * 2, faceUp: rand() > 0.1 }
-      : { x: TABLE.x + gauss() * 0.42, z: TABLE.z + gauss() * 0.28, yaw: rand() * Math.PI * 2, faceUp: rand() > 0.1 }, d) });
+      : { x: HOST.x + gauss() * SX, z: HOST.z + gauss() * SZ, yaw: rand() * Math.PI * 2, faceUp: rand() > 0.1 }, d) });
     cards.push(card); scene.add(card);
     return card;
   }
   // 열린 상자: 바닥 판과 네 벽
   function buildBox() {
     const g = new THREE.Group(); g.name = 'heap-box';
-    const { w, d, h, wall: t } = BOX, mat = tone(C, 'woodDark'), y = TABLE.top;
+    const { w, d, h, wall: t } = BOX, mat = tone(C, 'woodDark'), y = HOST.top;
     box(w + 2 * t, BOX.floor - y, d + 2 * t, mat, 0, (BOX.floor - y) / 2, 0, { parent: g });
     box(w + 2 * t, h, t, mat, 0, h / 2, -(d + t) / 2, { parent: g });
     box(w + 2 * t, h, t, mat, 0, h / 2, (d + t) / 2, { parent: g });
@@ -141,6 +144,7 @@ export function setupHeap(ctx) {
     box(t, h, d, mat, (w + t) / 2, h / 2, 0, { parent: g });
     g.position.set(BOX.x, y, BOX.z);
     scene.add(g);
+    ctx.heapBoxParts = g.children; // 상자를 누르면 더미 앞으로 걸어가 선다 (input.js)
   }
   function buildHeap() {
     if (BOX) buildBox();

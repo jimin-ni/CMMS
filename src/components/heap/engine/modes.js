@@ -5,7 +5,7 @@ import { srcUrl, PLATFORM_NAME, platformOf } from './format.js';
 export function setupModes(ctx) {
   const {
     controls, me, SEAT, setHint, SIT_CAM, syncUI, requestPile, NEAR, settle, request, CLOSE, clampPlace,
-    TABLE, gauss, toTop, startAnim, on, $, drawProjection, screen, screenOn, WATCH_CAM, screenIdle,
+    HOST, gauss, toTop, startAnim, on, $, drawProjection, screen, screenOn, WATCH_CAM, screenIdle,
     unperch,
   } = ctx;
 
@@ -18,7 +18,7 @@ export function setupModes(ctx) {
 
   function sit() {
     ctx.mode = 'sit'; ctx.walkTo = null; ctx.arrive = null; ctx.waypoints = []; ctx.perch = null;
-    me.position.copy(SEAT); me.rotation.y = Math.PI;
+    me.position.copy(SEAT); me.rotation.y = ctx.seatFace ?? Math.PI; // 서서 보는 더미는 옆에 서서 더미를 본다 (props.js)
     setHint('sit'); goTo(SIT_CAM); syncUI();
     requestPile(NEAR);
   }
@@ -39,7 +39,7 @@ export function setupModes(ctx) {
   function pickUp(c) { ctx.held = c; ctx.heldFlipped = false; ctx.hovered = null; controls.enabled = false; settle(); setHint('held'); syncUI(); request(c, CLOSE, true); glowCard(c, ctx.readGlow); }
   function dropOnTop(c) { // 더미 가운데 쪽으로 살짝, 그리고 제자리로 떨어진다
     const p = c.userData.place;
-    c.userData.place = clampPlace({ x: TABLE.x + (p.x - TABLE.x) * 0.5 + gauss() * 0.15, z: TABLE.z + (p.z - TABLE.z) * 0.5 + gauss() * 0.1, yaw: p.yaw + gauss() * 0.6, faceUp: true });
+    c.userData.place = clampPlace({ x: HOST.x + (p.x - HOST.x) * 0.5 + gauss() * 0.15, z: HOST.z + (p.z - HOST.z) * 0.5 + gauss() * 0.1, yaw: p.yaw + gauss() * 0.6, faceUp: true });
     toTop(c);
   }
   function putBack() {

@@ -4,7 +4,7 @@ import * as THREE from 'three';
 export function setupInput(ctx) {
   const {
     canvas, camera, projParts, phoneParts, $, on, nearTable, sit, nearShelf, enterSort, nearDoor,
-    openRooms, nearBook, openGuestbook, flip, eject, exitSort, putBack, stand, unperch, TABLE, pickables,
+    openRooms, nearBook, openGuestbook, flip, eject, exitSort, putBack, stand, unperch, HOST, pickables,
     controls, settle, setHint, clampPlace, toTop, startAnim, player, screen, openPlayer, albumAction,
     feed, openPhone, pickUp, tableTop, shelfParts, doorParts, bookParts, floor, openSlot, sitOn,
     walkRoute, SEAT,
@@ -41,7 +41,7 @@ export function setupInput(ctx) {
   on(window, 'blur', () => keys.clear());
 
   // 탁자 위에서 카드 끌기(앉은 모드). 궤도 컨트롤이 비켜서도록 capture 단계에 건다.
-  const deskPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(TABLE.top + 0.12)), _hit = new THREE.Vector3();
+  const deskPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -(HOST.top + (HOST.box ? 0.15 : 0.12))), _hit = new THREE.Vector3();
   let down = null, dragOff = new THREE.Vector2();
   canvas.addEventListener('pointerdown', ev => {
     down = { x: ev.clientX, y: ev.clientY, card: null };
@@ -98,7 +98,7 @@ export function setupInput(ctx) {
       if (hit) pickUp(hit.object.userData.card);
       return;
     }
-    const hit = ray.intersectObjects([tableTop, ...pickables, ...projParts, ...phoneParts, ...ctx.build.slotMeshes, ...ctx.build.seatMeshes, ...shelfParts, ...doorParts, ...bookParts, floor], false)[0];
+    const hit = ray.intersectObjects([tableTop, ...(ctx.heapBoxParts || []), ...pickables, ...projParts, ...phoneParts, ...ctx.build.slotMeshes, ...ctx.build.seatMeshes, ...shelfParts, ...doorParts, ...bookParts, floor], false)[0];
     if (!hit) return;
     if (hit.object.userData.slot) return openSlot(hit.object.userData.slot); // PC, 액자, TV, 라디오, 달력: 방문자가 서 있는 곳에서 바로 동작한다
     if (hit.object.userData.seats) return sitOn(hit.object.userData.seats, hit.point); // 의자, 소파, 러그: 그곳까지 걸어가 앉는다

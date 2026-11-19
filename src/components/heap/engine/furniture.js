@@ -95,6 +95,8 @@ export function setupFurniture(ctx) {
       box(0.6, 0.16, 0.45, flat('#f7f1e6'), -1.0, 0.56, 0, { parent: g });
       return { hw: 1.6, hd: 0.95 };
     },
+    // 사진 더미 (heap): 카드와 상자는 heap.js 가 HOST 자리에 짓는다. 여기서는 바닥에 둔 더미가 길을 막는 넓이만 돌려준다
+    heap(g, it) { return { hw: 0.6, hd: it.style === 'box' ? 0.37 : 0.45 }; },
     shelf(g, it, build) {
       if (it.style !== 'tall') return lowShelf(g, it, build);
       const wood = tone(C, 'woodDark'), add = m => { shelfParts.push(m); return m; };

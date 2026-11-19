@@ -25,15 +25,47 @@ export function setupProps(ctx) {
   const tableTop = box(TABLE.w, 0.08, TABLE.d, tone(C, 'woodB'), TABLE.x, TABLE.top - 0.04, TABLE.z);
   for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(0.12, TABLE.top - 0.08, 0.12, tone(C, 'woodDark'), TABLE.x + sx * (TABLE.w / 2 - 0.15), (TABLE.top - 0.08) / 2, TABLE.z + sz * (TABLE.d / 2 - 0.15));
   OBST.unshift({ x: TABLE.x, z: TABLE.z, hw: TABLE.w / 2 + 0.25, hd: TABLE.d / 2 + 0.25, rhw: TABLE.w / 2, rhd: TABLE.d / 2 });
-  const SEAT = new THREE.Vector3(TABLE.x, 0, TABLE.z + TABLE.d / 2 + 0.5);
-  box(0.75, 0.1, 0.75, tone(C, 'accent'), SEAT.x, 0.05, SEAT.z, { cast: false });
+  const CUSHION = new THREE.Vector3(TABLE.x, 0, TABLE.z + TABLE.d / 2 + 0.5);
+  box(0.75, 0.1, 0.75, tone(C, 'accent'), CUSHION.x, 0.05, CUSHION.z, { cast: false });
+  // 사진 더미가 놓인 곳(HOST): layout.items 의 heap 가구가 있으면 그 자리, 없으면 예전처럼 이 탁자 위.
+  //   x, z: 더미 가운데 · top: 카드가 놓이는 바닥 높이(가구 위에 올렸으면 그 윗면, 바닥이면 0) · w, d: 카드가 퍼지는 넓이
+  //   box: 열린 신발상자 안에 쌓는다 (heap.style "box") · onTable: 이 탁자 위 (영사기, 머그, 휴대폰을 피한다)
+  // 더미 가구를 다른 가구 위에 올렸으면 받침 가구의 윗면 넓이만큼 퍼진다. 바닥에 두면 1.2 x 0.9 다.
+  const heapIt = (layout.items || []).find(it => it?.type === 'heap');
+  let HOST, SEAT;
+  if (heapIt) {
+    const under = heapIt.y > 0 ? (layout.items || []).find(o => {
+      if (o === heapIt || o.type === 'heap') return false;
+      const e = ctx.opts.itemHalfExtents?.(o);
+      return e && Math.abs(heapIt.x - o.x) <= e.hx && Math.abs(heapIt.z - o.z) <= e.hz;
+    }) : null;
+    const ue = under && ctx.opts.itemHalfExtents(under);
+    HOST = { x: heapIt.x, z: heapIt.z, top: heapIt.y || 0, w: ue ? 2 * ue.hx : 1.2, d: ue ? 2 * ue.hz : 0.9, box: heapIt.style === 'box', onTable: false, item: heapIt };
+    // 서서 보는 자리: 더미(받침 가구가 있으면 그 가장자리)에서 0.45 떨어진 옆, 더미를 바라본다. 앞에 서면 보는 카메라가 머리에 막힌다.
+    // 오른쪽, 왼쪽, 뒤, 앞 순으로 벽 안이고 탁자나 바닥 가구에 막히지 않은 첫 자리. 모두 막히면 오른쪽
+    const hx = ue ? ue.hx : HOST.w / 2, hz = ue ? ue.hz : HOST.d / 2, cx = ue ? under.x : HOST.x, cz = ue ? under.z : HOST.z;
+    const blocked = (x, z) => Math.abs(x) > ctx.RX - 0.3 || Math.abs(z) > ctx.RZ - 0.3
+      || OBST.some(o => Math.abs(x - o.x) < o.hw && Math.abs(z - o.z) < o.hd)
+      || (layout.items || []).some(o => {
+        if (o === heapIt || o === under || o.y) return false;
+        const e = ctx.opts.itemHalfExtents?.(o);
+        return e && Math.abs(x - o.x) < e.hx + 0.2 && Math.abs(z - o.z) < e.hz + 0.2;
+      });
+    const sides = [[cx + hx + 0.45, HOST.z, -Math.PI / 2], [cx - hx - 0.45, HOST.z, Math.PI / 2], [HOST.x, cz - hz - 0.45, 0], [HOST.x, cz + hz + 0.45, Math.PI]];
+    const pick = sides.find(([x, z]) => !blocked(x, z)) ?? sides[0];
+    SEAT = new THREE.Vector3(pick[0], 0, pick[1]);
+    ctx.seatFace = pick[2];
+  } else {
+    HOST = { x: TABLE.x, z: TABLE.z, top: TABLE.top, w: TABLE.w, d: TABLE.d, box: false, onTable: true, item: null };
+    SEAT = CUSHION.clone();
+  }
   const MUG = { x: TABLE.x + 1.05, z: TABLE.z + 0.6 };
   const mug = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.055, 0.12, 8), tone(C, 'paper')); mug.position.set(MUG.x, TABLE.top + 0.06, MUG.z); mug.castShadow = true; scene.add(mug);
   const coffee = new THREE.Mesh(new THREE.CircleGeometry(0.052, 8), flat('#4a2f1e')); coffee.rotation.x = -Math.PI / 2; coffee.position.set(MUG.x, TABLE.top + 0.115, MUG.z); scene.add(coffee);
   const PHONE = { x: TABLE.x + 0.68, z: TABLE.z + 0.62 };
   const phoneBody = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.018, 0.32), tone(C, 'ink', { roughness: 0.5 }));
   // 휴대폰의 방향: 아래 끝(지역 +z)이 향하는 쪽. layout.table.phone === 'seat' 이면 방석에 앉은 사람 쪽, 아니면 원래의 0.35
-  const phoneA = layout.table.phone === 'seat' ? Math.atan2(SEAT.x - PHONE.x, SEAT.z - PHONE.z) : 0.35;
+  const phoneA = layout.table.phone === 'seat' ? Math.atan2(CUSHION.x - PHONE.x, CUSHION.z - PHONE.z) : 0.35;
   phoneBody.position.set(PHONE.x, TABLE.top + 0.009, PHONE.z); phoneBody.rotation.y = phoneA; phoneBody.castShadow = true;
   const phoneGlow = new THREE.Mesh(new THREE.PlaneGeometry(0.145, 0.29), new THREE.MeshStandardMaterial({ color: '#efe6d6', emissive: '#f3d9b0', emissiveIntensity: 0.6 }));
   phoneGlow.rotation.set(-Math.PI / 2, 0, phoneA); phoneGlow.position.set(PHONE.x, TABLE.top + 0.0185, PHONE.z);
@@ -113,7 +145,7 @@ export function setupProps(ctx) {
   }
 
   Object.assign(ctx, {
-    PROJ, MUG, PHONE, TABLE, drawProjection, SEAT, SCREEN_C, SCR, screen, screenOn, screenIdle,
+    PROJ, MUG, PHONE, TABLE, HOST, drawProjection, SEAT, SCREEN_C, SCR, screen, screenOn, screenIdle,
     projParts, phoneParts, tableTop, bookParts, beamMat, projLight, reelA, reelB, phoneDot, SLOT, GB,
   });
 }
