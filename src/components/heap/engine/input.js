@@ -96,13 +96,15 @@ export function setupInput(ctx) {
     }
     const hit = ray.intersectObjects([...(ctx.heapBoxParts || []), ...pickables, ...ctx.build.slotMeshes, ...ctx.build.seatMeshes, ...shelfParts, ...doorParts, floor], false)[0];
     if (!hit) return;
-    if (hit.object.userData.slot) return openSlot(hit.object.userData.slot); // PC, 액자, TV, 라디오, 달력: 방문자가 서 있는 곳에서 바로 동작한다
+    // 기능 가구(PC, 액자, TV, 라디오, 달력, 휴대폰, 방명록, 트리): 물건 아래 바닥에서 가장 가까운 빈 자리로 걸어간 뒤 동작한다
+    const slot = hit.object.userData.slot;
+    if (slot) { ctx.slotTarget = slot; return walkRoute(hit.point.clone().setY(0), 'slot', ctx.build.slotMeshes.filter(m => m.userData.slot === slot)); }
     if (hit.object.userData.seats) return sitOn(hit.object.userData.seats, hit.point); // 의자, 소파, 러그: 그곳까지 걸어가 앉는다
     const p = hit.point;
-    if (doorParts.includes(hit.object)) walkRoute(ctx.doorSpot.clone(), 'door');
-    else if (shelfParts.includes(hit.object)) walkRoute(ctx.shelfSpot.clone(), 'sort');
+    if (doorParts.includes(hit.object)) walkRoute(ctx.doorSpot.clone(), 'door', doorParts);
+    else if (shelfParts.includes(hit.object)) walkRoute(ctx.shelfSpot.clone(), 'sort', shelfParts);
     else if (hit.object === floor) walkRoute(p.clone().setY(0), null);
-    else if (SEAT) walkRoute(SEAT.clone(), 'sit'); // 사진 더미(카드, 상자): 더미를 보는 자리로 걸어가 본다
+    else if (SEAT) walkRoute(SEAT.clone(), 'sit', ctx.heapBoxParts || []); // 사진 더미(카드, 상자): 더미를 보는 자리로 걸어가 본다
   });
 
   Object.assign(ctx, { anyOverlay, keys });

@@ -16,20 +16,29 @@ export function setupPath(ctx) {
     !walkBoxes().some(o => o.owner !== s.item && Math.abs(s.pos.x - o.x) < (o.rhw ?? o.hw) + 0.1 && Math.abs(s.pos.z - o.z) < (o.rhd ?? o.hd) + 0.1);
   // 바닥을 0.25 격자로 나눈 A* (장애물의 걷기 상자에 0.15 를 더한 안의 칸은 막힘). 그다음 선이 비는 곳마다 길을 곧게 편다.
   // 걸어갈 점들을 돌려준다. 마지막은 `to` 자신이고, `to` 에 닿을 수 없으면 null 이다.
-  function planPath(from, to) {
+  // snap: `to` 가 막힌 칸이면 가장 가까운 빈 칸까지 간다. `to` 가 가구 몸 밖(여백 안)이면 마지막에 `to` 로 한 걸음 더 들어선다.
+  function planPath(from, to, { snap = false } = {}) {
     const S = 0.25, M = 0.15, x0 = -RX + 0.35, z0 = -RZ + 0.35, nx = Math.floor((2 * RX - 0.65) / S) + 1, nz = Math.floor((2 * RZ - 0.65) / S) + 1;
     const open = new Uint8Array(nx * nz);
     for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) open[j * nx + i] = walkFree(x0 + i * S, z0 + j * S, M) ? 1 : 0;
     const cellOf = (x, z) => [THREE.MathUtils.clamp(Math.round((x - x0) / S), 0, nx - 1), THREE.MathUtils.clamp(Math.round((z - z0) / S), 0, nz - 1)];
+    const nearestOpen = (ci, cj, reach) => {
+      let best = null;
+      for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) if (open[j * nx + i]) { const d = Math.hypot(i - ci, j - cj); if (d <= reach && (!best || d < best[0])) best = [d, i, j]; }
+      return best && [best[1], best[2]];
+    };
     let [si, sj] = cellOf(from.x, from.z);
     if (!open[sj * nx + si]) { // 시작점이 장애물 여백 안일 수 있다: 가장 가까운 빈 칸에서 시작한다
-      let best = null;
-      for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) if (open[j * nx + i]) { const d = Math.hypot(i - si, j - sj); if (d <= 8 && (!best || d < best[0])) best = [d, i, j]; }
-      if (!best) return null;
-      [, si, sj] = best;
+      const c = nearestOpen(si, sj, 8);
+      if (!c) return null;
+      [si, sj] = c;
     }
-    const [gi, gj] = cellOf(to.x, to.z);
-    if (!open[gj * nx + gi]) return null;
+    let [gi, gj] = cellOf(to.x, to.z), snapped = false;
+    if (!open[gj * nx + gi]) {
+      const c = snap && nearestOpen(gi, gj, Infinity);
+      if (!c) return null;
+      [gi, gj] = c; snapped = true;
+    }
     const g = new Float32Array(nx * nz).fill(Infinity), came = new Int32Array(nx * nz).fill(-1), done = new Uint8Array(nx * nz), heap = [[0, sj * nx + si]];
     g[sj * nx + si] = 0;
     const h = (i, j) => { const dx = Math.abs(i - gi), dz = Math.abs(j - gj); return Math.max(dx, dz) + 0.414 * Math.min(dx, dz); };
@@ -53,7 +62,8 @@ export function setupPath(ctx) {
     if (!reached) return null;
     const cells = [];
     for (let c = gj * nx + gi; c !== -1; c = came[c]) { const ci = c % nx; cells.unshift({ x: x0 + ci * S, z: z0 + (c - ci) / nx * S }); }
-    cells[cells.length - 1] = { x: to.x, z: to.z };
+    if (!snapped) cells[cells.length - 1] = { x: to.x, z: to.z };
+    else if (walkFree(to.x, to.z, 0)) cells.push({ x: to.x, z: to.z }); // 여백 안이지만 가구 몸 밖: 끝까지 들어선다
     const clear = (a, b) => { const n = Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 0.1); for (let t = 1; t <= n; t++) if (!walkFree(a.x + (b.x - a.x) * t / n, a.z + (b.z - a.z) * t / n, 0.1)) return false; return true; };
     const out = []; let cur = { x: from.x, z: from.z }, k = 0;
     while (k < cells.length) {
