@@ -26,7 +26,7 @@ export const HEAP_POLICY = {
   layoutRoomMin: 6,
   layoutRoomMax: 12,
   // 벽 높이(room.h)와 액자·스크린 가운데 높이(posters.y, screen.y). 없으면 엔진의 2.5, 1.8, 1.85다 (러브쑤 시안 2). 러그(table.rug)의 한 변.
-  layoutWallHMin: 2.4,
+  layoutWallHMin: 2.5, // 러브쑤 시안 2 의 높이. 이보다 낮은 벽은 저장할 수 없다 (엔진도 2.5 로 올린다)
   layoutWallHMax: 4,
   layoutHangYMin: 1,
   layoutHangYMax: 3.5,

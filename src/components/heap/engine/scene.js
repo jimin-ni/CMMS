@@ -31,8 +31,8 @@ export function setupScene(ctx) {
   // RX, RZ 는 반지름이다: 바닥은 x 로 -RX..RX, z 로 -RZ..RZ 에 걸친다.
   const roomDim = v => THREE.MathUtils.clamp(Number(v) || 8, 6, 12);
   const RX = roomDim(layout.room?.w) / 2, RZ = roomDim(layout.room?.d) / 2;
-  // 벽 높이: layout.room.h (2.4..4). 없으면 2.5 다 (러브쑤 시안 2 에서 정한 높이. 전에는 4 였다). 카메라 맞춤(loop.js)도 벽 윗선을 쓰므로 벽이 낮으면 방이 더 크게 잡힌다
-  const WALL_H = THREE.MathUtils.clamp(Number(layout.room?.h) || 2.5, 2.4, 4), Yv = new THREE.Vector3(0, 1, 0), Xv = new THREE.Vector3(1, 0, 0);
+  // 벽 높이: layout.room.h (2.5..4). 없으면 2.5 다. 2.5 는 러브쑤 시안 2 에서 정한 높이이고 더 낮출 수 없다 (전 기본은 4). 카메라 맞춤(loop.js)도 벽 윗선을 쓰므로 벽이 낮으면 방이 더 크게 잡힌다
+  const WALL_H = THREE.MathUtils.clamp(Number(layout.room?.h) || 2.5, 2.5, 4), Yv = new THREE.Vector3(0, 1, 0), Xv = new THREE.Vector3(1, 0, 0);
   function box(w, h, d, mat, x, y, z, { cast = true, receive = true, parent = scene } = {}) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
     m.position.set(x, y, z); m.castShadow = cast; m.receiveShadow = receive; parent.add(m); return m;
