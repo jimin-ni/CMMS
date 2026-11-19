@@ -7,7 +7,7 @@
     "accent": "#8C3B2E",
     "floor": ["#8B5E3C", "#7D5232", "#936646", "#85583A"]
   },
-  "window": { "wall": "back", "at": 3.0, "w": 1.2, "h": 1.2, "y": 2.55 },
+  "window": { "wall": "back", "at": 3.0, "w": 1.2, "h": 1.2, "y": 1.71 },
   "door": { "wall": "left", "at": 3.0 },
   "screen": { "wall": "back", "at": 0.2 },
   "table": { "x": 2.0, "z": 1.8, "projector": "right" },

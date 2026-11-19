@@ -2,7 +2,7 @@
   "room": { "w": 8, "d": 8 },
   "time": "auto",
   "palette": { "wall": "#E6DCC8", "trim": "#565344", "accent": "#A6613C" },
-  "window": { "wall": "back", "at": -2.2, "w": 1.4, "h": 1.2, "y": 2.55 },
+  "window": { "wall": "back", "at": -2.2, "w": 1.4, "h": 1.2, "y": 1.71 },
   "door": { "wall": "left", "at": 2.6 },
   "screen": { "wall": "back", "at": 1.2 },
   "posters": { "wall": "left", "at": [-2.4, -1.4] },
