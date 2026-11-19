@@ -131,7 +131,7 @@ export function setupHeap(ctx) {
       const g = new THREE.Group();
       box(0.74, 1.2, 0.05, tone(C, 'woodDark'), 0, 0, 0.025, { cast: false, parent: g });
       const p = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 1.07), new THREE.MeshStandardMaterial({ map: t, roughness: 0.6 })); p.position.z = 0.055; g.add(p);
-      onWall(layout.posters.wall, u, layout.posters.y ?? 2.5, 0, g); // y: 액자 가운데 높이 (벽이 낮은 방은 내려 건다)
+      onWall(layout.posters.wall, u, layout.posters.y ?? 1.8, 0, g); // y: 액자 가운데 높이. 없으면 1.8 (2.5 벽에 맞춘 높이)
     });
   }
   // 포스터 액자에 걸린 텍스처 (만든 순서). 액자는 방이 뜰 때 한 번 짓고, 영상 목록이 바뀌면 그림만 갈아 끼운다 (refreshPosters).

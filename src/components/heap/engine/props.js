@@ -64,7 +64,7 @@ export function setupProps(ctx) {
   }
 
   // 영사기와 스크린
-  const SCR = { wall: layout.screen.wall, at: layout.screen.at, y: layout.screen.y ?? 2.4, w: 1.6, h: 0.9 }; // y: 벽이 낮은 방은 내려 건다
+  const SCR = { wall: layout.screen.wall, at: layout.screen.at, y: layout.screen.y ?? 1.85, w: 1.6, h: 0.9 }; // y: 없으면 1.85 (2.5 벽에 맞춘 높이)
   const projC = makeCanvas(640, 360);
   const projTex = canvasTexture(projC);
   const screenIdle = tone(C, 'paper'), screenOn = new THREE.MeshBasicMaterial({ map: projTex });

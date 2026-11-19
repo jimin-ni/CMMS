@@ -21,7 +21,7 @@ export const SURFACE_REST = 0.08;
 const HAND: Record<string, { h: number; tops: number[] }> = {
   bed: { h: 0.64, tops: [0.48] },
   shelf: { h: 2.225, tops: [0.295, 0.995, 1.695, 2.225] },
-  // 낮은 앨범 책장 (shelf 의 style: "low", engine/furniture.js 의 LOW)
+  // 낮은 앨범 책장 (shelf 의 기본 모양, engine/furniture.js 의 LOW). 위의 shelf 는 style: "tall"
   shelfLow: { h: 0.92, tops: [0.1, 0.5, 0.92] },
   books: { h: 0.32, tops: [0.32] },
 };
@@ -29,7 +29,7 @@ const HAND: Record<string, { h: number; tops: number[] }> = {
 const r2 = (v: number) => Math.round(v * 100) / 100;
 const entryOf = (it: Obj) => (it.type === "model" ? BY_ID.get(it.model as string) : undefined);
 // 손 가구의 표 이름. 낮은 앨범 책장은 따로 잰다
-const handKey = (it: Obj) => (it.type === "shelf" && it.style === "low" ? "shelfLow" : (it.type as string));
+const handKey = (it: Obj) => (it.type === "shelf" && it.style !== "tall" ? "shelfLow" : (it.type as string));
 
 // 받침이면 그 윗면 높이들 (가구의 밑면에서, 낮은 것부터). 받침이 아니면 null
 export function surfaceTops(it: Obj): number[] | null {

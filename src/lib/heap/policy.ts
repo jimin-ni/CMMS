@@ -25,7 +25,7 @@ export const HEAP_POLICY = {
   // 방 크기는 엔진의 roomDim 범위(6..12)와 같다. 가구 좌표는 가장 큰 방(12)의 반쪽에 여유를 둔 값.
   layoutRoomMin: 6,
   layoutRoomMax: 12,
-  // 벽 높이(room.h)와 액자·스크린 가운데 높이(posters.y, screen.y). 없으면 엔진의 4, 2.5, 2.4다. 러그(table.rug)의 한 변.
+  // 벽 높이(room.h)와 액자·스크린 가운데 높이(posters.y, screen.y). 없으면 엔진의 2.5, 1.8, 1.85다 (러브쑤 시안 2). 러그(table.rug)의 한 변.
   layoutWallHMin: 2.4,
   layoutWallHMax: 4,
   layoutHangYMin: 1,
@@ -39,6 +39,8 @@ export const HEAP_POLICY = {
   layoutPostersMax: 8,
   // 벽 액자: 꾸미기가 놓는 높이(액자 가운데)와, 벽을 따라 모서리에서 떨어뜨리는 거리. 서버는 이 자리만 받는다 (layout.ts).
   frameY: 1.9,
+  // 방 밑 땅의 색. 방의 layout.ground가 없으면 모든 방이 이 색을 쓴다 (engine/scene.js).
+  groundColour: "#CDBFA6",
   frameWallMargin: 0.5,
   // 사진 탁자의 크기. 엔진의 TABLE과 같다. 앉는 가구(의자, 소파)는 이 탁자와 겹치게 둘 수 없다 (layout.ts).
   tableW: 2.6,

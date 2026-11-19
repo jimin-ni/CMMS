@@ -81,11 +81,11 @@ function checkItem(raw: unknown, index: number): Fail | { item: Obj } {
   const max = HEAP_POLICY.layoutCoordMax;
   if (!num(x, -max, max) || !num(z, -max, max)) return { error: `${at}: 좌표가 범위를 벗어났어요.` };
 
-  // style: 앨범 책장의 모양. "low" 는 낮은 두 칸 책장이다 (engine/furniture.js)
-  if (style !== undefined && (type !== "shelf" || style !== "low")) return { error: `${at}: style은 shelf에만 "low"로 쓸 수 있어요.` };
+  // style: 앨범 책장의 모양. 없거나 "low" 면 낮은 두 칸 책장, "tall" 이면 키 큰 책장이다 (engine/furniture.js)
+  if (style !== undefined && (type !== "shelf" || (style !== "low" && style !== "tall"))) return { error: `${at}: style은 shelf에만 "low"나 "tall"로 쓸 수 있어요.` };
   const item: Obj = { type, x, z };
   if (plant === false) item.plant = false;
-  if (style === "low") item.style = style;
+  if (style === "low" || style === "tall") item.style = style;
   if (type === "model") {
     if (typeof model !== "string" || !MODEL_IDS.has(model)) return { error: `${at}: 카탈로그에 없는 모델` };
     item.model = model;
