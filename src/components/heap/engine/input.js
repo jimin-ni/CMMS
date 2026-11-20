@@ -17,6 +17,13 @@ export function setupInput(ctx) {
     ndc.set(((ev.clientX - b.left) / b.width) * 2 - 1, -((ev.clientY - b.top) / b.height) * 2 + 1);
     ray.setFromCamera(ndc, camera);
   }
+  // 마지막 rayFrom 의 누른 자리가 집어 든 카드 가로의 어디인지 (0 왼쪽 ~ 1 오른쪽, 화면 기준). 카드는 카메라를 보고 있다
+  const _pc = new THREE.Vector3(), _pe = new THREE.Vector3();
+  function heldFx(c) {
+    _pc.copy(c.position).project(camera);
+    _pe.set(c.userData.d.w / 2, 0, 0).applyQuaternion(camera.quaternion).add(c.position).project(camera);
+    return (ndc.x - _pc.x) / (2 * Math.abs(_pe.x - _pc.x)) + 0.5;
+  }
   const keys = new Set();
   const OVERLAYS = ['phone', 'pc', 'keepsake', 'calendar', 'grid', 'rooms', 'guestbook'];
   const anyOverlay = () => OVERLAYS.some(id => !$(id).hidden);
@@ -87,7 +94,7 @@ export function setupInput(ctx) {
     if (ctx.mode === 'sort') { const h = ctx.shelf && ray.intersectObjects(ctx.shelf.albums.flatMap(a => [a.mesh, a.label]), false)[0]; if (h) albumAction(h.object.userData.album); return; }
     if (ctx.mode === 'sit') {
       const hits = ray.intersectObjects([...pickables, ...ctx.build.slotMeshes], false);
-      if (ctx.held && hits[0]?.object.userData.card === ctx.held) return flip();
+      if (ctx.held && hits[0]?.object.userData.card === ctx.held) return ctx.flipAt(heldFx(ctx.held)); // 3D 로 남는 카드 (팬 작품, 눈앞에 오는 중)
       const hit = hits.find(h => h.object.userData.card !== ctx.held);
       if (hit?.object.userData.slot) return openSlot(hit.object.userData.slot); // 더미 곁의 휴대폰, 방명록
       if (ctx.held) return putBack();
