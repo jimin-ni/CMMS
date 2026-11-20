@@ -1,7 +1,8 @@
 "use client";
 
 // 방의 배경음악. 평소에는 기본 곡, 쪽지 트리 모드(heap:mode 'tree')에서는 캐롤을 반복 재생한다.
-// - 소리 크기는 설정의 배경음악(prefs.volume.music)을 따른다.
+// - 소리 크기는 설정의 배경음악(prefs.volume.music)을 따른다. 기본값은 0(꺼짐)이고, 0이면 틀지 않는다
+//   (크기만 0이면 iOS Safari 에서는 소리가 난다: 아래 참고).
 // - paused(영사기로 영상을 볼 때, 음악 플레이어가 열려 있을 때)면 FADE_MS 동안 줄인 뒤 멈추고, 풀리면 같은 시간 동안 키운다.
 //   iOS Safari 는 audio.volume 을 바꿀 수 없어서 줄이는 과정 없이 FADE_MS 뒤에 멈춘다.
 // - 브라우저는 사용자가 누르기 전의 자동 재생을 막는다. 막히면 첫 클릭이나 키 입력 때 튼다.
@@ -18,6 +19,8 @@ export function RoomBgm({ tree, paused }: { tree: boolean; paused: boolean }) {
   const ref = useRef<HTMLAudioElement>(null);
   const [treeMissing, setTreeMissing] = useState(false);
   const music = usePrefs().volume.music;
+  // 멈춰 둘 때: 영상·음악 플레이어가 열렸거나, 설정에서 배경음악을 0으로 두었을 때
+  const off = paused || music === 0;
   const src = tree && !treeMissing ? TREE_TRACK : ROOM_TRACK;
   // 키울 때의 목표 크기. 키우는 도중에 설정이 바뀌어도 새 값까지 키운다.
   const target = useRef(music / 100);
@@ -28,7 +31,7 @@ export function RoomBgm({ tree, paused }: { tree: boolean; paused: boolean }) {
   const applyVolume = useEffectEvent(() => {
     target.current = music / 100;
     const el = ref.current;
-    if (el && !paused && !fade.current) el.volume = target.current;
+    if (el && !off && !fade.current) el.volume = target.current;
   });
   useEffect(() => {
     applyVolume();
@@ -54,7 +57,7 @@ export function RoomBgm({ tree, paused }: { tree: boolean; paused: boolean }) {
       };
       fade.current = requestAnimationFrame(step);
     };
-    if (paused) {
+    if (off) {
       fadeTo(
         () => 0,
         () => el.pause(),
@@ -82,7 +85,7 @@ export function RoomBgm({ tree, paused }: { tree: boolean; paused: boolean }) {
       cancelAnimationFrame(fade.current);
       fade.current = 0;
     };
-  }, [src, paused]);
+  }, [src, off]);
 
   return (
     <audio
