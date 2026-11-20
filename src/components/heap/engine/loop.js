@@ -40,7 +40,7 @@ export function setupLoop(ctx) {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const clock = new THREE.Clock(), dir = new THREE.Vector3(), want = new THREE.Vector3(), wantQ = new THREE.Quaternion();
   const focusGoal = new THREE.Vector3(), focusLook = new THREE.Vector3(); // 온보딩 연출의 책장 줌 (intro.js)
-  const roomGoal = new THREE.Vector3(), FLIP = new THREE.Quaternion().setFromAxisAngle(Yv, Math.PI);
+  const roomGoal = new THREE.Vector3(), turnQ = new THREE.Quaternion();
   // The canvas is sized by CSS: the whole room area, or what the 꾸미기 panel leaves of it. The observer catches both that and a window resize.
   function resize() {
     const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
@@ -111,8 +111,11 @@ export function setupLoop(ctx) {
       if (c === ctx.held) {
         const dist = Math.max(d.h / (1.5 * tn), d.w / (1.7 * tn * camera.aspect));
         want.copy(camera.position).addScaledVector(dir, dist); wantQ.copy(camera.quaternion);
-        if (ctx.heldFlipped) wantQ.multiply(FLIP);
-        heldArrived = c.position.distanceTo(want) < d.h * 0.03 && c.quaternion.angleTo(wantQ) < 0.03;
+        // 뒤집기는 각도를 따라 돌린다: 반 바퀴 목표를 한 번에 주면 slerp 가 도는 방향을 고르지 못한다 (modes.js 의 flip)
+        const goal = (ctx.heldTurn || 0) * Math.PI, now = c.userData.turnNow ?? 0;
+        c.userData.turnNow = reduced ? goal : now + (goal - now) * Math.min(1, a * 1.5);
+        wantQ.multiply(turnQ.setFromAxisAngle(Yv, c.userData.turnNow));
+        heldArrived = c.position.distanceTo(want) < d.h * 0.03 && c.quaternion.angleTo(wantQ) < 0.03 && Math.abs(goal - c.userData.turnNow) < 0.03;
       } else if (c === ctx.dragging) {
         const p = c.userData.place, below = cards.filter(o => o !== c && inPile(o));
         want.set(p.x, supportAt(p.x, p.z, below) + 0.05, p.z);

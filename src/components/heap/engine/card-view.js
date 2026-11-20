@@ -1,6 +1,6 @@
 // 집어 든 카드를 HTML 로 보여 준다. 더미의 카드는 작은 텍스처(card-art.js 의 LOW)로 두고,
 // 집어 든 카드가 눈앞에 다 오면 그 자리에 같은 모양의 HTML 카드를 겹치고 3D 카드는 숨긴다.
-// 앞면은 사진과 글자(제목, 날짜, 조회수), 뒷면은 뒷면 그림 위에 원본으로 가는 링크다. 카드를 누르면 뒤집힌다 (modes.js 의 flip).
+// 앞면은 사진과 글자(제목, 날짜, 조회수), 뒷면은 뒷면 그림 위에 원본으로 가는 링크다. 앞면 양옆 20% 나 뒷면을 누르면 뒤집히고, 앞면 가운데 60% 를 두 번 누르면 재생한다 (modes.js 의 flipAt).
 // 팬 작품은 3D 카드 그대로 둔다. 카드를 내려놓거나 영사기에 넣으면(ctx.held 가 바뀌면) HTML 카드를 내리고 3D 카드를 다시 보인다.
 import * as THREE from 'three';
 import { hasThumb, srcUrl, PLATFORM_NAME, platformOf } from './format.js';
@@ -83,12 +83,21 @@ export function setupCardView(ctx) {
   }
   ctx.onDispose(hide);
 
-  // 카드를 누르면 뒤집는다. 뒷면의 링크는 링크로만 동작한다.
-  on(host, 'click', ev => { if (!ev.target.closest('a')) ctx.flip(); });
-  // 두 번 누르면 공식 플레이어로 영상을 연다 (영사기 대신). 두 번의 click 이 뒤집기를 두 번 하므로 카드는 처음 면으로 돌아온다.
+  // 누른 자리의 카드 가로 비율 (0 왼쪽 ~ 1 오른쪽). host 는 돌지 않고 배율만 바뀌므로 host 의 상자로 잰다
+  const fxOf = ev => { const r = host.getBoundingClientRect(); return (ev.clientX - r.left) / r.width; };
+  // 앞면 양옆 20 을 누르거나 뒷면 어디를 누르면 그쪽으로 당겨 뒤집는다 (modes.js 의 flipAt). 뒷면의 링크는 링크로만 동작한다.
+  // pairFront: 두 번 누르기의 첫 click 이 앞면에서 시작했는지. 뒷면의 첫 click 이 앞면으로 뒤집은 뒤 둘째 click 이 재생하지 않게 한다
+  let pairFront = false;
+  on(host, 'click', ev => {
+    if (ev.detail <= 1) pairFront = !ctx.heldFlipped;
+    if (!ev.target.closest('a')) ctx.flipAt(fxOf(ev));
+  });
+  // 앞면 가운데 60 을 두 번 누르면 공식 플레이어로 영상을 연다. 가운데의 click 은 뒤집지 않으므로 앞면 그대로다.
   // 팬 작품은 영상이 없어 열지 않는다
   on(host, 'dblclick', ev => {
-    if (ev.target.closest('a') || !ctx.held) return;
+    if (ev.target.closest('a') || !ctx.held || ctx.heldFlipped || !pairFront) return;
+    const fx = fxOf(ev);
+    if (fx < 0.2 || fx > 0.8) return;
     const reel = ctx.held.userData.reel;
     if (reel && reel.kind !== 'fan') ctx.openPlayer(reel);
   });
@@ -110,7 +119,7 @@ export function setupCardView(ctx) {
     const k = Math.abs(_t.y - _c.y) * ch / size.H;
     const x = (_c.x + 1) / 2 * cw - size.W * k / 2, y = (1 - _c.y) / 2 * ch - size.H * k / 2;
     host.style.transform = `translate(${x}px, ${y}px) scale(${k})`;
-    inner.classList.toggle('flipped', ctx.heldFlipped);
+    inner.style.transform = `rotateY(${(ctx.heldTurn || 0) * 180}deg)`; // 돈 만큼 쌓인 각도: 누른 쪽으로 돈다
   }
 
   Object.assign(ctx, { stepCardView: step });
