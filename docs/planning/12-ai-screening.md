@@ -160,7 +160,8 @@ flowchart TD
 | 종류 | 예 | 위치 |
 |---|---|---|
 | 우회 표기 | 글자 사이에 기호·공백을 끼운 욕설 | DB (`moderation_patterns`) |
-| 위협 문장 틀 | "I'll find/hurt/kill you" 꼴 | 코드 |
+| 위협 문장 틀 | "I'll find/hurt/kill you" 꼴 | 코드 `src/lib/moderation/patterns.ts` |
+| 성적 요구 문장 틀 | 사진 요구, 속옷 질문. OpenAI가 놓친 것을 보완 (18-1) | 코드 `src/lib/moderation/patterns.ts` |
 | 연락처 | 아래 표 | 코드 `src/lib/moderation/contact.ts` |
 
 **연락처 패턴**
@@ -188,11 +189,13 @@ flowchart TD
 | 묶음 | 카테고리 | 처리 | 경고 |
 |---|---|---|---|
 | 바로 위반 | `sexual/minors`, `harassment/threatening`, `hate/threatening`, `hate`, `sexual` | OpenAI가 걸면 점수를 다시 따지지 않고 위반 | +1 |
-| 평가셋 결과로 정함 | `harassment` | 18-1 평가셋에서 팬 관용 표현이 걸리면 "숨김 + 경고 없음 + 검토 목록"(`hold_review`)으로 시작. 안 걸리면 바로 위반 | 결과에 따름 |
-| 점수 기준 | `violence`, `violence/graphic`, `illicit`, `illicit/violent` | 우리 기준값과 점수를 비교. 기준값을 정하기 전에는 OpenAI 판단을 그대로 씀 | +1 |
-| 자해 | `self-harm`, `self-harm/intent`, `self-harm/instructions` | 확인 필요로 숨김 (6-3) | 없음 |
+| 검토 숨김 [결정] 2026-11-20 | `harassment` | 평가셋(18-1)에서 팬 관용 표현이 걸려 "숨김 + 경고 없음 + 검토 목록"(`hold_review`)으로 시작 | 없음 |
+| 점수 기준 | `violence`, `violence/graphic`, `illicit`, `illicit/violent` | 점수 0.7 이상이면 위반 (평가셋 18-1) | +1 |
+| 자해 | `self-harm`, `self-harm/intent`, `self-harm/instructions` | 확인 필요로 숨김 (6-3). 바로 위반 묶음 다음, 점수 기준·`harassment`보다 먼저 봄 | 없음 |
 
 - 바로 위반 묶음의 기준은 평가셋으로 더 엄격하게 할 수는 있어도 느슨하게 하지 않습니다.
+- [결정] `sexual`은 OpenAI가 걸지 않아도 점수 0.5 이상이면 위반입니다. 평가셋에서 성적 요구 문장이 0.60인데도 걸리지 않았습니다.
+- [사실] OpenAI는 SDK 없이 `fetch`로 부릅니다 (`src/lib/moderation/openai.ts`). AI 미리보기(`ai-preview.ts`)와 같은 방식입니다.
 - [결정] 2026-11-20 `harassment`는 팬끼리의 장난에도 걸릴 수 있습니다. 연결 전에 평가셋(18-1)을 실제 OpenAI로 돌려 처리 방식을 정합니다 (#82 1번).
 - 받은 13개 점수는 모두 기록합니다.
 
@@ -214,7 +217,7 @@ type ScreenInput = {
 type ScreenOutcome =
   | "publish"              // 공개 저장
   | "block"                // 위반. 숨김 저장 + 경고
-  | "contact_first"        // 연락처 처음. 숨김 저장, 경고 없음
+  | "contact"              // 연락처. 처음이면 경고 없이 숨김, 2번째부터 block과 같음 (repo 계층이 정함)
   | "hold_self_harm"       // 확인 필요. 숨김 저장, 경고 없음, 관리자 알림
   | "hold_review";         // 오탐 위험 카테고리. 숨김 저장, 경고 없음, 검토 목록
 
@@ -512,7 +515,22 @@ type ScreenResult = {
 - 영어 중심 300~500문장. 정상 팬 대화, 관용 표현("killing it", "I hate you for being this cute"), 욕설, 비난, 성희롱, 위협, 연락처, 자해, 짧은 이름. 한국어는 보조로 일부.
 - [기본값] 용도는 **동작 확인과 큰 오탐 찾기**입니다. 이 규모로는 카테고리별 기준값을 믿을 만하게 정하기 어려우므로, 기준값은 운영 중 해지·재검토 데이터로 조정합니다.
 - 구현 뒤에는 회귀 테스트(고친 뒤 예전 결과가 깨지지 않았는지 확인)로 계속 씁니다.
-- 평가셋 원문은 공개 저장소에 넣지 않습니다.
+- 평가셋 원문은 공개 저장소에 넣지 않습니다. `.moderation-private/`(gitignore)에 두고 `MODERATION_EVAL=1 npm run moderation:eval`로 돌립니다.
+
+### 18-1-1. 50문장 1차 결과 [사실] 2026-11-20
+
+| 묶음 | 문장 수 | 결과 |
+|---|---|---|
+| 팬 관용 표현 | 16 | 경고로 이어진 것 0. `harassment` 0.40~0.88로 4~6개가 검토 숨김. `violence` 0.51~0.52 ("kill me, this is so good", "murder me with that smile", "fight you") |
+| 정상 글 (영어·한국어) | 8 | 모두 공개 |
+| 괴롭힘 | 5 | `harassment` 0.72~0.98. 관용 표현과 점수가 겹쳐 검토 숨김으로 처리 |
+| 위협·혐오 | 6 | 모두 위반 (regex 3, OpenAI 3). 실제 위협의 `violence`는 0.69~0.87 |
+| 성적 요구 | 3 | OpenAI가 하나도 걸지 않음(최고 `sexual` 0.60). regex와 점수 기준으로 보완 |
+| 자해 | 3 | 모두 확인 필요. 1개는 `violence`도 붙어 순서를 바꿈 |
+| 연락처 | 4 | 모두 regex로 잡힘 |
+| 짧은 이름 | 5 | 모두 공개 ("sexy fan"은 `sexual` 0.38) |
+
+- 결정: `harassment`는 검토 숨김, 점수 기준 0.7, `sexual` 점수 0.5, 자해 우선. 기준을 바꾸면 `policy.ts`의 `versions`를 올립니다.
 
 ### 18-2. 지표 [기본값]
 
@@ -525,23 +543,30 @@ type ScreenResult = {
 
 ## 19. 구현 범위와 순서
 
+### 19-0. 진행 상황 [사실] 2026-11-20
+
+- 브랜치 `jimins-claude/feature-ai-screening`. 19-1의 1~7 완료, 8은 데이터 내려받기와 사람 검토를 기다림.
+- `0011`은 공유 DB에 적용함. 변경 기록은 이슈 #92.
+- 브라우저 E2E 30개 항목 통과 (정상 글, 연락처 처음·2번째, 검토 숨김, 자해, 반복, 링크 수, 위반 직후 대기, 경고 3회 자동 차단과 예전 글 내림, 재검토 요청, 원문 보기, 검토 화면 범위, 해지, 크리에이터 차단 범위, 방 주인 글 바로 게시, 신고와 폴링 반영, 14세 미만).
+- 회원가입 14세 확인도 함께 넣음 (19-2에서 당김).
+- 의존성: `vitest`(개발용). npm 11 피어 의존성 오류 때문에 `.npmrc`에 `legacy-peer-deps=true`. OpenAI SDK는 넣지 않음.
+
 ### 19-1. 이번 목표: 판정 모듈 + 검토 화면
 
 | 순서 | 작업 | 필요한 것 |
 |---|---|---|
-| 1 | `vitest` 추가 (#83 7번), `openai` SDK 추가 | — |
+| 1 | `vitest` 추가 (#83 7번). OpenAI는 SDK 없이 `fetch` | — |
 | 2 | 판정 모듈 `src/lib/moderation/`: 정규화, 연락처 regex, 위협 regex, 사전 인터페이스(DB 없이도 테스트용 목록으로 동작), OpenAI 호출(시간 제한, 사용자 상한, 장애 차단기), 결정 함수, 정책 값 | `OPENAI_API_KEY` (없으면 OpenAI 단계만 건너뜀) |
 | 3 | 판정 모듈 단위 테스트: 우회 표기, 오탐 사례, 연락처, 카테고리 처리, 실패 처리. 50문장 평가셋으로 `harassment` 처리 결정 | `OPENAI_API_KEY` |
 | 4 | `0011` 마이그레이션(버블 + 모더레이션 테이블) 작성 → 마이그레이션 기록 이슈에 남김 → 공유 DB에 적용 | — |
 | 5 | repo 계층: 경고 기록, 자동 차단, 신고, 크리에이터 차단, 해지, 재검토 요청, 열람 기록 | 4 |
 | 6 | 버블 채팅에 판정 연결, 안내창, 입력창 차단 표시, 삭제 문구 표시, `status_changed_at` 폴링. 숨김 글이 폴링·AI 미리보기 문맥으로 새지 않게 repo 쿼리에서 거름 | 5 |
 | 7 | 검토 화면 `/admin/moderation`, `/creator/moderation`, 크리에이터 차단 버튼 | 5 |
-| 8 | 사전 첫 버전: ProfanityBench 영어 `severity` 5 + 혐오 표시 추출 → 사람 검토 → `moderation_terms` 적재 | 데이터 파일, 사람 검토 |
+| 8 | 사전 첫 버전: ProfanityBench 영어 `severity` 5 + 혐오 표시 추출 → 사람 검토 → `moderation_terms` 적재. `npm run moderation:terms -- extract <dataset.jsonl>` 후 `load <csv>` | 데이터 파일(HF 로그인·약관 동의 필요), 사람 검토 |
 
 ### 19-2. 다음
 
 - 쪽지·방명록 연결 (#82 6번 협의 뒤)
-- 회원가입 14세 확인 안내창
 - 로그인 화면 "관리자 문의" 버튼
 - 재검토 요청 화면
 - 평가셋 작성과 기준값 1차 조정
