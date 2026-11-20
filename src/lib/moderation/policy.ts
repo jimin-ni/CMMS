@@ -56,6 +56,9 @@ export const MODERATION_POLICY = {
   versions: { patterns: "2026-11-20.2", thresholds: "2026-11-20.2" },
 } as const;
 
+// 로그인 화면 "관리자 문의" 버튼의 받는 주소 (문서 9장, #83 6번). 임시 주소라 바뀔 수 있다.
+export const ADMIN_CONTACT_EMAIL = "ww326jimin@gmail.com";
+
 // 작성자 안내 문구 (문서 6장, 10장)
 export const MODERATION_TEXT = {
   removed: "커뮤니티 정책 위반으로 삭제되었습니다.",

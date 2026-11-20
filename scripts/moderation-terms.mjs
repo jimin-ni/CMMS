@@ -49,10 +49,20 @@ function parseCsv(text) {
   return rows;
 }
 
+// 검토를 돕는 자동 추천. 최종 판단은 사람이 approve 칸에 적는다.
+// y: 거친 어조이고 업무용으로 안전하지 않은 단어. ?: 가볍거나 장난스러운 어조, 3글자 이하, 여러 단어. 빈칸: 그 밖
+function suggest(term, r) {
+  const tone = String(r.tone ?? "").toLowerCase();
+  if (["mild", "playful", "moderate"].includes(tone) || r.safe_for_work === true) return "?";
+  if (Array.from(term).length <= 3 || /\s/.test(term)) return "?";
+  if (["harsh", "vulgar", "aggressive", "mocking"].includes(tone)) return "y";
+  return "";
+}
+
 async function extract(path) {
   const lines = createInterface({ input: createReadStream(path, "utf8"), crlfDelay: Infinity });
   const seen = new Set();
-  const out = [["approve", "term", "tag", "severity", "hate_speech", "tone", "category", "safe_for_work", "notes"]];
+  const out = [["approve", "suggest", "term", "tag", "severity", "hate_speech", "tone", "category", "safe_for_work", "notes"]];
   let total = 0;
   for await (const line of lines) {
     if (!line.trim()) continue;
@@ -65,7 +75,7 @@ async function extract(path) {
     const term = String(r.word ?? "").normalize("NFKC").toLowerCase().trim();
     if (!term || seen.has(term)) continue;
     seen.add(term);
-    out.push(["", term, hate ? "hate" : "sev5", r.severity, hate, r.tone, r.category, r.safe_for_work, r.notes]);
+    out.push(["", suggest(term, r), term, hate ? "hate" : "sev5", r.severity, hate, r.tone, r.category, r.safe_for_work, r.notes]);
   }
   writeFileSync(OUT, "﻿" + out.map((row) => row.map(csvCell).join(",")).join("\n"), "utf8");
   console.log(`전체 ${total}줄 중 후보 ${out.length - 1}개 → ${OUT}`);
