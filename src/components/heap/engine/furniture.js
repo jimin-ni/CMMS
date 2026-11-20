@@ -95,8 +95,16 @@ export function setupFurniture(ctx) {
       box(0.6, 0.16, 0.45, flat('#f7f1e6'), -1.0, 0.56, 0, { parent: g });
       return { hw: 1.6, hd: 0.95 };
     },
-    // 사진 더미 (heap): 카드와 상자는 heap.js 가 HOST 자리에 짓는다. 여기서는 바닥에 둔 더미가 길을 막는 넓이만 돌려준다
-    heap(g, it) { return { hw: 0.6, hd: it.style === 'box' ? 0.37 : 0.45 }; },
+    // 사진 더미 (heap): 카드와 상자는 heap.js 가 HOST 자리에 짓는다. 여기서는 바닥에 둔 더미가 길을 막는 넓이를 돌려주고,
+    // 그룹에 더미 크기의 보이지 않는 상자 하나를 둔다. 꾸미기(edit.js 의 pick)는 build.group 만 광선으로 보므로 이것이 없으면
+    // 더미를 고르지 못해 옮기기와 넣기를 할 수 없다. 끄는 동안의 윤곽(ghost)도 이 상자로 그린다. 방의 누르기(input.js)는 build.group 을 보지 않는다
+    heap(g, it) {
+      const isBox = it.style === 'box', hw = 0.6, hd = isBox ? 0.37 : 0.45, h = isBox ? 0.25 : 0.12;
+      const proxy = new THREE.Mesh(new THREE.BoxGeometry(hw * 2, h, hd * 2), new THREE.MeshBasicMaterial({ visible: false }));
+      proxy.position.y = h / 2; proxy.name = 'heap-pick';
+      g.add(proxy);
+      return { hw, hd };
+    },
     shelf(g, it, build) {
       if (it.style !== 'tall') return lowShelf(g, it, build);
       const wood = tone(C, 'woodDark'), add = m => { shelfParts.push(m); return m; };
