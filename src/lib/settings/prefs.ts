@@ -29,7 +29,8 @@ export const DEFAULT_PREFS: Prefs = {
   language: "ko",
   theme: "light",
   roomTime: null,
-  volume: { video: 80, music: 60, effects: 70 },
+  // 배경음악은 꺼진 채(0) 시작한다. 설정의 소리 쪽에서 키우면 그때부터 튼다 (room-bgm.tsx).
+  volume: { video: 80, music: 0, effects: 70 },
 };
 
 const KEY = "cmms:prefs";
