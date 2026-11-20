@@ -11,8 +11,12 @@ import { PixelIcon, type PixelIconName } from "./icons";
 import { LoginPopup } from "./login-popup";
 
 const LOGIN_REASON = "Sign in to leave your mark in this room.";
-// 휴대폰의 대화를 로그인 전에 누를 때 (엔진의 heap:signin)
-const CHAT_LOGIN_REASON = "Sign in to chat with the creator.";
+// 로그인 전에 방 안에서 로그인이 필요한 것을 누를 때 (HeapRoom 이 보내는 heap:signin 의 detail)
+const SIGNIN_REASONS: Record<string, string> = {
+  chat: "Sign in to chat with the creator.",
+  guestbook: "Sign in to leave your name in the guestbook.",
+  note: "Sign in to hang a note on the tree.",
+};
 // 설정 버튼이 여는 곳 (settings-book.tsx)
 const SETTINGS_HREF = "/settings";
 // 로그인한 사람의 이름 버튼이 여는 곳 (mypage/my-book.tsx)
@@ -21,13 +25,13 @@ const MYPAGE_HREF = "/mypage";
 const GUIDE_CENTER_MS = 3000;
 
 // 내비게이션 바의 버튼: 홈, 폴라로이드, 챗, 레터, (로그인), 설정.
-// go: 방 안에서 옮겨 갈 곳 (엔진의 heap:go, engine/nav.js). 레터는 아직 하는 일이 없다.
-type Go = "room" | "polaroid" | "phone";
-const NAV_ITEMS: { id: string; icon: PixelIconName; label: string; go?: Go }[] = [
+// go: 방 안에서 옮겨 갈 곳 (엔진의 heap:go, engine/nav.js). 레터는 방명록을 연다.
+type Go = "room" | "polaroid" | "phone" | "guestbook";
+const NAV_ITEMS: { id: string; icon: PixelIconName; label: string; go: Go }[] = [
   { id: "home", icon: "home", label: "Home", go: "room" },
   { id: "polaroid", icon: "image", label: "Polaroid", go: "polaroid" },
   { id: "chat", icon: "chat", label: "Chat", go: "phone" },
-  { id: "letter", icon: "mail", label: "Letter" },
+  { id: "letter", icon: "mail", label: "Letter", go: "guestbook" },
 ];
 const NAV_ICON = 28;
 
@@ -99,8 +103,8 @@ export function RoomTour({
     };
     const watch = new MutationObserver(check);
     watch.observe(roomEl, { subtree: true, attributes: true, attributeFilter: ["hidden"] });
-    // 로그인 전에 휴대폰의 대화를 누르면 엔진이 알려 준다 (HeapRoom 의 signInHere)
-    const onSignIn = () => setLoginReason(CHAT_LOGIN_REASON);
+    // 로그인 전에 휴대폰의 대화, 방명록, 쪽지 쓰기를 누르면 방이 알려 준다 (HeapRoom 의 signInHere)
+    const onSignIn = (e: Event) => setLoginReason(SIGNIN_REASONS[(e as CustomEvent<string>).detail] ?? LOGIN_REASON);
     roomEl.addEventListener("heap:mode", onMode);
     roomEl.addEventListener("heap:signin", onSignIn);
     return () => {
@@ -109,6 +113,21 @@ export function RoomTour({
       roomEl.removeEventListener("heap:signin", onSignIn);
     };
   }, [hostRef, markFound]);
+
+  // 로그인하지 않은 방문자에게 아직 둘러보지 않은 곳을 옅게 빛낸다 (엔진의 heap:hint, engine/walk.js).
+  // 둘러본 곳은 빛이 꺼진다. 건너뛰었거나 로그인했으면 아무것도 빛내지 않는다. 엔진이 다시 뜨면(heap:ready) 다시 보낸다.
+  const hintSpots = useMemo(
+    () => (live && !signedIn && !skipped ? spots.filter((id) => !found.includes(id)) : []),
+    [live, signedIn, skipped, spots, found],
+  );
+  useEffect(() => {
+    const roomEl = hostRef.current?.querySelector<HTMLElement>(".heap-room");
+    if (!roomEl) return;
+    const send = () => roomEl.dispatchEvent(new CustomEvent("heap:hint", { detail: hintSpots }));
+    send();
+    roomEl.addEventListener("heap:ready", send);
+    return () => roomEl.removeEventListener("heap:ready", send);
+  }, [hostRef, hintSpots]);
 
   // 방 안에 들어오면 안내 팝업이 가운데에 뜬다. 어디든 누르거나 3초가 지나면 아래로 내려간다.
   const centered = live && !skipped && guideSpot === "center";
@@ -194,7 +213,7 @@ export function RoomTour({
               key={item.id}
               type="button"
               className="oc-nav-btn"
-              onClick={item.go ? () => go(item.go!) : undefined}
+              onClick={() => go(item.go)}
               tabIndex={navOpen ? 0 : -1}
             >
               <PixelIcon name={item.icon} size={NAV_ICON} />

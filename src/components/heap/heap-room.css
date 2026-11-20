@@ -169,6 +169,7 @@
 .heap-room .big { font-family: var(--hand); font-size: 48px; text-align: center; color: var(--clay); line-height: 1; }
 .heap-room .note { margin: 0; font: 600 13px/1.4 var(--cp-ui); color: var(--cp-ash); }
 .heap-room .note a { color: var(--cp-ink); font-weight: 800; }
+.heap-room .note .link-btn { font: inherit; font-weight: 800; color: var(--cp-ink); background: none; border: 0; padding: 0; text-decoration: underline; cursor: pointer; }
 /* 다른 방 목록: 가이드의 menu-category-tile. 방 이름은 24px 대문자 Oswald */
 .heap-room .roomlist { display: flex; flex-direction: column; gap: 10px; }
 .heap-room .roomlist button { display: flex; justify-content: space-between; align-items: center; gap: 16px; text-align: left; font: 400 15px/1.5 var(--cp-ui); color: var(--cp-ink); background: var(--cp-white); border: 1px solid var(--cp-ink); border-radius: 4px; padding: 16px 20px; cursor: pointer; }
