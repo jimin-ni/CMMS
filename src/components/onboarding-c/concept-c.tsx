@@ -8,7 +8,7 @@
 // 엔진에는 heap:intro 이벤트(engine/intro.js)로 가구와 사진 더미, 카메라 거리만 알려 준다.
 import "./onboarding-c.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { HeapRoom, type HeapRoomData } from "@/components/heap/heap-room";
+import { HeapRoom, type HeapOwnerData, type HeapRoomData } from "@/components/heap/heap-room";
 import { ONBOARDING_ROOM_ID, SCROLL_SCREENS, STEPS, TIMELINE, ramp, stepOfItems, stepWindow } from "./story";
 import { PaperFilters } from "./paper";
 import { PixelIcon } from "./icons";
@@ -27,15 +27,20 @@ const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 // startInRoom: 온보딩을 끝낸 상태로 시작한다 (홈, /home). Esc 로 건너뛴 것과 같다: 방 안, 둘러보기는 모두 채움, 내비게이션 바가 열림.
+// canEdit, owner: 방 주인이 보면 /room/lovesoo 와 같이 꾸미기 버튼과 쪽지 답장을 연다 (HeapRoom 에 그대로 넘긴다).
 export function ConceptC({
   data,
   viewerName,
   signedIn,
+  canEdit = false,
+  owner = null,
   startInRoom = false,
 }: {
   data: HeapRoomData;
   viewerName: string | null;
   signedIn: boolean;
+  canEdit?: boolean;
+  owner?: HeapOwnerData | null;
   startInRoom?: boolean;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -185,7 +190,15 @@ export function ConceptC({
         <div className="oc-stage" onClick={() => phaseRef.current === "scroll" && enterRoom()}>
           {/* 실제 러브쑤 방. 스크롤하는 동안에는 누를 수 없고, 방 안에 들어오면 /room/lovesoo 와 똑같이 움직인다. */}
           <div ref={hostRef} className={phase === "room" ? "oc-room-host live" : "oc-room-host"}>
-            <HeapRoom roomId={ONBOARDING_ROOM_ID} data={data} viewerName={viewerName} signedIn={signedIn} signInHere />
+            <HeapRoom
+              roomId={ONBOARDING_ROOM_ID}
+              data={data}
+              viewerName={viewerName}
+              signedIn={signedIn}
+              canEdit={canEdit}
+              owner={owner}
+              signInHere
+            />
           </div>
           <div ref={vignetteRef} className="oc-layer oc-vignette" />
           <div ref={shadeRef} className="oc-layer oc-shade" />

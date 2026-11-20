@@ -448,7 +448,7 @@ export function HeapRoom({
               트리에서 물러나기
             </button>
             {canEdit && ready && mode === "room" && !editing && (
-              <button className="btn ghost" type="button" onClick={() => setEditing(true)}>
+              <button id="edit-open" className="btn ghost" type="button" onClick={() => setEditing(true)}>
                 꾸미기
               </button>
             )}
