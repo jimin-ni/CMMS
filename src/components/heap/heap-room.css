@@ -76,6 +76,13 @@
 .heap-room .tree-step.next { right: max(16px, env(safe-area-inset-right, 0px)); }
 .heap-room .tree-step[hidden] { display: none; }
 .heap-room .tree-step:focus-visible { outline: 2px solid var(--cp-white); outline-offset: 2px; box-shadow: 0 0 0 4px var(--cp-ink); }
+/* 임시 디버그 사이드바 (debug-flags.js). 오른쪽 가장자리, ‹ › 단추보다 위. */
+.heap-room .debug-side { position: absolute; top: 22%; right: 0; display: flex; align-items: flex-start; pointer-events: auto; z-index: 30; }
+.heap-room .debug-tab { writing-mode: vertical-rl; font: 600 12px var(--ui); color: var(--paper); background: rgba(47, 44, 36, 0.78); border: 0; border-radius: 8px 0 0 8px; padding: 12px 6px; cursor: pointer; }
+.heap-room .debug-body { display: flex; flex-direction: column; gap: 6px; padding: 10px; background: rgba(47, 44, 36, 0.88); border-radius: 0 0 0 10px; }
+.heap-room .debug-body button { font: 600 13px var(--ui); color: var(--paper); background: rgba(243, 234, 219, 0.12); border: 0; border-radius: 999px; padding: 8px 14px; cursor: pointer; text-align: left; white-space: nowrap; }
+.heap-room .debug-body button[aria-pressed="true"] { background: var(--clay); }
+.heap-room .debug-side button:focus-visible { outline: 3px solid var(--paper); outline-offset: 2px; }
 
 .heap-room #toast { position: absolute; top: 70px; left: 50%; transform: translateX(-50%); margin: 0; font-family: var(--hand); font-size: 26px; line-height: 1.2; color: var(--ink); background: var(--paper); padding: 4px 18px 6px; border: 1px solid var(--clay); border-radius: 4px; pointer-events: none; text-align: center; }
 .heap-room #toast:empty { display: none; }

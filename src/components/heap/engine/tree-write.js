@@ -617,7 +617,7 @@ export function setupTreeWrite(ctx, T) {
       if (T.rig()?.settled) { endAuto(); openSheet(); }
     }
   }
-  const advance = (n, d, min = 0) => { const t = THREE.MathUtils.clamp(n.t + d, min, n.total); applyNote(n, t, n.flight); return t; };
+  const advance = (n, d, min = 0) => { const t = THREE.MathUtils.clamp(n.t + d, min, n.total); applyNote(n, t, n.flight); return n.t; }; // n.t: 시험 토글이 구간을 건너뛰었을 수 있다
   function step(t, dt) {
     if (auto) tickAuto();
     syncButtons();

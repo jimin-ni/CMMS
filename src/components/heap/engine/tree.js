@@ -772,8 +772,8 @@ export function setupTree(ctx) {
     }
     reFit();
     for (const [n, an] of anims) {
-      const tt = THREE.MathUtils.clamp(n.t + an.dir * an.speed * dt, 0, n.total);
-      applyNote(n, tt);
+      applyNote(n, THREE.MathUtils.clamp(n.t + an.dir * an.speed * dt, 0, n.total));
+      const tt = n.t; // 시험 토글이 구간을 건너뛰었을 수 있다
       if (an.dir > 0 && tt >= n.total) { anims.delete(n); if (n === opened) markOpenedRead(n); }
       else if (an.dir < 0 && tt <= 0) finishClose(n);
     }

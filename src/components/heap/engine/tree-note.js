@@ -13,6 +13,7 @@
 // 반환한 p.root 를 씬에 붙이고 applyPose(p, t) 로 자세를 준다.
 import * as THREE from 'three';
 import { disposeScene } from './util.js';
+import { ANIM_TEST } from './debug-flags.js';
 
 export const C = { olive: 0x565344, clay: 0xA6613C, paper: 0xf3e9d6 };
 export const TREE_H = 1.8;
@@ -497,9 +498,22 @@ export function eraseText(p) {
 export const N_FLY = 0.35, N_OPEN_AT = 0.45, N_OPEN = 0.4, N_GAP = 0.05;
 // 껍데기가 열리고 난 뒤 쪽지 타임라인이 시작하는 시각과 전체 길이
 export const noteTimes = pk => { const offset = N_OPEN_AT + N_OPEN + N_GAP; return { offset, total: offset + pk.total }; };
+// 임시 시험 (debug-flags.js): 꺼 둔 구간 안으로 들어가는 t 는 움직이는 쪽의 끝으로 건너뛴다.
+// 호출하는 쪽은 돌려준 값 대신 n.t 를 읽어야 끝에 닿은 것을 안다.
+function skipTest(n, t) {
+  const from = n.t ?? t;
+  if (t === from) return t;
+  // 두 구간은 n.offset 에서 맞닿는다: 둘 다 꺼져 있으면 한 구간으로 합친다
+  const a = ANIM_TEST.bauble ? n.offset : N_FLY, b = ANIM_TEST.fold ? n.offset : n.total;
+  if (a >= b) return t;
+  if (t > from && t > a && t < b) return b;
+  if (t < from && t < b && t > a) return a;
+  return t;
+}
 // n: { pk, orn, offset, shellDrop, t }.
 // flight: { from: { p, q }, to: { p, q } } 날아오는 구간의 출발과 도착 자세. 없으면 n.root 의 자세는 건드리지 않는다.
 export function applyNote(n, t, flight = n.flight) {
+  t = skipTest(n, t);
   n.t = t;
   const clamp01 = v => THREE.MathUtils.clamp(v, 0, 1);
   const fFly = ease(clamp01(t / N_FLY));

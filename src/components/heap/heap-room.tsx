@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -24,6 +24,11 @@ import type { HeapChannelPlatform } from "@/lib/heap/platform";
 import type { ReelClass } from "@/lib/heap/caps";
 import { toEngineNote } from "./engine/tree-ids";
 import { RoomBgm } from "./room-bgm";
+import { ANIM_TEST, DEBUG_ON, saveDebugFlags } from "./engine/debug-flags";
+import { authClient } from "@/lib/auth-client";
+
+// 디버그 값은 페이지가 뜰 때 정해지고 바뀌지 않는다
+const noSubscribe = () => () => {};
 import { RoomEditor } from "./room-editor";
 import { SetupChecklist, setupFlags, type ChecklistAction } from "./setup-checklist";
 import { ShareButton } from "./share-button";
@@ -162,6 +167,19 @@ export function HeapRoom({
   // 오른쪽 위 음악 플레이어가 열려 있는지(heap:music). 열려 있으면 배경음악을 줄여 멈춘다.
   const [musicOn, setMusicOn] = useState(false);
   const [editing, setEditing] = useState(false);
+  // 임시 디버그 사이드바 (engine/debug-flags.js). ?debug=1 일 때만. 서버 렌더와 맞추려고 마운트 뒤에 켠다.
+  const debugOn = useSyncExternalStore(noSubscribe, () => DEBUG_ON, () => false);
+  const [debugOpen, setDebugOpen] = useState(false);
+  const [animTest, setAnimTest] = useState({ ...ANIM_TEST });
+  const toggleAnim = (key: "fold" | "bauble") => {
+    ANIM_TEST[key] = !ANIM_TEST[key];
+    saveDebugFlags();
+    setAnimTest({ ...ANIM_TEST });
+  };
+  const debugSignOut = async () => {
+    await authClient.signOut();
+    window.location.reload();
+  };
   // 팔로워로 보기 (판정 J7): 꾸미기 화면을 모두 숨기고 방을 팔로워의 구도로 보여 준다. 꾸미기 안에서만 켠다.
   const [preview, setPreview] = useState(false);
   const closeEditor = useCallback(() => {
@@ -442,6 +460,32 @@ export function HeapRoom({
         <button id="tree-next" className="tree-step next" type="button" aria-label="다음 쪽지" hidden>
           ›
         </button>
+        {/* 임시 디버그 사이드바 (engine/debug-flags.js). ?debug=1 일 때만. 비교가 끝나면 걷어 낸다. */}
+        {debugOn && (
+          <div className={`debug-side${debugOpen ? " open" : ""}`}>
+            <button type="button" className="debug-tab" aria-expanded={debugOpen} onClick={() => setDebugOpen((o) => !o)}>
+              디버그
+            </button>
+            {debugOpen && (
+              <div className="debug-body" role="group" aria-label="디버그">
+                <button type="button" onClick={() => window.location.reload()}>
+                  방 새로고침
+                </button>
+                <button type="button" aria-pressed={animTest.fold} onClick={() => toggleAnim("fold")}>
+                  쪽지 접기 {animTest.fold ? "켬" : "끔"}
+                </button>
+                <button type="button" aria-pressed={animTest.bauble} onClick={() => toggleAnim("bauble")}>
+                  장식 열기 {animTest.bauble ? "켬" : "끔"}
+                </button>
+                {signedIn && (
+                  <button type="button" onClick={debugSignOut}>
+                    로그아웃
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
       <p id="toast" />
       {/* 쪽지 쓰기 (tree-write.js): 3D 종이 위에 겹치는 글상자, 아래 조작 줄, 접은 쪽지를 끌어 걸 때의 안내 줄, 내 쪽지 지우기와 확인창 */}
