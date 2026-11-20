@@ -5,9 +5,9 @@ A Creator's Room Filled Together with Fans
 
 | Feature ID | Feature Name | Feature Description |
 |---|---|---|
-| F-01 | Login | Feature Description |
-| F-02 | Chat | Creator-fan messaging & public replies |
-| F-03 | Guestbook | Fan daily room visit log |
+| F-01 | Login | Creator, Admin, Public |
+| F-02 | Chat | Creator-public messaging |
+| F-03 | Guestbook | Daily room visit log |
 | F-04 | Room Decor | Customize room furniture, colors, & themes |
 | F-05 | Polaroid | Reels, shorts, & video clips with fan elements |
 | F-06 | Xmas Tree | Leave messages on the creator's tree |
