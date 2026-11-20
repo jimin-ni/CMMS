@@ -49,3 +49,6 @@ next-env.d.ts
 # audio whose license forbids redistributing original files (docs/planning/10-audio.md §3)
 /public/audio/**/*-mixkit-*
 /public/audio/**/*-pixabay-*
+
+# AI 스크리닝 사전 원본과 평가셋 (docs/planning/12-ai-screening.md 5-2, 18-1). 공개 저장소에 넣지 않는다.
+/.moderation-private/

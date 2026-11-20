@@ -38,7 +38,12 @@ async function CreatorContent() {
   return (
     <div className="flex flex-col gap-8">
       <section className="flex flex-col gap-3 rounded-sm bg-white p-6">
-        <h1 className="text-xl font-medium text-ink">크리에이터 페이지</h1>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-xl font-medium text-ink">크리에이터 페이지</h1>
+          <Link href="/creator/moderation" className="text-sm text-ink underline">
+            메시지 검토
+          </Link>
+        </div>
         {openRoom ? (
           <>
             <p className="text-sm text-ash">

@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
-import type { ActionResult } from "@/lib/bubble/actions";
+import { useRouter } from "next/navigation";
+import type { ActionResult, ModerationNotice } from "@/lib/bubble/actions";
 import { BUBBLE_POLICY } from "@/lib/bubble/policy";
 import { trackEvent } from "@/lib/analytics";
 import type { PreviewResult } from "@/lib/bubble/ai-preview";
@@ -24,7 +25,10 @@ export function Composer({
   previewRoomId: string | null;
   onSent: () => void;
 }) {
+  const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
+  // AI 스크리닝 안내. 확인을 누를 때까지 입력창 위에 둔다.
+  const [notice, setNotice] = useState<ModerationNotice | null>(null);
   const [draft, setDraft] = useState("");
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -32,6 +36,9 @@ export function Composer({
   // 전송 성공 시 입력창을 비우고 목록을 새로 가져온다.
   async function submitAction(prev: ActionResult | null, formData: FormData) {
     const result = await sendAction(prev, formData);
+    // 쓰기 차단이 걸렸거나 풀렸으면 입력창을 서버에서 다시 그린다.
+    if ((result.ok && result.notice?.refresh) || (!result.ok && result.refresh)) router.refresh();
+    setNotice(result.ok ? (result.notice ?? null) : null);
     if (result.ok) {
       // 버블 방은 roomId, 크리에이터 톡은 chatId로 보낸다.
       trackEvent({
@@ -77,6 +84,23 @@ export function Composer({
 
   return (
     <div className="flex flex-col gap-2 bg-white p-3">
+      {notice && (
+        <div
+          role="alert"
+          className={`flex items-start gap-2 rounded-sm border px-3 py-2 text-sm ${
+            notice.tone === "warn" ? "border-red-700 text-red-700" : "border-hairline text-ink"
+          }`}
+        >
+          <p className="flex-1">{notice.text}</p>
+          <button
+            type="button"
+            onClick={() => setNotice(null)}
+            className="shrink-0 text-xs font-bold uppercase underline"
+          >
+            확인
+          </button>
+        </div>
+      )}
       {preview?.status === "ok" && (
         <div className="flex items-center gap-2 rounded-sm bg-cream px-3 py-2 text-sm">
           <ReactionView reaction={preview.reaction} size={28} />

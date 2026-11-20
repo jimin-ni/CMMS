@@ -1,4 +1,4 @@
-import { and, desc, eq, exists, gt, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, exists, gte, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { db } from "@/lib/db";
 import { bubbleMembers, bubbleMessages, bubbleRooms, creatorAvatars, user } from "@/lib/schema";
@@ -34,6 +34,9 @@ export type MessageRow = {
   created_at: string;
   deleted_at: string | null;
   can_delete: boolean;
+  // 신고·차단으로 내린 글. 본문 대신 "커뮤니티 정책 위반으로 삭제되었습니다"를 보여준다.
+  // 원문은 방 주인·관리자가 따로 요청할 때만 내려간다. 크리에이터 톡에는 없다.
+  removed?: boolean;
 };
 
 export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -133,9 +136,14 @@ export async function joinRoom(roomId: string, userId: string): Promise<void> {
 }
 
 // 보는 사람에게 보이는 메시지만 고르는 조건. 구독자는 자신과 크리에이터의 메시지만 본다.
+// 판정에서 숨긴 글(blocked, held)은 누구에게도 대화방에 보이지 않는다. 검토 화면에서만 본다.
 function visibleTo(room: RoomRow, viewer: Viewer): SQL | undefined {
-  if (seesAllMessages(room, viewer)) return undefined;
-  return or(eq(bubbleMessages.senderId, viewer.id), eq(bubbleMessages.senderId, room.creator_id));
+  const shown = inArray(bubbleMessages.screenStatus, ["published", "removed"]);
+  if (seesAllMessages(room, viewer)) return shown;
+  return and(
+    shown,
+    or(eq(bubbleMessages.senderId, viewer.id), eq(bubbleMessages.senderId, room.creator_id)),
+  );
 }
 
 // DB 시각(밀리초). 실시간 읽기의 기준점으로 쓴다.
@@ -153,10 +161,9 @@ export async function listMessages(
   options: { limit?: number; since?: Date } = {},
 ): Promise<MessageRow[]> {
   const { limit = 200, since } = options;
-  // since가 있으면 그 뒤에 생기거나 삭제된 메시지만 가져온다.
-  const changed = since
-    ? or(gt(bubbleMessages.createdAt, since), gt(bubbleMessages.deletedAt, since))
-    : undefined;
+  // since가 있으면 그 뒤에 상태가 바뀐(생김, 삭제, 신고로 내림, 검토로 공개) 메시지만 가져온다.
+  // 같은 시각에 생긴 글이 빠지지 않게 >=로 가져오고, 겹친 것은 화면에서 id로 합친다.
+  const changed = since ? gte(bubbleMessages.statusChangedAt, since) : undefined;
 
   const rows = await db
     .select({
@@ -164,13 +171,16 @@ export async function listMessages(
       sender_id: bubbleMessages.senderId,
       sender_name: user.name,
       sender_avatar_at: creatorAvatars.updatedAt,
-      // 삭제된 메시지는 본문을 가리고 자리만 남긴다.
-      body: sql<string | null>`case when ${bubbleMessages.deletedAt} is null then ${bubbleMessages.body} end`,
+      // 삭제되거나 신고로 내린 메시지는 본문을 가리고 자리만 남긴다.
+      body: sql<string | null>`case when ${bubbleMessages.deletedAt} is null
+        and ${bubbleMessages.screenStatus} = 'published' then ${bubbleMessages.body} end`,
+      removed: sql<boolean>`${bubbleMessages.screenStatus} = 'removed'`,
       created_at: bubbleMessages.createdAt,
       deleted_at: bubbleMessages.deletedAt,
       // 내가 보낸 메시지이고 삭제 가능 시간이 남아 있는지 DB에서 계산한다.
       can_delete: sql<boolean>`(${bubbleMessages.senderId} = ${viewer.id}
         and ${bubbleMessages.deletedAt} is null
+        and ${bubbleMessages.screenStatus} = 'published'
         and ${within(bubbleMessages.createdAt, deleteWindowMs)})`,
     })
     .from(bubbleMessages)
@@ -198,6 +208,8 @@ export async function recentMessagesForPreview(room: RoomRow, viewer: Viewer, li
       and(
         eq(bubbleMessages.roomId, room.id),
         isNull(bubbleMessages.deletedAt),
+        // 미리보기 문맥은 외부 API로 가므로 공개 글만 넣는다.
+        eq(bubbleMessages.screenStatus, "published"),
         visibleTo(room, viewer),
       ),
     )
@@ -207,14 +219,8 @@ export async function recentMessagesForPreview(room: RoomRow, viewer: Viewer, li
   return rows.reverse();
 }
 
-export async function insertMessage(roomId: string, senderId: string, body: string) {
-  const rows = await db
-    .insert(bubbleMessages)
-    .values({ roomId, senderId, body })
-    .returning({ id: bubbleMessages.id });
-  return rows[0];
-}
-
+// 판정 결과와 관계없이 보낸 시도를 모두 센다. 위반 글도 같은 테이블에 있어서 함께 세진다 (문서 13장).
+// 여기에 screen_status 조건을 넣지 않는다.
 export async function getSendStats(senderId: string, windowMs: number) {
   const rows = await db
     .select({
@@ -237,12 +243,13 @@ export async function softDeleteOwnMessage(
   if (!UUID_PATTERN.test(messageId)) return false;
   const rows = await db
     .update(bubbleMessages)
-    .set({ deletedAt: sql`now()` })
+    .set({ deletedAt: sql`now()`, statusChangedAt: sql`now()` })
     .where(
       and(
         eq(bubbleMessages.id, messageId),
         eq(bubbleMessages.senderId, senderId),
         isNull(bubbleMessages.deletedAt),
+        eq(bubbleMessages.screenStatus, "published"),
         within(bubbleMessages.createdAt, windowMs),
       ),
     )

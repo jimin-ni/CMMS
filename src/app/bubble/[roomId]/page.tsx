@@ -15,6 +15,7 @@ import { getViewer } from "@/lib/session";
 import { RoomChat } from "@/components/bubble/room-chat";
 import { CloseRoomButton } from "@/components/bubble/room-controls";
 import { deleteMessageAction, sendMessageAction } from "@/lib/bubble/actions";
+import { getWriteBlock } from "@/lib/moderation/repo";
 
 export default function RoomPage({ params }: { params: Promise<{ roomId: string }> }) {
   return (
@@ -41,6 +42,9 @@ async function RoomContent({ params }: { params: Promise<{ roomId: string }> }) 
   const messages = await listMessages(room, viewer, BUBBLE_POLICY.deleteWindowMs);
   const isOpen = room.status === "open";
   const canClose = isOpen && (viewer.role === "admin" || viewer.id === room.creator_id);
+  // 방 주인·관리자는 쓰기 차단을 받지 않고, 구독자 글을 신고·차단할 수 있다.
+  const moderator = seesAllMessages(room, viewer);
+  const writeBlock = moderator ? null : await getWriteBlock(viewer.id, room.creator_id);
 
   return (
     <div className="flex h-[calc(100vh-9rem)] min-h-[28rem] flex-col overflow-hidden rounded-sm border border-ink bg-cream">
@@ -77,6 +81,7 @@ async function RoomContent({ params }: { params: Promise<{ roomId: string }> }) 
         isOpen={isOpen}
         memberCount={seesAllMessages(room, viewer) ? room.member_count : null}
         canSend={canSendInRoom(room, viewer)}
+        moderation={{ roomOwnerId: room.creator_id, moderator, writeBlock }}
         maxChars={maxCharsFor(viewer.role)}
         previewRoomId={
           FEATURE_ON.aiPreview && viewer.role === "public" && viewer.id !== room.creator_id

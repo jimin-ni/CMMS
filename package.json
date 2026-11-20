@@ -10,7 +10,10 @@
     "auth:migrate": "npx @better-auth/cli migrate --config src/lib/auth.ts",
     "db:bubble": "node --env-file=.env.local scripts/db-migrate.mjs",
     "heap:seed": "node --env-file=.env.local scripts/heap-seed.mjs",
-    "heap:channels": "node --env-file=.env.local scripts/heap-import-channels.mjs"
+    "heap:channels": "node --env-file=.env.local scripts/heap-import-channels.mjs",
+    "test": "vitest run",
+    "moderation:eval": "node --env-file=.env.local node_modules/vitest/vitest.mjs run src/lib/moderation/eval.live.test.ts",
+    "moderation:terms": "node --env-file=.env.local scripts/moderation-terms.mjs"
   },
   "dependencies": {
     "better-auth": "^1.7.19",
@@ -31,6 +34,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.4.6",
     "tailwindcss": "4.3.3",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.12"
   }
 }
