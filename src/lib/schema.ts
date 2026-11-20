@@ -16,6 +16,8 @@ import {
 } from "drizzle-orm/pg-core";
 import { HEAP_CHANNEL_PLATFORMS, HEAP_PIECE_PLATFORMS } from "./heap/platform";
 
+export const SCREEN_STATUSES = ["published", "blocked", "removed", "held"] as const;
+
 // Drizzle에 bytea 기본 타입이 없어서 직접 정의한다. node-postgres는 bytea를 Buffer로 주고받는다.
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   dataType: () => "bytea",
@@ -59,6 +61,12 @@ export const bubbleMessages = pgTable("bubble_messages", {
   body: text("body").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  // AI 스크리닝 (0011). published만 다른 사람에게 보인다. removed는 "삭제되었습니다" 자리만 남는다.
+  screenStatus: text("screen_status", { enum: SCREEN_STATUSES }).notNull().default("published"),
+  screenedAt: timestamp("screened_at", { withTimezone: true }),
+  // 상태가 바뀐 시각. 폴링 기준점이라 DB now()로만 넣는다.
+  statusChangedAt: timestamp("status_changed_at", { withTimezone: true }).notNull().defaultNow(),
+  normalizedHash: text("normalized_hash"),
 });
 
 export const creatorProfiles = pgTable("creator_profiles", {
@@ -259,4 +267,92 @@ export const heapAttempts = pgTable("heap_attempts", {
   key: text("key").primaryKey(),
   windowStart: timestamp("window_start", { withTimezone: true }).notNull().defaultNow(),
   count: integer("count").notNull().default(1),
+});
+
+// AI 스크리닝 (0011). 기준 문서: docs/planning/12-ai-screening.md 15장
+export const moderationEvents = pgTable("moderation_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id").notNull(),
+  roomOwnerId: text("room_owner_id"),
+  surface: text("surface", { enum: ["chat", "note", "guestbook"] }).notNull(),
+  targetId: uuid("target_id").notNull(),
+  source: text("source", { enum: ["auto", "report"] }).notNull(),
+  kind: text("kind", { enum: ["abuse", "contact", "self_harm"] }).notNull(),
+  countsAsStrike: boolean("counts_as_strike").notNull(),
+  reasons: text("reasons").array().notNull().default(sql`'{}'`),
+  scores: jsonb("scores").$type<Record<string, number> | null>(),
+  openaiStatus: text("openai_status"),
+  versions: jsonb("versions"),
+  reportedBy: text("reported_by"),
+  reviewStatus: text("review_status", { enum: ["none", "pending", "upheld", "dismissed"] })
+    .notNull()
+    .default("none"),
+  reviewedBy: text("reviewed_by"),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  voidedAt: timestamp("voided_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const sanctions = pgTable("sanctions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id").notNull(),
+  scope: text("scope", { enum: ["owner", "auto", "global"] }).notNull(),
+  roomOwnerId: text("room_owner_id"),
+  createdBy: text("created_by"),
+  reason: text("reason"),
+  reviewStatus: text("review_status", { enum: ["none", "pending", "upheld"] }).notNull().default("none"),
+  reviewedBy: text("reviewed_by"),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  revokedBy: text("revoked_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const sanctionAppeals = pgTable("sanction_appeals", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  sanctionId: uuid("sanction_id").notNull().unique(),
+  userId: text("user_id").notNull(),
+  status: text("status", { enum: ["pending", "reviewed"] }).notNull().default("pending"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const userAgeChecks = pgTable("user_age_checks", {
+  userId: text("user_id").primaryKey(),
+  is14OrOlder: boolean("is_14_or_older").notNull(),
+  answeredAt: timestamp("answered_at", { withTimezone: true }).notNull().defaultNow(),
+  resetBy: text("reset_by"),
+  resetAt: timestamp("reset_at", { withTimezone: true }),
+});
+
+export const moderationAccessLog = pgTable("moderation_access_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  viewerId: text("viewer_id"),
+  eventId: uuid("event_id"),
+  surface: text("surface", { enum: ["chat", "note", "guestbook"] }).notNull(),
+  targetId: uuid("target_id").notNull(),
+  viewedAt: timestamp("viewed_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const moderationTerms = pgTable("moderation_terms", {
+  id: integer("id").primaryKey(),
+  term: text("term").notNull(),
+  lang: text("lang").notNull(),
+  tag: text("tag").notNull(),
+  source: text("source").notNull(),
+  version: text("version").notNull(),
+  enabled: boolean("enabled").notNull().default(true),
+});
+
+export const moderationPatterns = pgTable("moderation_patterns", {
+  id: integer("id").primaryKey(),
+  name: text("name").notNull(),
+  pattern: text("pattern").notNull(),
+  version: text("version").notNull(),
+  enabled: boolean("enabled").notNull().default(true),
+});
+
+export const moderationAllowlist = pgTable("moderation_allowlist", {
+  id: integer("id").primaryKey(),
+  term: text("term").notNull(),
+  note: text("note"),
 });

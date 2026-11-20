@@ -1,6 +1,7 @@
 import { BUBBLE_POLICY } from "@/lib/bubble/policy";
 import { canAccessRoom, dbNowMs, getRoom, listMessages, seesAllMessages } from "@/lib/bubble/repo";
 import { getViewer } from "@/lib/session";
+import { getWriteBlock } from "@/lib/moderation/repo";
 
 // 늦게 커밋된 메시지를 놓치지 않도록 다음 요청 기준점을 조금 앞당긴다.
 // 겹쳐서 온 메시지는 클라이언트가 id로 합친다.
@@ -32,7 +33,10 @@ export async function GET(
   // 기준점을 조회보다 먼저 잡아야 조회 중에 생긴 메시지를 다음 요청에서 받는다.
   const nowMs = await dbNowMs();
   const messages = await listMessages(room, viewer, BUBBLE_POLICY.deleteWindowMs, { since });
+  // 내 작성 가능 여부. 바뀌면 화면이 입력창을 다시 그린다 (문서 10-1). 방 주인·관리자는 막히지 않는다.
+  const writeBlock = seesAllMessages(room, viewer) ? null : await getWriteBlock(viewer.id, room.creator_id);
   return Response.json({
+    writeBlock,
     messages,
     cursor: new Date(nowMs - CURSOR_OVERLAP_MS).toISOString(),
     status: room.status,

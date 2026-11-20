@@ -6,6 +6,8 @@ import type { MessageRow } from "@/lib/bubble/repo";
 import { Composer, type SendAction } from "./composer";
 import { DeleteMessageButton, type DeleteAction } from "./room-controls";
 import { Avatar } from "@/components/avatar";
+import { ModeratorTools, RemovedText, WriteBlockedPanel } from "@/components/moderation/chat-moderation";
+import type { WriteBlock } from "@/lib/moderation/repo";
 
 // 새 메시지를 가져오는 간격. (실시간 방식은 PoC 후 결정, 지금은 폴링)
 const POLL_MS = 5000;
@@ -29,10 +31,15 @@ type Props = {
   // 크리에이터 예상 반응 미리보기를 쓸 버블 방. 구독자에게만 넘긴다.
   previewRoomId: string | null;
   closedNotice: string;
+  // AI 스크리닝. 버블 대화방에만 넘긴다(크리에이터 톡은 없음).
+  // moderator: 방 주인·관리자. 구독자 글을 신고·차단하고 내린 글의 원문을 볼 수 있다.
+  // writeBlock: 구독자가 지금 이 방에 쓸 수 없는 이유. null이면 쓸 수 있다.
+  moderation?: { roomOwnerId: string; moderator: boolean; writeBlock: WriteBlock | null };
 };
 
 export function RoomChat(props: Props) {
-  const { pollUrl, viewerId, isOpen, memberCount } = props;
+  const { pollUrl, viewerId, isOpen, memberCount, moderation } = props;
+  const writeBlockKey = JSON.stringify(moderation?.writeBlock ?? null);
   const router = useRouter();
   const [messages, setMessages] = useState(props.initialMessages);
   const cursor = useRef(props.initialCursor);
@@ -53,6 +60,7 @@ export function RoomChat(props: Props) {
         cursor: string;
         status: "open" | "closed";
         memberCount: number | null;
+        writeBlock?: WriteBlock | null;
       };
       cursor.current = data.cursor;
       if (data.messages.length > 0) {
@@ -63,11 +71,14 @@ export function RoomChat(props: Props) {
         });
       }
       // 방이 닫히거나 참여 인원이 바뀌면 머리글과 입력창을 서버에서 다시 그린다.
-      if (data.status === "closed" || data.memberCount !== memberCount) router.refresh();
+      // 쓰기 차단 상태가 바뀌어도 입력창을 다시 그린다.
+      const blockChanged =
+        data.writeBlock !== undefined && JSON.stringify(data.writeBlock) !== writeBlockKey;
+      if (data.status === "closed" || data.memberCount !== memberCount || blockChanged) router.refresh();
     } finally {
       inFlight.current = false;
     }
-  }, [pollUrl, router, memberCount]);
+  }, [pollUrl, router, memberCount, writeBlockKey]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -93,7 +104,13 @@ export function RoomChat(props: Props) {
                   mine ? "border-ink bg-ink" : "border-hairline bg-white"
                 } ${message.deleted_at ? (mine ? "italic text-white/70" : "italic text-ash") : mine ? "text-white" : "text-ink"}`}
               >
-                {message.deleted_at ? "삭제된 메시지입니다." : message.body}
+                {message.deleted_at ? (
+                  "삭제된 메시지입니다."
+                ) : message.removed ? (
+                  <RemovedText messageId={message.id} canReveal={Boolean(moderation?.moderator)} />
+                ) : (
+                  message.body
+                )}
               </p>
             );
             const time = (
@@ -138,6 +155,17 @@ export function RoomChat(props: Props) {
                     {bubble}
                     {time}
                   </div>
+                  {moderation?.moderator &&
+                    message.sender_id !== moderation.roomOwnerId &&
+                    !message.removed &&
+                    !message.deleted_at && (
+                      <ModeratorTools
+                        messageId={message.id}
+                        senderId={message.sender_id}
+                        senderName={message.sender_name}
+                        onDone={sync}
+                      />
+                    )}
                 </div>
               </li>
             );
@@ -145,7 +173,9 @@ export function RoomChat(props: Props) {
         </ul>
       </div>
 
-      {props.canSend ? (
+      {props.canSend && moderation?.writeBlock ? (
+        <WriteBlockedPanel block={moderation.writeBlock} />
+      ) : props.canSend ? (
         <Composer
           sendAction={props.sendAction}
           target={props.target}

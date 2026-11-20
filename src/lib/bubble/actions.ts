@@ -8,13 +8,22 @@ import {
   createRoom,
   getRoom,
   getSendStats,
-  insertMessage,
   joinRoom,
   softDeleteOwnMessage,
 } from "./repo";
 import { getViewer } from "@/lib/session";
+import { countLinks } from "@/lib/moderation/contact";
+import { MODERATION_POLICY, MODERATION_TEXT } from "@/lib/moderation/policy";
+import { chatPreScreenBlock, getWriteBlock, saveChatMessage, type SaveNotice } from "@/lib/moderation/repo";
+import { hashNormalized } from "@/lib/moderation/screen";
+import { screenText } from "@/lib/moderation/server";
 
-export type ActionResult = { ok: true; roomId?: string } | { ok: false; error: string };
+// 판정 결과 안내. 보낸 사람에게만 보인다. refresh가 true면 입력창 상태(쓰기 차단)를 서버에서 다시 그린다.
+export type ModerationNotice = { tone: "warn" | "info" | "care"; text: string; refresh?: boolean };
+
+export type ActionResult =
+  | { ok: true; roomId?: string; notice?: ModerationNotice }
+  | { ok: false; error: string; refresh?: boolean };
 
 // DB 제약(1~50자)과 같은 값
 const TITLE_MAX = 50;
@@ -70,6 +79,19 @@ export async function sendMessageAction(
   const check = validateBody(String(formData.get("body") ?? ""), maxCharsFor(viewer.role));
   if (!check.ok) return check;
 
+  // 방 주인과 관리자는 판정 후 바로 게시하고, 판정용 도배 방지와 쓰기 차단을 받지 않는다 (문서 3-2).
+  const privileged = viewer.role === "admin" || viewer.id === room.creator_id;
+  if (!privileged) {
+    const block = await getWriteBlock(viewer.id, room.creator_id);
+    if (block) {
+      return {
+        ok: false,
+        error: block.reason === "under_age" ? MODERATION_TEXT.underAge : MODERATION_TEXT.writeBlocked,
+        refresh: true,
+      };
+    }
+  }
+
   // 도배 방지: 연속 전송 간격과 시간창당 개수
   const stats = await getSendStats(viewer.id, BUBBLE_POLICY.windowMs);
   if (stats.lastSentMsAgo !== null && stats.lastSentMsAgo < BUBBLE_POLICY.minIntervalMs) {
@@ -80,8 +102,44 @@ export async function sendMessageAction(
     return { ok: false, error: "메시지를 너무 많이 보냈어요. 잠시 후 다시 시도해 주세요." };
   }
 
-  await insertMessage(room.id, viewer.id, check.body);
-  return { ok: true };
+  const normalizedHash = hashNormalized(check.body);
+  if (!privileged) {
+    if (countLinks(check.body) > MODERATION_POLICY.maxLinksPerPost) {
+      return { ok: false, error: MODERATION_TEXT.tooManyLinks };
+    }
+    const pre = await chatPreScreenBlock(viewer.id, normalizedHash);
+    if (pre?.kind === "repeat") return { ok: false, error: MODERATION_TEXT.repeat };
+    if (pre?.kind === "cooldown") return { ok: false, error: MODERATION_TEXT.cooldown(pre.seconds) };
+  }
+
+  // 먼저 판정하고 그다음 저장한다. 위반 글은 다른 사람에게 한 번도 보이지 않는다.
+  const result = await screenText({ text: check.body, surface: "chat", authorId: viewer.id });
+  const saved = await saveChatMessage({
+    roomId: room.id,
+    roomOwnerId: room.creator_id,
+    senderId: viewer.id,
+    body: check.body,
+    result,
+    privileged,
+  });
+  return { ok: true, notice: noticeFor(saved) };
+}
+
+function noticeFor(saved: SaveNotice): ModerationNotice | undefined {
+  switch (saved.kind) {
+    case "published":
+      return undefined;
+    case "blocked":
+      return saved.autoBlocked
+        ? { tone: "warn", text: `${MODERATION_TEXT.blocked(saved.strikes)} ${MODERATION_TEXT.nowBlocked}`, refresh: true }
+        : { tone: "warn", text: MODERATION_TEXT.blocked(saved.strikes) };
+    case "contact_first":
+      return { tone: "info", text: MODERATION_TEXT.contactFirst };
+    case "hold_review":
+      return { tone: "info", text: MODERATION_TEXT.holdReview };
+    case "hold_self_harm":
+      return { tone: "care", text: MODERATION_TEXT.selfHarm };
+  }
 }
 
 export async function deleteMessageAction(messageId: string): Promise<ActionResult> {
