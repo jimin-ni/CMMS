@@ -40,7 +40,14 @@ export type ScreenDeps = {
   moderate: Moderate;
   // DB(moderation_patterns)에 둔 우회 표기 regex. 정규화한 글과 원문 양쪽에 돌린다.
   extraPatterns?: { name: string; re: RegExp }[];
+  // 단계별 진행 기록. 개발 중 콘솔 확인용 (server.ts). 걸린 사전 단어는 넘기지 않고 근거 종류만 넘긴다.
+  trace?: (step: TraceStep) => void;
 };
+
+export type TraceStep =
+  | { stage: "lexicon" | "regex" | "contact"; hit: string | null }
+  | { stage: "openai"; status: OpenAIStatus; ms: number; flagged?: string[] }
+  | { stage: "decision"; outcome: ScreenOutcome; reasons: string[] };
 
 const P = MODERATION_POLICY;
 
@@ -95,31 +102,55 @@ export async function screen(input: ScreenInput, deps: ScreenDeps): Promise<Scre
     openai: "skipped_earlier_hit",
   });
 
+  const trace = deps.trace ?? (() => {});
+  const done = (r: ScreenResult): ScreenResult => {
+    trace({ stage: "decision", outcome: r.outcome, reasons: r.reasons });
+    return r;
+  };
+
   // 싼 것부터. 앞에서 걸리면 뒤는 부르지 않는다.
   const term = matchLexicon(deps.lexicon, n);
-  if (term) return early("block", `lexicon:${term.lang}:${term.tag}`);
+  const lexiconHit = term ? `lexicon:${term.lang}:${term.tag}` : null;
+  trace({ stage: "lexicon", hit: lexiconHit });
+  if (lexiconHit) return done(early("block", lexiconHit));
 
+  let patternHit: string | null = null;
   const pattern = findPattern(n.text);
-  if (pattern) return early("block", `regex:${pattern}`);
-  for (const p of deps.extraPatterns ?? []) {
-    if (p.re.test(n.text) || p.re.test(input.text)) return early("block", `regex:db:${p.name}`);
+  if (pattern) patternHit = `regex:${pattern}`;
+  else {
+    const db = (deps.extraPatterns ?? []).find((p) => p.re.test(n.text) || p.re.test(input.text));
+    if (db) patternHit = `regex:db:${db.name}`;
   }
+  trace({ stage: "regex", hit: patternHit });
+  if (patternHit) return done(early("block", patternHit));
 
   const contact = findContact(input.text);
-  if (contact) return early("contact", `regex:contact:${contact}`);
+  const contactHit = contact ? `regex:contact:${contact}` : null;
+  trace({ stage: "contact", hit: contactHit });
+  if (contactHit) return done(early("contact", contactHit));
 
+  const started = Date.now();
   const ai = await deps.moderate(input.text, input.authorId);
   if (ai.status !== "called") {
+    trace({ stage: "openai", status: ai.status, ms: Date.now() - started });
     // 판정 실패: 사전·regex를 통과했으므로 공개 (문서 6-4)
-    return { ...base, outcome: "publish", reasons: [], scores: null, openai: ai.status };
+    return done({ ...base, outcome: "publish", reasons: [], scores: null, openai: ai.status });
   }
+  trace({
+    stage: "openai",
+    status: "called",
+    ms: Date.now() - started,
+    flagged: Object.entries(ai.categories)
+      .filter(([, v]) => v)
+      .map(([c]) => `${c}=${(ai.scores[c] ?? 0).toFixed(2)}`),
+  });
   const decided = decideOpenAI(ai);
-  return {
+  return done({
     ...base,
     versions: { ...base.versions, model: P.openai.model },
     outcome: decided.outcome,
     reasons: decided.reasons,
     scores: ai.scores,
     openai: "called",
-  };
+  });
 }

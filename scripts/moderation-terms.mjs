@@ -6,6 +6,7 @@
 //    → .moderation-private/terms-review.csv  (첫 칸 approve를 사람이 y로 채운다)
 // 2) 적재: approve=y인 줄만 moderation_terms에 넣는다. 같은 (lang, term)은 덮어쓴다.
 //    npm run moderation:terms -- load .moderation-private/terms-review.csv
+//    --accept-suggest를 붙이면 approve가 비어 있어도 suggest=y인 줄을 함께 적재한다(검토자가 추천을 그대로 받아들인 경우).
 //
 // 출처: ProfanityBench (https://huggingface.co/datasets/BibbyResearch/ProfanityBench), MIT 라이선스.
 // 라벨은 전문가 검증이 아니고 가볍거나 되찾아 쓰는 말이 섞여 있어 사람 검토 없이 적재하지 않는다.
@@ -13,7 +14,9 @@ import { createReadStream, readFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 import pg from "pg";
 
-const [mode, file] = process.argv.slice(2);
+const args = process.argv.slice(2);
+const acceptSuggest = args.includes("--accept-suggest");
+const [mode, file] = args.filter((a) => !a.startsWith("--"));
 const OUT = ".moderation-private/terms-review.csv";
 const SOURCE = "ProfanityBench";
 
@@ -86,7 +89,10 @@ async function load(path) {
   const rows = parseCsv(readFileSync(path, "utf8").replace(/^﻿/, ""));
   const [header, ...body] = rows;
   const col = (name) => header.indexOf(name);
-  const approved = body.filter((r) => /^y(es)?$/i.test(r[col("approve")]?.trim() ?? ""));
+  const isYes = (v) => /^y(es)?$/i.test(v?.trim() ?? "");
+  const approved = body.filter(
+    (r) => isYes(r[col("approve")]) || (acceptSuggest && col("suggest") >= 0 && isYes(r[col("suggest")])),
+  );
   if (!approved.length) {
     console.log("approve=y인 줄이 없어 적재하지 않습니다.");
     return;

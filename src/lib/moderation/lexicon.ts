@@ -55,7 +55,10 @@ function lookupWord(lex: Lexicon, token: string): LexiconTerm | null {
   if (exact) return exact;
   for (const suf of SUFFIXES) {
     if (token.length - suf.length > 3 && token.endsWith(suf)) {
-      const hit = lex.words.get(token.slice(0, -suf.length));
+      const base = token.slice(0, -suf.length);
+      // 허용 목록은 어미를 뗀 형태에도 적용한다 ("queens"도 "queen"과 같이 뺀다).
+      if (lex.allow.has(base)) continue;
+      const hit = lex.words.get(base);
       if (hit) return hit;
     }
   }

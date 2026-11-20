@@ -13,6 +13,8 @@ export type MyAccount = {
   email: string;
   roleLabel: string;
   joinedAt: Date;
+  // 관리자면 계정 정보 장에 관리자 페이지 버튼을 보인다. 접근 권한은 관리자 페이지가 서버에서 다시 확인한다.
+  isAdmin: boolean;
 };
 
 // 크리에이터·관리자에게만 있는 값. room 이 null 이면 아직 방이 없다.
@@ -35,6 +37,8 @@ const PLATFORM_LABELS: Record<HeapChannelPlatform, string> = {
 
 const MY_ROOM_HREF = "/room/me";
 const CREATOR_HREF = "/creator";
+// 관리자 페이지. 지금은 AI 스크리닝 검토 화면 하나다 (docs/planning/12-ai-screening.md 11장).
+const ADMIN_HREF = "/admin/moderation";
 
 const dateFormat = new Intl.DateTimeFormat("ko-KR", { dateStyle: "long", timeZone: "Asia/Seoul" });
 
@@ -104,6 +108,11 @@ function AccountPage({ no, account }: { no: number; account: MyAccount }) {
         <Row label="가입일">{dateFormat.format(account.joinedAt)}</Row>
       </dl>
       <div className="mp-actions">
+        {account.isAdmin && (
+          <Link href={ADMIN_HREF} className="mp-btn">
+            관리자 페이지
+          </Link>
+        )}
         <SignOutButton className="mp-btn" />
       </div>
     </BookPage>

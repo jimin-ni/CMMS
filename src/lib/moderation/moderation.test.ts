@@ -58,6 +58,11 @@ describe("lexicon", () => {
     expect(hit("asses")).toBeNull(); // 3글자 이하는 정확히 같을 때만
     expect(hit("ass")).not.toBeNull();
   });
+  it("허용 목록은 어미를 뗀 형태에도 적용", () => {
+    const lex = buildLexicon([{ term: "queen", lang: "en", tag: "hate" }], ["queen"], "t");
+    expect(matchLexicon(lex, normalize("you are a queen"))).toBeNull();
+    expect(matchLexicon(lex, normalize("queens of pop"))).toBeNull();
+  });
   it("한국어 보조 사전은 공백을 지우고 부분 일치", () => {
     expect(hit("나 쁜 말 하지마")).not.toBeNull();
   });

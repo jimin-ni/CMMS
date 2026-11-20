@@ -122,6 +122,13 @@ export async function sendMessageAction(
     result,
     privileged,
   });
+  if (process.env.NODE_ENV === "development" || process.env.MODERATION_DEBUG === "1") {
+    // 판정 뒤 실제로 어떻게 저장됐는지 (방 주인 바로 게시, 연락처 처음, 경고 수, 자동 차단)
+    console.log(
+      `[moderation] 저장: ${saved.kind}${privileged ? " (방 주인·관리자: 바로 게시)" : ""}` +
+        (saved.kind === "blocked" ? ` 경고 ${saved.strikes}회${saved.autoBlocked ? ", 자동 차단" : ""}` : ""),
+    );
+  }
   return { ok: true, notice: noticeFor(saved) };
 }
 
