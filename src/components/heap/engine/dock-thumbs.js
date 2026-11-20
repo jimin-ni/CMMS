@@ -1,7 +1,7 @@
 // 꾸미기 가구 목록의 그림 (design/editor.md 의 B3). 진짜 Kenney 모델을 지금 방의 팔레트로 물들여 화면 밖에서 한 장씩 그린다.
 // 방의 렌더러와 따로 작은 렌더러 하나를 쓴다: 방의 렌더러로 그리면 렌더 타깃에서 톤 매핑과 sRGB 가 빠져 방과 색이 달라진다.
 // 처음 부탁을 받을 때 만들고, 마운트가 끝날 때 함께 버린다. 모델은 models.js 의 캐시(loadModel)를 같이 쓴다.
-//   받는 것  heap:thumb { id, cb, token? }  id 는 카탈로그 모델 id. cb(dataURL | null) 은 그림이 나오면 한 번 불린다 (모르는 모델이나 실패는 null).
+//   받는 것  heap:thumb { id, cb, token?, item? }  id 는 카탈로그 모델 id. 손 가구(방 소품)는 item(가구 항목 모양)을 함께 보내 BUILD 로 짓는다. cb(dataURL | null) 은 그림이 나오면 한 번 불린다 (모르는 모델이나 실패는 null).
 //            token.live 가 false 가 되면 그 부탁은 그리지 않고 cb 도 부르지 않는다 (room-editor.tsx 가 정리할 때 끈다).
 //            heap:edit false (꾸미기를 닫음): 줄을 비우고 렌더러와 그림을 버린다. 다시 열면 처음부터 그린다.
 // 그림은 이 마운트 안에서 (칠한 색, id) 로 기억한다. 팔레트는 다시 마운트하지 않고 바뀌므로(recolour.js) 색마다 따로 둔다: 되돌리기로 돌아온 색은 다시 그리지 않는다.
@@ -33,12 +33,41 @@ export function setupDockThumbs(ctx) {
   onDispose(drop);
   on(root, 'heap:edit', e => { if (e.detail) return; gen++; queue = Promise.resolve(); done.clear(); drop(); });
 
+  // 묶음 하나를 화면 가득 비스듬히 찍는다
+  function shoot(hold) {
+    const { renderer, scene, camera, canvas } = rig();
+    scene.add(hold); hold.updateMatrixWorld(true);
+    const sphere = new THREE.Box3().setFromObject(hold, true).getBoundingSphere(new THREE.Sphere());
+    const fit = Math.max(0.05, sphere.radius) / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2));
+    camera.position.copy(sphere.center).addScaledVector(VIEW, fit * 0.9);
+    camera.near = fit / 20; camera.far = fit * 4; camera.updateProjectionMatrix();
+    camera.lookAt(sphere.center);
+    renderer.render(scene, camera);
+    const url = canvas.toDataURL('image/png');
+    scene.remove(hold);
+    return url;
+  }
+
+  // 손으로 짓는 가구(방 소품)를 방과 같은 BUILD 로 지어 찍는다. item 은 독의 항목 모양 (room-editor.tsx 의 HAND_TEMPLATE).
+  // 버리는 build 에 짓는다: 기능 슬롯은 build !== ctx.build 라 시작하지 않는다 (slots.js). 재질은 방과 나눠 쓰는 것(tone)이 있어 버리지 않고,
+  // 이 묶음이 만든 기하만 버린다. 아무 메시도 없으면(창문은 shell.js 가 짓는다) null.
+  function drawHand(item) {
+    const build = { group: null, groups: [], obst: [], items: [item], lamps: [], slots: [], slotMeshes: [], seats: [], seatMeshes: [], loads: new Set() };
+    const g = new THREE.Group(), irand = ctx.irand;
+    let s = 7; ctx.irand = () => (s = (s * 16807) % 2147483647) / 2147483647; // 러그 무늬 같은 것이 방의 난수 수열을 건드리지 않게
+    try { if (!ctx.BUILD[item.type]?.(g, item, build)) return null; } finally { ctx.irand = irand; }
+    let meshes = 0; g.traverse(o => { if (o.isMesh) meshes++; });
+    const url = meshes ? shoot(g) : null;
+    g.traverse(o => { if (o.isMesh) o.geometry.dispose(); });
+    return url;
+  }
+
   // 모델 하나를 그린다. 재질은 furniture.js 처럼 이름으로 물들인 복사본을 쓰고, 그린 뒤 버린다 (기하는 캐시의 것이라 두고 간다).
-  async function draw(id) {
+  async function draw(id, item) {
+    if (item) return drawHand(item);
     const tint = { ...ctx.TINT }; // 부탁을 꺼낸 때의 색 (모델을 읽는 동안 미리보기가 색을 바꿔도 캐시 열쇠와 맞는다)
     const m = await ctx.loadModel(id);
     if (!m || ctx.disposed) return null;
-    const { renderer, scene, camera, canvas } = rig();
     const inst = m.root.clone(), own = new Map();
     inst.traverse(o => {
       if (!o.isMesh) return;
@@ -48,16 +77,8 @@ export function setupDockThumbs(ctx) {
       o.material = own.get(o.material);
     });
     const hold = new THREE.Group();
-    hold.scale.setScalar(ctx.scaleOf(m.entry)); hold.add(inst); scene.add(hold);
-    hold.updateMatrixWorld(true);
-    const sphere = new THREE.Box3().setFromObject(hold, true).getBoundingSphere(new THREE.Sphere());
-    const fit = Math.max(0.05, sphere.radius) / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2));
-    camera.position.copy(sphere.center).addScaledVector(VIEW, fit * 0.9);
-    camera.near = fit / 20; camera.far = fit * 4; camera.updateProjectionMatrix();
-    camera.lookAt(sphere.center);
-    renderer.render(scene, camera);
-    const url = canvas.toDataURL('image/png');
-    scene.remove(hold);
+    hold.scale.setScalar(ctx.scaleOf(m.entry)); hold.add(inst);
+    const url = shoot(hold);
     for (const c of own.values()) c.dispose();
     return url;
   }
@@ -74,7 +95,7 @@ export function setupDockThumbs(ctx) {
       if (!done.has(key)) {
         let url = null;
         key = keyOf(d.id); // 그리기 시작할 때의 색 (draw 는 기다리는 동안 ctx.TINT 를 읽는다)
-        try { url = await draw(d.id); } catch (err) { if (!ctx.disposed) console.error('[heap-room] thumb', d.id, err); }
+        try { url = await draw(d.id, d.item && typeof d.item.type === 'string' ? d.item : null); } catch (err) { if (!ctx.disposed) console.error('[heap-room] thumb', d.id, err); }
         if (ctx.disposed || g !== gen) return;
         done.set(key, url);
       }

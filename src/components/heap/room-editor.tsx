@@ -111,6 +111,7 @@ const HAND_MODELS: Model[] = [
   { id: `${HAND_PREFIX}screen`, label: "스크린", category: "hand" },
   { id: `${HAND_PREFIX}poster`, label: "포스터", category: "hand" },
   { id: `${HAND_PREFIX}window`, label: "창문", category: "hand" },
+  { id: `${HAND_PREFIX}projector`, label: "영사기", category: "hand" },
   { id: `${HAND_PREFIX}frame`, label: "벽 액자", category: "hand" },
   { id: `${HAND_PREFIX}calendar`, label: "탁상 달력", category: "hand" },
 ];
@@ -133,7 +134,23 @@ const POLAROID_PIC =
   encodeURIComponent(
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><g transform="rotate(-8 32 32)"><rect x="14" y="8" width="36" height="44" rx="1.5" fill="#F3EADB" stroke="#565344" stroke-width="2"/><rect x="18" y="12" width="28" height="26" fill="#A6613C"/><circle cx="38" cy="19" r="4" fill="#F3EADB" opacity="0.8"/><path d="M18 38 L27 27 L34 34 L39 29 L46 38 Z" fill="#565344"/></g></svg>',
   );
-const HAND_PIC: Record<string, string> = { [`${HAND_PREFIX}heap`]: POLAROID_PIC, [`${HAND_PREFIX}heapBox`]: POLAROID_PIC };
+// 창문은 벽 구멍과 틀을 방의 틀(shell.js)이 짓고 가구 묶음은 비어 있어 엔진이 찍을 것이 없다. 그래서 그림을 그려 둔다.
+const WINDOW_PIC =
+  "data:image/svg+xml," +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect x="12" y="8" width="40" height="46" fill="#E9DCC4" stroke="#565344" stroke-width="3"/><rect x="16" y="12" width="14" height="18" fill="#F6D9A8"/><rect x="34" y="12" width="14" height="18" fill="#F6D9A8"/><rect x="16" y="34" width="14" height="16" fill="#EFC98F"/><rect x="34" y="34" width="14" height="16" fill="#EFC98F"/><rect x="9" y="52" width="46" height="4" fill="#A6613C"/></svg>',
+  );
+// 엔진이 찍지 않고 그림을 쓰는 방 소품. 나머지 방 소품은 엔진이 방과 같은 BUILD 로 지어 찍는다 (dock-thumbs.js)
+const HAND_PIC: Record<string, string> = {
+  [`${HAND_PREFIX}heap`]: POLAROID_PIC,
+  [`${HAND_PREFIX}heapBox`]: POLAROID_PIC,
+  [`${HAND_PREFIX}window`]: WINDOW_PIC,
+};
+// 독의 손 가구 id → 엔진이 지을 항목 모양 (자리는 원점)
+const handItemOf = (id: string): Partial<Item> => {
+  const key = id.slice(HAND_PREFIX.length);
+  return { ...(HAND_TEMPLATE[key] ?? { type: key }), x: 0, z: 0 } as Partial<Item>;
+};
 // 카탈로그 이름을 바꿔 부르는 모델 (방 v2: 받침 하나의 원탁을 카페 탁자로)
 const LABEL_OVERRIDE: Record<string, string> = { tableRound: "카페 탁자" };
 
@@ -174,7 +191,8 @@ function useThumbs(rootRef: RefObject<HTMLDivElement | null>, look: string, moun
   const scope = `${mount}|${look}`;
   const [pics, setPics] = useState<{ scope: string; map: Record<string, string | null> }>({ scope, map: {} });
   const pending = useRef<{ scope: string; ids: Set<string> }>({ scope, ids: new Set() });
-  const want = ids.filter((id) => !id.startsWith(HAND_PREFIX)).join(",");
+  // 그림이 따로 있는 방 소품(HAND_PIC)은 부탁하지 않는다. 나머지 방 소품은 항목 모양(item)을 함께 보내 엔진이 지어 찍는다
+  const want = ids.filter((id) => !(id in HAND_PIC)).join(",");
   useEffect(() => {
     const root = rootRef.current;
     if (!root || !look || !want) return;
@@ -189,6 +207,7 @@ function useThumbs(rootRef: RefObject<HTMLDivElement | null>, look: string, moun
           detail: {
             id,
             token,
+            item: id.startsWith(HAND_PREFIX) ? handItemOf(id) : undefined,
             cb: (url: string | null) => {
               if (!token.live) return;
               asked.splice(asked.indexOf(id), 1);

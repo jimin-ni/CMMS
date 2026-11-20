@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { flat, makeCanvas, canvasTexture } from './draw.js';
 import { tone, mark } from './palette.js';
+import { makeChip } from './chip.js';
 
 export function setupFixtures(ctx) {
   const { BUILD, C, box } = ctx;
@@ -64,8 +65,28 @@ export function setupFixtures(ctx) {
     pageL.rotation.z = 0.12; pageR.rotation.z = -0.12;
     const pen = box(0.015, 0.015, 0.16, tone(C, 'accent'), 0.14, by + 0.05, 0.02, { parent: g }); pen.rotation.y = 0.5;
     parts.push(pageL, pageR, pen);
+    // "새 방명록 N": 방 주인에게만, 아직 보지 않은 이름이 있을 때 공책 위에 뜬다 (live.js 가 칠하고 숨긴다). 누르면 방명록을 연다
+    const chip = makeChip(C.ink); chip.sp.position.y = by + 0.5; g.add(chip.sp); parts.push(chip.sp);
+    (build.gbChips ??= []).push(chip);
+    ctx.paintGbChips?.();
     tap(build, it, 'guestbook', parts);
     return stand ? { hw: 0.32, hd: 0.25 } : { hw: 0.25, hd: 0.18 };
+  };
+
+  // 영사기: 예전 고정 소품의 모양 그대로 (몸통, 렌즈, 받침, 두 릴과 팔). 꾸밈만이고 누르기도 받지 않는다. 렌즈는 지역 -z 를 본다
+  BUILD.projector = g => {
+    const metal = flat('#3f3d32', { roughness: 0.55, metalness: 0.3 });
+    box(0.26, 0.2, 0.36, tone(C, 'olive'), 0, 0.12, 0, { parent: g });
+    const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.065, 0.12, 10), metal); lens.rotation.x = Math.PI / 2; lens.position.set(0, 0.13, -0.23);
+    const glass = new THREE.Mesh(new THREE.CircleGeometry(0.045, 10), flat('#5b5a4a')); glass.position.set(0, 0.13, -0.291); glass.rotation.y = Math.PI;
+    box(0.22, 0.03, 0.3, metal, 0, 0.015, 0, { parent: g });
+    const reelGeo = new THREE.CylinderGeometry(0.09, 0.09, 0.025, 12);
+    for (const z of [-0.1, 0.1]) {
+      const reel = new THREE.Mesh(reelGeo, tone(C, 'accent')); reel.rotation.z = Math.PI / 2; reel.position.set(0, 0.33, z); reel.castShadow = true; g.add(reel);
+    }
+    box(0.03, 0.12, 0.3, metal, 0, 0.26, 0, { parent: g });
+    lens.castShadow = true; g.add(lens, glass);
+    return { hw: 0.15, hd: 0.21 };
   };
 
   // 벽 가구: 묶음은 벽 선 위(x, z)에 있고 y 는 가운데 높이다. 지역 +z 가 방 안쪽이다 (뒷벽 rot 0, 왼쪽 벽 rot 90)

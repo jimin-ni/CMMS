@@ -85,8 +85,30 @@ export function setupLive(ctx) {
       list.appendChild(row);
     }
   }
+  // 방 주인의 "새 방명록 N" (fixtures.js 의 방명록 위 표지). 본 시각은 주인의 브라우저(localStorage)에만 남는다:
+  // 다른 기기에서 열어 봐도 여기의 표지는 줄지 않는다. 처음이면(기록 없음) 모든 이름이 새것이다.
+  const GB_SEEN = `heap-gb-seen:${opts.roomUuid}`;
+  let gbSeen = '';
+  try { gbSeen = localStorage.getItem(GB_SEEN) ?? ''; } catch { /* 막힌 저장소: 기록 없음 */ }
+  const gbNew = () => (opts.isOwner ? [...gbRows.values()].filter(e => e.createdAt > gbSeen).length : 0);
+  function paintGbChips() {
+    const n = ctx.mode === 'edit' ? 0 : gbNew();
+    for (const c of ctx.build?.gbChips ?? []) c.paint(n > 0 ? `새 방명록 ${n}` : '');
+  }
+  // 열린 방명록에 보이는 이름은 모두 본 것이다. 기준은 가장 최근 이름의 시각 (기기 시계와 상관없게)
+  function markGbSeen() {
+    if (!opts.isOwner) return;
+    const latest = gbSorted()[0]?.createdAt ?? '';
+    if (latest > gbSeen) { gbSeen = latest; try { localStorage.setItem(GB_SEEN, gbSeen); } catch { /* 막힌 저장소 */ } }
+    paintGbChips();
+  }
+  on(root, 'heap:mode', paintGbChips); // 꾸미기 중에는 숨긴다
+  ctx.paintGbChips = paintGbChips;
+  paintGbChips();
+
   function openGuestbook() {
     renderGuestbook();
+    markGbSeen();
     $('gb-msg').textContent = '';
     $('guestbook').hidden = false;
     setTimeout(() => $('gb-name')?.focus(), 50);
@@ -136,7 +158,7 @@ export function setupLive(ctx) {
       }
       if (opts.isOwner && Number.isFinite(d.unreadNotes) && d.unreadNotes !== ctx.unreadNotes) { ctx.unreadNotes = d.unreadNotes; renderMeta(); }
       for (const e of d.guestbook || []) gbRows.set(e.id, { id: e.id, name: e.name, createdAt: e.createdAt });
-      if (!$('guestbook').hidden) renderGuestbook();
+      if (!$('guestbook').hidden) { renderGuestbook(); markGbSeen(); } else paintGbChips();
       // 작품: 새로 올라온 것은 더미로 떨어진다. 더미에 있는 카드는 그 작품이 내려져도 남는다 (팬 작품 화면이 생기기 전까지)
       for (const p of d.pieces || []) {
         if (p.status !== 'landed' || fanReels.some(f => f.id === p.id)) continue;
