@@ -21,9 +21,10 @@ type Room = { w: number; d: number; h?: number };
 // 방 v2 (docs/dev/heap-room-v2.md): 예전의 고정 소품도 가구다.
 //   heap 사진 더미(방에 하나까지, style "box" 면 신발상자) · lowTable 좌식 탁자(러그, 방석, 머그째, rug 로 러그 크기)
 //   phone 휴대폰 · guestbook 방명록 공책(style "stand" 면 나무 받침째) · screen 벽 스크린 · poster 벽 포스터 · window 창(w, h)
+//   projector 영사기 (꾸밈만, 하는 일은 없다. 렌즈가 지역 -z 를 본다)
 const HAND_TYPES = new Set([
   "bed", "shelf", "plant", "snake", "lamp", "books", "frame", "calendar",
-  "heap", "lowTable", "phone", "guestbook", "screen", "poster", "window",
+  "heap", "lowTable", "phone", "guestbook", "screen", "poster", "window", "projector",
 ]);
 // 벽에 거는 손 가구. 바닥을 차지하지 않고, 액자처럼 뒷벽(z = -d/2, 0도)이나 왼쪽 벽(x = -w/2, 90도)에 붙는다.
 // 액자와 달리 높이 y(가운데)를 고른다. 폭과 높이는 엔진(furniture.js, shell.js)이 짓는 틀 포함 크기다. window 는 item.w, item.h 에 틀 0.16 을 더한다.
@@ -48,6 +49,7 @@ export const HAND_FOOTPRINT: Record<string, { w: number; d: number }> = {
   lowTable: { w: 2.6, d: 1.8 },
   phone: { w: 0.2, d: 0.35 },
   guestbook: { w: 0.5, d: 0.36 },
+  projector: { w: 0.3, d: 0.42 },
 };
 const MODEL_BY_ID = new Map(catalogue.models.map((model) => [model.id, model]));
 // 불을 켜고 끌 수 있는 가구: 손으로 만드는 lamp, 그리고 카탈로그 category가 lamp인 모델

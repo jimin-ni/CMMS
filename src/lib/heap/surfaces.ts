@@ -32,6 +32,8 @@ const HAND: Record<string, { h: number; tops: number[] }> = {
   guestbook: { h: 0.04, tops: [] },
   // 방명록 받침대째 (style "stand"): 받침 0.78 위에 공책
   guestbookStand: { h: 0.82, tops: [] },
+  // 영사기: 위 릴 꼭대기까지
+  projector: { h: 0.42, tops: [] },
 };
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
@@ -60,8 +62,8 @@ export function itemHeight(it: Obj): number | null {
 }
 
 export function isSmallItem(it: Obj): boolean {
-  // 받침 위에 얹는 손 가구: 달력, 휴대폰, 방명록 공책(받침대째는 바닥에 선다), 사진 더미 (더미는 크지만 탁자에 얹는 것이다)
-  if (it.type === "calendar" || it.type === "phone" || it.type === "heap") return true;
+  // 받침 위에 얹는 손 가구: 달력, 휴대폰, 영사기, 방명록 공책(받침대째는 바닥에 선다), 사진 더미 (더미는 크지만 탁자에 얹는 것이다)
+  if (it.type === "calendar" || it.type === "phone" || it.type === "projector" || it.type === "heap") return true;
   if (it.type === "guestbook") return it.style !== "stand";
   const e = entryOf(it);
   if (!e || e.mount || e.category === "rug" || SEAT_CATS.has(e.category)) return false;

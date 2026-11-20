@@ -52,10 +52,10 @@ const OK = '#7d9a4a', BAD = '#c2452d', PICKED = '#A6613C';
 // 엔진이 직접 만드는 가구의 이름 (알림 문구용). 모델은 카탈로그의 label 을 쓴다.
 const HAND_LABEL = {
   bed: '침대', shelf: '앨범 책장', plant: '화분', snake: '산세베리아', lamp: '조명', books: '책 더미', frame: '벽 액자', calendar: '탁상 달력',
-  heap: '사진 더미', lowTable: '좌식 탁자', phone: '휴대폰', guestbook: '방명록', screen: '스크린', poster: '포스터', window: '창문',
+  heap: '사진 더미', lowTable: '좌식 탁자', phone: '휴대폰', guestbook: '방명록', screen: '스크린', poster: '포스터', window: '창문', projector: '영사기',
 };
 // 모양 바꾸기(swap)를 하지 않는 손 가구: 하는 일이 그 가구에 묶여 있다
-const NO_SWAP = new Set(['frame', 'calendar', 'heap', 'lowTable', 'phone', 'guestbook', 'screen', 'poster', 'window']);
+const NO_SWAP = new Set(['frame', 'calendar', 'heap', 'lowTable', 'phone', 'guestbook', 'screen', 'poster', 'window', 'projector']);
 const OVERLAYS = ['phone', 'pc', 'keepsake', 'calendar', 'grid', 'rooms', 'guestbook'];
 // 방의 틀의 레이아웃 열쇠. 순서가 비교 문자열(snap)의 순서다. 방 v2 에서 창, 스크린, 방명록, 포스터, 사진 탁자는 가구다 (template-move.ts 와 같다)
 const SHELL_KEYS = ['room', 'door'];
