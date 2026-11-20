@@ -46,7 +46,13 @@ async function MyPageContent() {
 
   return (
     <MyBook
-      account={{ name: user.name, email: user.email, roleLabel: roleLabel(role), joinedAt: user.createdAt }}
+      account={{
+        name: user.name,
+        email: user.email,
+        roleLabel: roleLabel(role),
+        joinedAt: user.createdAt,
+        isAdmin: role === "admin",
+      }}
       creator={creator}
     />
   );
