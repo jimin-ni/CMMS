@@ -126,7 +126,7 @@ function toOwnerData(snapshot: HeapRoomSnapshot, reels: Awaited<ReturnType<typeo
 }
 
 // 방 하나를 띄우는 데 필요한 값. 없는 방이면 null.
-// withOwner: 방 주인이 보면 꾸미기용 값(owner)까지 읽는다. 온보딩은 꾸미기를 열지 않으므로 false.
+// withOwner: 방 주인이 보면 꾸미기용 값(owner)까지 읽는다. 꾸미기를 열지 않는 화면(온보딩 컨셉 B)은 false.
 export async function loadRoomView(
   roomId: string,
   viewer: Viewer | null,
