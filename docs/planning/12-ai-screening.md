@@ -152,6 +152,9 @@ flowchart TD
 - 보관: DB 테이블 `moderation_terms`. 공개 저장소에는 넣지 않습니다. 저장소에는 추출 스크립트만 둡니다.
 - 서버가 처음 판정할 때 메모리에 올리고, 5분마다 다시 읽습니다.
 - 허용 목록(`moderation_allowlist`)으로 오탐을 뺍니다.
+- [결정] 2026-11-21 첫 사전 적재: 후보 841개 중 사람이 approve=y로 고르거나 자동 추천(suggest=y)을 받아들인 703개를 넣었습니다. 애매한 138개는 넣지 않았습니다.
+- [결정] 2026-11-21 사전에 걸리면 OpenAI 판단 없이 바로 경고가 쌓입니다. 그래서 본뜻이 흔한 일상어(`queen`, `body`, `monday` 등), 정치·사회 용어, 가벼운 욕(`stupid`, `idiot` 등) 135개를 허용 목록에 넣었습니다. 이 단어들은 OpenAI 판정만 받습니다. 허용 목록은 어미를 뗀 형태(`queens`)에도 적용됩니다.
+- 실제 사전을 붙인 평가셋에서 사전 오탐은 0건입니다 (`MODERATION_EVAL_DB=1`).
 - 한국어는 보조 목록으로, 공백을 지운 글에서 부분 일치로 찾습니다.
 - 판정 기록에는 걸린 단어를 남기지 않고 근거 종류만 남깁니다 (예: `lexicon:en:sev5`).
 
@@ -551,6 +554,7 @@ type ScreenResult = {
 - 회원가입 14세 확인도 함께 넣음 (19-2에서 당김).
 - 로그인 화면 "관리자 문의" 버튼도 넣음. 받는 주소는 임시이며 `src/lib/moderation/policy.ts`의 `ADMIN_CONTACT_EMAIL` 한 곳에서 바꿈.
 - 관리자 화면 E2E 8개 통과 (자해 원문 보기와 유지, 방 주인 글 사후 확인과 내림, 관리자 전체 차단).
+- 마이페이지 계정 정보 장에 관리자 전용 "관리자 페이지" 버튼(`/admin/moderation`)을 넣음.
 - 사전: ProfanityBench 영어 후보 841개를 `.moderation-private/terms-review.csv`로 추출함 (영어 7,402줄 중 severity 5 또는 혐오 표시, 중복 제거). `suggest` 칸은 자동 추천(y 635, ? 206)이고, 적재는 사람이 `approve`에 y를 쓴 줄만 함.
 - 의존성: `vitest`(개발용). npm 11 피어 의존성 오류 때문에 `.npmrc`에 `legacy-peer-deps=true`. OpenAI SDK는 넣지 않음.
 
