@@ -27,22 +27,52 @@ export function setupWalk(ctx) {
   const marker = new THREE.Mesh(new THREE.RingGeometry(0.13, 0.19, 24), new THREE.MeshBasicMaterial({ color: '#A6613C', transparent: true, depthWrite: false }));
   marker.rotation.x = -Math.PI / 2; marker.visible = false; marker.renderOrder = 2;
   scene.add(marker);
-  let markerAge = 0, lit = [], litAge = 0;
+  let markerAge = 0, litAge = 0, hintAge = 0;
   const MARK_LIFE = 0.7;
   function showMarker(p) { marker.position.set(p.x, 0.012, p.z); marker.visible = true; markerAge = 0; }
-  function unlight() {
-    for (const [m, orig, copy] of lit) { m.material = orig; copy.dispose(); }
-    lit = [];
-  }
-  function light(meshes) {
-    unlight();
-    for (const m of meshes) {
-      if (!m?.isMesh || Array.isArray(m.material) || !m.material.emissive) continue;
+  // 빛나는 메시: 누른 물건(lit)과 온보딩의 아직 안 둘러본 곳(hinted). 재질은 공유될 수 있어 메시마다 한 번 복제해 바꾸고,
+  // 둘 다에서 빠지면 되돌린다 (glow: 메시 → { orig, copy }). 두 빛이 한 메시를 두고 서로 재질을 덮어쓰지 않는다
+  const glow = new Map();
+  let lit = new Set(), hinted = new Set(), hintSpots = [];
+  const glowable = m => m?.isMesh && !Array.isArray(m.material) && !!m.material?.emissive;
+  function syncGlow() {
+    for (const m of [...lit, ...hinted]) {
+      if (glow.has(m)) continue;
       const copy = m.material.clone(); copy.emissive.set('#A6613C');
-      lit.push([m, m.material, copy]); m.material = copy;
+      glow.set(m, { orig: m.material, copy }); m.material = copy;
     }
-    litAge = 0;
+    for (const [m, g] of glow) {
+      if (lit.has(m) || hinted.has(m)) continue;
+      if (m.material === g.copy) m.material = g.orig;
+      g.copy.dispose(); glow.delete(m);
+    }
   }
+  function unlight() { if (lit.size) { lit = new Set(); syncGlow(); } }
+  function light(meshes) { lit = new Set(meshes.filter(glowable)); litAge = 0; syncGlow(); }
+
+  // 온보딩 안내 (heap:hint, detail: 아직 둘러보지 않은 곳의 id 목록, onboarding-c/story.ts 의 SpotId). 빈 목록이면 끈다.
+  // 가구 모델은 늦게 읽히고 꾸미기가 가구를 다시 지으므로, 메시는 1초마다 다시 찾는다
+  function hintMeshes() {
+    const out = [], want = new Set(hintSpots), b = ctx.build;
+    for (const m of b?.slotMeshes ?? []) if (want.has(m.userData.slot?.fn?.kind)) out.push(m);
+    if (want.has('door')) out.push(...(ctx.doorParts ?? []));
+    if (want.has('shelf')) out.push(...(ctx.shelfParts ?? []));
+    if (want.has('pile')) {
+      if (ctx.heapBoxParts?.length) out.push(...ctx.heapBoxParts);
+      else if (ctx.HOST && b) { // 더미를 받친 가구 (좌식 탁자 같은 것). 바닥에 깔린 러그는 빼고 위에 선 부분만
+        b.items.forEach((o, i) => {
+          if (o === ctx.HOST.item || !b.groups[i]) return;
+          const e = ctx.opts.itemHalfExtents?.(o);
+          if (!e || Math.abs(o.x - ctx.HOST.x) > e.hx || Math.abs(o.z - ctx.HOST.z) > e.hz) return;
+          b.groups[i].traverse(m => { if (m.isMesh && m.position.y > 0.05) out.push(m); });
+        });
+      }
+    }
+    return out.filter(glowable);
+  }
+  function refreshHints() { hinted = new Set(hintSpots.length ? hintMeshes() : []); syncGlow(); }
+  let hintClock = 0;
+  ctx.on(ctx.root, 'heap:hint', e => { hintSpots = Array.isArray(e.detail) ? e.detail : []; refreshHints(); });
   // 걸을 점들을 정하고 표시를 띄운다. 길이 없으면 false
   function followPath(path, action, meshes) {
     if (!path?.length) { toast('거기까지 갈 길이 없어요'); return false; }
@@ -58,11 +88,13 @@ export function setupWalk(ctx) {
       marker.scale.setScalar(0.7 + 0.6 * k); marker.material.opacity = 0.9 * (1 - k);
       if (k >= 1) marker.visible = false;
     }
-    if (lit.length) {
-      if (!ctx.walkTo) return unlight();
-      litAge += dt;
-      for (const [, , copy] of lit) copy.emissiveIntensity = 0.22 + 0.12 * Math.sin(litAge * 5);
-    }
+    if (lit.size && !ctx.walkTo) unlight();
+    if (hintSpots.length && (hintClock += dt) > 1) { hintClock = 0; refreshHints(); }
+    if (!glow.size) return;
+    litAge += dt; hintAge += dt;
+    // 누른 물건은 또렷이 고동치고, 안내는 그보다 옅게 천천히 숨 쉰다
+    const litI = 0.22 + 0.12 * Math.sin(litAge * 5), hintI = 0.1 + 0.05 * Math.sin(hintAge * 2.2);
+    for (const [m, g] of glow) g.copy.emissiveIntensity = lit.has(m) ? litI : hintI;
   }
 
   function sitOn(seats, point) { // 이 가구에서 클릭한 자리에 가장 가까운 자리

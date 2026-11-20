@@ -328,7 +328,7 @@ export function HeapRoom({
         pollMs: HEAP_POLICY.pollIntervalMs,
         bubbleHref: data.bubbleHref,
         navigate: (href: string) => router.push(href),
-        askSignIn: signInHere ? () => root.dispatchEvent(new CustomEvent("heap:signin")) : undefined,
+        askSignIn: signInHere ? () => root.dispatchEvent(new CustomEvent("heap:signin", { detail: "chat" })) : undefined,
         // 기념품 링크가 유튜브 게시물인지 알아보는 데 쓴다 (엔진이 썸네일 주소를 만든다)
         parseLink: parsePieceUrl,
         // 음악 링크(유튜브 영상·재생목록)에서 임베드 ID를 뽑는다. 서버가 저장 전에 하는 검사와 같은 함수다.
@@ -371,8 +371,11 @@ export function HeapRoom({
             ? { ok: true as const, notes: result.notes.map(toEngineNote), noteRevealAt: result.noteRevealAt, unreadNotes: result.unreadNotes }
             : result;
         },
-        // 로그인이 없는 사람이 쪽지 쓰기를 누르면: 로그인 화면으로 보낸다. next 는 돌아올 주소다 (로그인 화면이 읽으면 그리로 돌아온다).
-        signIn: () => router.push(`/login?next=${encodeURIComponent(`/room/${encodeURIComponent(roomId)}?write=1`)}`),
+        // 로그인이 없는 사람이 쪽지 쓰기를 누르면: 온보딩 방(signInHere)은 방 안의 로그인 팝업을 띄우고(heap:signin),
+        // 다른 방은 로그인 화면으로 보낸다. next 는 돌아올 주소다 (로그인 화면이 읽으면 그리로 돌아온다).
+        signIn: signInHere
+          ? () => root.dispatchEvent(new CustomEvent("heap:signin", { detail: "note" }))
+          : () => router.push(`/login?next=${encodeURIComponent(`/room/${encodeURIComponent(roomId)}?write=1`)}`),
         openWrite: signedIn && writeOnLoad.current === true,
         consumeWrite: () => {
           writeOnLoad.current = false;
@@ -756,7 +759,20 @@ export function HeapRoom({
               </form>
             ) : (
               <p className="note" id="gb-login">
-                이름을 남기려면 <Link href="/login">로그인</Link>이 필요해요.
+                이름을 남기려면{" "}
+                {signInHere ? (
+                  // 온보딩 방: 방 안의 로그인 팝업 (heap:signin, 둘러보기가 띄운다)
+                  <button
+                    type="button"
+                    className="link-btn"
+                    onClick={() => rootRef.current?.dispatchEvent(new CustomEvent("heap:signin", { detail: "guestbook" }))}
+                  >
+                    로그인
+                  </button>
+                ) : (
+                  <Link href="/login">로그인</Link>
+                )}
+                이 필요해요.
               </p>
             )}
             <p className="note" id="gb-msg" role="status" />
