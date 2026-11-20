@@ -241,10 +241,12 @@ export function setupTree(ctx) {
       turn: 0, settled: false, view: null, countN: -1, dirty: false,
     };
     r.visible = makeVisible(surface);
-    // "쪽지 N": 트리 위에 떠 있는 작은 표지. 방 어디서든 보이고, 누르면 트리 모드로 들어간다. 번지는 빛은 없다.
+    // "새 쪽지 N": 방 주인에게만, 안 읽은 쪽지가 있을 때 트리 위에 뜨는 작은 표지. 방 어디서든 보이고, 누르면 트리 모드로 들어간다. 번지는 빛은 없다.
+    // 방문자에게는 없다 (걸린 쪽지 수는 트리를 보면 안다). 숨은 동안은 누르기도 받지 않는다 (트리 위 빈 곳을 눌러 트리로 들어가지 않게).
     const cv = document.createElement('canvas'); cv.width = 320; cv.height = 100;
     const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false, toneMapped: false }));
+    sp.raycast = function (ray, hits) { if (this.visible) THREE.Sprite.prototype.raycast.call(this, ray, hits); };
     sp.scale.set(1.2, 0.375, 1); sp.position.set(0, tip.y + 0.42, 0); sp.renderOrder = 20; sp.userData.slot = slot;
     pivot.add(sp); ctx.build.slotMeshes.push(sp);
     r.count = { sp, cv, tex };
@@ -309,8 +311,10 @@ export function setupTree(ctx) {
     }
     return mk;
   }
+  // 방 주인에게 안 읽은 쪽지 수. 읽을 수 있는 것만 센다 (markOpenedRead 와 같은 조건: 숨긴 것, 봉인된 것은 읽음 처리가 되지 않는다)
+  const newCount = () => (isOwner ? list.filter(d => d.unread && !d.hidden && !d.sealed).length : 0);
   function paintCount(r) {
-    const n = list.length;
+    const n = newCount();
     if (r.countN === n) return;
     r.countN = n;
     const g = r.count.cv.getContext('2d'), W = r.count.cv.width, H = r.count.cv.height, k = 8;
@@ -319,7 +323,7 @@ export function setupTree(ctx) {
     g.beginPath(); g.moveTo(k + 44, k); g.arcTo(W - k, k, W - k, H - k, 44); g.arcTo(W - k, H - k, k, H - k, 44); g.arcTo(k, H - k, k, k, 44); g.arcTo(k, k, W - k, k, 44); g.closePath(); g.fill();
     g.fillStyle = C.ink; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.font = '600 46px "IBM Plex Sans KR", system-ui, sans-serif';
-    g.fillText(`쪽지 ${n}`, W / 2, H / 2 + 3);
+    g.fillText(`새 쪽지 ${n}`, W / 2, H / 2 + 3);
     r.count.tex.needsUpdate = true;
   }
 
@@ -751,7 +755,7 @@ export function setupTree(ctx) {
     if (r.queue.length) processQueue(r);
     paintCount(r);
     r.lights.update(t); r.star.update(t);
-    r.count.sp.visible = ctx.mode !== 'tree' && ctx.mode !== 'edit' && list.length > 0;
+    r.count.sp.visible = ctx.mode !== 'tree' && ctx.mode !== 'edit' && r.countN > 0;
     const showBox = ctx.mode !== 'edit' && ctx.boxedNotes > 0;
     if (r.box.group.visible !== showBox) r.box.group.visible = showBox;
     if (r.boxKey !== [r.g.position.x, r.g.position.z, r.g.rotation.y].map(n => n.toFixed(3)).join('|')) placeBox(r); // 가구가 옮겨졌다
