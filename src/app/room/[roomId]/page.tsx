@@ -5,7 +5,8 @@ import { getViewer } from "@/lib/session";
 import { getRoomBySlug } from "@/lib/heap/repo";
 import { loadRoomView } from "@/lib/heap/room-view";
 import { loadProtoLayout } from "@/lib/heap/proto";
-import { HeapRoom } from "@/components/heap/heap-room";
+import { VisitRoom } from "@/components/onboarding-c/visit-room";
+import { moneygraphyPixel, moneygraphyRounded, pretendard } from "@/app/fonts/onboarding";
 
 type RoomPageProps = {
   params: Promise<{ roomId: string }>;
@@ -35,17 +36,20 @@ async function RoomContent({ params, searchParams }: RoomPageProps) {
     }
   }
 
-  // key: 다른 방으로 옮기면 꾸미기 패널의 상태도 새로 시작한다.
+  // key: 다른 방으로 옮기면 꾸미기 패널과 둘러보기(내비게이션 바)의 상태도 새로 시작한다.
+  // 온보딩이 끝난 방(/home)과 같은 메모 모양 내비게이션 바를 얹는다 (visit-room.tsx).
   return (
-    <HeapRoom
-      key={proto ? `${roomId}:${String(proto)}` : roomId}
-      roomId={roomId}
-      owner={view.owner}
-      data={data}
-      viewerName={viewer?.name ?? null}
-      signedIn={viewer !== null}
-      canEdit={canEdit}
-    />
+    <div className={`${moneygraphyPixel.variable} ${moneygraphyRounded.variable} ${pretendard.variable}`}>
+      <VisitRoom
+        key={proto ? `${roomId}:${String(proto)}` : roomId}
+        roomId={roomId}
+        owner={view.owner}
+        data={data}
+        viewerName={viewer?.name ?? null}
+        signedIn={viewer !== null}
+        canEdit={canEdit}
+      />
+    </div>
   );
 }
 

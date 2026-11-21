@@ -39,15 +39,16 @@ import { setupEditCamera } from './edit-camera.js';
 import { setupRecolour } from './recolour.js';
 import { setupIntro } from './intro.js';
 import { setupNav } from './nav.js';
+import { setupSparkle } from './sparkle.js';
 
 // heap-room.tsx 가 그리고 엔진이 채우거나 보이게 하는 노드의 id. dispose 가 첫 렌더 상태로 되돌린다.
 const LISTS = ['cardview', 'albumrow', 'player-frame', 'music-frame', 'phone-feed', 'pc-list', 'ks-body', 'cal-body', 'grid-list', 'gb-list', 'roomlist', 'ts-tints', 'ts-fonts'];
-const HIDDEN = ['cardview', 'visit', 'albumrow', 'stand', 'flip', 'srclink', 'eject', 'ytlink', 'sortexit', 'treeexit', 'tree-write', 'tree-prev', 'tree-next', 'tree-sheet', 'ts-text', 'ts-ctl', 'ts-drag', 'tree-del', 'tree-confirm', 'player', 'player-note', 'music', 'music-note', 'music-link', 'phone', 'pc', 'keepsake', 'calendar', 'grid', 'guestbook', 'rooms', 'rooms-legend'];
+const HIDDEN = ['cardview', 'visit', 'albumrow', 'stand', 'flip', 'srclink', 'eject', 'ytlink', 'sortexit', 'treeexit', 'tree-write', 'tree-prev', 'tree-next', 'tree-sheet', 'ts-text', 'ts-ctl', 'ts-drag', 'tree-del', 'tree-confirm', 'player', 'player-shade', 'player-note', 'music', 'music-note', 'music-link', 'phone', 'pc', 'keepsake', 'calendar', 'grid', 'guestbook', 'rooms', 'rooms-legend'];
 
 /**
  * 방을 `root`(heap-room.tsx 가 그린 요소)에 올리고 dispose 함수를 돌려준다.
  * 라이브 훅은 `root` 에 보내는 CustomEvent 다: `heap:time`, `heap:viewtime`(time.js), `heap:items`, `heap:get`, `heap:saved`, `heap:edit`(editor-bridge.js),
- * `heap:editcmd`(edit.js), `heap:thumb`(dock-thumbs.js), `heap:reels`(live.js: 새 영상 목록으로 더미를 맞춘다), `heap:reveal`(live.js: 쪽지 공개일이 바뀌었다, detail: ISO 또는 null), `heap:capture`(loop.js: 지금 구도를 한 장 그려 준다), `heap:intro`(intro.js: 온보딩 연출), `heap:go`(nav.js: 온보딩 내비게이션 바의 이동).
+ * `heap:editcmd`(edit.js), `heap:thumb`(dock-thumbs.js), `heap:reels`(live.js: 새 영상 목록으로 더미를 맞춘다), `heap:reveal`(live.js: 쪽지 공개일이 바뀌었다, detail: ISO 또는 null), `heap:capture`(loop.js: 지금 구도를 한 장 그려 준다), `heap:intro`(intro.js: 온보딩 연출), `heap:go`(nav.js: 온보딩 내비게이션 바의 이동), `heap:sparkle`(sparkle.js: 누를 수 있는 물건 위의 반짝임).
  * 팔레트와 배경은 그 자리에서 다시 칠한다 (recolour.js, time.js 의 setBackdrop). 꾸미기가 방의 틀(템플릿)을 바꾸면 엔진은 `heap:remount`(detail: 편집 상태)를 보낸다. heap-room.tsx 가 그 상태를 opts.resume 으로 넘겨 다시 마운트한다:
  * resume { edit, items, time, palette, backdrop, brand, shell, name, savedName, hist, future, saved, original, baseLayout } (edit.js 의 remount 참고).
  * 엔진이 `root` 에 직접 보내는 것은 셋이다. `heap:mode`(detail: 'room' | 'sit' | 'sort' | 'tree')는 모드가 정해질 때마다,
@@ -113,6 +114,7 @@ async function run(ctx) {
   setupThumbs(ctx);
   setupLoop(ctx);
   setupIntro(ctx); // 온보딩의 연출 훅 (heap:intro). 보내지 않으면 아무 일도 없다
+  setupSparkle(ctx); // 누를 수 있는 물건 위의 반짝임 (heap:sparkle). 보내지 않으면 아무 일도 없다
   setupModes(ctx);
   setupCardView(ctx); // 집어 든 카드를 HTML 로 (modes.js 의 flip 을 쓴다)
   setupEditorBridge(ctx);

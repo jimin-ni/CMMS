@@ -632,6 +632,8 @@ export function HeapRoom({
         />
       )}
 
+      {/* 플레이어 바깥: 누르면 플레이어를 닫는다. 아래의 사진 보기나 방에는 닿지 않는다 (players.js) */}
+      <div id="player-shade" hidden />
       <div id="player" hidden>
         <div className="player-bar">
           <span id="player-title" />

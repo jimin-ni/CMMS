@@ -25,13 +25,13 @@ const MYPAGE_HREF = "/mypage";
 const GUIDE_CENTER_MS = 3000;
 
 // 내비게이션 바의 버튼: 홈, 폴라로이드, 챗, 레터, (로그인), 설정.
-// go: 방 안에서 옮겨 갈 곳 (엔진의 heap:go, engine/nav.js). 레터는 방명록을 연다.
-type Go = "room" | "polaroid" | "phone" | "guestbook";
+// go: 방 안에서 옮겨 갈 곳 (엔진의 heap:go, engine/nav.js). 레터는 쪽지 트리로 들어간다 (트리가 없는 방은 방명록).
+type Go = "room" | "polaroid" | "phone" | "tree";
 const NAV_ITEMS: { id: string; icon: PixelIconName; label: string; go: Go }[] = [
   { id: "home", icon: "home", label: "Home", go: "room" },
   { id: "polaroid", icon: "image", label: "Polaroid", go: "polaroid" },
   { id: "chat", icon: "chat", label: "Chat", go: "phone" },
-  { id: "letter", icon: "mail", label: "Letter", go: "guestbook" },
+  { id: "letter", icon: "mail", label: "Letter", go: "tree" },
 ];
 const NAV_ICON = 28;
 
@@ -41,6 +41,7 @@ type GuideSpot = "center" | "bottom" | "hidden";
 // hostRef: HeapRoom 을 감싼 요소 (.oc-room-host). 엔진 모드를 data-mode 로 달아 CSS 가 방의 단추를 감추거나 보인다.
 // live: 방 안을 둘러보는 단계인지. 그 전에는 아무것도 세지 않고 보이지 않는다.
 // skipped: Esc 로 온보딩을 건너뛰었는지. 모두 둘러본 것으로 세어 내비게이션 바를 연다.
+// homeHref: 있으면 홈 버튼이 방 안의 처음 자리 대신 이 주소로 간다 (문으로 옮겨 간 다른 방, visit-room.tsx).
 export function RoomTour({
   hostRef,
   live,
@@ -48,6 +49,7 @@ export function RoomTour({
   layoutItems,
   viewerName,
   signedIn,
+  homeHref,
 }: {
   hostRef: RefObject<HTMLDivElement | null>;
   live: boolean;
@@ -55,6 +57,7 @@ export function RoomTour({
   layoutItems: unknown;
   viewerName: string | null;
   signedIn: boolean;
+  homeHref?: string;
 }) {
   const router = useRouter();
   const liveRef = useRef(live);
@@ -129,6 +132,17 @@ export function RoomTour({
     return () => roomEl.removeEventListener("heap:ready", send);
   }, [hostRef, hintSpots]);
 
+  // 방 안에 들어오면("Ready to Start?" 뒤) 누를 수 있는 물건 위에 작은 빛을 반짝인다 (엔진의 heap:sparkle, engine/sparkle.js).
+  // 엔진이 다시 뜨면(heap:ready) 다시 보낸다.
+  useEffect(() => {
+    const roomEl = hostRef.current?.querySelector<HTMLElement>(".heap-room");
+    if (!roomEl) return;
+    const send = () => roomEl.dispatchEvent(new CustomEvent("heap:sparkle", { detail: live }));
+    send();
+    roomEl.addEventListener("heap:ready", send);
+    return () => roomEl.removeEventListener("heap:ready", send);
+  }, [hostRef, live]);
+
   // 방 안에 들어오면 안내 팝업이 가운데에 뜬다. 어디든 누르거나 3초가 지나면 아래로 내려간다.
   const centered = live && !skipped && guideSpot === "center";
   useEffect(() => {
@@ -150,6 +164,10 @@ export function RoomTour({
   }, [router]);
   // 방 안의 자리로 옮긴다: 홈(처음 들어온 상태), 탁자의 사진, 탁자의 휴대폰
   const go = (where: Go) => {
+    if (where === "room" && homeHref) {
+      router.push(homeHref);
+      return;
+    }
     // 홈은 온보딩이 끝난 처음 상태라 안내 팝업도 내린다
     if (where === "room") setGuideSpot("hidden");
     hostRef.current?.querySelector(".heap-room")?.dispatchEvent(new CustomEvent("heap:go", { detail: where }));

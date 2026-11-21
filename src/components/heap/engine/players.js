@@ -8,7 +8,7 @@ export function setupPlayers(ctx) {
 
   // 공식 유튜브 임베드: 평평하게, 가리는 것 없이. 이 호스트가 임베드를 막으면 링크로 바꾼다
   ctx.embedBlocked = false;
-  const player = $('player'), frameBox = $('player-frame'), note = $('player-note');
+  const player = $('player'), frameBox = $('player-frame'), note = $('player-note'), shade = $('player-shade');
   // 공식 플레이어는 한 번에 하나: 영사기와 음악 독이 이 두 함수를 나눠 쓰고, 하나가 열리면 다른 하나는 닫힌다.
   const embedSrc = ({ video, list }) => `https://www.youtube-nocookie.com/embed/${video ?? 'videoseries'}?${new URLSearchParams({ autoplay: '1', playsinline: '1', rel: '0', ...(list ? { list } : {}) })}`;
   // 남의 집 플레이어라서 틀을 가둔다. allow-top-navigation 을 주지 않으므로 임베드가 우리 쪽 주소를 바꿔치기할 수 없다 (codex).
@@ -67,11 +67,14 @@ export function setupPlayers(ctx) {
       frameBox.style.width = w + 'px'; frameBox.style.height = h + 'px';
       frameBox.appendChild(makeFrame(spec.src, reel.title || PLAYER_TITLE[platform] || '영상', spec.allow));
     } else { frameBox.style.width = frameBox.style.height = '0px'; }
+    // 임베드를 못 넣는 곳에서는 바깥을 덮지 않는다: 안내 글이 가리키는 원본 보기 단추를 눌러야 한다
+    shade.hidden = ctx.embedBlocked;
     player.hidden = false;
   }
   const PLAYER_TITLE = { youtube: 'YouTube 영상', instagram: 'Instagram 게시물', tiktok: 'TikTok 영상', x: 'X 게시물' };
-  function closePlayer() { frameBox.innerHTML = ''; player.hidden = true; }
+  function closePlayer() { frameBox.innerHTML = ''; player.hidden = true; shade.hidden = true; }
   on($('player-close'), 'click', closePlayer);
+  on(shade, 'click', closePlayer);
 
   // 음악: 방 오른쪽 위에 붙는 독 플레이어, 방 이름의 반대편 (라디오, 스피커, TV 에 단 item.fn kind "music").
   // A visible official embed of 200 px or more with nothing laid over it: heap-room.css keeps the overlays and the 꾸미기 panel out of its corner (--music-w).
@@ -120,7 +123,7 @@ export function setupPlayers(ctx) {
   on(document, 'securitypolicyviolation', e => {
     if (!EMBED_HOST.test(e.blockedURI || '')) return;
     ctx.embedBlocked = true;
-    if (!player.hidden) { frameBox.innerHTML = ''; frameBox.style.width = frameBox.style.height = '0px'; note.hidden = false; }
+    if (!player.hidden) { frameBox.innerHTML = ''; frameBox.style.width = frameBox.style.height = '0px'; note.hidden = false; shade.hidden = true; }
     if (!dock.hidden) { dockFrame.replaceChildren(); layoutMusic(); }
   });
 
