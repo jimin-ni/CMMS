@@ -2,15 +2,20 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { authClient } from "@/lib/auth-client";
 import { trackEvent } from "@/lib/analytics";
 import { ADMIN_CONTACT_EMAIL } from "@/lib/moderation/policy";
+import { nextFromLocation, withNext } from "@/lib/next-path";
+
+const noSubscribe = () => () => {};
 
 export default function LoginPage() {
   const router = useRouter();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  // 다른 화면에서 로그인하러 왔으면(?next=) 로그인 뒤 그리로 돌아간다. 회원가입으로 가도 이어 넘긴다.
+  const next = useSyncExternalStore(noSubscribe, nextFromLocation, () => null);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -29,7 +34,7 @@ export default function LoginPage() {
       return;
     }
     trackEvent({ event: "login", method: "email", user_role: toUserRole(result.data.user.role) });
-    router.push("/");
+    router.push(next ?? "/");
     router.refresh();
   }
 
@@ -55,7 +60,7 @@ export default function LoginPage() {
         </button>
         <p className="text-sm text-ash">
           계정이 없나요?{" "}
-          <Link href="/signup" className="font-medium text-ink underline">
+          <Link href={withNext("/signup", next)} className="font-medium text-ink underline">
             회원가입
           </Link>
         </p>

@@ -83,7 +83,7 @@
 .heap-room .debug-body button[aria-pressed="true"] { background: var(--clay); }
 .heap-room .debug-side button:focus-visible { outline: 3px solid var(--paper); outline-offset: 2px; }
 
-.heap-room #toast { position: absolute; top: 70px; left: 50%; transform: translateX(-50%); margin: 0; font-family: var(--hand); font-size: 26px; line-height: 1.2; color: var(--ink); background: var(--paper); padding: 4px 18px 6px; border: 1px solid var(--clay); border-radius: 4px; pointer-events: none; text-align: center; }
+.heap-room #toast { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); margin: 0; font-family: var(--hand); font-size: 26px; line-height: 1.2; color: var(--ink); background: var(--paper); padding: 4px 18px 6px; border: 1px solid var(--clay); border-radius: 4px; pointer-events: none; text-align: center; }
 .heap-room #toast:empty { display: none; }
 /* 방명록: 가이드의 text-input 과 hairline-divider */
 .heap-room .gb-list { display: flex; flex-direction: column; border-top: 1px solid var(--cp-ink); }

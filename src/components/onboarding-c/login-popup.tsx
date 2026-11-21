@@ -4,19 +4,23 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { trackEvent } from "@/lib/analytics";
+import { withNext } from "@/lib/next-path";
 import { Paper } from "./paper";
 import { PixelIcon } from "./icons";
 
 // 내비게이션 바의 아이콘을 누르면 뜨는 로그인 팝업. 로그인 처리는 /login 페이지와 같다.
 // onSignedIn: 로그인에 성공하면 부른다 (팝업을 닫고 서버 값을 다시 읽는다)
+// signupNext: 회원가입 화면으로 갔다가 가입 뒤 돌아올 주소. 없으면 가입 뒤 첫 화면으로 간다.
 export function LoginPopup({
   reason,
   onClose,
   onSignedIn,
+  signupNext = null,
 }: {
   reason: string;
   onClose: () => void;
   onSignedIn: () => void;
+  signupNext?: string | null;
 }) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -88,7 +92,7 @@ export function LoginPopup({
             </button>
           </form>
           <p className="oc-foot">
-            New here? <Link href="/signup">Create an account</Link>
+            New here? <Link href={withNext("/signup", signupNext)}>Create an account</Link>
           </p>
         </Paper>
       </div>

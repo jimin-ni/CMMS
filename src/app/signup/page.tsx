@@ -2,16 +2,19 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { authClient } from "@/lib/auth-client";
 import { trackEvent } from "@/lib/analytics";
+import { nextFromLocation, withNext } from "@/lib/next-path";
+
+const noSubscribe = () => () => {};
 
 export default function SignupPage() {
   const router = useRouter();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  // null: 아직 선택 안 함, true: 크리에이터, false: 구독자
-  const [isCreator, setIsCreator] = useState<boolean | null>(null);
+  // 다른 화면에서 가입하러 왔으면(?next=) 가입 뒤 그리로 돌아간다
+  const next = useSyncExternalStore(noSubscribe, nextFromLocation, () => null);
   // 만 14세 이상인지. null: 아직 선택 안 함 (docs/planning/12-ai-screening.md 3-3)
   const [is14OrOlder, setIs14OrOlder] = useState<boolean | null>(null);
   // "아니오"로 가입한 뒤 보여 주는 안내창. 확인을 누르면 다음 화면으로 간다.
@@ -19,10 +22,6 @@ export default function SignupPage() {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (isCreator === null) {
-      setErrorMessage("크리에이터인지 예 또는 아니오를 선택해 주세요.");
-      return;
-    }
     if (is14OrOlder === null) {
       setErrorMessage("만 14세 이상인지 예 또는 아니오를 선택해 주세요.");
       return;
@@ -52,28 +51,14 @@ export default function SignupPage() {
       body: JSON.stringify({ is14OrOlder }),
     }).catch(() => undefined);
 
-    if (isCreator) {
-      const res = await fetch("/api/signup/creator", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ role: "creator" }),
-      });
-      if (!res.ok) {
-        setPending(false);
-        setErrorMessage("크리에이터 설정에 실패했습니다. 로그인 후 다시 시도해 주세요.");
-        return;
-      }
-    }
-
     setPending(false);
-    trackEvent({ event: "sign_up", method: "email", user_role: isCreator ? "creator" : "public" });
-    // 예를 고른 경우 크리에이터 페이지로 이동한다.
-    const next = isCreator ? "/creator" : "/";
+    trackEvent({ event: "sign_up", method: "email", user_role: "public" });
+    const to = next ?? "/";
     if (!is14OrOlder) {
-      setUnderAgeNext(next);
+      setUnderAgeNext(to);
       return;
     }
-    router.push(next);
+    router.push(to);
     router.refresh();
   }
 
@@ -104,39 +89,6 @@ export default function SignupPage() {
     <main className="mx-auto w-full max-w-md px-6 py-12">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4 rounded-sm border border-hairline bg-white p-8">
         <h1 className="text-[32px] leading-[1.2] font-medium text-ink">회원가입</h1>
-
-        <fieldset className="flex flex-col gap-2 text-sm">
-          <legend className="mb-1">크리에이터인가요?</legend>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              aria-pressed={isCreator === true}
-              onClick={() => setIsCreator(true)}
-              className={`flex-1 rounded-sm border px-3 py-2 ${
-                isCreator === true
-                  ? "border-ink bg-ink text-white"
-                  : "border-ash text-ink"
-              }`}
-            >
-              예
-            </button>
-            <button
-              type="button"
-              aria-pressed={isCreator === false}
-              onClick={() => setIsCreator(false)}
-              className={`flex-1 rounded-sm border px-3 py-2 ${
-                isCreator === false
-                  ? "border-ink bg-ink text-white"
-                  : "border-ash text-ink"
-              }`}
-            >
-              아니오
-            </button>
-          </div>
-          <p className="text-xs text-ash">
-            예를 고르면 크리에이터로 가입합니다. 크리에이터 검증 절차는 나중에 추가합니다.
-          </p>
-        </fieldset>
 
         <fieldset className="flex flex-col gap-2 text-sm">
           <legend className="mb-1">만 14세 이상인가요?</legend>
@@ -171,6 +123,18 @@ export default function SignupPage() {
           <input name="password" type="password" minLength={8} required className="rounded-sm border border-ash px-3 py-2" />
         </label>
         {errorMessage && <p className="text-sm text-red-700">{errorMessage}</p>}
+        {/* 문서는 새 탭으로 연다: 쓰던 가입 양식이 지워지지 않게 */}
+        <p className="text-xs text-ash">
+          가입하기를 누르면{" "}
+          <Link href="/terms" target="_blank" rel="noopener" className="text-ink underline">
+            서비스 이용약관
+          </Link>
+          과{" "}
+          <Link href="/privacy" target="_blank" rel="noopener" className="text-ink underline">
+            개인정보 처리방침
+          </Link>
+          에 동의한 것으로 봅니다.
+        </p>
         <button
           type="submit"
           disabled={pending}
@@ -180,7 +144,7 @@ export default function SignupPage() {
         </button>
         <p className="text-sm text-ash">
           이미 계정이 있나요?{" "}
-          <Link href="/login" className="font-medium text-ink underline">
+          <Link href={withNext("/login", next)} className="font-medium text-ink underline">
             로그인
           </Link>
         </p>

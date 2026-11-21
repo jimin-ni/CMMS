@@ -609,7 +609,9 @@ export function setupTreeWrite(ctx, T) {
     const a = auto;
     if (performance.now() - a.since > 20000) { endAuto(); return; }
     if (a.phase === 'wait') {
-      if (ctx.mode !== 'room' || !T.hasTreeSlot()) { endAuto(); return; }
+      if (!ctx.slotsLive) return; // 방이 아직 다 뜨지 않았다 (가구를 짓기 전 프레임)
+      // 트리 자리(slot)는 트리 모델을 읽은 뒤에야 생기므로, 트리가 있는지는 배치(build.items)로 본다
+      if (ctx.mode !== 'room' || !ctx.build.items.some(it => it.fn?.kind === 'tree')) { endAuto(); return; }
       if (!T.syncRig()) return; // 모델을 읽는 중
       ctx.enterTree(); a.phase = 'settle';
     } else {
