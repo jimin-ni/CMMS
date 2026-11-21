@@ -22,6 +22,8 @@ const FAR = 1.95;
 // 스크롤하는 동안 방이 천천히 도는 각도 (시작, 끝)
 const TURN: [number, number] = [-0.4, 0.12];
 const ZOOM_MS = 2800;
+// 스크롤이 이만큼(ms) 멈춰 있으면 스크롤 안내를 띄운다
+const HINT_IDLE_MS = 2000;
 
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -47,6 +49,10 @@ export function ConceptC({
   const hostRef = useRef<HTMLDivElement>(null);
   const introRef = useRef<HTMLDivElement>(null);
   const shadeRef = useRef<HTMLDivElement>(null);
+  const hintRef = useRef<HTMLDivElement>(null);
+  const hintTextRef = useRef<HTMLSpanElement>(null);
+  // 마지막으로 스크롤한 시각. 방이 뜨기 전에는 Infinity 라 안내가 뜨지 않는다.
+  const lastScrollRef = useRef(Infinity);
   const vignetteRef = useRef<HTMLDivElement>(null);
   const readyRef = useRef<HTMLDivElement>(null);
   const captionRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -69,7 +75,11 @@ export function ConceptC({
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const zoomMs = reduce ? 500 : ZOOM_MS;
     const pileStep = STEPS.findIndex((s) => s.pile);
-    let last = performance.now(), raf = 0, sentNull = false;
+    let last = performance.now(), raf = 0, sentNull = false, hintShown = false, hintBegin = true;
+    const onScroll = () => {
+      lastScrollRef.current = performance.now();
+    };
+    root.addEventListener("scroll", onScroll, { passive: true });
 
     const loop = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
@@ -124,6 +134,17 @@ export function ConceptC({
         el.style.opacity = scrolling ? String(enter * (1 - leave)) : "0";
         el.style.setProperty("--oc-shift", `${(1 - enter) * 28 - leave * 28}px`);
       });
+      // 스크롤 안내: 스크롤이 HINT_IDLE_MS 동안 멈춰 있으면 뜨고, 스크롤하면 사라진다. "Ready to Start?"부터는 띄우지 않는다.
+      const showHint = scrolling && p < TIMELINE.ready[0] && now - lastScrollRef.current >= HINT_IDLE_MS;
+      if (showHint !== hintShown && hintRef.current) {
+        hintShown = showHint;
+        hintRef.current.classList.toggle("show", showHint);
+      }
+      const begin = p < TIMELINE.introOut[1];
+      if (begin !== hintBegin && hintTextRef.current) {
+        hintBegin = begin;
+        hintTextRef.current.textContent = begin ? "Scroll to begin" : "Keep scrolling";
+      }
       if (readyRef.current) {
         const r = ramp(p, ...TIMELINE.ready) * Math.max(0, 1 - zoom * 4);
         readyRef.current.style.opacity = String(r);
@@ -132,7 +153,10 @@ export function ConceptC({
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      root.removeEventListener("scroll", onScroll);
+    };
   }, [itemSteps]);
 
   // "Ready to Start?"가 보일 때 클릭이나 키를 누르면 방 안으로 들어간다
@@ -176,7 +200,10 @@ export function ConceptC({
   useEffect(() => {
     const roomEl = hostRef.current?.querySelector(".heap-room");
     if (!roomEl) return;
-    const onReady = () => setReady(true);
+    const onReady = () => {
+      lastScrollRef.current = performance.now();
+      setReady(true);
+    };
     roomEl.addEventListener("heap:ready", onReady, { once: true });
     return () => roomEl.removeEventListener("heap:ready", onReady);
   }, []);
@@ -207,14 +234,16 @@ export function ConceptC({
           <div ref={introRef} className="oc-layer oc-intro">
             <h1 className="oc-display">Memories</h1>
             <p className="oc-rounded">a room full of the moments you loved</p>
-            <div className="oc-scroll-hint">
-              <PixelIcon name="mouse" size={28} />
-              <span>Scroll to begin</span>
-              <PixelIcon name="chevronDown" size={18} className="oc-bob" />
-              <span className="oc-skip-hint">
-                Press <kbd>Esc</kbd> to skip
-              </span>
-            </div>
+          </div>
+
+          {/* 스크롤 안내: 스크롤이 2초 멈추면 화면 아래 가운데에 뜬다 */}
+          <div ref={hintRef} className="oc-layer oc-scroll-hint" aria-hidden={phase !== "scroll"}>
+            <PixelIcon name="mouse" size={28} />
+            <span ref={hintTextRef}>Scroll to begin</span>
+            <PixelIcon name="chevronDown" size={18} className="oc-bob" />
+            <span className="oc-skip-hint">
+              Press <kbd>Esc</kbd> to skip
+            </span>
           </div>
 
           {/* 2. 가구와 함께 나오는 글 */}

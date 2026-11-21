@@ -852,7 +852,7 @@ export function setupTree(ctx) {
     rig: () => rig, syncRig, busy, opened: () => opened, pending: () => pending,
     dismissNote() { if (pending) clearPending(); if (opened) closeNote(); else syncNav(); },
     buildNote, disposeNote, openTarget, shellDrop, view: () => view, measure, setCursor, treeSpot, planFromSpot, hashId,
-    hasTreeSlot: () => !!treeSlot(), noteById: id => list.find(d => d.id === id) ?? null,
+    noteById: id => list.find(d => d.id === id) ?? null,
     reviseOpened, openBoxNote, boxedList, sealedNow, revealAt: () => revealAt,
     otherBusy: () => !!(R?.active() || B?.active()), writing,
   };

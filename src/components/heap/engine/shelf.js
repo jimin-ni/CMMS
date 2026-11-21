@@ -67,8 +67,14 @@ export function setupShelf(ctx) {
       const it = el('div', 'gitem' + (r.wide ? ' wide' : ''));
       // 가까운 단계 썸네일. 격자의 object-fit: cover 가 유튜브의 여백 있는 틀을 그림만 남게 자른다
       // 썸네일이 없는 플랫폼(붙여 넣은 게시물)은 그림 없이 제목만 보여 준다
-      if (hasThumb(r)) { const im = el('img'); im.crossOrigin = 'anonymous'; im.src = thumbUrl(r, 'hqdefault'); im.alt = ''; im.loading = 'lazy'; it.appendChild(im); }
-      it.appendChild(el('span', null, r.title)); it.appendChild(link('원본 ↗', srcUrl(r)));
+      // 썸네일도 원본으로 가는 링크다. 키보드와 낭독기는 아래 '원본' 링크 하나만 만난다
+      const href = srcUrl(r);
+      if (hasThumb(r)) {
+        const im = el('img'); im.crossOrigin = 'anonymous'; im.src = thumbUrl(r, 'hqdefault'); im.alt = ''; im.loading = 'lazy';
+        const a = link('', href); a.className = 'gthumb'; a.tabIndex = -1; a.setAttribute('aria-hidden', 'true'); a.appendChild(im);
+        it.appendChild(a);
+      }
+      it.appendChild(el('span', null, r.title)); it.appendChild(link('원본 ↗', href));
       list.appendChild(it);
     }
     if (!items.length) list.appendChild(el('p', 'note', '아직 비어 있어요.'));

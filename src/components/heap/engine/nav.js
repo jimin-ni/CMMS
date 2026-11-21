@@ -4,6 +4,7 @@
 //            'polaroid' 탁자에 앉아 더미 맨 위 사진을 집는다 (사진을 눌렀을 때와 같은 화면)
 //            'phone'    탁자에 앉아 휴대폰을 연다 (휴대폰을 눌렀을 때와 같은 화면)
 //            'guestbook' 방 모드로 돌아와 방명록 창을 연다 (방명록 가구를 눌렀을 때와 같은 창)
+//            'tree'     방 모드로 돌아와 쪽지 트리 모드로 들어간다 (트리를 눌렀을 때와 같다). 트리가 없는 방은 방명록 창을 연다
 // 꾸미기 중에는 듣지 않는다.
 
 // 엔진이 여닫는 창 (input.js 의 Esc 와 같은 목록)
@@ -36,8 +37,12 @@ export function setupNav(ctx) {
   on(root, 'heap:go', e => {
     if (ctx.mode === 'edit') return;
     const where = e.detail;
-    if (where !== 'room' && where !== 'polaroid' && where !== 'phone' && where !== 'guestbook') return;
+    if (!['room', 'polaroid', 'phone', 'guestbook', 'tree'].includes(where)) return;
     toRoom();
+    if (where === 'tree') {
+      if (ctx.build.slots.some(s => s.fn?.kind === 'tree')) ctx.enterTree(); else ctx.openGuestbook();
+      return;
+    }
     if (where === 'guestbook') { ctx.openGuestbook(); return; }
     if (where === 'room') {
       me.position.copy(start.pos); me.rotation.y = start.rotY;

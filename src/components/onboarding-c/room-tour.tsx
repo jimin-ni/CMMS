@@ -17,6 +17,8 @@ const SIGNIN_REASONS: Record<string, string> = {
   guestbook: "Sign in to leave your name in the guestbook.",
   note: "Sign in to hang a note on the tree.",
 };
+// 회원가입 화면으로 갔다가 돌아올 때 지금 주소에 붙일 것. 쪽지는 ?write=1 로 쓰기 판을 바로 연다 (heap-room.tsx).
+const SIGNUP_RETURN_QUERY: Record<string, string> = { note: "write=1" };
 // 설정 버튼이 여는 곳 (settings-book.tsx)
 const SETTINGS_HREF = "/settings";
 // 로그인한 사람의 이름 버튼이 여는 곳 (mypage/my-book.tsx)
@@ -25,13 +27,13 @@ const MYPAGE_HREF = "/mypage";
 const GUIDE_CENTER_MS = 3000;
 
 // 내비게이션 바의 버튼: 홈, 폴라로이드, 챗, 레터, (로그인), 설정.
-// go: 방 안에서 옮겨 갈 곳 (엔진의 heap:go, engine/nav.js). 레터는 방명록을 연다.
-type Go = "room" | "polaroid" | "phone" | "guestbook";
+// go: 방 안에서 옮겨 갈 곳 (엔진의 heap:go, engine/nav.js). 레터는 쪽지 트리로 들어간다 (트리가 없는 방은 방명록).
+type Go = "room" | "polaroid" | "phone" | "tree";
 const NAV_ITEMS: { id: string; icon: PixelIconName; label: string; go: Go }[] = [
   { id: "home", icon: "home", label: "Home", go: "room" },
   { id: "polaroid", icon: "image", label: "Polaroid", go: "polaroid" },
   { id: "chat", icon: "chat", label: "Chat", go: "phone" },
-  { id: "letter", icon: "mail", label: "Letter", go: "guestbook" },
+  { id: "letter", icon: "mail", label: "Letter", go: "tree" },
 ];
 const NAV_ICON = 28;
 
@@ -41,6 +43,7 @@ type GuideSpot = "center" | "bottom" | "hidden";
 // hostRef: HeapRoom 을 감싼 요소 (.oc-room-host). 엔진 모드를 data-mode 로 달아 CSS 가 방의 단추를 감추거나 보인다.
 // live: 방 안을 둘러보는 단계인지. 그 전에는 아무것도 세지 않고 보이지 않는다.
 // skipped: Esc 로 온보딩을 건너뛰었는지. 모두 둘러본 것으로 세어 내비게이션 바를 연다.
+// homeHref: 있으면 홈 버튼이 방 안의 처음 자리 대신 이 주소로 간다 (문으로 옮겨 간 다른 방, visit-room.tsx).
 export function RoomTour({
   hostRef,
   live,
@@ -48,6 +51,7 @@ export function RoomTour({
   layoutItems,
   viewerName,
   signedIn,
+  homeHref,
 }: {
   hostRef: RefObject<HTMLDivElement | null>;
   live: boolean;
@@ -55,6 +59,7 @@ export function RoomTour({
   layoutItems: unknown;
   viewerName: string | null;
   signedIn: boolean;
+  homeHref?: string;
 }) {
   const router = useRouter();
   const liveRef = useRef(live);
@@ -63,8 +68,10 @@ export function RoomTour({
   const [guideSpot, setGuideSpot] = useState<GuideSpot>("center");
   const [found, setFound] = useState<SpotId[]>([]);
   const [active, setActive] = useState<SpotId | null>(null);
-  // 로그인 팝업에 쓰는 까닭 글. null 이면 닫힘.
-  const [loginReason, setLoginReason] = useState<string | null>(null);
+  // 로그인 팝업. null 이면 닫힘. reason: 까닭 글.
+  // action: 방 안에서 로그인이 필요한 것을 눌러 뜬 경우 그 일(heap:signin 의 detail). 내비게이션 바의 로그인이면 null.
+  // 로그인하거나 가입하고 나면 그 일을 하던 화면으로 돌아간다.
+  const [login, setLogin] = useState<{ reason: string; action: string | null } | null>(null);
   const spots = useMemo(() => spotsFor(layoutItems), [layoutItems]);
 
   useEffect(() => {
@@ -104,7 +111,10 @@ export function RoomTour({
     const watch = new MutationObserver(check);
     watch.observe(roomEl, { subtree: true, attributes: true, attributeFilter: ["hidden"] });
     // 로그인 전에 휴대폰의 대화, 방명록, 쪽지 쓰기를 누르면 방이 알려 준다 (HeapRoom 의 signInHere)
-    const onSignIn = (e: Event) => setLoginReason(SIGNIN_REASONS[(e as CustomEvent<string>).detail] ?? LOGIN_REASON);
+    const onSignIn = (e: Event) => {
+      const action = (e as CustomEvent<string>).detail;
+      setLogin({ reason: SIGNIN_REASONS[action] ?? LOGIN_REASON, action: action ?? null });
+    };
     roomEl.addEventListener("heap:mode", onMode);
     roomEl.addEventListener("heap:signin", onSignIn);
     return () => {
@@ -129,6 +139,17 @@ export function RoomTour({
     return () => roomEl.removeEventListener("heap:ready", send);
   }, [hostRef, hintSpots]);
 
+  // 방 안에 들어오면("Ready to Start?" 뒤) 누를 수 있는 물건 위에 작은 빛을 반짝인다 (엔진의 heap:sparkle, engine/sparkle.js).
+  // 엔진이 다시 뜨면(heap:ready) 다시 보낸다.
+  useEffect(() => {
+    const roomEl = hostRef.current?.querySelector<HTMLElement>(".heap-room");
+    if (!roomEl) return;
+    const send = () => roomEl.dispatchEvent(new CustomEvent("heap:sparkle", { detail: live }));
+    send();
+    roomEl.addEventListener("heap:ready", send);
+    return () => roomEl.removeEventListener("heap:ready", send);
+  }, [hostRef, live]);
+
   // 방 안에 들어오면 안내 팝업이 가운데에 뜬다. 어디든 누르거나 3초가 지나면 아래로 내려간다.
   const centered = live && !skipped && guideSpot === "center";
   useEffect(() => {
@@ -142,14 +163,27 @@ export function RoomTour({
     };
   }, [centered]);
 
-  const closeLogin = useCallback(() => setLoginReason(null), []);
-  // 로그인하면 서버가 닉네임과 로그인 상태를 다시 읽는다 (방명록 쓰기도 켜진다)
+  const closeLogin = useCallback(() => setLogin(null), []);
+  // 로그인하면 서버가 닉네임과 로그인 상태를 다시 읽는다 (방명록 쓰기도 켜진다).
+  // 방 안의 일 때문에 뜬 팝업이면 방에 heap:signedin 으로 알린다: 엔진이 다시 뜬 뒤 그 화면을 다시 연다 (heap-room.tsx).
+  const loginAction = login?.action ?? null;
   const onSignedIn = useCallback(() => {
-    setLoginReason(null);
+    setLogin(null);
+    if (loginAction) hostRef.current?.querySelector(".heap-room")?.dispatchEvent(new CustomEvent("heap:signedin", { detail: loginAction }));
     router.refresh();
-  }, [router]);
+  }, [router, hostRef, loginAction]);
+  // 팝업에서 회원가입으로 가면 가입 뒤 이 방으로 돌아온다 (내비게이션 바의 로그인이면 돌아오지 않는다)
+  const signupNext = useMemo(() => {
+    if (!loginAction || typeof window === "undefined") return null;
+    const query = SIGNUP_RETURN_QUERY[loginAction];
+    return `${window.location.pathname}${query ? `?${query}` : window.location.search}`;
+  }, [loginAction]);
   // 방 안의 자리로 옮긴다: 홈(처음 들어온 상태), 탁자의 사진, 탁자의 휴대폰
   const go = (where: Go) => {
+    if (where === "room" && homeHref) {
+      router.push(homeHref);
+      return;
+    }
     // 홈은 온보딩이 끝난 처음 상태라 안내 팝업도 내린다
     if (where === "room") setGuideSpot("hidden");
     hostRef.current?.querySelector(".heap-room")?.dispatchEvent(new CustomEvent("heap:go", { detail: where }));
@@ -235,7 +269,7 @@ export function RoomTour({
             <button
               type="button"
               className="oc-nav-btn"
-              onClick={() => setLoginReason(LOGIN_REASON)}
+              onClick={() => setLogin({ reason: LOGIN_REASON, action: null })}
               tabIndex={navOpen ? 0 : -1}
             >
               <PixelIcon name="login" size={NAV_ICON} />
@@ -249,7 +283,7 @@ export function RoomTour({
         </Paper>
       </nav>
 
-      {loginReason && <LoginPopup reason={loginReason} onClose={closeLogin} onSignedIn={onSignedIn} />}
+      {login && <LoginPopup reason={login.reason} onClose={closeLogin} onSignedIn={onSignedIn} signupNext={signupNext} />}
     </>
   );
 }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { withNext } from "@/lib/next-path";
 import {
   addGuestbookAction,
   addNoteAction,
@@ -29,6 +30,8 @@ import { authClient } from "@/lib/auth-client";
 
 // 디버그 값은 페이지가 뜰 때 정해지고 바뀌지 않는다
 const noSubscribe = () => () => {};
+// 방 안의 로그인 팝업으로 로그인한 뒤 다시 열 화면 (heap:signin 의 detail 에서 heap:go 의 detail 로). 쪽지는 writeOnLoad 로 연다.
+const GO_AFTER_SIGNIN: Record<string, string> = { chat: "phone", guestbook: "guestbook" };
 import { RoomEditor } from "./room-editor";
 import { SetupChecklist, setupFlags, type ChecklistAction } from "./setup-checklist";
 import { ShareButton } from "./share-button";
@@ -234,6 +237,18 @@ export function HeapRoom({
   // 로그인하고 돌아온 주소의 ?write=1: 쪽지 쓰기를 바로 연다 (L6). 처음 한 번만 읽고 주소에서 지운다.
   // StrictMode의 첫 effect가 지운 뒤에도 두 번째 effect가 알 수 있게 ref에 둔다. 엔진이 열고 나면 false가 된다 (다시 마운트해도 열리지 않는다).
   const writeOnLoad = useRef<boolean | null>(null);
+  // 방 안의 로그인 팝업으로 로그인했다 (둘러보기가 보내는 heap:signedin, room-tour.tsx). 값은 로그인을 부른 일(heap:signin 의 detail).
+  // 로그인하면 엔진이 다시 뜨는데, 그때 그 일을 하던 화면을 다시 연다. 쪽지는 쓰기 판, 대화는 휴대폰, 방명록은 방명록 창.
+  const afterSignIn = useRef<string | null>(null);
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const onSignedIn = (e: Event) => {
+      afterSignIn.current = (e as CustomEvent<string>).detail;
+    };
+    root.addEventListener("heap:signedin", onSignedIn);
+    return () => root.removeEventListener("heap:signedin", onSignedIn);
+  }, []);
   useEffect(() => {
     latest.current = data;
     if (engineData.current === data) return;
@@ -278,9 +293,20 @@ export function HeapRoom({
         window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
       }
     }
+    // 쪽지를 쓰려다 로그인했으면 ?write=1 로 돌아온 것과 같게 쓰기 판을 연다
+    if (signedIn && afterSignIn.current === "note") {
+      afterSignIn.current = null;
+      writeOnLoad.current = true;
+    }
     // 엔진이 뜨는 동안(dynamic import, setupLive 전) 새 스냅샷이 오면 그 heap:reels 는 듣는 이가 없다. 뜬 뒤에 최신 목록을 한 번 더 보낸다.
     const onReady = () => {
       setReady(true);
+      // 대화나 방명록을 열려다 로그인했으면 그 화면을 다시 연다 (engine/nav.js 의 heap:go)
+      const go = signedIn ? GO_AFTER_SIGNIN[afterSignIn.current ?? ""] : undefined;
+      if (go) {
+        afterSignIn.current = null;
+        root.dispatchEvent(new CustomEvent("heap:go", { detail: go }));
+      }
       root.dispatchEvent(new CustomEvent("heap:viewtime", { detail: viewTimeRef.current }));
       const now = latest.current;
       // 엔진이 뜬 data 와 다르면 보낸다. 이미 받은 목록이면 엔진에서 아무 일도 없다.
@@ -632,6 +658,8 @@ export function HeapRoom({
         />
       )}
 
+      {/* 플레이어 바깥: 누르면 플레이어를 닫는다. 아래의 사진 보기나 방에는 닿지 않는다 (players.js) */}
+      <div id="player-shade" hidden />
       <div id="player" hidden>
         <div className="player-bar">
           <span id="player-title" />
@@ -770,7 +798,7 @@ export function HeapRoom({
                     로그인
                   </button>
                 ) : (
-                  <Link href="/login">로그인</Link>
+                  <Link href={withNext("/login", `/room/${encodeURIComponent(roomId)}`)}>로그인</Link>
                 )}
                 이 필요해요.
               </p>
