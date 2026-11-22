@@ -44,6 +44,10 @@ export function createYoutubeClient(apiKey) {
 const YOUTUBE_HOSTS = ["youtube.com", "www.youtube.com", "m.youtube.com"];
 const HANDLE = /^@[\p{L}\p{N}._-]{3,30}$/u;
 const CHANNEL_ID = /^UC[A-Za-z0-9_-]{22}$/;
+const CHANNEL_TAB = /\/(?:videos|shorts|streams|featured|playlists|community|about)$/;
+const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
+// 재생목록 ID (PL…, UU…, OL… 등). 모양만 본다. 실제로 있는지는 API가 답한다.
+const PLAYLIST_ID = /^[A-Za-z0-9_-]{12,64}$/;
 
 // 퍼센트 인코딩된 핸들을 풀고 모양을 검사한다. 맞지 않으면 null.
 /** @param {string} raw */
@@ -80,7 +84,8 @@ export function parseChannelInput(input) {
   if (url.username !== "" || url.password !== "" || url.port !== "") return null;
   if (!YOUTUBE_HOSTS.includes(url.hostname)) return null;
 
-  const path = url.pathname.replace(/\/$/, "");
+  // 채널 화면의 탭 주소(/@이름/videos, /channel/UC…/shorts 등)는 채널 주소로 본다.
+  const path = url.pathname.replace(/\/$/, "").replace(CHANNEL_TAB, "");
   const handleMatch = /^\/(@[^/]+)$/.exec(path);
   if (handleMatch) {
     const handle = cleanHandle(handleMatch[1]);
@@ -89,6 +94,53 @@ export function parseChannelInput(input) {
   const idMatch = /^\/channel\/([^/]+)$/.exec(path);
   if (idMatch && CHANNEL_ID.test(idMatch[1])) return { kind: "id", value: idMatch[1] };
   return null;
+}
+
+// 방 주인이 힙에 영상을 넣으려고 붙여 넣은 유튜브 주소를 해석한다. 영상 하나, 재생목록, 채널(주소나 @핸들) 중 하나다.
+// 받는 영상 주소: youtube.com/watch?v=…, youtu.be/…, youtube.com/shorts/…, youtube.com/live/…
+// 받는 재생목록 주소: youtube.com/playlist?list=…. watch 주소에 list가 같이 붙어 있으면 영상 하나로 본다 (v가 더 구체적이다).
+// 채널은 parseChannelInput과 같은 규칙이다. 그 밖의 주소는 null.
+/**
+ * @param {unknown} input
+ * @returns {{ kind: "video", id: string } | { kind: "playlist", id: string } | { kind: "channel", ref: { kind: "handle" | "id", value: string } } | null}
+ */
+export function parseYoutubeSource(input) {
+  if (typeof input !== "string") return null;
+  const raw = input.trim();
+  if (raw.length === 0 || raw.length > 2048) return null;
+  if (raw.startsWith("@")) {
+    const ref = parseChannelInput(raw);
+    return ref ? { kind: "channel", ref } : null;
+  }
+
+  let url;
+  try {
+    url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+  if (url.username !== "" || url.password !== "" || url.port !== "") return null;
+  const path = url.pathname.length > 1 ? url.pathname.replace(/\/$/, "") : url.pathname;
+
+  if (url.hostname === "youtu.be") {
+    const id = path.slice(1);
+    return VIDEO_ID.test(id) ? { kind: "video", id } : null;
+  }
+  if (!YOUTUBE_HOSTS.includes(url.hostname)) return null;
+
+  if (path === "/watch") {
+    const id = url.searchParams.get("v") ?? "";
+    return VIDEO_ID.test(id) ? { kind: "video", id } : null;
+  }
+  const short = /^\/(?:shorts|live)\/([^/]+)$/.exec(path);
+  if (short) return VIDEO_ID.test(short[1]) ? { kind: "video", id: short[1] } : null;
+  if (path === "/playlist") {
+    const id = url.searchParams.get("list") ?? "";
+    return PLAYLIST_ID.test(id) ? { kind: "playlist", id } : null;
+  }
+  const ref = parseChannelInput(raw);
+  return ref ? { kind: "channel", ref } : null;
 }
 
 // creator.json의 링크 목록에서 YouTube @핸들만 뽑는다 (스크립트용). 같은 핸들은 한 번만.

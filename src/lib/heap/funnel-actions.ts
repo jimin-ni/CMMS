@@ -8,8 +8,16 @@ import { validateLayout } from "./layout";
 import { getTemplate } from "./templates";
 import { checkRoomName, checkSlug, SLUG_MESSAGES, type SlugFailure } from "./slug";
 import { takeAttempt } from "./rate-limit";
-import { parseChannelInput } from "./youtube-api.mjs";
-import { fetchYoutubeUploads, getYoutubeClient, resolveYoutubeChannel } from "./import";
+import { parseChannelInput, parseYoutubeSource } from "./youtube-api.mjs";
+import {
+  fetchPlaylistTitle,
+  fetchPlaylistVideoIds,
+  fetchYoutubeUploads,
+  fetchYoutubeVideos,
+  getYoutubeClient,
+  resolveYoutubeChannel,
+  type ImportCandidate,
+} from "./import";
 import {
   isStorableLinkPlatform,
   parsePostUrl,
@@ -20,6 +28,9 @@ import {
 import type { ReelCounts } from "./caps";
 import {
   addPastedReels,
+  addPickedReels,
+  getOwnerReelKeys,
+  listCreatorChannels,
   claimRoom,
   claimCreatorChannel,
   type PastedReelInput,
@@ -305,6 +316,183 @@ export async function addPostLinksAction(text: unknown): Promise<AddPostLinksRes
     row.status = result.outcome[`${link.platform}:${link.externalId}`] ?? "added";
   }
   return { ok: true, rows, added: result.added, visible: result.visible };
+}
+
+// ---------- 유튜브 영상 고르기 ----------
+// 방 주인이 영상 주소, 재생목록 주소, 아무 채널(주소나 @핸들)을 적으면 후보를 보여 주고(browse), 고른 영상만 힙에 넣는다(add).
+// 채널을 연결하지 않으므로 남의 채널도 된다. 넣은 영상의 channel_id는 방 주인이 연결한 채널의 영상일 때만 채운다.
+// 재생은 공식 플레이어로만 한다. 영상 파일은 받지도 다시 올리지도 않는다. 쿼터 규칙은 import.ts (search.list 없음).
+
+export type YoutubePickStatus = "new" | "have" | "excluded";
+
+export type YoutubePickCandidate = {
+  id: string;
+  title: string;
+  url: string;
+  short: boolean;
+  channelTitle: string;
+  // "YYYY.MM.DD" (UTC 날짜). 모르면 null.
+  published: string | null;
+  status: YoutubePickStatus;
+};
+
+export type BrowseYoutubeResult =
+  | {
+      ok: true;
+      source: { kind: "video" | "playlist" | "channel"; title: string; url: string };
+      videos: YoutubePickCandidate[];
+      // 읽은 쪽 수 상한에 닿아 더 오래된 영상을 읽지 않았으면 true
+      more: boolean;
+    }
+  | Fail<
+      | "not-signed-in"
+      | "not-creator"
+      | "no-room"
+      | "invalid-youtube-source"
+      | "too-many-attempts"
+      | "source-not-found"
+      | "import-unavailable"
+      | "import-failed"
+    >;
+
+function toPickCandidate(video: ImportCandidate, keys: { existing: Set<string>; excluded: Set<string> }): YoutubePickCandidate {
+  const key = `youtube:${video.externalId}`;
+  return {
+    id: video.externalId,
+    title: video.title,
+    url: video.sourceUrl,
+    short: !video.wide,
+    channelTitle: video.channelTitle,
+    published: video.publishedAt ? video.publishedAt.toISOString().slice(0, 10).replaceAll("-", ".") : null,
+    status: keys.excluded.has(key) ? "excluded" : keys.existing.has(key) ? "have" : "new",
+  };
+}
+
+// 후보 보기. DB에는 쓰지 않는다 (방의 영상 목록만 읽어 이미 있는지 표시한다).
+export async function browseYoutubeAction(input: unknown): Promise<BrowseYoutubeResult> {
+  const auth = await requireCreator();
+  if ("ok" in auth) return auth;
+  const { viewer } = auth;
+
+  const source = parseYoutubeSource(input);
+  if (!source) return fail("invalid-youtube-source");
+  if (!takeAttempt(`yt-browse:${viewer.id}`, HEAP_FUNNEL_POLICY.browseAttemptsPer10Min, 10 * 60 * 1000)) {
+    return fail("too-many-attempts");
+  }
+  const keys = await getOwnerReelKeys(viewer.id);
+  if (!keys) return fail("no-room");
+  const client = getYoutubeClient();
+  if (!client) return fail("import-unavailable");
+
+  try {
+    const pages = HEAP_FUNNEL_POLICY.browseMaxPages;
+    if (source.kind === "video") {
+      const [video] = await fetchYoutubeVideos(client, [source.id]);
+      if (!video) return fail("source-not-found");
+      return {
+        ok: true,
+        source: { kind: "video", title: video.title, url: video.sourceUrl },
+        videos: [toPickCandidate(video, keys)],
+        more: false,
+      };
+    }
+    if (source.kind === "playlist") {
+      const title = await fetchPlaylistTitle(client, source.id);
+      if (title === null) return fail("source-not-found");
+      const { ids, more } = await fetchPlaylistVideoIds(client, source.id, pages);
+      const videos = await fetchYoutubeVideos(client, ids);
+      return {
+        ok: true,
+        source: { kind: "playlist", title, url: `https://www.youtube.com/playlist?list=${source.id}` },
+        // 재생목록은 목록의 순서를 그대로 둔다.
+        videos: videos.map((video) => toPickCandidate(video, keys)),
+        more,
+      };
+    }
+    const channel = await resolveYoutubeChannel(client, source.ref);
+    if (!channel) return fail("source-not-found");
+    const { ids, more } = await fetchPlaylistVideoIds(client, channel.uploadsPlaylistId, pages);
+    const videos = await fetchYoutubeVideos(client, ids, channel.externalId);
+    videos.sort((a, b) => (b.publishedAt?.getTime() ?? 0) - (a.publishedAt?.getTime() ?? 0));
+    return {
+      ok: true,
+      source: { kind: "channel", title: channel.title, url: channel.url },
+      videos: videos.map((video) => toPickCandidate(video, keys)),
+      more,
+    };
+  } catch (error) {
+    console.error("[heap browse]", error instanceof Error ? error.message : "알 수 없는 오류");
+    return fail("import-failed");
+  }
+}
+
+// 영상 하나의 넣기 결과. unavailable = 지금은 공개·퍼가기 허용 영상이 아니어서 넣지 않음.
+export type YoutubePickOutcome = PastedReelStatus | "unavailable";
+
+export type AddYoutubePicksResult =
+  | { ok: true; outcome: Record<string, YoutubePickOutcome>; added: number; visible: ReelCounts }
+  | Fail<
+      | "not-signed-in"
+      | "not-creator"
+      | "no-room"
+      | "no-picks"
+      | "too-many-picks"
+      | "too-many-attempts"
+      | "import-unavailable"
+      | "import-failed"
+    >;
+
+// 고른 영상(유튜브 영상 ID 목록)을 힙에 넣는다. 제목과 길이 같은 정보는 클라이언트 값을 믿지 않고 API로 다시 읽는다.
+// 상한과 중복, 뺀 영상은 repo가 한 트랜잭션에서 지킨다.
+export async function addYoutubePicksAction(ids: unknown): Promise<AddYoutubePicksResult> {
+  const auth = await requireCreator();
+  if ("ok" in auth) return auth;
+  const { viewer } = auth;
+
+  if (!Array.isArray(ids)) return fail("no-picks");
+  const picked = [...new Set(ids.filter((id): id is string => typeof id === "string" && /^[A-Za-z0-9_-]{11}$/.test(id)))];
+  if (picked.length === 0) return fail("no-picks");
+  if (picked.length > HEAP_FUNNEL_POLICY.picksMax) return fail("too-many-picks");
+  if (!takeAttempt(`yt-pick:${viewer.id}`, HEAP_FUNNEL_POLICY.pickAttemptsPer10Min, 10 * 60 * 1000)) {
+    return fail("too-many-attempts");
+  }
+  const room = await getRoomByCreator(viewer.id);
+  if (!room) return fail("no-room");
+  const client = getYoutubeClient();
+  if (!client) return fail("import-unavailable");
+
+  let videos: ImportCandidate[];
+  try {
+    videos = await fetchYoutubeVideos(client, picked);
+  } catch (error) {
+    console.error("[heap pick]", error instanceof Error ? error.message : "알 수 없는 오류");
+    return fail("import-failed");
+  }
+
+  // 방 주인이 연결한 유튜브 채널의 영상이면 그 채널에 묶는다 (카드 뒷면의 채널 이름과 앨범 규칙이 쓴다).
+  const owned = new Map(
+    (await listCreatorChannels(viewer.id))
+      .filter((channel) => channel.platform === "youtube")
+      .map((channel) => [channel.externalId, channel.id]),
+  );
+  const result = await addPickedReels({
+    roomId: room.id,
+    creatorId: viewer.id,
+    picks: videos.map((video) => ({
+      externalId: video.externalId,
+      sourceUrl: video.sourceUrl,
+      title: video.title,
+      wide: video.wide,
+      viewCount: video.viewCount,
+      publishedAt: video.publishedAt,
+      channelId: owned.get(video.channelExternalId) ?? null,
+    })),
+  });
+  if ("ok" in result) return fail("no-room");
+
+  const outcome: Record<string, YoutubePickOutcome> = {};
+  for (const id of picked) outcome[id] = result.outcome[`youtube:${id}`] ?? "unavailable";
+  return { ok: true, outcome, added: result.added, visible: result.visible };
 }
 
 // ---------- 영상 빼기·되돌리기 ----------

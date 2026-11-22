@@ -1300,14 +1300,83 @@ export type AddPastedReelsResult = {
   visible: ReelCounts;
 };
 
-// 크리에이터가 붙여 넣은 게시물 링크를 방에 넣는다. 한 트랜잭션에서 방 행을 잠그고 importReels와 같은 순서로 한다.
-// 1) 힙에서 뺀 링크는 건너뛴다 2) 이미 있는 링크는 그대로 둔다 (제목을 덮어쓰지 않는다: 창작자가 적은 제목을 지우지 않기 위해서다)
-// 3) 남은 것만 갈래별 상한(allocateCaps)이 허락하는 만큼 붙여 넣은 순서대로 넣는다.
+// 크리에이터가 붙여 넣은 게시물 링크를 방에 넣는다. 규칙은 addReelsCapped와 같다.
 // 채널(channel_id)은 없다. 가져오기가 아니라 링크 하나하나라서 연결된 채널에 속하지 않는다.
 export async function addPastedReels(input: {
   roomId: string;
   creatorId: string;
   links: PastedReelInput[];
+}): Promise<AddPastedReelsResult | Fail<"no-room">> {
+  return addReelsCapped({
+    roomId: input.roomId,
+    creatorId: input.creatorId,
+    // 게시물 카드는 세로로 그린다.
+    reels: input.links.map((link) => ({ ...link, channelId: null, wide: false })),
+  });
+}
+
+// 방 주인이 고른 유튜브 영상(영상 주소, 재생목록, 아무 채널에서 고른 것). 정보는 서버가 API로 다시 읽은 값이다.
+// channelId: 방 주인이 연결한 채널의 영상이면 그 채널 행의 id, 아니면 null.
+export type PickedReelInput = {
+  externalId: string;
+  sourceUrl: string;
+  title: string;
+  wide: boolean;
+  viewCount: number | null;
+  publishedAt: Date | null;
+  channelId: string | null;
+};
+
+// 고른 영상을 방에 넣는다. 규칙은 addReelsCapped와 같다: 이미 있는 영상은 건드리지 않는다
+// (연결한 채널로 가져온 영상의 channel_id를 null로 덮지 않는다).
+export async function addPickedReels(input: {
+  roomId: string;
+  creatorId: string;
+  picks: PickedReelInput[];
+}): Promise<AddPastedReelsResult | Fail<"no-room">> {
+  return addReelsCapped({
+    roomId: input.roomId,
+    creatorId: input.creatorId,
+    reels: input.picks.map((pick) => ({ ...pick, platform: "youtube" as const })),
+  });
+}
+
+// 방 주인의 방에 이미 있는 영상 키와 힙에서 뺀 영상 키 ("<platform>:<external_id>"). 고르기 화면이 후보에 표시를 붙이는 데 쓴다.
+export async function getOwnerReelKeys(
+  creatorId: string,
+): Promise<{ roomId: string; existing: Set<string>; excluded: Set<string> } | null> {
+  const room = await db
+    .select({ id: heapRooms.id, layout: heapRooms.layout })
+    .from(heapRooms)
+    .where(eq(heapRooms.creatorId, creatorId))
+    .limit(1);
+  if (!room[0]) return null;
+  const rows = await db.select({ key: reelKeySql }).from(heapReels).where(eq(heapReels.roomId, room[0].id));
+  return {
+    roomId: room[0].id,
+    existing: new Set(rows.map((row) => row.key)),
+    excluded: new Set(excludedReelKeys(room[0].layout)),
+  };
+}
+
+type NewReelRow = {
+  platform: HeapChannelPlatform;
+  externalId: string;
+  sourceUrl: string;
+  title: string;
+  wide: boolean;
+  viewCount?: number | null;
+  publishedAt?: Date | null;
+  channelId: string | null;
+};
+
+// 영상 여러 개를 방에 새로 넣는다. 한 트랜잭션에서 방 행을 잠그고 importReels와 같은 순서로 한다.
+// 1) 힙에서 뺀 영상은 건너뛴다 2) 이미 있는 영상은 그대로 둔다 (제목을 덮어쓰지 않는다: 창작자가 적은 제목을 지우지 않기 위해서다)
+// 3) 남은 것만 갈래별 상한(allocateCaps)과 합계 상한이 허락하는 만큼 받은 순서대로 넣는다.
+async function addReelsCapped(input: {
+  roomId: string;
+  creatorId: string;
+  reels: NewReelRow[];
 }): Promise<AddPastedReelsResult | Fail<"no-room">> {
   return db.transaction(async (tx) => {
     const roomRows = await tx
@@ -1331,16 +1400,16 @@ export async function addPastedReels(input: {
     }
 
     const outcome: Record<string, PastedReelStatus> = {};
-    const fresh: Record<ReelClass, PastedReelInput[]> = { shorts: [], long: [], instagram: [] };
-    // 한 번의 붙여넣기 안에 같은 게시물이 두 줄로 와도 한 줄만 넣는다 (뒤의 줄은 결과를 받지 않는다: 부르는 쪽이 중복으로 센다).
+    const fresh: Record<ReelClass, NewReelRow[]> = { shorts: [], long: [], instagram: [] };
+    // 한 번에 같은 영상이 두 번 와도 한 줄만 넣는다 (뒤의 것은 결과를 받지 않는다: 부르는 쪽이 중복으로 센다).
     const seen = new Set<string>();
-    for (const link of input.links) {
+    for (const link of input.reels) {
       const key = `${link.platform}:${link.externalId}`;
       if (seen.has(key)) continue;
       seen.add(key);
       if (excluded.has(key)) outcome[key] = "excluded";
       else if (existingKeys.has(key)) outcome[key] = "duplicate";
-      else fresh[classifyReel({ platform: link.platform, wide: false })].push(link);
+      else fresh[classifyReel(link)].push(link);
     }
 
     const available: ReelCounts = {
@@ -1349,7 +1418,7 @@ export async function addPastedReels(input: {
       instagram: have.instagram + fresh.instagram.length,
     };
     const allocation = allocateCaps(available);
-    const chosen: PastedReelInput[] = [];
+    const chosen: NewReelRow[] = [];
     const visible: ReelCounts = { ...have };
     // 갈래 몫과 별도로 합계 상한도 지킨다. 한 갈래가 이미 몫을 넘긴 방에서는 allocateCaps가 그 갈래를 줄이지 못해
     // 남은 몫을 다른 갈래에 내주기 때문에, 방이 이미 300줄이어도 다른 갈래가 더 들어갈 수 있다.
@@ -1371,16 +1440,17 @@ export async function addPastedReels(input: {
         .values(
           chosen.map((link) => ({
             roomId: room.id,
-            channelId: null,
+            channelId: link.channelId,
             platform: link.platform,
             externalId: link.externalId,
             sourceUrl: link.sourceUrl,
             title: link.title,
-            // 게시물 카드는 세로로 그린다.
-            wide: false,
+            wide: link.wide,
+            viewCount: link.viewCount ?? null,
+            publishedAt: link.publishedAt ?? null,
           })),
         )
-        // 같은 크리에이터가 두 곳에서 동시에 붙여 넣어도 한 줄만 남는다.
+        // 같은 크리에이터가 두 곳에서 동시에 넣어도 한 줄만 남는다.
         .onConflictDoNothing({ target: [heapReels.roomId, heapReels.platform, heapReels.externalId] });
     }
     return { outcome, added: chosen.length, visible };

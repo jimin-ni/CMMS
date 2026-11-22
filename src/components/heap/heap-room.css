@@ -474,6 +474,10 @@
 .heap-room .ch-reels li { display: flex; align-items: center; gap: 8px; padding: 2px 4px; border-bottom: 1px solid #d4cbc7; font-size: 12.5px; }
 .heap-room .ch-reels li.out { opacity: 0.6; }
 .heap-room .ch-reels li.out .ch-title { text-decoration: line-through; }
+/* 유튜브 영상 고르기: 이미 있거나 넣은 후보는 흐리게만 (줄은 긋지 않는다) */
+.heap-room .ch-reels li.taken { opacity: 0.6; }
+.heap-room .ch-reels input[type="checkbox"] { flex: none; margin: 0; accent-color: var(--clay); }
+.heap-room .ch-tools b.ch-title { font-size: 12.5px; font-weight: 600; }
 .heap-room .ch-kind { flex: none; width: 4.5em; font-size: 11px; color: var(--clay); font-weight: 600; }
 .heap-room .ch-title { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .heap-room .ch-reels small { flex: none; color: rgba(47, 44, 36, 0.55); font-size: 11.5px; white-space: nowrap; }

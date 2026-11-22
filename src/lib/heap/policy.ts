@@ -142,6 +142,14 @@ export const HEAP_FUNNEL_POLICY = {
   pasteAttemptsPer10Min: 20,
   // 붙여 넣은 제목("<주소> | <제목>")의 길이. 0007의 check(300자)보다 좁다.
   pasteTitleMaxChars: 100,
+
+  // 유튜브 영상 고르기 (채널 탭): 영상 주소, 재생목록, 아무 채널의 영상을 골라 넣는다. 연결한 채널의 가져오기와 달리 간격 제한이 없다.
+  // 찾기 한 번: 채널 1 + 재생목록 쪽당 1 + 영상 정보 50개당 1 (+ 재생목록 제목 1). 쪽 4개면 많아야 9유닛.
+  browseMaxPages: 4,
+  browseAttemptsPer10Min: 10,
+  // 넣기 한 번에 고를 수 있는 영상 수. 서버가 영상 정보를 다시 읽는다 (50개당 1유닛).
+  picksMax: 50,
+  pickAttemptsPer10Min: 20,
 } as const;
 
 // 쪽지 색과 글꼴 목록. DB에는 id(^[a-z0-9-]{1,24}$)만 저장하고 화면 값은 엔진(tree-note.js)이 가진다.
