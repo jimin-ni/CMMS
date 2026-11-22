@@ -156,6 +156,8 @@ export const heapReels = pgTable("heap_reels", {
   wide: boolean("wide"),
   viewCount: bigint("view_count", { mode: "number" }),
   publishedAt: timestamp("published_at", { withTimezone: true }),
+  // 플랫폼이 알려 준 업로더 채널 이름 (0012). 모르면 null.
+  uploaderName: text("uploader_name"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

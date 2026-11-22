@@ -60,6 +60,8 @@ export type HeapReel = {
   // 연결된 채널의 이름과 주소. 채널을 모르면 null.
   channelTitle: string | null;
   channelUrl: string | null;
+  // 플랫폼이 알려 준 업로더 채널 이름. 연결하지 않은 채널의 영상에 쓴다. 모르면 null.
+  uploaderName: string | null;
 };
 
 export type HeapPieceStatus = "pending" | "rejected" | "voting" | "landed" | "lifted";
@@ -297,6 +299,7 @@ export async function listReels(
       publishedAt: heapReels.publishedAt,
       channelTitle: heapCreatorChannels.title,
       channelUrl: heapCreatorChannels.channelUrl,
+      uploaderName: heapReels.uploaderName,
     })
     .from(heapReels)
     .leftJoin(heapCreatorChannels, eq(heapCreatorChannels.id, heapReels.channelId))
@@ -1251,6 +1254,7 @@ export async function importReels(input: {
       wide: candidate.wide,
       viewCount: candidate.viewCount,
       publishedAt: candidate.publishedAt,
+      uploaderName: candidate.channelTitle || null,
     }));
     for (let i = 0; i < rows.length; i += 100) {
       await tx
@@ -1264,12 +1268,14 @@ export async function importReels(input: {
             viewCount: sql`excluded.view_count`,
             channelId: sql`excluded.channel_id`,
             publishedAt: sql`coalesce(${heapReels.publishedAt}, excluded.published_at)`,
+            uploaderName: sql`coalesce(excluded.uploader_name, ${heapReels.uploaderName})`,
             updatedAt: sql`now()`,
           },
           setWhere: sql`${heapReels.title} is distinct from excluded.title
             or ${heapReels.viewCount} is distinct from excluded.view_count
             or ${heapReels.channelId} is distinct from excluded.channel_id
-            or ${heapReels.publishedAt} is null`,
+            or ${heapReels.publishedAt} is null
+            or ${heapReels.uploaderName} is null`,
         });
     }
 
@@ -1325,6 +1331,8 @@ export type PickedReelInput = {
   viewCount: number | null;
   publishedAt: Date | null;
   channelId: string | null;
+  // 업로더 채널 이름 (API가 알려 준 값)
+  uploaderName: string | null;
 };
 
 // 고른 영상을 방에 넣는다. 규칙은 addReelsCapped와 같다: 이미 있는 영상은 건드리지 않는다
@@ -1368,6 +1376,7 @@ type NewReelRow = {
   viewCount?: number | null;
   publishedAt?: Date | null;
   channelId: string | null;
+  uploaderName?: string | null;
 };
 
 // 영상 여러 개를 방에 새로 넣는다. 한 트랜잭션에서 방 행을 잠그고 importReels와 같은 순서로 한다.
@@ -1448,6 +1457,7 @@ async function addReelsCapped(input: {
             wide: link.wide,
             viewCount: link.viewCount ?? null,
             publishedAt: link.publishedAt ?? null,
+            uploaderName: link.uploaderName || null,
           })),
         )
         // 같은 크리에이터가 두 곳에서 동시에 넣어도 한 줄만 남는다.

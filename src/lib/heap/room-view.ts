@@ -60,8 +60,8 @@ function toRoomData(
         // 정규 원본 주소. 카드 뒷면, "원본 보기", 공식 임베드가 모두 이 값을 쓴다.
         url: reel.sourceUrl,
         title: reel.title,
-        // 채널을 모르는 영상은 null. 엔진이 방 이름으로 대신한다.
-        channel: reel.channelTitle,
+        // 연결된 채널 이름, 없으면 업로더 채널 이름. 둘 다 모르면 null이고 엔진이 방 이름으로 대신한다.
+        channel: reel.channelTitle ?? reel.uploaderName,
         // 카드 뒷면의 "@핸들". 채널 주소에 @핸들이 없으면 null.
         handle: channelHandle(reel.channelUrl),
         wide: reel.wide ?? false,

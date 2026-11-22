@@ -486,6 +486,7 @@ export async function addYoutubePicksAction(ids: unknown): Promise<AddYoutubePic
       viewCount: video.viewCount,
       publishedAt: video.publishedAt,
       channelId: owned.get(video.channelExternalId) ?? null,
+      uploaderName: video.channelTitle || null,
     })),
   });
   if ("ok" in result) return fail("no-room");
