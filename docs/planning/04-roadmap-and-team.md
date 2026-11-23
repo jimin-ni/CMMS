@@ -164,6 +164,7 @@
 | 2026-11-21 | 사전 첫 버전과 허용 목록 | ProfanityBench 영어 703개 적재(검토 approve=y 또는 suggest=y). 일상어·정치 용어·가벼운 욕 135개는 허용 목록으로 빼서 OpenAI 판정만 받게 함 (12-ai-screening 5-2) |
 | 2026-11-21 | 버블 대화방 정리 | 모든 대화방을 닫고 온보딩 방(lovesoo) 주인 MainCreator01의 "Chat with Lovesoo"만 엶 |
 | 2026-11-21 | 관리자 페이지 진입 | 관리자 계정은 마이페이지 계정 정보 장의 "관리자 페이지" 버튼으로 `/admin/moderation`에 들어감 |
+| 2026-11-23 | 사전 2차 검토 반영 | 사람 검토 칸 `user_review`를 최종 판단으로 씀. y 604개만 사전에 켜고, n·?·빈칸 237개는 끔(`enabled=false`)으로 regex·OpenAI 판정만 받게 함. 허용 목록에서 `nazi`만 빼고 134개는 그대로 둠 (12-ai-screening 5-2) |
 
 ## 5. 미결 사항
 
