@@ -6,6 +6,7 @@ import { useState, useSyncExternalStore } from "react";
 import { authClient } from "@/lib/auth-client";
 import { trackEvent } from "@/lib/analytics";
 import { nextFromLocation, withNext } from "@/lib/next-path";
+import { NICKNAME_MAX, NICKNAME_TEXT, nicknameLength, type NicknameStatus } from "@/lib/nickname";
 
 const noSubscribe = () => () => {};
 
@@ -19,23 +20,71 @@ export default function SignupPage() {
   const [is14OrOlder, setIs14OrOlder] = useState<boolean | null>(null);
   // "아니오"로 가입한 뒤 보여 주는 안내창. 확인을 누르면 다음 화면으로 간다.
   const [underAgeNext, setUnderAgeNext] = useState<string | null>(null);
+  const [nickname, setNickname] = useState("");
+  // 스크리닝을 통과한 닉네임. 입력이 바뀌면 다시 확인해야 한다.
+  const [checkedNickname, setCheckedNickname] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+  // 닉네임 확인에 실패했을 때 띄우는 안내창 문구
+  const [nicknameNotice, setNicknameNotice] = useState<string | null>(null);
+  const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const nicknameOk = checkedNickname !== null && checkedNickname === nickname.trim();
+  const passwordMismatch = passwordConfirm.length > 0 && password !== passwordConfirm;
+
+  // 통과하면 true. 실패하면 안내창을 띄우고 false.
+  async function checkNickname(): Promise<boolean> {
+    const name = nickname.trim();
+    if (nicknameOk) return true;
+    let status: NicknameStatus;
+    if (nicknameLength(name) === 0) status = "empty";
+    else if (nicknameLength(name) > NICKNAME_MAX) status = "too_long";
+    else {
+      setChecking(true);
+      const res = await fetch("/api/signup/nickname", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name }),
+      }).catch(() => null);
+      setChecking(false);
+      const data = (await res?.json().catch(() => null)) as { status?: NicknameStatus } | null;
+      if (!data?.status) {
+        setErrorMessage("닉네임을 확인하지 못했어요. 잠시 뒤에 다시 시도해 주세요.");
+        return false;
+      }
+      status = data.status;
+    }
+    if (status === "ok") {
+      setCheckedNickname(name);
+      return true;
+    }
+    setNicknameNotice(NICKNAME_TEXT[status]);
+    return false;
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    // await 뒤에는 event.currentTarget이 비므로 먼저 읽어 둔다.
+    const form = new FormData(event.currentTarget);
     if (is14OrOlder === null) {
       setErrorMessage("만 14세 이상인지 예 또는 아니오를 선택해 주세요.");
       return;
     }
+    // 두 칸이 다르면 입력칸 아래 안내가 이미 보이고 있다.
+    if (password !== passwordConfirm) return;
 
     setPending(true);
     setErrorMessage(null);
+    if (!(await checkNickname())) {
+      setPending(false);
+      return;
+    }
 
-    const form = new FormData(event.currentTarget);
     // 역할은 가입 요청에 넣지 않는다. 가입 후 서버에서 따로 설정한다.
     const result = await authClient.signUp.email({
-      name: String(form.get("name")),
+      name: nickname.trim(),
       email: String(form.get("email")),
-      password: String(form.get("password")),
+      password,
     });
 
     if (result.error) {
@@ -110,18 +159,57 @@ export default function SignupPage() {
           <p className="text-xs text-ash">한 번 답하면 바꿀 수 없어요.</p>
         </fieldset>
 
-        <label className="flex flex-col gap-1 text-sm">
-          닉네임
-          <input name="name" required className="rounded-sm border border-ash px-3 py-2" />
-        </label>
+        <div className="flex flex-col gap-1 text-sm">
+          <label htmlFor="signup-name" className="flex justify-between">
+            닉네임
+            <span className={nicknameLength(nickname) > NICKNAME_MAX ? "text-red-700" : "text-ash"}>
+              {nicknameLength(nickname)}/{NICKNAME_MAX}
+            </span>
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="signup-name"
+              name="name"
+              required
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              aria-describedby="signup-name-rules signup-name-status"
+              className="min-w-0 flex-1 rounded-sm border border-ash px-3 py-2"
+            />
+            <button
+              type="button"
+              onClick={() => void checkNickname()}
+              disabled={checking || nicknameOk}
+              className="shrink-0 rounded-sm border border-ink px-3 py-2 text-ink disabled:opacity-60"
+            >
+              {checking ? "확인 중..." : "확인"}
+            </button>
+          </div>
+          <p id="signup-name-rules" className="text-xs text-red-700">{NICKNAME_TEXT.rulesNotice}</p>
+          <p id="signup-name-status" aria-live="polite" className="text-xs text-green-700">
+            {nicknameOk ? NICKNAME_TEXT.ok : ""}
+          </p>
+        </div>
         <label className="flex flex-col gap-1 text-sm">
           이메일
           <input name="email" type="email" required className="rounded-sm border border-ash px-3 py-2" />
         </label>
-        <label className="flex flex-col gap-1 text-sm">
-          비밀번호 (8자 이상)
-          <input name="password" type="password" minLength={8} required className="rounded-sm border border-ash px-3 py-2" />
-        </label>
+        <PasswordField
+          label="비밀번호 (8자 이상)"
+          value={password}
+          onChange={setPassword}
+          visible={showPassword}
+          onToggle={() => setShowPassword((v) => !v)}
+        />
+        <PasswordField
+          label="비밀번호 확인"
+          value={passwordConfirm}
+          onChange={setPasswordConfirm}
+          visible={showPassword}
+          onToggle={() => setShowPassword((v) => !v)}
+          invalid={passwordMismatch}
+        />
+        {passwordMismatch && <p className="text-xs text-red-700">비밀번호가 서로 달라요.</p>}
         {errorMessage && <p className="text-sm text-red-700">{errorMessage}</p>}
         {/* 문서는 새 탭으로 연다: 쓰던 가입 양식이 지워지지 않게 */}
         <p className="text-xs text-ash">
@@ -149,6 +237,68 @@ export default function SignupPage() {
           </Link>
         </p>
       </form>
+      {nicknameNotice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6">
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="nickname-notice-title"
+            aria-describedby="nickname-notice-body"
+            className="flex w-full max-w-sm flex-col gap-4 rounded-sm border border-hairline bg-white p-6"
+          >
+            <h2 id="nickname-notice-title" className="text-lg font-medium text-ink">닉네임을 사용할 수 없어요</h2>
+            <p id="nickname-notice-body" className="text-sm text-ink">{nicknameNotice}</p>
+            <button
+              type="button"
+              autoFocus
+              onClick={() => setNicknameNotice(null)}
+              className="inline-flex h-[35px] items-center justify-center rounded-sm border border-black bg-ink px-3 text-sm font-bold uppercase text-white hover:bg-ink-soft"
+            >
+              확인
+            </button>
+          </div>
+        </div>
+      )}
     </main>
+  );
+}
+
+function PasswordField(props: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  visible: boolean;
+  onToggle: () => void;
+  invalid?: boolean;
+}) {
+  return (
+    <label className="flex flex-col gap-1 text-sm">
+      {props.label}
+      <span className="relative flex">
+        <input
+          type={props.visible ? "text" : "password"}
+          minLength={8}
+          required
+          autoComplete="new-password"
+          value={props.value}
+          onChange={(e) => props.onChange(e.target.value)}
+          aria-invalid={props.invalid || undefined}
+          className={`w-full rounded-sm border px-3 py-2 pr-10 ${props.invalid ? "border-red-700" : "border-ash"}`}
+        />
+        <button
+          type="button"
+          onClick={props.onToggle}
+          aria-label={props.visible ? "비밀번호 숨기기" : "비밀번호 보기"}
+          aria-pressed={props.visible}
+          className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-ash hover:text-ink"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+            <circle cx="12" cy="12" r="3" />
+            {props.visible && <path d="M3 3l18 18" />}
+          </svg>
+        </button>
+      </span>
+    </label>
   );
 }
