@@ -1,0 +1,12 @@
+// 방 함께 있기(presence) 워커. 방 하나 = Durable Object 하나 (docs/dev/presence.md).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cmms-presence",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "durable_objects": {
+    "bindings": [{ "name": "ROOM", "class_name": "Room" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }],
+  "observability": { "enabled": true }
+}

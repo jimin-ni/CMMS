@@ -1,0 +1,20 @@
+{
+  "name": "cmms-presence",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --port 3001",
+    "deploy": "wrangler deploy",
+    "types": "wrangler types",
+    "test": "vitest run",
+    "check": "wrangler types && tsc --noEmit -p . && tsc --noEmit -p test",
+    "bots": "node scripts/bots.mjs"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.9.0",
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.12",
+    "wrangler": "^4.166.0"
+  }
+}
