@@ -18,7 +18,10 @@ import {
 } from "@/lib/schema";
 import type { Viewer } from "@/lib/session";
 import { MODERATION_POLICY } from "./policy";
-import type { ScreenResult, Surface } from "./screen";
+import type { ScreenResult } from "./screen";
+
+// 글이 저장되는 표면 (moderation_events.surface의 check와 같다). 닉네임은 판정만 하고 기록하지 않는다.
+export type PostSurface = "chat" | "note" | "guestbook";
 
 export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Executor = typeof db | Tx;
@@ -70,7 +73,7 @@ export async function chatPreScreenBlock(userId: string, normalizedHash: string)
 }
 
 // 같은 글 반복(표면마다 그 표면의 내 글)과 위반 직후 대기(표면마다)
-export async function preScreenBlock(surface: Surface, userId: string, normalizedHash: string): Promise<PreScreenBlock> {
+export async function preScreenBlock(surface: PostSurface, userId: string, normalizedHash: string): Promise<PreScreenBlock> {
   const since = (col: typeof bubbleMessages.createdAt | typeof heapNotes.createdAt | typeof heapGuestbook.createdAt) =>
     sql`${col} > now() - ${P.repeatWindowMs}::int * interval '1 millisecond'`;
   const repeatQuery =
@@ -268,7 +271,7 @@ export async function recordScreenEvent(
   args: {
     userId: string;
     roomOwnerId: string;
-    surface: Surface;
+    surface: PostSurface;
     targetId: string;
     result: ScreenResult;
     plan: ScreenPlan;
@@ -778,7 +781,7 @@ export async function listForReview(viewer: Viewer, limit = 100): Promise<Review
     viewer.id,
     events
       .filter((e) => e.body !== null)
-      .map((e) => ({ surface: e.surface as Surface, targetId: e.messageId, eventId: e.id })),
+      .map((e) => ({ surface: e.surface as PostSurface, targetId: e.messageId, eventId: e.id })),
   );
 
   return {
