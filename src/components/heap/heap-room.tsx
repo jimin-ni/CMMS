@@ -35,6 +35,7 @@ const GO_AFTER_SIGNIN: Record<string, string> = { chat: "phone", guestbook: "gue
 import { RoomEditor } from "./room-editor";
 import { SetupChecklist, setupFlags, type ChecklistAction } from "./setup-checklist";
 import { ShareButton } from "./share-button";
+import { createPresenceClient, type PresenceClient } from "./presence-client";
 import { moneygraphyPixel, moneygraphyRounded, pretendard } from "@/app/fonts/onboarding";
 import "./heap-room.css";
 
@@ -151,6 +152,7 @@ export function HeapRoom({
   canEdit = false,
   owner = null,
   signInHere = false,
+  presence = false,
 }: {
   roomId: string;
   data: HeapRoomData;
@@ -161,6 +163,8 @@ export function HeapRoom({
   owner?: HeapOwnerData | null;
   // 온보딩: 로그인 전에 휴대폰의 대화를 누르면 로그인 화면으로 가지 않고 방에 heap:signin 을 보낸다 (둘러보기가 로그인 팝업을 띄운다)
   signInHere?: boolean;
+  // 방 함께 있기를 켤지. /room 페이지만 true 를 넘긴다 (온보딩 방은 끈다)
+  presence?: boolean;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -263,6 +267,21 @@ export function HeapRoom({
     setResume(null);
   }
 
+  // 방 함께 있기(presence, docs/dev/presence.md): 로그인한 사람의 /room 화면에서만 연결한다.
+  // 연결은 엔진 바깥에 둔다. 꾸미기 때문에 엔진이 다시 마운트되어도 다른 사람에게 나갔다 들어온 것처럼 보이지 않게.
+  // 이 effect 는 아래 엔진 마운트 effect 보다 먼저 돌아야 한다 (엔진이 presenceRef 를 읽는다).
+  const presenceRef = useRef<PresenceClient | null>(null);
+  useEffect(() => {
+    if (!presence || !signedIn || !process.env.NEXT_PUBLIC_PRESENCE_URL) return;
+    const client = createPresenceClient({ roomUuid: data.roomUuid });
+    presenceRef.current = client;
+    client.start();
+    return () => {
+      client.close();
+      if (presenceRef.current === client) presenceRef.current = null;
+    };
+  }, [presence, signedIn, data.roomUuid]);
+
   // 꾸미기가 열리고 닫힐 때 엔진에 알린다. 엔진은 편집 모드로 들어가고(engine/edit.js) 음악을 멈춘다.
   useEffect(() => {
     rootRef.current?.dispatchEvent(new CustomEvent("heap:edit", { detail: editing }));
@@ -351,6 +370,8 @@ export function HeapRoom({
         viewerName,
         signedIn,
         roomUuid: data.roomUuid,
+        // 방 함께 있기 연결 (없으면 혼자 보는 방 그대로)
+        presence: presenceRef.current ?? undefined,
         pollMs: HEAP_POLICY.pollIntervalMs,
         bubbleHref: data.bubbleHref,
         navigate: (href: string) => router.push(href),
