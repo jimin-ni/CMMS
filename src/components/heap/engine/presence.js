@@ -4,7 +4,8 @@
 // 다른 사람 캐릭터는 입력 레이캐스트 목록에 없으므로 왼쪽 클릭은 뒤의 바닥이나 가구로 간다. 캐릭터끼리는 부딪히지 않는다.
 import * as THREE from 'three';
 import { flat } from './draw.js';
-import { makeFigure, seatLegs, stepGait, turnToward, SIT_DROP, WALK_SPEED } from './figure.js';
+import { makeFigure, seatLegs, stepGait, turnToward, wrapAngle, SIT_DROP, WALK_SPEED } from './figure.js';
+import { disposeScene } from './util.js';
 
 // 다른 사람 몸 색 (서버가 주는 colour 0..7). 방의 흙빛과 어울리는 따뜻한 색들
 const BODY = ['#A6613C', '#565344', '#7a8b6f', '#c9a15b', '#8c5a6b', '#5d7389', '#b77d5a', '#6f6a8c'];
@@ -14,6 +15,7 @@ const POP = 0.25; // 들어오고 나갈 때 커지고 작아지는 시간 (초)
 const MAX_PTS = 16;
 
 const r2 = v => Math.round(v * 100) / 100;
+const ang = a => r2(wrapAngle(a));
 const xz = v => [r2(v.x), r2(v.z)];
 
 export function setupPresence(ctx) {
@@ -30,14 +32,15 @@ export function setupPresence(ctx) {
 
   // peer → { fig, tag, state, path: Vector3[], target: Vector3 | null, seat: {p, ry} | null, heapSpot, pop, leaving }
   const peers = new Map();
-  ctx.onDispose(() => { for (const p of peers.values()) scene.remove(p.fig.group); peers.clear(); });
+  // 다른 사람 캐릭터의 형상과 재질은 사람마다 새로 만든 것이다. 지울 때 GPU 메모리도 돌려준다
+  ctx.onDispose(() => { for (const p of peers.values()) { scene.remove(p.fig.group); disposeScene(p.fig.group); } peers.clear(); });
 
   function spawnAt() {
     if (ctx.doorSpot) return ctx.doorSpot.clone().setY(0);
     return new THREE.Vector3(2.2, 0, 2.4);
   }
 
-  function addPeer({ peer, name, colour, state, p, ry }) {
+  function addPeer({ peer, name, colour, state, p, ry, sit }) {
     if (peers.has(peer)) return peers.get(peer);
     const fig = makeFigure(C, flat(BODY[(colour | 0) % BODY.length]));
     const at = Array.isArray(p) ? new THREE.Vector3(p[0], 0, p[1]) : spawnAt();
@@ -52,13 +55,18 @@ export function setupPresence(ctx) {
     tags.appendChild(tag);
     const it = { fig, tag, state: state || 'idle', path: [], target: null, seat: null, heapSpot: null, pop: 0, leaving: false };
     peers.set(peer, it);
+    // 먼저 와서 앉아 있던 사람 (hello 와 연결의 사람 목록이 자리를 준다)
+    if (sit && Array.isArray(sit.p)) {
+      if (sit.kind === 'heap') { it.atHeap = true; assignHeapSpots(); }
+      else it.seat = { p: new THREE.Vector3(sit.p[0], sit.p[1], sit.p[2]), ry: sit.ry };
+    }
     return it;
   }
 
   function dropPeer(peer, now = false) {
     const it = peers.get(peer);
     if (!it) return;
-    if (now) { scene.remove(it.fig.group); it.tag.remove(); peers.delete(peer); return; }
+    if (now) { scene.remove(it.fig.group); disposeScene(it.fig.group); it.tag.remove(); peers.delete(peer); return; }
     it.leaving = true; it.pop = 0;
   }
 
@@ -88,7 +96,6 @@ export function setupPresence(ctx) {
       case 'join': addPeer(m); sendSnap(); return;
       case 'leave': dropPeer(m.peer); return;
       case 'reset': for (const k of [...peers.keys()]) dropPeer(k); return;
-      case 'full': ctx.toast('방이 가득 찼어요. 혼자 둘러볼 수 있어요'); return;
     }
     const it = peers.get(m.peer);
     if (!it) return;
@@ -118,6 +125,7 @@ export function setupPresence(ctx) {
         break;
       case 'snap': {
         it.state = m.state;
+        if ((it.seat || it.atHeap) && m.state === 'sit') break; // 앉은 사람의 snap 은 자리를 바꾸지 않는다
         // 걷는 중이 아니면 0.3초에 걸쳐 맞춘다. 걷는 중이면 크게 어긋났을 때만
         const want = new THREE.Vector3(m.p[0], 0, m.p[1]), off = fig.position.distanceTo(want);
         if (!it.path.length && !it.seat && !it.atHeap && off > 0.05) { it.target = want; it.targetRy = m.ry; it.correcting = 0.3; }
@@ -131,6 +139,13 @@ export function setupPresence(ctx) {
   ctx.onDispose(offMsg);
   // 연결은 엔진보다 먼저 열린다 (heap-room.tsx). 엔진이 뜨기 전에 받은 사람들, 다시 마운트되기 전부터 있던 사람들로 시작한다
   for (const p of client.peers()) addPeer(p);
+  // 정원 초과, 다른 탭이 대체: 엔진이 뜨기 전에 일어났어도 한 번 알린다
+  const notify = s => {
+    if (s === 'full') ctx.toast('방이 가득 찼어요. 혼자 둘러볼 수 있어요');
+    else if (s === 'replaced') ctx.toast('다른 탭에서 이 방을 열었어요');
+  };
+  notify(client.status());
+  ctx.onDispose(client.onStatus(notify));
 
   // ---------- 내 쪽: 바뀐 것만 보낸 ----------
   const me = () => ctx.me;
@@ -146,7 +161,7 @@ export function setupPresence(ctx) {
   }
   function sendSnap() {
     const m = me();
-    if (m) client.send({ t: 'snap', p: xz(m.position), ry: r2(m.rotation.y), state: myState() });
+    if (m) client.send({ t: 'snap', p: xz(m.position), ry: ang(m.rotation.y), state: myState() });
   }
 
   function stepOut(dt) {
@@ -163,18 +178,18 @@ export function setupPresence(ctx) {
     lastPos.copy(m.position);
     // 길 없이 움직인다 = 걷기 키(WASD)
     if (moved && !ctx.walkTo && ctx.mode === 'room' && !ctx.perch) {
-      if ((posClock += dt) >= POS_EVERY) { posClock = 0; client.send({ t: 'pos', p: xz(m.position), ry: r2(m.rotation.y) }); }
+      if ((posClock += dt) >= POS_EVERY) { posClock = 0; client.send({ t: 'pos', p: xz(m.position), ry: ang(m.rotation.y) }); }
     } else posClock = POS_EVERY; // 다음 첫 걸음은 바로 보낸다
 
     // 앉기와 일어나기
     if (ctx.perch !== lastPerch) {
-      if (ctx.perch) client.send({ t: 'sit', p: [r2(ctx.perch.pos.x), r2(ctx.perch.pos.y), r2(ctx.perch.pos.z)], ry: r2(ctx.perch.yaw), kind: 'seat' });
-      else if (lastPerch) client.send({ t: 'stand', p: xz(m.position), ry: r2(m.rotation.y) });
+      if (ctx.perch) client.send({ t: 'sit', p: [r2(ctx.perch.pos.x), r2(ctx.perch.pos.y), r2(ctx.perch.pos.z)], ry: ang(ctx.perch.yaw), kind: 'seat' });
+      else if (lastPerch) client.send({ t: 'stand', p: xz(m.position), ry: ang(m.rotation.y) });
       lastPerch = ctx.perch;
     }
     if (ctx.mode !== lastMode) {
-      if (ctx.mode === 'sit') client.send({ t: 'sit', p: [r2(m.position.x), 0, r2(m.position.z)], ry: r2(m.rotation.y), kind: 'heap' });
-      else if (lastMode === 'sit') client.send({ t: 'stand', p: xz(m.position), ry: r2(m.rotation.y) });
+      if (ctx.mode === 'sit') client.send({ t: 'sit', p: [r2(m.position.x), 0, r2(m.position.z)], ry: ang(m.rotation.y), kind: 'heap' });
+      else if (lastMode === 'sit') client.send({ t: 'stand', p: xz(m.position), ry: ang(m.rotation.y) });
       lastMode = ctx.mode;
     }
 
@@ -184,13 +199,17 @@ export function setupPresence(ctx) {
     wasMoving = moved;
 
     const s = myState();
-    if (s !== lastState && (s === 'busy' || s === 'away' || lastState === 'busy' || lastState === 'away')) client.send({ t: 'state', state: s });
+    if (s !== lastState) {
+      if (s === 'busy' || s === 'away') client.send({ t: 'state', state: s });
+      else if (lastState === 'busy' || lastState === 'away') sendSnap(); // 돌아왔다: 상태와 지금 자리를 함께
+    }
     lastState = s;
   }
 
   // ---------- 다른 사람: 프레임마다 ----------
   const v = new THREE.Vector3(), head = new THREE.Vector3();
   function stepPeers(dt) {
+    if (!peers.size) return; // 혼자면 아무 일도 하지 않는다
     const hideAll = ctx.mode === 'sit'; // 내가 더미를 보는 동안 내 화면에서 다른 사람을 숨긴다
     const rect = ctx.renderer?.domElement?.getBoundingClientRect?.();
     const rootRect = root.getBoundingClientRect();
@@ -243,6 +262,8 @@ export function setupPresence(ctx) {
   }
 
   ctx.presenceStep = dt => { stepOut(dt); stepPeers(dt); };
+  // 다시 마운트된 엔진(꾸미기 뒤)의 내 자리를 바로 알린다. 아직 연결 전이면 hello 가 오면서 보낸다
+  sendSnap();
   // 디버그 사이드바가 읽는 값 (peer id 와 이름만)
   ctx.presencePeers = () => [...peers.entries()].map(([peer, it]) => ({ peer, name: it.tag.textContent, state: it.state }));
 }

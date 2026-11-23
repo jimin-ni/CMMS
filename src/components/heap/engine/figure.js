@@ -27,8 +27,11 @@ export function makeFigure(C, bodyMat) {
 export function turnToward(fig, dx, dz, dt) {
   const want = Math.atan2(dx, dz);
   let dr = want - fig.group.rotation.y; dr = Math.atan2(Math.sin(dr), Math.cos(dr));
-  fig.group.rotation.y += dr * Math.min(1, dt * 12);
+  fig.group.rotation.y = wrapAngle(fig.group.rotation.y + dr * Math.min(1, dt * 12));
 }
+
+// 각도를 -π..π 로. 같은 방향으로 계속 돌아도 값이 커지지 않는다 (presence 서버는 큰 각도를 버린다)
+export const wrapAngle = a => Math.atan2(Math.sin(a), Math.cos(a));
 
 // 걸음: 다리 흔들기와 위아래 출렁임. 멈추면 바로 선다.
 export function stepGait(fig, moving, dt) {

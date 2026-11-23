@@ -57,16 +57,19 @@ class Bot {
       exp: Math.floor(Date.now() / 1000) + 60,
       j: randomUUID(),
     });
-    // Node 의 WebSocket(undici)은 headers 옵션을 받는다. 워커가 Origin 을 확인하므로 앱과 같은 출처를 싣는다.
-    const ws = new WebSocket(`${BASE}/room/${room}?t=${encodeURIComponent(ticket)}`, { headers: { Origin: ORIGIN } });
+    // 티켓은 subprotocol 로 (브라우저와 같다). Node 의 WebSocket(undici)은 headers 옵션도 받는다: 워커가 Origin 을 확인한다.
+    const ws = new WebSocket(`${BASE}/room/${room}`, { protocols: ["presence.v1", ticket], headers: { Origin: ORIGIN } });
     this.ws = ws;
     ws.addEventListener("open", () => {
       console.log(`[${this.name}] 연결됨`);
       this.send({ t: "snap", p: this.p, ry: this.ry, state: "idle" });
       this.loop();
       this.timers.push(setInterval(() => this.send({ t: "snap", p: this.p, ry: this.ry, state: "idle" }), 3000));
+      // 살아 있음 확인 (브라우저와 같은 25초). 워커는 75초 넘게 조용한 연결을 닫는다
+      this.timers.push(setInterval(() => this.ws?.readyState === WebSocket.OPEN && this.ws.send("ping"), 25_000));
     });
     ws.addEventListener("message", (e) => {
+      if (e.data === "pong") return;
       const m = JSON.parse(e.data);
       if (!QUIET || m.t === "hello" || m.t === "join" || m.t === "leave" || m.t === "full") console.log(`[${this.name}] <- ${short(m)}`);
     });

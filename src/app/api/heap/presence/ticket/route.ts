@@ -8,6 +8,29 @@ import { getViewer } from "@/lib/session";
 const NO_STORE = { "Cache-Control": "no-store" };
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const TICKET_TTL_SEC = 60;
+// 다른 사람에게 보이는 이름의 최대 길이 (워커도 같은 길이로 자른다)
+const MAX_NAME = 24;
+// 한 사람이 10분에 받을 수 있는 티켓 수. 정상 사용(입장, 다시 붙기, 탭 복귀)은 넉넉히 들어오고 반복 호출은 막힌다.
+// 서버 인스턴스마다 따로 세는 근사값이다 (opens/route.ts 와 같은 방식)
+const USER_LIMIT = 30;
+const USER_WINDOW_MS = 10 * 60 * 1000;
+const MAX_KEYS = 5000;
+const issued = new Map<string, { start: number; count: number }>();
+
+function overLimit(userId: string): boolean {
+  const now = Date.now();
+  const cur = issued.get(userId);
+  if (!cur || now - cur.start > USER_WINDOW_MS) {
+    if (!cur && issued.size >= MAX_KEYS) {
+      for (const [k, v] of issued) if (now - v.start > USER_WINDOW_MS) issued.delete(k);
+      if (issued.size >= MAX_KEYS) return true;
+    }
+    issued.set(userId, { start: now, count: 1 });
+    return false;
+  }
+  cur.count += 1;
+  return cur.count > USER_LIMIT;
+}
 
 export async function POST(request: Request): Promise<Response> {
   const secret = process.env.PRESENCE_TICKET_SECRET;
@@ -17,6 +40,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const viewer = await getViewer();
   if (!viewer) return Response.json({ error: "sign-in" }, { status: 401, headers: NO_STORE });
+  if (overLimit(viewer.id)) return Response.json({ error: "rate" }, { status: 429, headers: NO_STORE });
 
   let roomUuid: unknown;
   try {
@@ -32,7 +56,7 @@ export async function POST(request: Request): Promise<Response> {
   const ticket = await signTicket(secret, {
     r: roomUuid,
     u: await userKey(secret, viewer.id),
-    n: viewer.name,
+    n: viewer.name.slice(0, MAX_NAME),
     exp: Math.floor(Date.now() / 1000) + TICKET_TTL_SEC,
     j: randomUUID(),
   });
