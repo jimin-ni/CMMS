@@ -161,7 +161,7 @@ const BUILD_PER_FRAME = 8; // 한 프레임에 짓는 쪽지 수: 많은 쪽지�
 const NOTE_FONTS_HREF = 'https://fonts.googleapis.com/css2?family=Gaegu&family=Hi+Melody&family=Gamja+Flower&family=Cute+Font&family=Single+Day&family=Yeon+Sung&family=East+Sea+Dokdo&display=swap';
 
 const validSpot = d => Number.isFinite(d.y) && Number.isFinite(d.angle) && d.y > 0;
-const sigOf = d => JSON.stringify([d.name, d.date, d.msg, d.reply ?? null, d.replyFont ?? null, d.replySize ?? null, d.tint ?? null, d.font ?? null, d.kind ?? null, d.main ?? null, d.accent ?? null, d.fontSize ?? null, d.y ?? null, d.angle ?? null, !!d.sealed, !!d.mine, !!d.hidden, !!d.unread]);
+const sigOf = d => JSON.stringify([d.name, d.date, d.msg, d.reply ?? null, d.replyFont ?? null, d.replySize ?? null, d.tint ?? null, d.font ?? null, d.kind ?? null, d.main ?? null, d.accent ?? null, d.fontSize ?? null, d.y ?? null, d.angle ?? null, !!d.sealed, !!d.mine, !!d.hidden, !!d.unread, d.screen ?? null]);
 // 쪽지 하나의 장식 모양: 데이터가 정하지 않은 것은 id 에서 정한다 (모든 방문자가 같은 것을 본다)
 function lookOf(d) {
   const h = hashId(d.id), accents = Object.keys(ACCENTS);

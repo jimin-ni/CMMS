@@ -68,7 +68,9 @@ export function setupLive(ctx) {
   }
 
   // 방명록: 이름과 날짜만. 줄은 DB 행 { id, name, createdAt(ISO) } 이고 최신이 먼저이며, 페이지, 폴링, 방문자 자신의 제출에서 id 로 합친다.
-  const gbRows = new Map((DATA.guestbook || []).map(e => [e.id, { id: e.id, name: e.name, createdAt: e.createdAt }]));
+  // screen(0013): removed 는 이름 자리에 서버가 삭제 문구를 넣어 보낸다. blocked·held 는 쓴 사람에게만 온다.
+  const gbRow = e => ({ id: e.id, name: e.name, createdAt: e.createdAt, ...(e.screen ? { screen: e.screen } : {}) });
+  const gbRows = new Map((DATA.guestbook || []).map(e => [e.id, gbRow(e)]));
   const gbSorted = () => [...gbRows.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt) || (a.id < b.id ? 1 : -1));
   function renderGuestbook() {
     const list = $('gb-list'); list.innerHTML = '';
@@ -79,9 +81,9 @@ export function setupLive(ctx) {
       list.appendChild(row);
     }
     for (const e of gbSorted()) {
-      const row = el('div', 'gb-row');
+      const row = el('div', e.screen ? `gb-row ${e.screen === 'removed' ? 'removed' : 'mine-only'}` : 'gb-row');
       row.appendChild(el('span', null, e.name));
-      row.appendChild(el('small', null, fmtDay(e.createdAt)));
+      row.appendChild(el('small', null, e.screen === 'blocked' || e.screen === 'held' ? `나에게만 보여요 · ${fmtDay(e.createdAt)}` : fmtDay(e.createdAt)));
       list.appendChild(row);
     }
   }
@@ -125,9 +127,13 @@ export function setupLive(ctx) {
       const res = await opts.addGuestbook(name);
       if (ctx.disposed) return;
       if (res.ok) {
-        gbRows.set(res.entry.id, res.entry);
+        // 판정에 걸린 이름은 쓴 사람에게만 보인다. 안내는 방명록 안에 남긴다 (토스트는 금방 사라진다).
+        const hiddenEntry = !!res.notice;
+        gbRows.set(res.entry.id, gbRow(hiddenEntry ? { ...res.entry, screen: 'blocked' } : res.entry));
         $('gb-name').value = '';
-        renderGuestbook(); toast(`${res.entry.name}님, 다녀가셨어요`);
+        renderGuestbook();
+        if (hiddenEntry) $('gb-msg').textContent = res.notice.text;
+        else toast(`${res.entry.name}님, 다녀가셨어요`);
       } else $('gb-msg').textContent = res.message;
     } catch {
       if (!ctx.disposed) $('gb-msg').textContent = '지금은 남기지 못했어요. 잠시 뒤에 다시 시도해 주세요.';
@@ -157,7 +163,7 @@ export function setupLive(ctx) {
         if (up.length || gone.length || reveal !== undefined) ctx.mergeTreeNotes?.(up, gone, reveal);
       }
       if (opts.isOwner && Number.isFinite(d.unreadNotes) && d.unreadNotes !== ctx.unreadNotes) { ctx.unreadNotes = d.unreadNotes; renderMeta(); }
-      for (const e of d.guestbook || []) gbRows.set(e.id, { id: e.id, name: e.name, createdAt: e.createdAt });
+      for (const e of d.guestbook || []) gbRows.set(e.id, gbRow(e));
       if (!$('guestbook').hidden) { renderGuestbook(); markGbSeen(); } else paintGbChips();
       // 작품: 새로 올라온 것은 더미로 떨어진다. 더미에 있는 카드는 그 작품이 내려져도 남는다 (팬 작품 화면이 생기기 전까지)
       for (const p of d.pieces || []) {

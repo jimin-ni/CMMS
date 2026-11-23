@@ -413,7 +413,9 @@ export function HeapRoom({
         // 쪽지 쓰기. addNote 는 서버 액션의 답을 그대로 주되 쪽지를 엔진 모양으로 바꿔 준다 (tree-ids.js). input = { body, tint, font, displayName, fontSize, ornament, ornamentColor, spot }
         addNote: async (input: unknown) => {
           const result = await addNoteAction(data.roomUuid, input);
-          return result.ok ? { ok: true as const, note: toEngineNote(result.note), evictedId: result.evictedId } : result;
+          return result.ok
+            ? { ok: true as const, note: toEngineNote(result.note), evictedId: result.evictedId, notice: result.notice }
+            : result;
         },
         deleteNote: (noteId: string) => deleteNoteAction(noteId),
         // 방 주인의 도구 (engine/tree-owner.js). replyNote 의 note 는 엔진 모양으로 바꿔 준다.

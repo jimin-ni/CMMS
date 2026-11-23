@@ -429,7 +429,9 @@ export function setupTreeWrite(ctx, T) {
       // 가득 차서 내려간 쪽지는 쪽지함으로: 자리를 비운 채로 합친다
       ctx.mergeTreeNotes([note, ...(evicted ? [{ ...evicted, y: null, angle: null }] : [])], []);
       const hung = Number.isFinite(note.y) && Number.isFinite(note.angle);
-      toast(hung ? '트리에 달았어요' : spot || why === 'full' ? '트리가 가득 차서 쪽지함에 넣었어요' : '쪽지함에 넣었어요');
+      // 판정 안내(경고, 연락처, 검토, 자해 상담 안내)가 있으면 그것을 오래 보여 준다. 쪽지는 쪽지함에 작성자만 보이게 있다.
+      if (res.notice?.text) { toast(res.notice.text); ctx.toastTimer = 8; }
+      else toast(hung ? '트리에 달았어요' : spot || why === 'full' ? '트리가 가득 차서 쪽지함에 넣었어요' : '쪽지함에 넣었어요');
       draft.text = ''; saveDraft();
       if (live) finishClose();
       return;

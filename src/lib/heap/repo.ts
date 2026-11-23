@@ -25,6 +25,7 @@ import { likePattern } from "@/lib/heap/search";
 import type { ImportCandidate } from "@/lib/heap/import";
 import { planScreen, recordScreenEvent, type SaveNotice } from "@/lib/moderation/repo";
 import type { ScreenResult } from "@/lib/moderation/screen";
+import { MODERATION_TEXT } from "@/lib/moderation/policy";
 
 // 힙 미니룸의 DB 접근은 전부 이 파일에 둔다. 서버에서만 불러 쓴다 (Server Component, Server Action, Route Handler).
 // 역할(creator, admin) 검사는 부르는 쪽이 하고, 여기서는 데이터로 알 수 있는 것만 검사한다
@@ -87,7 +88,7 @@ export type HeapPiece = {
   updatedAt: Date;
 };
 
-// screen: 판정 상태. published가 아니면 실려 온다. removed는 모두에게(이름은 비운다), blocked·held는 쓴 사람에게만 온다.
+// screen: 판정 상태. published가 아니면 실려 온다. removed는 모두에게(이름 자리에 삭제 문구), blocked·held는 쓴 사람에게만 온다.
 export type HeapGuestbookEntry = {
   id: string;
   name: string;
@@ -394,10 +395,10 @@ const guestbookColumns = {
   screenStatus: heapGuestbook.screenStatus,
 };
 
-// 내려간 줄은 이름을 비워서 보낸다. 화면이 같은 자리에 삭제 문구를 쓴다 (문서 8장).
+// 내려간 줄은 이름 대신 삭제 문구를 보낸다 (문서 8장). 원문은 검토 화면에서만 본다.
 function toGuestbookEntry(row: { id: string; name: string; createdAt: Date; screenStatus: string }): HeapGuestbookEntry {
   const entry: HeapGuestbookEntry = { id: row.id, name: row.name, createdAt: row.createdAt };
-  if (row.screenStatus === "removed") return { ...entry, name: "", screen: "removed" };
+  if (row.screenStatus === "removed") return { ...entry, name: MODERATION_TEXT.removed, screen: "removed" };
   if (row.screenStatus === "blocked" || row.screenStatus === "held") entry.screen = row.screenStatus;
   return entry;
 }
