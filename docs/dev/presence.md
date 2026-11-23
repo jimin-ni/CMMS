@@ -26,7 +26,17 @@
 
 - presence 때문에 방이 느려지거나 깨지는 것.
 - presence가 Postgres에 쓰거나 읽는 것.
-- 다른 방문자에게 Better Auth 사용자 id를 보내는 것.
+- 사용자 정보가 새는 것. **[윤]**
+  - 다른 방문자에게 가는 것은 연결마다 새로 만드는 `peer` id와 표시 이름뿐이다.
+  - Better Auth 사용자 id는 HTML, RSC 페이로드, 티켓, 웹소켓 메시지 어디에도 원문으로 나가지 않는다. 티켓의 사용자 칸은 `HMAC(서버 비밀값, userId)`이다. DO는 이 값으로 같은 사람의 두 번째 탭만 알아본다.
+  - F12로 볼 수 있는 곳(페이지 소스, 네트워크, 콘솔, 전역 변수)에 남의 정보나 내부 id를 두지 않는다. 디버그 사이드바도 `peer` id만 보인다.
+
+## 기본 방 코드 개선 **[윤]**
+
+presence 작업 중에 드러난 방 엔진 개선은 기본 코드에 넣는다. 단, 혼자 있는 방(방문자 없음)에 부담을 더하지 않는 것만이다. 지금 보이는 후보:
+
+- 캐릭터 만들기와 걷기를 `me` 전용에서 캐릭터마다 쓸 수 있는 모양으로 빼기(`walk.js`).
+- 가구 id (아래).
 
 ## 방식 선택
 
@@ -51,7 +61,7 @@
 ### 티켓 (Next 쪽)
 
 - 경로 `src/app/api/heap/presence/ticket/route.ts`, POST. 로그인하지 않았으면 401. 방이 없으면 404. **[제안]**
-- 내용 `{ r: roomUuid, u: userId, n: 표시 이름, exp: 지금+60초, j: 무작위 id }`. base64url JSON에 HMAC-SHA256 서명. 비밀값은 `PRESENCE_TICKET_SECRET` (Next `.env.local`과 Worker `.dev.vars` / secret에 같은 값). **[제안]**
+- 내용 `{ r: roomUuid, u: HMAC(비밀값, userId), n: 표시 이름, exp: 지금+60초, j: 무작위 id }`. 사용자 id 원문은 넣지 않는다. base64url JSON에 HMAC-SHA256 서명. 비밀값은 `PRESENCE_TICKET_SECRET` (Next `.env.local`과 Worker `.dev.vars` / secret에 같은 값). **[제안]**
 - 표시 이름은 `getViewer()`의 `name`. **[제안]**
 - 쓰기가 아니므로 Server Action이 아닌 Route Handler. DB는 방 존재 확인(읽기)만 한다.
 
@@ -61,9 +71,9 @@
 - Worker: `/room/:uuid` 만 받는다. Origin이 `ALLOWED_ORIGINS`에 없으면 403. 티켓 서명·만료·방 일치를 Web Crypto로 확인한다.
 - Room DO (SQLite 백엔드, 무료 플랜 조건):
   - `ctx.acceptWebSocket` (hibernation API).
-  - 소켓마다 `serializeAttachment({ peer, userId, name, colour, state })`. `peer`는 연결마다 새로 만드는 무작위 id이고 다른 사람에게는 이것만 보낸다.
+  - 소켓마다 `serializeAttachment({ peer, userKey, name, colour, state })` (`userKey` = 티켓의 `u`). `peer`는 연결마다 새로 만드는 무작위 id이고 다른 사람에게는 이것만 보낸다.
   - 정원 4. 5번째는 연결 직후 `{t:"full"}`을 보내고 닫는다(코드 4003). 방 주인 자리를 따로 비워 두지 않는다. **[제안]**
-  - 같은 `userId`가 다시 들어오면(새 탭) 이전 소켓을 닫는다(코드 4001). **[제안]**
+  - 같은 `userKey`가 다시 들어오면(새 탭) 이전 소켓을 닫는다(코드 4001). **[제안]**
   - 티켓 재사용 방지: 쓴 `j`를 DO 저장소에 만료 시각과 함께 둔다.
 - 남용 방지: 메시지 512바이트 상한, 소켓당 초당 20건(버스트 40) 초과 시 닫음, 모양이 틀린 메시지는 버림. 유료 전환 때 Durable Objects 지출 한도를 건다.
 
@@ -71,7 +81,16 @@
 
 움직임은 **위치를 계속 보내지 않고 경로를 한 번 보낸다.** 보내는 쪽이 이미 A*로 만든 경로점 목록을 그대로 보낸다. 받는 쪽은 경로를 다시 계산하지 않는다. 방을 연 시점이나 `?proto=` 때문에 사람마다 장애물이 다를 수 있어서다(`path.js`는 지금 만들어진 가구를 읽고, 방이 열린 동안 레이아웃은 새로 받지 않는다). **[제안]**
 
-앉기도 같은 이유로 좌석 id가 아니라 **월드 좌표**를 보낸다. 가구에는 id 필드가 없고 좌석 id(`항목순번:ij`, `furniture.js`)는 순서에 달려 있으며 모델이 로드된 뒤에야 생긴다. **[제안]**
+앉기는 **월드 좌표**와 함께 가구 id를 보낸다. 좌표는 모델이 아직 로드되지 않은 사람도 바로 쓸 수 있고, id는 나중의 자리 차지·함께 고르기 같은 기능이 쓴다. **[제안]**
+
+### 가구 id **[제안]**
+
+지금 가구(`layout.items`)에는 id가 없고 좌석 id는 `항목순번:ij`(`furniture.js`)라 순서가 바뀌면 달라진다. 오래 갈 기능(자리 차지, 함께 고르기, 꾸미기 실행 취소)은 안정된 id가 필요하다.
+
+- `layout.items[]`에 `id`(짧은 무작위 문자열)를 더한다. `layout.ts`의 허용 키에 넣는다.
+- 꾸미기가 가구를 추가할 때 id를 만든다. 레이아웃을 읽을 때 id가 없는 항목은 그 자리에서 임시 id를 받고, 주인이 다음에 저장할 때 굳는다.
+- 공유 DB의 기존 레이아웃 채우기(백필)는 이 코드가 main에 들어간 뒤에 한다. 스키마 변경이 아니라 `heap_rooms.layout` 값 갱신이다.
+- 좌석 id는 `가구id:ij`가 된다.
 
 보내는 쪽 → DO:
 
@@ -79,7 +98,7 @@
 |---|---|---|
 | `walk` | `pts:[[x,z],…]` (현재 위치부터, 최대 16점) | 클릭 이동 시작 |
 | `pos` | `p:[x,z]`, `ry` | WASD 이동 중 초당 약 5번 |
-| `sit` | `p:[x,y,z]`, `ry`, `kind` (`seat` 또는 `heap`) | 앉음 / 사진 더미 보기 |
+| `sit` | `p:[x,y,z]`, `ry`, `kind` (`seat` 또는 `heap`), `seat?` (좌석 id) | 앉음 / 사진 더미 보기 |
 | `stand` | `p:[x,z]`, `ry` | 일어남 (일어날 때 위치가 순간 이동하므로 위치를 함께 보냄) |
 | `snap` | `p`, `ry`, `state` | 움직이는 동안 3초마다, 도착 때 |
 
