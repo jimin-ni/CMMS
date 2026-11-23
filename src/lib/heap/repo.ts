@@ -26,6 +26,7 @@ import type { ImportCandidate } from "@/lib/heap/import";
 import { planScreen, recordScreenEvent, type SaveNotice } from "@/lib/moderation/repo";
 import type { ScreenResult } from "@/lib/moderation/screen";
 import { MODERATION_TEXT } from "@/lib/moderation/policy";
+import { screenView } from "@/lib/heap/screen-view";
 
 // 힙 미니룸의 DB 접근은 전부 이 파일에 둔다. 서버에서만 불러 쓴다 (Server Component, Server Action, Route Handler).
 // 역할(creator, admin) 검사는 부르는 쪽이 하고, 여기서는 데이터로 알 수 있는 것만 검사한다
@@ -390,16 +391,23 @@ function guestbookVisible(viewerId: string | null): SQL {
 
 const guestbookColumns = {
   id: heapGuestbook.id,
+  userId: heapGuestbook.userId,
   name: heapGuestbook.name,
   createdAt: heapGuestbook.createdAt,
   screenStatus: heapGuestbook.screenStatus,
 };
 
 // 내려간 줄은 이름 대신 삭제 문구를 보낸다 (문서 8장). 원문은 검토 화면에서만 본다.
-function toGuestbookEntry(row: { id: string; name: string; createdAt: Date; screenStatus: string }): HeapGuestbookEntry {
+// SQL(guestbookVisible)이 이미 거르지만 여기서 한 번 더 본다. 작성자 id는 응답에 싣지 않는다.
+function toGuestbookEntry(
+  row: { id: string; userId: string; name: string; createdAt: Date; screenStatus: string },
+  viewerId: string | null,
+): HeapGuestbookEntry | null {
+  const view = screenView(row.screenStatus, viewerId !== null && row.userId === viewerId);
+  if (view === "hide") return null;
   const entry: HeapGuestbookEntry = { id: row.id, name: row.name, createdAt: row.createdAt };
-  if (row.screenStatus === "removed") return { ...entry, name: MODERATION_TEXT.removed, screen: "removed" };
-  if (row.screenStatus === "blocked" || row.screenStatus === "held") entry.screen = row.screenStatus;
+  if (view === "removed") return { ...entry, name: MODERATION_TEXT.removed, screen: "removed" };
+  if (view === "own") entry.screen = row.screenStatus as "blocked" | "held";
   return entry;
 }
 
@@ -412,7 +420,7 @@ export async function listGuestbook(roomId: string, limit: number, viewerId: str
     .where(and(eq(heapGuestbook.roomId, roomId), guestbookVisible(viewerId)))
     .orderBy(desc(heapGuestbook.createdAt), asc(heapGuestbook.id))
     .limit(limit);
-  return rows.map(toGuestbookEntry);
+  return rows.flatMap((row) => toGuestbookEntry(row, viewerId) ?? []);
 }
 
 // TODAY는 한국 시간 날짜 기준
@@ -563,7 +571,7 @@ export async function getRoomChangesSince(
   };
 
   // 기준점용 ts 열은 응답에 싣지 않는다.
-  const guestbook: HeapGuestbookEntry[] = guestbookRows.map(toGuestbookEntry);
+  const guestbook: HeapGuestbookEntry[] = guestbookRows.flatMap((row) => toGuestbookEntry(row, viewerId) ?? []);
   const changed: HeapPiece[] = changedRows.map((row) => {
     const piece: Partial<typeof row> = { ...row };
     delete piece.ts;

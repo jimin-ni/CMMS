@@ -13,6 +13,7 @@ import type { Fail, HeapChangesPosition } from "@/lib/heap/repo";
 import { planScreen, recordScreenEvent, type SaveNotice } from "@/lib/moderation/repo";
 import type { ScreenResult } from "@/lib/moderation/screen";
 import { MODERATION_TEXT } from "@/lib/moderation/policy";
+import { screenView } from "@/lib/heap/screen-view";
 
 // 쪽지 트리의 DB 접근. repo.ts가 길어서 따로 뒀고, 규칙은 repo.ts와 같다 (쿼리는 이 파일에만, 실패는 { ok: false, reason }).
 // 방 주인(owner) = heap_rooms.creator_id. 역할 검사는 하지 않고 방 주인인지만 서버에서 확인한다.
@@ -285,7 +286,8 @@ function toNote(row: NoteRow, ctx: NoteContext, viewerId: string | null): HeapNo
   // 숨긴 쪽지는 작성자와 방 주인(되돌리기용)에게만 보인다.
   if (row.hiddenAt !== null && !mine && !owner) return null;
   // 판정에 걸린 쪽지(blocked, held)는 작성자에게만 보인다. 트리에 걸리지 않은 채 쪽지함에 있다.
-  if ((row.screenStatus === "blocked" || row.screenStatus === "held") && !mine) return null;
+  const view = screenView(row.screenStatus, mine);
+  if (view === "hide") return null;
   // 봉인 중에는 작성자 말고는 닫혀 있다. 방 주인은 이른 검토가 켜져 있을 때만 읽는다 (서버가 레이아웃에서 읽은 값).
   const sealed = ctx.sealedNow && !mine && !(owner && ctx.ownerEarly);
   const note: HeapNote = {
@@ -304,9 +306,9 @@ function toNote(row: NoteRow, ctx: NoteContext, viewerId: string | null): HeapNo
     angle: row.posAngle,
     createdAt: row.createdAt,
   };
-  if (row.screenStatus !== "published") note.screen = row.screenStatus;
+  if (view !== "plain") note.screen = row.screenStatus as "removed" | "blocked" | "held";
   // 내려간 쪽지는 자리를 지키고 삭제 문구만 보인다 (문서 8장). 이름과 답장도 내린다. 원문은 검토 화면에서만 본다.
-  if (row.screenStatus === "removed") {
+  if (view === "removed") {
     note.name = null;
     note.body = MODERATION_TEXT.removed;
     return note;
