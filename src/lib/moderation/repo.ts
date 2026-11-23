@@ -393,6 +393,122 @@ export async function reportChatMessage(messageId: string, viewer: Viewer): Prom
   });
 }
 
+// ─── 쪽지·방명록 글 (0013) ───
+
+export type HeapSurface = "note" | "guestbook";
+
+// 쪽지·방명록 한 줄과 그 방의 주인. 작성자 id는 서버 안에서만 쓴다 (익명 쪽지도 차단은 실제 작성자에게, #95 2번).
+async function heapPostWithOwner(surface: HeapSurface, id: string, exec: Executor = db) {
+  if (!UUID.test(id)) return null;
+  if (surface === "note") {
+    const [row] = await exec
+      .select({
+        id: heapNotes.id,
+        authorId: heapNotes.authorId,
+        body: heapNotes.body,
+        displayName: heapNotes.displayName,
+        screenStatus: heapNotes.screenStatus,
+        roomOwnerId: heapRooms.creatorId,
+      })
+      .from(heapNotes)
+      .innerJoin(heapRooms, eq(heapRooms.id, heapNotes.roomId))
+      .where(eq(heapNotes.id, id));
+    return row
+      ? { ...row, text: row.displayName ? `${row.displayName}\n${row.body}` : row.body }
+      : null;
+  }
+  const [row] = await exec
+    .select({
+      id: heapGuestbook.id,
+      authorId: heapGuestbook.userId,
+      name: heapGuestbook.name,
+      screenStatus: heapGuestbook.screenStatus,
+      roomOwnerId: heapRooms.creatorId,
+    })
+    .from(heapGuestbook)
+    .innerJoin(heapRooms, eq(heapRooms.id, heapGuestbook.roomId))
+    .where(eq(heapGuestbook.id, id));
+  return row ? { ...row, text: row.name } : null;
+}
+
+// 쪽지·방명록 판정 상태 바꾸기. 변경 읽기 커서(쪽지 updated_at, 방명록 status_changed_at)도 함께 바꾼다.
+async function setHeapStatus(
+  tx: Tx,
+  surface: HeapSurface,
+  id: string,
+  to: "published" | "removed",
+  from: "published" | "held",
+) {
+  if (surface === "note") {
+    await tx
+      .update(heapNotes)
+      .set({ screenStatus: to, updatedAt: sql`clock_timestamp()` })
+      .where(and(eq(heapNotes.id, id), eq(heapNotes.screenStatus, from)));
+  } else {
+    await tx
+      .update(heapGuestbook)
+      .set({ screenStatus: to, statusChangedAt: sql`clock_timestamp()` })
+      .where(and(eq(heapGuestbook.id, id), eq(heapGuestbook.screenStatus, from)));
+  }
+}
+
+// 신고 (문서 8장). 채팅 신고와 같은 규칙: 방 주인(자기 방)과 관리자만, 방 주인의 글은 안 됨, 글을 내리고 경고 +1.
+export async function reportHeapPost(
+  surface: HeapSurface,
+  id: string,
+  viewer: Viewer,
+): Promise<{ ok: boolean; error?: string }> {
+  return db.transaction(async (tx) => {
+    const post = await heapPostWithOwner(surface, id, tx);
+    if (!post) return { ok: false, error: "글을 찾을 수 없어요." };
+    if (viewer.role !== "admin" && viewer.id !== post.roomOwnerId) return { ok: false, error: "신고할 권한이 없어요." };
+    if (post.authorId === post.roomOwnerId) return { ok: false, error: "방 주인의 글은 신고할 수 없어요." };
+    if (post.screenStatus !== "published") return { ok: false, error: "이미 내려간 글이에요." };
+
+    await lockUser(tx, post.authorId);
+    await setHeapStatus(tx, surface, post.id, "removed", "published");
+    await tx
+      .insert(moderationEvents)
+      .values({
+        userId: post.authorId,
+        roomOwnerId: post.roomOwnerId,
+        surface,
+        targetId: post.id,
+        source: "report",
+        kind: "abuse",
+        countsAsStrike: true,
+        reportedBy: viewer.id,
+      })
+      .onConflictDoUpdate({
+        target: [moderationEvents.surface, moderationEvents.targetId],
+        set: { source: "report", kind: "abuse", countsAsStrike: true, reportedBy: viewer.id, reviewStatus: "none" },
+      });
+    await applyAutoBlock(tx, post.authorId);
+    return { ok: true };
+  });
+}
+
+// 쪽지·방명록에서 작성자 차단 (크리에이터 차단·전체 차단, 문서 9장). 화면은 글 id만 안다.
+export async function blockHeapAuthor(
+  surface: HeapSurface,
+  id: string,
+  viewer: Viewer,
+): Promise<{ ok: boolean; error?: string }> {
+  const post = await heapPostWithOwner(surface, id);
+  if (!post) return { ok: false, error: "글을 찾을 수 없어요." };
+  return blockUser(post.authorId, viewer);
+}
+
+// 내려간 쪽지·방명록 원문 보기 (문서 8장, 11-4). 방 주인(자기 방)과 관리자만. 열람을 기록한다.
+export async function revealHeapOriginal(surface: HeapSurface, id: string, viewer: Viewer): Promise<string | null> {
+  const post = await heapPostWithOwner(surface, id);
+  if (!post) return null;
+  if (viewer.role !== "admin" && viewer.id !== post.roomOwnerId) return null;
+  if (post.screenStatus !== "removed") return null;
+  await logAccess(viewer.id, [{ surface, targetId: post.id, eventId: null }]);
+  return post.text;
+}
+
 // ─── 크리에이터 차단, 전체 차단 (문서 9장) ───
 
 export async function blockUser(targetUserId: string, viewer: Viewer): Promise<{ ok: boolean; error?: string }> {
@@ -497,18 +613,17 @@ export async function decideEvent(
     // 방 주인은 자기 방의 오탐 위험 숨김(hold_review)만. 자해 글과 방 주인 자신의 글은 관리자만.
     const ownerMayDecide = ev.roomOwnerId === viewer.id && ev.kind === "abuse" && ev.userId !== viewer.id;
     if (viewer.role !== "admin" && !ownerMayDecide) return { ok: false, error: "권한이 없어요." };
-    if (ev.surface !== "chat") return { ok: false, error: "아직 채팅만 검토할 수 있어요." };
-
     // dismiss: 숨김 글이면 공개로 되돌림. uphold: 공개 글(방 주인 글 사후 확인)이면 내림.
-    await tx
-      .update(bubbleMessages)
-      .set({ screenStatus: decision === "dismiss" ? "published" : "removed", statusChangedAt: sql`now()` })
-      .where(
-        and(
-          eq(bubbleMessages.id, ev.targetId),
-          eq(bubbleMessages.screenStatus, decision === "dismiss" ? "held" : "published"),
-        ),
-      );
+    const to = decision === "dismiss" ? "published" : "removed";
+    const from = decision === "dismiss" ? "held" : "published";
+    if (ev.surface === "chat") {
+      await tx
+        .update(bubbleMessages)
+        .set({ screenStatus: to, statusChangedAt: sql`now()` })
+        .where(and(eq(bubbleMessages.id, ev.targetId), eq(bubbleMessages.screenStatus, from)));
+    } else {
+      await setHeapStatus(tx, ev.surface, ev.targetId, to, from);
+    }
     await tx
       .update(moderationEvents)
       .set({ reviewStatus: decision === "dismiss" ? "dismissed" : "upheld", reviewedBy: viewer.id, reviewedAt: sql`now()` })
@@ -598,8 +713,13 @@ export async function listForReview(viewer: Viewer, limit = 100): Promise<Review
       reviewStatus: moderationEvents.reviewStatus,
       createdAt: moderationEvents.createdAt,
       messageId: moderationEvents.targetId,
-      messageStatus: bubbleMessages.screenStatus,
-      body: bubbleMessages.body,
+      // 채팅, 쪽지(표시 이름 + 본문), 방명록(이름) 중 그 기록의 글
+      messageStatus: sql<string | null>`coalesce(${bubbleMessages.screenStatus}, ${heapNotes.screenStatus}, ${heapGuestbook.screenStatus})`,
+      body: sql<string | null>`coalesce(${bubbleMessages.body},
+        case when ${heapNotes.id} is null then null
+             when ${heapNotes.displayName} is null then ${heapNotes.body}
+             else ${heapNotes.displayName} || chr(10) || ${heapNotes.body} end,
+        ${heapGuestbook.name})`,
       roomOwnerId: moderationEvents.roomOwnerId,
     })
     .from(moderationEvents)
@@ -607,6 +727,11 @@ export async function listForReview(viewer: Viewer, limit = 100): Promise<Review
     .leftJoin(
       bubbleMessages,
       and(eq(moderationEvents.surface, "chat"), eq(bubbleMessages.id, moderationEvents.targetId)),
+    )
+    .leftJoin(heapNotes, and(eq(moderationEvents.surface, "note"), eq(heapNotes.id, moderationEvents.targetId)))
+    .leftJoin(
+      heapGuestbook,
+      and(eq(moderationEvents.surface, "guestbook"), eq(heapGuestbook.id, moderationEvents.targetId)),
     )
     .where(eventScope)
     .orderBy(desc(moderationEvents.createdAt))
@@ -651,7 +776,9 @@ export async function listForReview(viewer: Viewer, limit = 100): Promise<Review
   }));
   await logAccess(
     viewer.id,
-    events.filter((e) => e.body !== null).map((e) => ({ surface: "chat" as const, targetId: e.messageId, eventId: e.id })),
+    events
+      .filter((e) => e.body !== null)
+      .map((e) => ({ surface: e.surface as Surface, targetId: e.messageId, eventId: e.id })),
   );
 
   return {
