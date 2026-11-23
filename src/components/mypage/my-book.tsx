@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Book, BookPage } from "@/components/settings/book";
 import { SignOutButton } from "@/components/sign-out-button";
 import type { HeapChannelPlatform } from "@/lib/heap/platform";
+import { BlockList, type MyBlock } from "./block-list";
 
 // 마이페이지 (/mypage): 설정과 같은 책상 위에 펼친 O링 수첩 (틀은 settings/book.tsx).
 // 모든 계정: 계정 정보와 로그아웃, 결제 정보. 크리에이터와 관리자: 쪽지, 대화방, 채널, 내 방.
@@ -42,17 +43,26 @@ const ADMIN_HREF = "/admin/moderation";
 
 const dateFormat = new Intl.DateTimeFormat("ko-KR", { dateStyle: "long", timeZone: "Asia/Seoul" });
 
-export function MyBook({ account, creator }: { account: MyAccount; creator: MyCreatorData | null }) {
+export function MyBook({
+  account,
+  creator,
+  blocks,
+}: {
+  account: MyAccount;
+  creator: MyCreatorData | null;
+  blocks: MyBlock[];
+}) {
   const pages = [
     <AccountPage key="account" no={1} account={account} />,
     <PaymentPage key="payment" no={2} />,
+    <BlocksPage key="blocks" no={3} blocks={blocks} />,
   ];
   if (creator) {
     pages.push(
-      <NotesPage key="notes" no={3} creator={creator} />,
-      <ChatPage key="chat" no={4} creator={creator} />,
-      <ChannelsPage key="channels" no={5} creator={creator} />,
-      <RoomPage key="room" no={6} creator={creator} />,
+      <NotesPage key="notes" no={4} creator={creator} />,
+      <ChatPage key="chat" no={5} creator={creator} />,
+      <ChannelsPage key="channels" no={6} creator={creator} />,
+      <RoomPage key="room" no={7} creator={creator} />,
     );
   }
   return (
@@ -131,6 +141,16 @@ function PaymentPage({ no }: { no: number }) {
       <Head ko="결제 내역" en="History" />
       <div className="mp-box mp-empty">결제 내역이 없어요</div>
       <Soon>결제는 준비 중이에요</Soon>
+    </BookPage>
+  );
+}
+
+// 개인 차단 (0013): 방에서 "차단"으로 가린 사람. 풀면 다시 보인다. 쓰기를 막는 크리에이터 차단은 검토 화면에서 푼다.
+function BlocksPage({ no, blocks }: { no: number; blocks: MyBlock[] }) {
+  return (
+    <BookPage id="blocks" no={no} tag="blocked" title="blocked">
+      <Head ko="차단한 사람" en="Blocked" />
+      <BlockList blocks={blocks} />
     </BookPage>
   );
 }
