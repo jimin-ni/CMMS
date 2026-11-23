@@ -100,6 +100,7 @@ export async function listBlockedUserIds(viewerId: string): Promise<string[]> {
   const rows = await db
     .select({ id: heapBlocks.blockedId })
     .from(heapBlocks)
-    .where(eq(heapBlocks.blockerId, viewerId));
+    .where(eq(heapBlocks.blockerId, viewerId))
+    .orderBy(desc(heapBlocks.createdAt));
   return rows.map((r) => r.id);
 }

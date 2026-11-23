@@ -281,6 +281,8 @@ export function HeapRoom({
   const presenceRef = useRef<PresenceClient | null>(null);
   const presencePrefs = usePrefs().presence;
   const hideOthersRef = useRef(presencePrefs.hideOthers);
+  // 개인 차단(0013)을 새로 걸면 올린다: 새 티켓(가린 사람 목록 h)으로 다시 붙는다
+  const [blockEpoch, setBlockEpoch] = useState(0);
   useEffect(() => {
     if (!presenceOn || presencePrefs.hideMe) return;
     const client = createPresenceClient({ roomUuid: data.roomUuid, show: presencePrefs.show });
@@ -293,7 +295,7 @@ export function HeapRoom({
       client.close();
       if (presenceRef.current === client) presenceRef.current = null;
     };
-  }, [presenceOn, data.roomUuid, presencePrefs.show, presencePrefs.hideMe, presenceHub]);
+  }, [presenceOn, data.roomUuid, presencePrefs.show, presencePrefs.hideMe, presenceHub, blockEpoch]);
   // 다른 사람 숨기기는 연결을 바꾸지 않고 서버에 알린다
   useEffect(() => {
     hideOthersRef.current = presencePrefs.hideOthers;
@@ -428,6 +430,7 @@ export function HeapRoom({
         blockAuthor: (surface: HeapSurface, id: string) => blockHeapAuthorAction(surface, id),
         hidePerson: (surface: HeapSurface, id: string) => hidePersonAction(surface, id),
         removedText: MODERATION_TEXT.removed,
+        refreshBlocked: () => setBlockEpoch((n) => n + 1),
         // 방 주인의 도구 (engine/tree-owner.js). replyNote 의 note 는 엔진 모양으로 바꿔 준다.
         replyNote: async (noteId: string, input: unknown) => {
           const result = await replyNoteAction(noteId, input);

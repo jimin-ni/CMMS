@@ -132,6 +132,24 @@ describe("room", () => {
     expect(all).not.toMatch(/user-\d+/);
   });
 
+  it("a personal block (ticket h) keeps the blocked person out of hello and relays, one way", async () => {
+    const room = roomId();
+    const a = await connect(room, await ticket(room, { u: "blocked-user" }));
+    const helloA = await a.next((m) => m.t === "hello");
+    a.ws.send(JSON.stringify({ t: "snap", p: [1, 1], ry: 0, state: "idle" }));
+    await settle();
+    const b = await connect(room, await ticket(room, { h: ["blocked-user"] }));
+    const helloB = await b.next((m) => m.t === "hello");
+    expect((helloB.peers as Record<string, unknown>[]).some((p) => p.peer === helloA.you)).toBe(false);
+    // a 는 b 를 본다 (한쪽만 가린다)
+    await a.next((m) => m.t === "join" && m.peer === helloB.you);
+    a.ws.send(JSON.stringify({ t: "walk", pts: [[0, 0], [1, 1]] }));
+    await settle();
+    expect(b.msgs.some((m) => m.peer === helloA.you)).toBe(false);
+    b.ws.send(JSON.stringify({ t: "walk", pts: [[0, 0], [2, 2]] }));
+    await a.next((m) => m.t === "walk" && m.peer === helloB.you);
+  });
+
   it("5th visitor gets full and 4003", async () => {
     const room = roomId();
     for (let i = 0; i < 4; i++) await connect(room);

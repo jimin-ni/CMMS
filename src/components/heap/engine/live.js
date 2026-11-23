@@ -117,7 +117,7 @@ export function setupLive(ctx) {
     } else {
       hideGuestbookRows(res.hiddenGuestbookIds ?? []);
       ctx.mergeTreeNotes?.([], res.hiddenNoteIds ?? []);
-      ctx.refreshBlocked?.();
+      opts.refreshBlocked?.();
       $('gb-msg').textContent = '차단했어요. 이제 보이지 않아요';
     }
     renderGuestbook();

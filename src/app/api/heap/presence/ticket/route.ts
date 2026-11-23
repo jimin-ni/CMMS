@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { getRoomOwnerId } from "@/lib/heap/repo";
-import { NAME_RULES, signTicket, userKey, type NameRule } from "@/lib/heap/presence-ticket";
+import { HIDE_MAX, NAME_RULES, signTicket, userKey, type NameRule } from "@/lib/heap/presence-ticket";
+import { listBlockedUserIds } from "@/lib/heap/blocks-repo";
 import { getViewer } from "@/lib/session";
 
 // 방 함께 있기(presence) 입장 티켓 (docs/dev/presence.md). 로그인한 사람에게만, 60초짜리 1회용.
@@ -56,6 +57,10 @@ export async function POST(request: Request): Promise<Response> {
   const ownerId = await getRoomOwnerId(roomUuid);
   if (!ownerId) return Response.json({ error: "room" }, { status: 404, headers: NO_STORE });
 
+  // 내가 가린 사람은 방 안에서도 보이지 않는다. 워커가 그 사람의 소식을 나에게 보내지 않는다 (userKey로만 넘긴다).
+  const blocked = (await listBlockedUserIds(viewer.id)).slice(0, HIDE_MAX);
+  const h = await Promise.all(blocked.map((id) => userKey(secret, id)));
+
   const ticket = await signTicket(secret, {
     r: roomUuid,
     u: await userKey(secret, viewer.id),
@@ -64,6 +69,7 @@ export async function POST(request: Request): Promise<Response> {
     j: randomUUID(),
     o: ownerId === viewer.id,
     v: rule,
+    ...(h.length ? { h } : {}),
   });
   return Response.json({ ticket, url: `${base.replace(/\/$/, "")}/room/${roomUuid}` }, { headers: NO_STORE });
 }

@@ -274,7 +274,7 @@ export function setupTreeOwner(ctx, T, W) {
       T.dismissNote();
       ctx.mergeTreeNotes([], res.hiddenNoteIds ?? []);
       ctx.hideGuestbookRows?.(res.hiddenGuestbookIds ?? []);
-      ctx.refreshBlocked?.();
+      opts.refreshBlocked?.();
     });
   });
   on(replyBtn, 'click', () => {
