@@ -25,12 +25,20 @@ export function setupFurniture(ctx) {
   // false 면 계속 꺼짐: 불빛도, 빛남도 없고 MAX_LAMP_LIGHTS 몫도 차지하지 않는다.
   const isLampModel = it => it.type === 'model' && ctx.catalogue?.models?.find(m => m.id === it.model)?.category === 'lamp';
   const isLit = o => o.lit !== false;
+  // 작은 빛(glow)은 빛만 내는 것이라 몫을 먼저 받는다: 작은 빛, 손으로 만든 램프, 램프 모델 순서다.
   function lampLight(build, it) {
     if (!isLit(it)) return null;
-    const hand = build.items.filter(o => o.type === 'lamp' && isLit(o));
-    const rank = it.type === 'lamp' ? hand.indexOf(it) : hand.length + build.items.filter(o => isLampModel(o) && isLit(o)).indexOf(it);
+    const glows = build.items.filter(o => o.type === 'glow'), hand = build.items.filter(o => o.type === 'lamp' && isLit(o));
+    const rank = it.type === 'glow' ? glows.indexOf(it)
+      : glows.length + (it.type === 'lamp' ? hand.indexOf(it) : hand.length + build.items.filter(o => isLampModel(o) && isLit(o)).indexOf(it));
     return rank < MAX_LAMP_LIGHTS ? new THREE.PointLight(0xffb86b, 3.2, 9, 1.2) : null;
   }
+  // 작은 빛 (type "glow"): 보이지 않고 빛만 내는 가구. 시계를 따르지 않고 늘 켜져 있다. item.level(1..5, 없으면 3)이 세기다 (layout.ts 가 검사한다).
+  // 꾸미기에서만 반투명한 구슬(mark)이 보여 집고 옮길 수 있다 (edit.js 가 ctx.glowMarksOn 을 정하고 syncGlowMarks 를 부른다). 독의 그림(dock-thumbs.js)에서도 보인다.
+  // 길을 막지 않는다 (바닥 크기를 돌려주지 않는다). build.lamps 에 fixed(고정 세기)로 들어가 loop.js 가 시계 세기로 덮지 않는다.
+  const GLOW_I = [0.5, 1, 1.6, 2.3, 3.2], GLOW_Y = 0.2;
+  ctx.glowMarksOn = false;
+  ctx.syncGlowMarks = () => { for (const l of ctx.build.lamps) if (l.mark) l.mark.visible = ctx.glowMarksOn; };
   // 책 색: 포인트, 올리브, 고정된 넷 (palette.js 의 'book:i')
   function pottedPlant(parent, x, z, y, s) {
     box(0.36 * s, 0.34 * s, 0.36 * s, tone(C, 'accent'), x, y + 0.17 * s, z, { parent });
@@ -148,6 +156,15 @@ export function setupFurniture(ctx) {
       if (light) { light.position.y = 1.72; g.add(light); }
       build.lamps.push({ light, shades: [shade.material], off: !isLit(it) });
       return { hw: 0.35, hd: 0.35 };
+    },
+    glow(g, it, build) {
+      const room = build === ctx.build; // 독의 그림을 찍는 버리는 build 에는 불빛을 두지 않는다
+      const mark = new THREE.Mesh(new THREE.SphereGeometry(0.09, 16, 12), new THREE.MeshBasicMaterial({ color: '#ffd59a', transparent: true, opacity: 0.55, depthWrite: false }));
+      mark.position.y = GLOW_Y; mark.visible = !room || ctx.glowMarksOn; g.add(mark);
+      const light = room ? lampLight(build, it) : null;
+      if (light) { light.intensity = GLOW_I[(it.level ?? 3) - 1] ?? GLOW_I[2]; light.distance = 5; light.position.y = GLOW_Y; g.add(light); }
+      build.lamps.push({ light, shades: [], off: false, fixed: light?.intensity, mark });
+      return {};
     },
     books(g) {
       for (let i = 0; i < 4; i++) { const b = box(0.42, 0.08, 0.3, tone(C, `book:${i + 2}`), 0, 0.04 + i * 0.08, 0, { parent: g }); b.rotation.y = (ctx.irand() - 0.5) * 0.5; }
@@ -282,7 +299,7 @@ export function setupFurniture(ctx) {
   }
 
   // ITEMS: what the last buildItems() made. group: every object built from the items · obst: their walk obstacles · items: the list itself
-  //   lamps: 이 build 의 램프들, 각각 { light, shades, off } (위의 MAX_LAMP_LIGHTS 참고)
+  //   lamps: 이 build 의 램프들, 각각 { light, shades, off } (위의 MAX_LAMP_LIGHTS 참고). 작은 빛은 fixed(고정 세기)와 mark(꾸미기의 구슬)도 갖는다
   //   slots: its functions, { it, fn, start? } each · slotMeshes: the meshes a click can hit, each with userData.slot (see the slots section above)
   //   seats / seatMeshes: addSeats 참고
   //   loads: 이 build 가 아직 기다리는 기념품 썸네일 (다음 build 가 바꿀 때 취소한다)

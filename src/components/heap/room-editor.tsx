@@ -114,6 +114,7 @@ const HAND_MODELS: Model[] = [
   { id: `${HAND_PREFIX}projector`, label: "영사기", category: "hand" },
   { id: `${HAND_PREFIX}frame`, label: "벽 액자", category: "hand" },
   { id: `${HAND_PREFIX}calendar`, label: "탁상 달력", category: "hand" },
+  { id: `${HAND_PREFIX}glow`, label: "작은 빛", category: "hand" },
 ];
 const HAND_GROUP = "방 소품";
 // 독의 손 가구 id → 커서에 붙일 항목 (x, z, rot 는 엔진이 정한다). 없는 id 는 { type: id } 다.
@@ -124,6 +125,7 @@ const HAND_TEMPLATE: Record<string, Partial<Item>> = {
   window: { type: "window", w: 1.3, h: 1.2 },
   frame: { type: "frame", y: HEAP_POLICY.frameY },
   calendar: { type: "calendar", fn: { kind: "calendar", entries: [] } },
+  glow: { type: "glow", level: 3 },
 };
 const HEAP_IDS = new Set([`${HAND_PREFIX}heap`, `${HAND_PREFIX}heapBox`]);
 // 벽을 따라 움직이고 높이를 바꾸는 손 가구 (벽 가구 모델처럼 ▲▼ 단추를 보인다)
@@ -989,6 +991,19 @@ export function RoomEditor({
             <button type="button" aria-pressed={selItem.lit !== false} onClick={() => cmd({ op: "lit" })} title="꺼 둔 조명은 밤에도 꺼져 있어요">
               {selItem.lit === false ? "불 켜기" : "불 끄기"}
             </button>
+          )}
+          {selItem.type === "glow" && (
+            <>
+              <button type="button" onClick={() => cmd({ op: "level", dir: -1 })} aria-label="빛 약하게" title="빛 약하게">
+                −
+              </button>
+              <span className="lbl" aria-live="polite">
+                빛 {selItem.level ?? 3}/5
+              </span>
+              <button type="button" onClick={() => cmd({ op: "level", dir: 1 })} aria-label="빛 세게" title="빛 세게">
+                +
+              </button>
+            </>
           )}
           {selKinds.length > 0 && (
             <button type="button" className="fn" aria-pressed={bubbleOpen} onClick={() => (bubbleOpen ? closeBubble() : setBubbleFor(sel))}>

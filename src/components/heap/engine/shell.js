@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { flat, makeCanvas, canvasTexture } from './draw.js';
 import { tone } from './palette.js';
+import { DEBUG_ON, SHADOW_TEST } from './debug-flags.js';
 
 export function setupShell(ctx) {
   const { layout, C, WALLS, box, WALL_H, onWall, RX, RZ, scene, rand } = ctx;
@@ -106,6 +107,17 @@ export function setupShell(ctx) {
   Object.assign(sun.shadow.camera, { left: -SHADOW, right: SHADOW, top: SHADOW, bottom: -SHADOW, near: 1, far: 30 });
   sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.012;
   scene.add(sun, sun.target);
+  // 임시 디버그 그림자 보기 (debug-flags.js, ?debug=1 일 때만). 그림자는 해 하나의 그림자 지도와 땅(scene.js)에 그려 넣은 접지 그림자뿐이다.
+  //   all: 그대로 · room: 방 밖의 땅은 해 그림자를 받지 않고 접지 그림자도 지운다 (방 안의 바닥, 벽, 가구는 그대로) · none: 해가 그림자를 드리우지 않는다
+  // receiveShadow 와 castShadow 를 바꾸면 three 가 다음 그리기에서 셰이더를 알아서 다시 고른다.
+  ctx.applyShadowMode = mode => {
+    sun.castShadow = mode !== 'none';
+    if (ctx.ground) { ctx.ground.receiveShadow = mode === 'all'; ctx.paintGround(mode === 'all'); }
+  };
+  if (DEBUG_ON) {
+    if (SHADOW_TEST.mode !== 'all') ctx.applyShadowMode(SHADOW_TEST.mode);
+    ctx.on(ctx.root, 'heap:shadow', () => ctx.applyShadowMode(SHADOW_TEST.mode));
+  }
   ctx.moteGeo = null; ctx.shaftGeo = null; ctx.shaftMat = null; ctx.moteMat = null; const moteSeeds = [];
   if (ctx.shaftCorners) {
     const shaftFloor = ctx.shaftCorners.map(p => p.clone().addScaledVector(ctx.sunDir, p.y / -ctx.sunDir.y));

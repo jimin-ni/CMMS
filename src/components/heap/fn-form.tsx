@@ -21,6 +21,8 @@ export type Item = {
   fn?: SlotFn;
   // 조명 스위치. 없으면 켜진 것(밤에 불이 들어온다), false면 늘 꺼져 있다.
   lit?: boolean;
+  // 작은 빛(glow)의 세기 1..5 (없으면 3)
+  level?: number;
   // 가구 하나만 따로 칠한 색 { 부분: "#RRGGBB" } (색 묶음 C2, src/lib/heap/parts.ts). Kenney 모델만
   colors?: Record<string, string>;
   // 모양: 앨범 책장 "low" | "tall", 사진 더미 "box", 방명록 "stand" (layout.ts)
@@ -52,6 +54,7 @@ export const HAND_LABEL: Record<string, string> = {
   poster: "포스터",
   window: "창문",
   projector: "영사기",
+  glow: "작은 빛",
 };
 export const itemLabel = (it: Item, models: Model[]) =>
   (it.type === "model" ? models.find((m) => m.id === it.model)?.label : HAND_LABEL[it.type]) ?? it.model ?? it.type;
