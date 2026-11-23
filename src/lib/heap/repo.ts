@@ -27,6 +27,7 @@ import { planScreen, recordScreenEvent, type SaveNotice } from "@/lib/moderation
 import type { ScreenResult } from "@/lib/moderation/screen";
 import { MODERATION_TEXT } from "@/lib/moderation/policy";
 import { screenView } from "@/lib/heap/screen-view";
+import { notBlockedBy } from "@/lib/heap/blocks-repo";
 
 // 힙 미니룸의 DB 접근은 전부 이 파일에 둔다. 서버에서만 불러 쓴다 (Server Component, Server Action, Route Handler).
 // 역할(creator, admin) 검사는 부르는 쪽이 하고, 여기서는 데이터로 알 수 있는 것만 검사한다
@@ -384,9 +385,11 @@ export async function listVotingPieces(roomId: string, viewerId: string | null):
 }
 
 // 보는 사람에게 보일 방명록 줄: 공개, 내려간 줄(자리 표시), 내가 쓴 숨김 줄.
+// 내가 가린 사람(heap_blocks)의 줄은 빠진다.
 function guestbookVisible(viewerId: string | null): SQL {
   const open = sql`${heapGuestbook.screenStatus} in ('published', 'removed')`;
-  return viewerId === null ? open : (or(open, eq(heapGuestbook.userId, viewerId)) as SQL);
+  if (viewerId === null) return open;
+  return and(or(open, eq(heapGuestbook.userId, viewerId)), notBlockedBy(viewerId, heapGuestbook.userId)) as SQL;
 }
 
 const guestbookColumns = {

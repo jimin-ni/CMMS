@@ -14,6 +14,7 @@ import { planScreen, recordScreenEvent, type SaveNotice } from "@/lib/moderation
 import type { ScreenResult } from "@/lib/moderation/screen";
 import { MODERATION_TEXT } from "@/lib/moderation/policy";
 import { screenView } from "@/lib/heap/screen-view";
+import { notBlockedBy } from "@/lib/heap/blocks-repo";
 
 // 쪽지 트리의 DB 접근. repo.ts가 길어서 따로 뒀고, 규칙은 repo.ts와 같다 (쿼리는 이 파일에만, 실패는 { ok: false, reason }).
 // 방 주인(owner) = heap_rooms.creator_id. 역할 검사는 하지 않고 방 주인인지만 서버에서 확인한다.
@@ -335,6 +336,7 @@ export async function countUnreadNotes(roomId: string, viewerId: string | null):
       isNull(heapNotes.hiddenAt),
       eq(heapNotes.screenStatus, "published"),
       ne(heapNotes.authorId, viewerId),
+      notBlockedBy(viewerId, heapNotes.authorId),
       sql`exists (select 1 from ${heapRooms} where ${heapRooms.id} = ${heapNotes.roomId} and ${heapRooms.creatorId} = ${viewerId})`,
     ),
   );
@@ -352,7 +354,7 @@ export async function listNotes(roomId: string, viewerId: string | null): Promis
         ? undefined
         : or(isNull(heapNotes.hiddenAt), eq(heapNotes.authorId, viewerId));
   const rows = await noteSelect(db)
-    .where(and(eq(heapNotes.roomId, roomId), visible))
+    .where(and(eq(heapNotes.roomId, roomId), visible, notBlockedBy(viewerId, heapNotes.authorId)))
     .orderBy(asc(heapNotes.createdAt), asc(heapNotes.id));
   return rows.flatMap((row) => toNote(row, ctx, viewerId) ?? []);
 }
@@ -389,6 +391,7 @@ export async function listNoteChanges(
       .where(
         and(
           eq(heapNotes.roomId, roomId),
+          notBlockedBy(viewerId, heapNotes.authorId),
           sql`(${heapNotes.updatedAt}, ${heapNotes.id}) > (${from.ts}::timestamptz, ${from.id}::uuid)`,
         ),
       )

@@ -68,6 +68,8 @@ export type HeapNoteWire = {
 
 // page.tsx가 DB 스냅샷을 엔진이 쓰는 모양으로 바꿔 넘긴다. 날짜는 한국 시간 "YYYY.MM.DD" 문자열.
 export type HeapRoomData = {
+  // 0013: 이 방의 글을 신고하고 쓰기를 막을 수 있는가 (방 주인이나 관리자). 서버가 다시 확인한다.
+  canModerate?: boolean;
   // heap_rooms.id (uuid). 서버 액션과 실시간 읽기 주소가 이 값을 쓴다. 주소의 slug와 다르다.
   roomUuid: string;
   // 방 이름(heap_rooms.name). 화면 제목과 카드 뒷면에 쓴다.
