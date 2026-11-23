@@ -56,6 +56,8 @@ class Bot {
       n: this.name,
       exp: Math.floor(Date.now() / 1000) + 60,
       j: randomUUID(),
+      o: false,
+      v: "followers",
     });
     // 티켓은 subprotocol 로 (브라우저와 같다). Node 의 WebSocket(undici)은 headers 옵션도 받는다: 워커가 Origin 을 확인한다.
     const ws = new WebSocket(`${BASE}/room/${room}`, { protocols: ["presence.v1", ticket], headers: { Origin: ORIGIN } });

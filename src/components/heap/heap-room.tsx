@@ -35,7 +35,8 @@ const GO_AFTER_SIGNIN: Record<string, string> = { chat: "phone", guestbook: "gue
 import { RoomEditor } from "./room-editor";
 import { SetupChecklist, setupFlags, type ChecklistAction } from "./setup-checklist";
 import { ShareButton } from "./share-button";
-import { createPresenceClient, type PresenceClient } from "./presence-client";
+import { createPresenceClient, createPresenceHub, type PresenceClient, type PresenceHub } from "./presence-client";
+import { setPrefs, type NameShow } from "@/lib/settings/prefs";
 import { moneygraphyPixel, moneygraphyRounded, pretendard } from "@/app/fonts/onboarding";
 import "./heap-room.css";
 
@@ -269,18 +270,30 @@ export function HeapRoom({
 
   // 방 함께 있기(presence, docs/dev/presence.md): 로그인한 사람의 /room 화면에서만 연결한다.
   // 연결은 엔진 바깥에 둔다. 꾸미기 때문에 엔진이 다시 마운트되어도 다른 사람에게 나갔다 들어온 것처럼 보이지 않게.
-  // 이 effect 는 아래 엔진 마운트 effect 보다 먼저 돌아야 한다 (엔진이 presenceRef 를 읽는다).
+  // 엔진은 고정 손잡이(hub)를 받고, 연결은 설정(나 숨기기, 이름 공개 규칙)에 따라 여기서 바꿔 끼운다.
+  const presenceOn = presence && signedIn && !!process.env.NEXT_PUBLIC_PRESENCE_URL;
+  const [presenceHub] = useState(createPresenceHub);
   const presenceRef = useRef<PresenceClient | null>(null);
+  const presencePrefs = usePrefs().presence;
+  const hideOthersRef = useRef(presencePrefs.hideOthers);
   useEffect(() => {
-    if (!presence || !signedIn || !process.env.NEXT_PUBLIC_PRESENCE_URL) return;
-    const client = createPresenceClient({ roomUuid: data.roomUuid });
+    if (!presenceOn || presencePrefs.hideMe) return;
+    const client = createPresenceClient({ roomUuid: data.roomUuid, show: presencePrefs.show });
+    client.setMuted(hideOthersRef.current);
     presenceRef.current = client;
+    presenceHub.attach(client);
     client.start();
     return () => {
+      presenceHub.attach(null);
       client.close();
       if (presenceRef.current === client) presenceRef.current = null;
     };
-  }, [presence, signedIn, data.roomUuid]);
+  }, [presenceOn, data.roomUuid, presencePrefs.show, presencePrefs.hideMe, presenceHub]);
+  // 다른 사람 숨기기는 연결을 바꾸지 않고 서버에 알린다
+  useEffect(() => {
+    hideOthersRef.current = presencePrefs.hideOthers;
+    presenceRef.current?.setMuted(presencePrefs.hideOthers);
+  }, [presencePrefs.hideOthers]);
 
   // 꾸미기가 열리고 닫힐 때 엔진에 알린다. 엔진은 편집 모드로 들어가고(engine/edit.js) 음악을 멈춘다.
   useEffect(() => {
@@ -371,7 +384,7 @@ export function HeapRoom({
         signedIn,
         roomUuid: data.roomUuid,
         // 방 함께 있기 연결 (없으면 혼자 보는 방 그대로)
-        presence: presenceRef.current ?? undefined,
+        presence: presenceOn ? presenceHub : undefined,
         pollMs: HEAP_POLICY.pollIntervalMs,
         bubbleHref: data.bubbleHref,
         navigate: (href: string) => router.push(href),
@@ -440,7 +453,7 @@ export function HeapRoom({
       root.removeEventListener("heap:remount", onRemount);
       dispose?.();
     };
-  }, [roomId, viewerName, signedIn, canEdit, router, resume, signInHere]);
+  }, [roomId, viewerName, signedIn, canEdit, router, resume, signInHere, presenceOn, presenceHub]);
 
   // 체크리스트: 방 주인에게, 방이 뜬 뒤, 걸어 다니는 방이나 꾸미기(팔로워로 보기 빼고)에서
   const showChecklist = !!owner && ready && (editing ? !preview : mode === "room");
@@ -500,6 +513,7 @@ export function HeapRoom({
               </button>
             )}
             {ready && !editing && <ShareButton rootRef={rootRef} roomId={roomId} />}
+            {presenceOn && ready && !editing && <PresenceControls hub={presenceHub} isOwner={canEdit} />}
           </div>
           <p className="hint" id="hint" />
         </div>
@@ -532,7 +546,7 @@ export function HeapRoom({
                     로그아웃
                   </button>
                 )}
-                {presence && <PresenceDebug clientRef={presenceRef} />}
+                {presenceOn && <PresenceDebug hub={presenceHub} />}
               </div>
             )}
           </div>
@@ -856,28 +870,86 @@ export function HeapRoom({
 }
 
 // 디버그 사이드바의 방 함께 있기 줄: 연결 상태, 초당 보낸/받은 메시지 수, 같이 있는 사람(peer id 와 이름만).
-function PresenceDebug({ clientRef }: { clientRef: { current: PresenceClient | null } }) {
+function PresenceDebug({ hub }: { hub: PresenceHub }) {
   const [view, setView] = useState({ status: "-", rate: "0/0", peers: "" });
   useEffect(() => {
-    let last = clientRef.current?.counts() ?? { sent: 0, recv: 0 };
+    let last = hub.counts();
     const id = setInterval(() => {
-      const c = clientRef.current;
-      if (!c) return setView({ status: "꺼짐", rate: "0/0", peers: "" });
+      const c = hub;
+      if (!c.active()) return setView({ status: "꺼짐 (나 숨기기)", rate: "0/0", peers: "" });
       const now = c.counts();
       setView({
         status: c.status(),
         rate: `${now.sent - last.sent}/${now.recv - last.recv}`,
-        peers: c.peers().map((p) => `${p.name}(${p.peer}) ${p.state}`).join(", "),
+        peers: c.peers().map((p) => `${p.name}${p.owner ? "[주인]" : ""}(${p.peer}) ${p.state}`).join(", "),
       });
       last = now;
     }, 1000);
     return () => clearInterval(id);
-  }, [clientRef]);
+  }, [hub]);
   return (
     <p className="debug-presence">
       함께 있기: {view.status} · 초당 보냄/받음 {view.rate}
       <br />
       {view.peers || "다른 사람 없음"}
     </p>
+  );
+}
+
+// 방 함께 있기 설정: 지금 남에게 어떻게 보이는지, 나 숨기기, 다른 사람 숨기기, 이름 공개 규칙.
+// 설정은 이 브라우저에 남는다 (settings/prefs.ts). 이름 규칙을 바꾸면 새 입장권으로 다시 들어온다.
+const SHOW_LABEL: Record<NameShow, string> = { hidden: "가리기", creators: "방 주인에게만", followers: "팔로워에게" };
+
+function PresenceControls({ hub, isOwner }: { hub: PresenceHub; isOwner: boolean }) {
+  const [open, setOpen] = useState(false);
+  const pref = usePrefs().presence;
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    const sync = () => setCount(hub.peers().length);
+    const offMsg = hub.on(sync);
+    const offStatus = hub.onStatus(sync);
+    return () => {
+      offMsg();
+      offStatus();
+    };
+  }, [hub]);
+  const patch = (p: Partial<typeof pref>) => setPrefs({ presence: { ...pref, ...p } });
+  const seenAs = pref.hideMe
+    ? "지금은 아무에게도 보이지 않아요. 다른 사람도 보이지 않아요"
+    : isOwner
+      ? "방 주인으로, 이름과 함께 보여요"
+      : pref.show === "followers"
+        ? "이 방의 다른 방문자에게 이름이 보여요"
+        : pref.show === "creators"
+          ? "방 주인에게만 이름이 보이고, 다른 방문자에게는 '방문자'로 보여요"
+          : "다른 방문자에게 '방문자'로 보여요";
+  return (
+    <div className="presence-ctl">
+      <button type="button" className="btn ghost" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        함께 있기{!pref.hideMe && !pref.hideOthers && count > 0 ? ` ${count}` : ""}
+      </button>
+      {open && (
+        <div className="presence-panel" role="group" aria-label="함께 있기 설정">
+          <p className="presence-seen">{seenAs}</p>
+          <label>
+            <input type="checkbox" checked={pref.hideMe} onChange={(e) => patch({ hideMe: e.target.checked })} /> 나 숨기기
+          </label>
+          <label>
+            <input type="checkbox" checked={pref.hideOthers} disabled={pref.hideMe} onChange={(e) => patch({ hideOthers: e.target.checked })} /> 다른 사람
+            숨기기 (연결이 느릴 때)
+          </label>
+          {!isOwner && (
+            <fieldset disabled={pref.hideMe}>
+              <legend>내 이름</legend>
+              {(Object.keys(SHOW_LABEL) as NameShow[]).map((v) => (
+                <label key={v}>
+                  <input type="radio" name="presence-show" checked={pref.show === v} onChange={() => patch({ show: v })} /> {SHOW_LABEL[v]}
+                </label>
+              ))}
+            </fieldset>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

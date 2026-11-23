@@ -13,7 +13,7 @@ function roomId(): string {
 
 async function ticket(room: string, over: Partial<PresenceTicket> = {}): Promise<string> {
   seq += 1;
-  return signTicket(SECRET, { r: room, u: `user-${seq}`, n: `사람${seq}`, exp: Math.floor(Date.now() / 1000) + 60, j: `j-${seq}`, ...over });
+  return signTicket(SECRET, { r: room, u: `user-${seq}`, n: `사람${seq}`, exp: Math.floor(Date.now() / 1000) + 60, j: `j-${seq}`, o: false, v: "followers", ...over });
 }
 
 type Conn = {
@@ -132,7 +132,7 @@ describe("room", () => {
     expect(all).not.toMatch(/user-\d+/);
   });
 
-  it("5th connection gets full and 4003", async () => {
+  it("5th visitor gets full and 4003", async () => {
     const room = roomId();
     for (let i = 0; i < 4; i++) await connect(room);
     const e = await connect(room);
@@ -255,5 +255,85 @@ describe("liveness and late joiners", () => {
     await connect(room, await ticket(room, { n: "가".repeat(200) }));
     const join = await a.next((m) => m.t === "join");
     expect((join.name as string).length).toBe(24);
+  });
+});
+
+describe("seats and names", () => {
+  it("the owner always gets in as a fifth person", async () => {
+    const room = roomId();
+    for (let i = 0; i < 4; i++) await connect(room);
+    const owner = await connect(room, await ticket(room, { o: true }));
+    const hello = await owner.next((m) => m.t === "hello");
+    expect((hello.peers as unknown[]).length).toBe(4);
+  });
+
+  it("a full room lets a newcomer in by moving out the idlest visitor, pings do not count", async () => {
+    const room = roomId();
+    const idle = await connect(room);
+    const helloIdle = await idle.next((m) => m.t === "hello");
+    const others = [await connect(room), await connect(room), await connect(room)];
+    // 테스트 설정: 끊김 0.6초, 자리 비움 1.5초. idle 은 ping 만, 나머지는 실제 메시지를 보낸다
+    for (let i = 0; i < 6; i++) {
+      await new Promise((r) => setTimeout(r, 300));
+      idle.ws.send("ping");
+      for (const o of others) o.ws.send(JSON.stringify({ t: "state", state: "idle" }));
+    }
+    const late = await connect(room);
+    expect(await idle.closed).toBe(4009);
+    await others[0].next((m) => m.t === "leave" && m.peer === helloIdle.you);
+    const hello = await late.next((m) => m.t === "hello");
+    expect((hello.peers as unknown[]).length).toBe(3);
+  });
+
+  it("a full room of active visitors stays full", async () => {
+    const room = roomId();
+    for (let i = 0; i < 4; i++) await connect(room);
+    const fifth = await connect(room);
+    expect(await fifth.closed).toBe(4003);
+  });
+
+  it("name rules: hidden shows 방문자, creators shows the name only to the owner, the owner is always named", async () => {
+    const room = roomId();
+    const owner = await connect(room, await ticket(room, { o: true, n: "주인", v: "hidden" }));
+    const visitor = await connect(room, await ticket(room, { n: "손님", v: "hidden" }));
+    const helloVisitor = await visitor.next((m) => m.t === "hello");
+    expect(helloVisitor.peers).toEqual([expect.objectContaining({ name: "주인", owner: true })]);
+    const joinAtOwner = await owner.next((m) => m.t === "join");
+    expect(joinAtOwner).toMatchObject({ name: "방문자", owner: false });
+
+    const shy = await connect(room, await ticket(room, { n: "수줍음", v: "creators" }));
+    const atOwner = await owner.next((m) => m.t === "join" && m.peer !== joinAtOwner.peer);
+    const atVisitor = await visitor.next((m) => m.t === "join");
+    expect(atOwner.name).toBe("수줍음");
+    expect(atVisitor.name).toBe("방문자");
+    const all = JSON.stringify([...visitor.msgs, ...shy.msgs]);
+    expect(all).not.toContain("손님");
+    expect(all).not.toContain("수줍음");
+  });
+
+  it("followers rule shows the name to everyone in the room for now", async () => {
+    const room = roomId();
+    const a = await connect(room);
+    await connect(room, await ticket(room, { n: "공개", v: "followers" }));
+    expect((await a.next((m) => m.t === "join")).name).toBe("공개");
+  });
+
+  it("hide others: a muted visitor stops receiving but stays visible, and unmuting resyncs", async () => {
+    const room = roomId();
+    const quiet = await connect(room);
+    const helloQuiet = await quiet.next((m) => m.t === "hello");
+    const mover = await connect(room);
+    await quiet.next((m) => m.t === "join");
+    quiet.ws.send(JSON.stringify({ t: "mute", on: true }));
+    quiet.ws.send(JSON.stringify({ t: "snap", p: [1, 1], ry: 0, state: "idle" }));
+    await mover.next((m) => m.t === "snap" && m.peer === helloQuiet.you);
+    const before = quiet.msgs.length;
+    mover.ws.send(JSON.stringify({ t: "walk", pts: [[0, 0], [2, 2]] }));
+    await new Promise((r) => setTimeout(r, 100));
+    expect(quiet.msgs.length).toBe(before);
+    quiet.ws.send(JSON.stringify({ t: "mute", on: false }));
+    const resync = await quiet.next((m) => m.t === "hello" && quiet.msgs.indexOf(m) >= before);
+    expect((resync.peers as Record<string, unknown>[])[0]).toMatchObject({ p: [2, 2], state: "walk" });
+    expect(mover.msgs.some((m) => m.t === "mute")).toBe(false);
   });
 });

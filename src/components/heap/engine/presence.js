@@ -40,7 +40,7 @@ export function setupPresence(ctx) {
     return new THREE.Vector3(2.2, 0, 2.4);
   }
 
-  function addPeer({ peer, name, colour, state, p, ry, sit }) {
+  function addPeer({ peer, name, owner, colour, state, p, ry, sit }) {
     if (peers.has(peer)) return peers.get(peer);
     const fig = makeFigure(C, flat(BODY[(colour | 0) % BODY.length]));
     const at = Array.isArray(p) ? new THREE.Vector3(p[0], 0, p[1]) : spawnAt();
@@ -51,6 +51,13 @@ export function setupPresence(ctx) {
     scene.add(fig.group);
     const tag = document.createElement('div');
     tag.textContent = String(name ?? '').slice(0, 24);
+    // 방 주인 표시: 서버가 서명된 티켓으로 정한 사람에게만. 이름은 누구나 지을 수 있으므로 이것이 진짜 주인을 가린다
+    if (owner === true) {
+      const badge = document.createElement('span');
+      badge.textContent = '방 주인';
+      badge.style.cssText = 'margin-left:6px;padding:0 6px;border-radius:999px;background:#A6613C;color:#fbf6ec;font-size:10px';
+      tag.appendChild(badge);
+    }
     tag.style.cssText = 'position:absolute;transform:translate(-50%,-100%);padding:2px 8px;border-radius:999px;background:rgba(251,246,236,.86);color:#3a2a22;font:600 12px/1.4 var(--font-pretendard, sans-serif);white-space:nowrap';
     tags.appendChild(tag);
     const it = { fig, tag, state: state || 'idle', path: [], target: null, seat: null, heapSpot: null, pop: 0, leaving: false };
@@ -143,6 +150,7 @@ export function setupPresence(ctx) {
   const notify = s => {
     if (s === 'full') ctx.toast('방이 가득 찼어요. 혼자 둘러볼 수 있어요');
     else if (s === 'replaced') ctx.toast('다른 탭에서 이 방을 열었어요');
+    else if (s === 'kicked') ctx.toast('한동안 움직임이 없어 다른 방문자에게 자리를 내줬어요');
   };
   notify(client.status());
   ctx.onDispose(client.onStatus(notify));
@@ -166,7 +174,7 @@ export function setupPresence(ctx) {
 
   function stepOut(dt) {
     const m = me();
-    if (!m) return;
+    if (!m || (client.active && !client.active())) return; // 나 숨기기: 보낼 곳이 없다
     // 새 길: walk.js 의 followPath 는 길마다 새 waypoints 배열을 만든다
     if (ctx.walkTo && ctx.waypoints !== lastWaypoints) {
       const pts = [xz(m.position), xz(ctx.walkTo), ...ctx.waypoints.map(xz)].slice(0, MAX_PTS);
@@ -265,5 +273,5 @@ export function setupPresence(ctx) {
   // 다시 마운트된 엔진(꾸미기 뒤)의 내 자리를 바로 알린다. 아직 연결 전이면 hello 가 오면서 보낸다
   sendSnap();
   // 디버그 사이드바가 읽는 값 (peer id 와 이름만)
-  ctx.presencePeers = () => [...peers.entries()].map(([peer, it]) => ({ peer, name: it.tag.textContent, state: it.state }));
+  ctx.presencePeers = () => [...peers.entries()].map(([peer, it]) => ({ peer, name: it.tag.firstChild?.textContent ?? '', state: it.state }));
 }

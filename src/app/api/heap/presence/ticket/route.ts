@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { roomExists } from "@/lib/heap/repo";
-import { signTicket, userKey } from "@/lib/heap/presence-ticket";
+import { getRoomOwnerId } from "@/lib/heap/repo";
+import { NAME_RULES, signTicket, userKey, type NameRule } from "@/lib/heap/presence-ticket";
 import { getViewer } from "@/lib/session";
 
 // 방 함께 있기(presence) 입장 티켓 (docs/dev/presence.md). 로그인한 사람에게만, 60초짜리 1회용.
@@ -42,16 +42,19 @@ export async function POST(request: Request): Promise<Response> {
   if (!viewer) return Response.json({ error: "sign-in" }, { status: 401, headers: NO_STORE });
   if (overLimit(viewer.id)) return Response.json({ error: "rate" }, { status: 429, headers: NO_STORE });
 
-  let roomUuid: unknown;
+  let roomUuid: unknown, show: unknown;
   try {
-    roomUuid = ((await request.json()) as { roomUuid?: unknown }).roomUuid;
+    ({ roomUuid, show } = (await request.json()) as { roomUuid?: unknown; show?: unknown });
   } catch {
     return Response.json({ error: "body" }, { status: 400, headers: NO_STORE });
   }
   if (typeof roomUuid !== "string" || !UUID_PATTERN.test(roomUuid)) {
     return Response.json({ error: "room" }, { status: 400, headers: NO_STORE });
   }
-  if (!(await roomExists(roomUuid))) return Response.json({ error: "room" }, { status: 404, headers: NO_STORE });
+  // 이름 공개 규칙: 모르는 값이면 가장 닫힌 쪽(hidden)
+  const rule: NameRule = NAME_RULES.includes(show as NameRule) ? (show as NameRule) : "hidden";
+  const ownerId = await getRoomOwnerId(roomUuid);
+  if (!ownerId) return Response.json({ error: "room" }, { status: 404, headers: NO_STORE });
 
   const ticket = await signTicket(secret, {
     r: roomUuid,
@@ -59,6 +62,8 @@ export async function POST(request: Request): Promise<Response> {
     n: viewer.name.slice(0, MAX_NAME),
     exp: Math.floor(Date.now() / 1000) + TICKET_TTL_SEC,
     j: randomUUID(),
+    o: ownerId === viewer.id,
+    v: rule,
   });
   return Response.json({ ticket, url: `${base.replace(/\/$/, "")}/room/${roomUuid}` }, { headers: NO_STORE });
 }

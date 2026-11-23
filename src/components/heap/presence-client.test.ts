@@ -57,8 +57,10 @@ function setup(ticketStatus = 200) {
   const statuses: PresenceStatus[] = [];
   const doc = new FakeDoc();
   let fetches = 0;
-  const fetchImpl = (async () => {
+  const bodies: unknown[] = [];
+  const fetchImpl = (async (_url: string, init: RequestInit) => {
     fetches += 1;
+    bodies.push(JSON.parse(String(init.body)));
     return new Response(JSON.stringify({ ticket: "tk.sig", url: "ws://x/room/r" }), { status: ticketStatus });
   }) as unknown as typeof fetch;
   const client = createPresenceClient({
@@ -77,12 +79,13 @@ function setup(ticketStatus = 200) {
     // 흔들기 없이 최대 간격으로
     randomImpl: () => 1,
     doc,
+    show: "creators",
   });
   client.onStatus((s) => statuses.push(s));
   const flush = () => new Promise((r) => setTimeout(r, 0));
   // 다시 붙기 타이머만 (ping, 숨김 타이머 제외)
   const retries = () => timers.filter((t) => t.ms !== PING_MS && t.ms !== HIDDEN_PAUSE_MS).map((t) => t.ms);
-  return { client, timers, statuses, flush, doc, retries, fetchCount: () => fetches };
+  return { client, timers, statuses, flush, doc, retries, fetchCount: () => fetches, bodies };
 }
 
 describe("backoffMs", () => {
@@ -289,19 +292,57 @@ describe("presence client", () => {
     const s = FakeSocket.last!;
     s.fire("open");
     const msg = (m: unknown) => s.fire("message", { data: JSON.stringify(m) });
-    msg({ t: "hello", you: "me", peers: [{ peer: "a", name: "가", colour: 1, state: "idle", p: null, ry: 0, sit: null }] });
+    msg({ t: "hello", you: "me", peers: [{ peer: "a", name: "가", owner: true, colour: 1, state: "idle", p: null, ry: 0, sit: null }] });
     msg({ t: "join", peer: "b", name: "나", colour: 2 });
     msg({ t: "sit", peer: "a", p: [1, 0.45, 2], ry: 0.5, kind: "seat" });
     msg({ t: "snap", peer: "a", p: [9, 9], ry: 0, state: "sit" });
     msg({ t: "walk", peer: "b", pts: [[0, 0], [3, 4]] });
     expect(client.peers()).toEqual([
-      { peer: "a", name: "가", colour: 1, state: "sit", p: [1, 2], ry: 0.5, sit: { p: [1, 0.45, 2], ry: 0.5, kind: "seat" } },
-      { peer: "b", name: "나", colour: 2, state: "walk", p: [3, 4], ry: 0, sit: null },
+      { peer: "a", name: "가", owner: true, colour: 1, state: "sit", p: [1, 2], ry: 0.5, sit: { p: [1, 0.45, 2], ry: 0.5, kind: "seat" } },
+      { peer: "b", name: "나", owner: false, colour: 2, state: "walk", p: [3, 4], ry: 0, sit: null },
     ]);
     msg({ t: "leave", peer: "a" });
     expect(client.peers().map((p) => p.peer)).toEqual(["b"]);
     s.fire("close", { code: 1006 });
     expect(client.peers()).toEqual([]);
+  });
+
+  it("asks for a ticket with the room and the name rule", async () => {
+    const { client, flush, bodies } = setup();
+    client.start();
+    await flush();
+    expect(bodies[0]).toEqual({ roomUuid: "11111111-2222-4333-8444-555555555555", show: "creators" });
+  });
+
+  it("4009 (moved out for being idle) does not reconnect", async () => {
+    const { client, retries, flush } = setup();
+    client.start();
+    await flush();
+    FakeSocket.last!.fire("open");
+    FakeSocket.last!.fire("close", { code: 4009 });
+    expect(client.status()).toBe("kicked");
+    expect(retries()).toEqual([]);
+  });
+
+  it("hide others: tells the server, clears peers, and re-sends after a reconnect", async () => {
+    const { client, timers, flush } = setup();
+    const seen: string[] = [];
+    client.on((m) => seen.push(m.t));
+    client.start();
+    await flush();
+    FakeSocket.last!.fire("open");
+    FakeSocket.last!.fire("message", { data: JSON.stringify({ t: "hello", you: "me", peers: [{ peer: "a", name: "가", owner: false, colour: 0, state: "idle", p: null, ry: 0, sit: null }] }) });
+    client.setMuted(true);
+    expect(FakeSocket.last!.sent).toEqual(['{"t":"mute","on":true}']);
+    expect(seen.at(-1)).toBe("reset");
+    expect(client.peers()).toEqual([]);
+    FakeSocket.last!.fire("close", { code: 1006 });
+    timers.find((t) => t.ms === 1000)!.fn();
+    await flush();
+    FakeSocket.last!.fire("open");
+    expect(FakeSocket.last!.sent).toEqual(['{"t":"mute","on":true}']);
+    client.setMuted(false);
+    expect(FakeSocket.last!.sent.at(-1)).toBe('{"t":"mute","on":false}');
   });
 
   it("close() stops everything", async () => {
@@ -313,5 +354,33 @@ describe("presence client", () => {
     doc.set(true);
     expect(retries()).toEqual([]);
     expect(client.status()).toBe("closed");
+  });
+});
+
+describe("presence hub", () => {
+  it("forwards the attached connection and clears figures when it is swapped", async () => {
+    const { createPresenceHub } = await import("./presence-client");
+    const hub = createPresenceHub();
+    const seen: string[] = [];
+    hub.on((m) => seen.push(m.t));
+    const mk = () => {
+      const fns = new Set<(m: { t: string }) => void>();
+      return {
+        on: (fn: (m: { t: string }) => void) => (fns.add(fn), () => fns.delete(fn)),
+        onStatus: () => () => {},
+        fire: (t: string) => fns.forEach((fn) => fn({ t })),
+      };
+    };
+    const a = mk(), b = mk();
+    expect(hub.active()).toBe(false);
+    hub.attach(a as never);
+    a.fire("hello");
+    hub.attach(b as never);
+    a.fire("walk");
+    b.fire("join");
+    hub.attach(null);
+    expect(seen).toEqual(["hello", "reset", "join", "reset"]);
+    expect(hub.active()).toBe(false);
+    expect(hub.peers()).toEqual([]);
   });
 });

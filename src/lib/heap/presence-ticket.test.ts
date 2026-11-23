@@ -5,7 +5,7 @@ const SECRET = "test-secret-not-real";
 const ROOM = "6f1c2b8e-0d4a-4c1e-9b7a-2f3e4d5c6b7a";
 
 async function ticket(over: Partial<PresenceTicket> = {}): Promise<{ t: PresenceTicket; token: string }> {
-  const t: PresenceTicket = { r: ROOM, u: "k", n: "윤", exp: 1000, j: "j1", ...over };
+  const t: PresenceTicket = { r: ROOM, u: "k", n: "윤", exp: 1000, j: "j1", o: false, v: "hidden", ...over };
   return { t, token: await signTicket(SECRET, t) };
 }
 
@@ -46,6 +46,13 @@ describe("presence ticket", () => {
   it("signed but malformed payload", async () => {
     const token = await signTicket(SECRET, { r: ROOM } as unknown as PresenceTicket);
     expect(await verifyTicket(SECRET, token, ROOM, 999)).toEqual({ ok: false, why: "format" });
+  });
+
+  it("rejects an unknown name rule or a missing owner flag", async () => {
+    const bad1 = await signTicket(SECRET, { r: ROOM, u: "k", n: "n", exp: 1000, j: "j", o: false, v: "everyone" } as unknown as PresenceTicket);
+    expect(await verifyTicket(SECRET, bad1, ROOM, 999)).toEqual({ ok: false, why: "format" });
+    const bad2 = await signTicket(SECRET, { r: ROOM, u: "k", n: "n", exp: 1000, j: "j", v: "hidden" } as unknown as PresenceTicket);
+    expect(await verifyTicket(SECRET, bad2, ROOM, 999)).toEqual({ ok: false, why: "format" });
   });
 
   it("userKey is stable and hides id", async () => {

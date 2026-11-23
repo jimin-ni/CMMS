@@ -5,10 +5,11 @@
 // - 한 번도 열리지 못한 시도가 5번 이어지면 멈춘다 (출처나 티켓이 거절되는 설정 문제가 끝없는 재시도가 되지 않게).
 // - 4001(새 탭이 대체), 4003(정원 초과), 1008(규칙 위반), 티켓 발급 거절(4xx)이면 다시 붙지 않는다.
 // - 탭이 2분 넘게 가려져 있으면 연결을 놓고(자리를 비움), 다시 보이면 새로 붙는다.
+// - 4009(오래 가만히 있어 가득 찬 방의 자리를 내줌)도 다시 붙지 않는다. 새로 고치거나 다시 켜면 들어온다.
 // - 25초마다 "ping" 을 보낸다. 서버는 DO 를 깨우지 않고 "pong" 으로 답하고, 답이 끊긴 연결을 정리한다.
 // 티켓은 주소가 아니라 웹소켓 subprotocol 로 보낸다 (로그와 기록에 남지 않게).
 
-export type PresenceStatus = "idle" | "connecting" | "open" | "closed" | "full" | "replaced" | "paused";
+export type PresenceStatus = "idle" | "connecting" | "open" | "closed" | "full" | "replaced" | "paused" | "kicked";
 
 // 서버가 보내는 메시지. 모양 검사는 엔진(presence.js)이 쓰는 필드만 한다. "reset" 은 연결이 끊겼다는 이 파일의 신호다.
 export type PresenceIn = { t: string; [key: string]: unknown };
@@ -17,6 +18,8 @@ export type PeerSit = { p: [number, number, number]; ry: number; kind: "seat" | 
 export type PeerSnapshot = {
   peer: string;
   name: string;
+  // 방 주인 (서버가 서명된 티켓으로 정한다)
+  owner: boolean;
   colour: number;
   state: string;
   p: [number, number] | null;
@@ -34,6 +37,9 @@ export type PresenceClient = {
   counts(): { sent: number; recv: number };
   // 지금 같은 방에 있는 사람들의 마지막 모습. 엔진이 늦게 뜨거나 다시 마운트될 때 이것으로 시작한다
   peers(): PeerSnapshot[];
+  // 다른 사람 숨기기. 켜면 서버가 이 사람에게 소식을 보내지 않고, 엔진은 다른 사람을 지운다 ("reset")
+  setMuted(on: boolean): void;
+  muted(): boolean;
   close(): void;
 };
 
@@ -48,6 +54,8 @@ type Options = {
   clearTimeoutImpl?: typeof clearTimeout;
   randomImpl?: () => number;
   doc?: DocLike | null;
+  // 이름 공개 규칙 (티켓에 서명된다): hidden | creators | followers
+  show?: string;
 };
 
 export const SUBPROTOCOL = "presence.v1";
@@ -56,6 +64,7 @@ export const HIDDEN_PAUSE_MS = 120_000;
 export const MAX_FAILS = 5;
 const CLOSE_REPLACED = 4001;
 const CLOSE_FULL = 4003;
+const CLOSE_IDLE = 4009;
 const CLOSE_POLICY = 1008;
 
 export function backoffMs(attempt: number): number {
@@ -80,6 +89,7 @@ export function createPresenceClient(opts: Options): PresenceClient {
   let pingTimer: ReturnType<typeof setTimeout> | null = null;
   let hideTimer: ReturnType<typeof setTimeout> | null = null;
   let stopped = false;
+  let isMuted = false;
   let sent = 0;
   let recv = 0;
   const listeners = new Set<(m: PresenceIn) => void>();
@@ -99,12 +109,12 @@ export function createPresenceClient(opts: Options): PresenceClient {
   const track = (m: PresenceIn) => {
     if (m.t === "hello") {
       known.clear();
-      for (const p of (m.peers as PeerSnapshot[]) ?? []) known.set(p.peer, { ...p, sit: p.sit ?? null });
+      for (const p of (m.peers as PeerSnapshot[]) ?? []) known.set(p.peer, { ...p, owner: p.owner === true, sit: p.sit ?? null });
       return;
     }
     if (m.t === "reset") return known.clear();
     if (m.t === "join") {
-      known.set(String(m.peer), { peer: String(m.peer), name: String(m.name), colour: Number(m.colour) || 0, state: "idle", p: null, ry: 0, sit: null });
+      known.set(String(m.peer), { peer: String(m.peer), name: String(m.name), owner: m.owner === true, colour: Number(m.colour) || 0, state: "idle", p: null, ry: 0, sit: null });
       return;
     }
     if (m.t === "leave") return void known.delete(String(m.peer));
@@ -186,7 +196,7 @@ export function createPresenceClient(opts: Options): PresenceClient {
       const res = await fetchImpl(ticketUrl, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ roomUuid: opts.roomUuid }),
+        body: JSON.stringify({ roomUuid: opts.roomUuid, show: opts.show ?? "hidden" }),
         cache: "no-store",
       });
       if (halted()) return;
@@ -219,6 +229,7 @@ export function createPresenceClient(opts: Options): PresenceClient {
       fails = 0;
       setStatus("open");
       schedulePing();
+      if (isMuted) sock.send(JSON.stringify({ t: "mute", on: true }));
     });
     sock.addEventListener("message", (e: MessageEvent) => {
       if (e.data === "pong") return;
@@ -240,6 +251,7 @@ export function createPresenceClient(opts: Options): PresenceClient {
       if (halted()) return;
       if (e.code === CLOSE_REPLACED) setStatus("replaced");
       else if (e.code === CLOSE_FULL) setStatus("full");
+      else if (e.code === CLOSE_IDLE) setStatus("kicked");
       else if (e.code === CLOSE_POLICY) setStatus("closed");
       else if (!opened) failed();
       else retry();
@@ -254,7 +266,7 @@ export function createPresenceClient(opts: Options): PresenceClient {
       hideTimer = later(() => {
         hideTimer = null;
         if (stopped || !doc.hidden) return;
-        if (status === "closed" || status === "full" || status === "replaced") return;
+        if (status === "closed" || status === "full" || status === "replaced" || status === "kicked") return;
         clearTimer(retryTimer);
         retryTimer = null;
         setStatus("paused");
@@ -296,7 +308,15 @@ export function createPresenceClient(opts: Options): PresenceClient {
     },
     status: () => status,
     counts: () => ({ sent, recv }),
-    peers: () => [...known.values()].map((p) => ({ ...p })),
+    peers: () => (isMuted ? [] : [...known.values()].map((p) => ({ ...p }))),
+    setMuted(on) {
+      if (on === isMuted) return;
+      isMuted = on;
+      if (ws && ws.readyState === 1) ws.send(JSON.stringify({ t: "mute", on }));
+      // 숨기면 지금 보이는 사람을 지운다. 다시 보이면 서버의 hello 가 처음부터 채운다
+      if (on) emit({ t: "reset" });
+    },
+    muted: () => isMuted,
     close() {
       stopped = true;
       doc?.removeEventListener("visibilitychange", onVisibility);
@@ -312,5 +332,49 @@ export function createPresenceClient(opts: Options): PresenceClient {
       ws = null;
       setStatus("closed");
     },
+  };
+}
+
+// 엔진이 마운트 때 한 번 받는 고정 손잡이. React 가 연결을 바꿔 끼워도(나 숨기기, 이름 공개 규칙 변경) 엔진은 그대로다.
+// 연결을 바꾸면 "reset" 을 보내 엔진이 지금 보이는 사람을 지우고, 새 연결의 hello 가 다시 채운다.
+export type PresenceHub = Omit<PresenceClient, "start" | "close" | "setMuted"> & {
+  attach(client: PresenceClient | null): void;
+  active(): boolean;
+};
+
+export function createPresenceHub(): PresenceHub {
+  let client: PresenceClient | null = null;
+  let detach: (() => void)[] = [];
+  const listeners = new Set<(m: PresenceIn) => void>();
+  const statusListeners = new Set<(s: PresenceStatus) => void>();
+  const emit = (m: PresenceIn) => {
+    for (const fn of listeners) fn(m);
+  };
+  return {
+    attach(next) {
+      if (next === client) return;
+      for (const off of detach) off();
+      detach = [];
+      if (client) emit({ t: "reset" });
+      client = next;
+      if (client) {
+        detach.push(client.on(emit));
+        detach.push(client.onStatus((s) => statusListeners.forEach((fn) => fn(s))));
+      }
+    },
+    active: () => client !== null,
+    send: (msg) => client?.send(msg),
+    on(fn) {
+      listeners.add(fn);
+      return () => listeners.delete(fn);
+    },
+    onStatus(fn) {
+      statusListeners.add(fn);
+      return () => statusListeners.delete(fn);
+    },
+    status: () => client?.status() ?? "closed",
+    counts: () => client?.counts() ?? { sent: 0, recv: 0 },
+    peers: () => client?.peers() ?? [],
+    muted: () => client?.muted() ?? false,
   };
 }

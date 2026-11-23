@@ -2,6 +2,11 @@
 // 두 런타임이 같은 파일을 쓰므로 Web Crypto(crypto.subtle)만 쓰고 Node 모듈을 가져오지 않는다.
 // 모양: base64url(JSON) + "." + base64url(HMAC-SHA256). 내용은 읽을 수 있으니 사용자 id 원문은 넣지 않는다 (u = userKey).
 
+// 이름 공개 규칙. hidden: 모두에게 "방문자" · creators: 방 주인에게만 이름 · followers: 팔로워에게 이름
+// (팔로워 관계 subscriptions 가 아직 없어 지금은 방에 있는 로그인한 사람 모두에게 보인다)
+export const NAME_RULES = ["hidden", "creators", "followers"] as const;
+export type NameRule = (typeof NAME_RULES)[number];
+
 export type PresenceTicket = {
   // 방 id (heap_rooms.id)
   r: string;
@@ -13,6 +18,10 @@ export type PresenceTicket = {
   exp: number;
   // 한 번만 쓰는 무작위 id
   j: string;
+  // 이 방의 주인인가 (Next 가 DB 로 확인해 서명한다. 주인 자리와 주인 표시에 쓴다)
+  o: boolean;
+  // 이름 공개 규칙
+  v: NameRule;
 };
 
 export type VerifyResult = { ok: true; t: PresenceTicket } | { ok: false; why: "format" | "sig" | "expired" | "room" };
@@ -62,7 +71,9 @@ function isTicket(v: unknown): v is PresenceTicket {
     typeof o.n === "string" &&
     typeof o.j === "string" &&
     typeof o.exp === "number" &&
-    Number.isFinite(o.exp)
+    Number.isFinite(o.exp) &&
+    typeof o.o === "boolean" &&
+    NAME_RULES.includes(o.v as NameRule)
   );
 }
 

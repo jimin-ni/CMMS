@@ -236,11 +236,11 @@ export async function getRoomBySlug(slug: string): Promise<HeapRoom | null> {
   return (await roomWithClock(slug))?.room ?? null;
 }
 
-// 방 uuid가 있는지 (presence 입장 티켓이 쓴다).
-export async function roomExists(roomId: string): Promise<boolean> {
-  if (!isUuid(roomId)) return false;
-  const rows = await db.select({ id: heapRooms.id }).from(heapRooms).where(eq(heapRooms.id, roomId)).limit(1);
-  return rows.length > 0;
+// 방 주인의 사용자 id. 방이 없으면 null (presence 입장 티켓이 방 확인과 주인 표시에 쓴다).
+export async function getRoomOwnerId(roomId: string): Promise<string | null> {
+  if (!isUuid(roomId)) return null;
+  const rows = await db.select({ creatorId: heapRooms.creatorId }).from(heapRooms).where(eq(heapRooms.id, roomId)).limit(1);
+  return rows[0]?.creatorId ?? null;
 }
 
 // 문에 붙는 방 목록

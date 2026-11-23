@@ -18,7 +18,9 @@ export type ClientMsg =
   | { t: "sit"; p: XYZ; ry: number; kind: "seat" | "heap"; seat?: string }
   | { t: "stand"; p: XZ; ry: number }
   | { t: "snap"; p: XZ; ry: number; state: PeerState }
-  | { t: "state"; state: PeerState };
+  | { t: "state"; state: PeerState }
+  // 다른 사람 숨기기: on 이면 서버가 이 사람에게 다른 사람 소식을 보내지 않는다 (이 사람은 계속 보인다)
+  | { t: "mute"; on: boolean };
 
 function coord(v: unknown): v is number {
   return typeof v === "number" && Number.isFinite(v) && Math.abs(v) <= MAX_COORD;
@@ -86,6 +88,8 @@ export function parseClient(raw: string): ClientMsg | null {
       const s = state(o.state);
       return s ? { t: "state", state: s } : null;
     }
+    case "mute":
+      return typeof o.on === "boolean" ? { t: "mute", on: o.on } : null;
     default:
       return null;
   }
