@@ -94,6 +94,7 @@
 /* 0013: 내려간 이름(삭제 문구)과 판정에 걸려 쓴 사람에게만 보이는 이름 */
 .heap-room .gb-row.removed span:first-child { font-weight: 400; color: var(--cp-ash); }
 .heap-room .gb-row.mine-only span:first-child { opacity: 0.55; }
+.heap-room .gb-row:has(.gb-tools) span:first-child { flex: 1; }
 .heap-room .gb-row .gb-tools { flex: none; display: inline-flex; align-items: baseline; gap: 6px; }
 .heap-room .gb-row .gb-tools em { font: 400 12px/1.4 var(--cp-ui); font-style: normal; color: var(--cp-ash); }
 .heap-room .gb-row .gb-act { border: 0; background: none; padding: 2px 4px; font: 600 12px/1.4 var(--cp-ui); color: var(--cp-ash); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
