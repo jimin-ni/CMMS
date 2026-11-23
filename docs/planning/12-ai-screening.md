@@ -158,7 +158,7 @@ flowchart TD
   - `y`/`yes` (대소문자 무관) 604개: 사전에 켭니다. 걸리면 바로 위반입니다.
   - `n` 149개, `?` 88개, 빈칸: 사전에서 끕니다(`enabled=false`, 행은 남김). 사전을 지나 regex, OpenAI 판정만 받습니다. `approve`, `suggest` 칸은 참고용으로만 남고 적재 결과를 바꾸지 않습니다.
   - 적재: `npm run moderation:terms -- load .moderation-private/terms-review-completed.csv`. `user_review` 칸이 없는 예전 CSV는 전처럼 `approve`(와 `--accept-suggest`)로 읽습니다.
-  - 허용 목록 135개는 그대로 둡니다. 그래서 `user_review=y`이면서 허용 목록에도 있는 66개는 사전에 걸리지 않고 OpenAI 판정만 받습니다.
+  - 허용 목록은 `nazi` 하나만 빼고 134개를 그대로 둡니다. `nazi`는 이제 사전에 걸려 바로 위반입니다. `user_review=y`이면서 허용 목록에 남은 65개는 사전에 걸리지 않고 OpenAI 판정만 받습니다.
 - 사전 단계 안에서의 순서: 글을 단어로 나눈 뒤 단어마다 허용 목록을 먼저 보고, 허용 목록에 없을 때만 사전과 비교합니다. 허용 목록은 별도 단계가 아니라 사전 비교에서 그 단어만 빼는 장치입니다.
 - 실제 사전을 붙인 평가셋에서 사전 오탐은 0건입니다 (`MODERATION_EVAL_DB=1`).
 - 한국어는 보조 목록으로, 공백을 지운 글에서 부분 일치로 찾습니다.
