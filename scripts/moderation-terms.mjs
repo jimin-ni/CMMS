@@ -7,6 +7,9 @@
 // 2) 적재: approve=y인 줄만 moderation_terms에 넣는다. 같은 (lang, term)은 덮어쓴다.
 //    npm run moderation:terms -- load .moderation-private/terms-review.csv
 //    --accept-suggest를 붙이면 approve가 비어 있어도 suggest=y인 줄을 함께 적재한다(검토자가 추천을 그대로 받아들인 경우).
+//    CSV에 user_review 칸이 있으면(terms-review-completed.csv) 그 칸만 본다. y/yes는 사전에 켜고,
+//    n, ?, 빈칸은 사전에서 꺼서 regex 단계로 넘긴다. 이때 --accept-suggest는 쓰지 않는다.
+//    npm run moderation:terms -- load .moderation-private/terms-review-completed.csv
 //
 // 출처: ProfanityBench (https://huggingface.co/datasets/BibbyResearch/ProfanityBench), MIT 라이선스.
 // 라벨은 전문가 검증이 아니고 가볍거나 되찾아 쓰는 말이 섞여 있어 사람 검토 없이 적재하지 않는다.
@@ -90,11 +93,19 @@ async function load(path) {
   const [header, ...body] = rows;
   const col = (name) => header.indexOf(name);
   const isYes = (v) => /^y(es)?$/i.test(v?.trim() ?? "");
-  const approved = body.filter(
-    (r) => isYes(r[col("approve")]) || (acceptSuggest && col("suggest") >= 0 && isYes(r[col("suggest")])),
-  );
-  if (!approved.length) {
-    console.log("approve=y인 줄이 없어 적재하지 않습니다.");
+  if (col("term") < 0) throw new Error("CSV에 term 칸이 없습니다.");
+  // user_review 칸이 있으면 그 칸이 최종 판단이다. y/yes만 사전(바로 경고)에 켜고,
+  // n, ?, 빈칸은 사전에서 끈다(enabled=false). 꺼진 단어는 사전을 지나 regex, OpenAI 판정만 받는다.
+  // approve, suggest는 n일 때 참고용으로만 남기고 적재 결과를 바꾸지 않는다.
+  const userReview = col("user_review") >= 0;
+  const picked = userReview
+    ? body.map((r) => ({ r, enabled: isYes(r[col("user_review")]) }))
+    : body
+        .filter((r) => isYes(r[col("approve")]) || (acceptSuggest && col("suggest") >= 0 && isYes(r[col("suggest")])))
+        .map((r) => ({ r, enabled: true }));
+  const on = picked.filter((x) => x.enabled).length;
+  if (!on) {
+    console.log(`${userReview ? "user_review" : "approve"}=y인 줄이 없어 적재하지 않습니다.`);
     return;
   }
   const version = new Date().toISOString().slice(0, 10);
@@ -102,16 +113,18 @@ async function load(path) {
   await client.connect();
   try {
     await client.query("begin");
-    for (const r of approved) {
+    for (const { r, enabled } of picked) {
       await client.query(
-        `insert into moderation_terms (term, lang, tag, source, version)
-         values ($1, 'en', $2, $3, $4)
-         on conflict (lang, term) do update set tag = excluded.tag, version = excluded.version, enabled = true`,
-        [r[col("term")].trim(), r[col("tag")].trim() || "sev5", SOURCE, version],
+        `insert into moderation_terms (term, lang, tag, source, version, enabled)
+         values ($1, 'en', $2, $3, $4, $5)
+         on conflict (lang, term) do update set tag = excluded.tag, version = excluded.version, enabled = excluded.enabled`,
+        [r[col("term")].trim(), r[col("tag")]?.trim() || "sev5", SOURCE, version, enabled],
       );
     }
     await client.query("commit");
-    console.log(`moderation_terms에 ${approved.length}개 적재 (version ${version}). 서버는 5분 안에 다시 읽습니다.`);
+    console.log(
+      `moderation_terms 사전 켬 ${on}개, 끔 ${picked.length - on}개 (version ${version}). 서버는 5분 안에 다시 읽습니다.`,
+    );
   } catch (error) {
     await client.query("rollback");
     throw error;
