@@ -101,7 +101,7 @@ export function setupLoop(ctx) {
     for (const d of ctx.build.phoneDots ?? []) d.visible = blink;
     tickClock();
     const lampNow = Math.max(0, ctx.lampBase + Math.sin(t * 1.3) * 0.05);
-    for (const l of ctx.build.lamps) if (l.light) l.light.intensity = lampNow;
+    for (const l of ctx.build.lamps) if (l.light) l.light.intensity = l.fixed ?? lampNow; // 작은 빛(fixed)은 주인이 고른 세기 그대로
     stepMotes(t);
     // 카드
     const tn = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);

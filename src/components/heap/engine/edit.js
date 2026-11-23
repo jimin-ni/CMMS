@@ -2,7 +2,7 @@
 // 편집 중의 가구 목록, 고른 가구, 되돌리기 기록은 이 모듈이 갖는다. 화면 위 단추(위 막대, 가구 목록, 가구 위 막대, 기능 칸)는
 // room-editor.tsx 가 그리고, 이 모듈과는 방 루트의 이벤트로만 이야기한다.
 //   받는 것  heap:edit (true 면 들어오고 false 면 나간다, heap-room.tsx)
-//            heap:editcmd { op, ... }  op: arm(template), rotate(dir), copy, remove, undo, redo, time(value), fn(index, fn), lit, select(index | null), cancel, reset(처음으로), discard(나가며 버리기),
+//            heap:editcmd { op, ... }  op: arm(template), rotate(dir), copy, remove, undo, redo, time(value), fn(index, fn), lit, level(dir: 1 | -1, 작은 빛의 세기), select(index | null), cancel, reset(처음으로), discard(나가며 버리기),
 //                                     palette(palette | null), swap(index, to { type, model? }), plan(value?: 위에서 보기를 켜고 끈다), fit(구도 맞추기),
 //                                     lift(dir: 1 | -1, 벽 가구의 높이. PageUp/PageDown 과 같다),
 //                                     name(value: 방 이름, 검사는 room-editor.tsx 와 서버가 한다), load(layout { items, palette, shell?, time? }, name?: 템플릿이나 저장 전 모습을 한 걸음으로 깐다),
@@ -52,10 +52,10 @@ const OK = '#7d9a4a', BAD = '#c2452d', PICKED = '#A6613C';
 // 엔진이 직접 만드는 가구의 이름 (알림 문구용). 모델은 카탈로그의 label 을 쓴다.
 const HAND_LABEL = {
   bed: '침대', shelf: '앨범 책장', plant: '화분', snake: '산세베리아', lamp: '조명', books: '책 더미', frame: '벽 액자', calendar: '탁상 달력',
-  heap: '사진 더미', lowTable: '좌식 탁자', phone: '휴대폰', guestbook: '방명록', screen: '스크린', poster: '포스터', window: '창문', projector: '영사기',
+  heap: '사진 더미', lowTable: '좌식 탁자', phone: '휴대폰', guestbook: '방명록', screen: '스크린', poster: '포스터', window: '창문', projector: '영사기', glow: '작은 빛',
 };
 // 모양 바꾸기(swap)를 하지 않는 손 가구: 하는 일이 그 가구에 묶여 있다
-const NO_SWAP = new Set(['frame', 'calendar', 'heap', 'lowTable', 'phone', 'guestbook', 'screen', 'poster', 'window', 'projector']);
+const NO_SWAP = new Set(['frame', 'calendar', 'heap', 'lowTable', 'phone', 'guestbook', 'screen', 'poster', 'window', 'projector', 'glow']);
 const OVERLAYS = ['phone', 'pc', 'keepsake', 'calendar', 'grid', 'rooms', 'guestbook'];
 // 방의 틀의 레이아웃 열쇠. 순서가 비교 문자열(snap)의 순서다. 방 v2 에서 창, 스크린, 방명록, 포스터, 사진 탁자는 가구다 (template-move.ts 와 같다)
 const SHELL_KEYS = ['room', 'door'];
@@ -821,6 +821,15 @@ export function setupEdit(ctx) {
     ed.items = ed.items.map((o, j) => (j === i ? next : o));
     rebuild();
   }
+  // 작은 빛(glow)의 세기를 한 단계 올리거나(dir 1) 내린다 (1..5, 없으면 3). 이어서 누르는 동안 한 걸음으로 묶는다
+  function stepLevel(dir) {
+    const i = ed.sel, it = ed.items[i]; if (!it || it.type !== 'glow') return;
+    const level = clamp((it.level ?? 3) + dir, 1, 5);
+    if (level === (it.level ?? 3)) { notice(dir > 0 ? '가장 밝아요' : '가장 어두워요'); return; }
+    pushUndo(`level:${i}`);
+    ed.items = ed.items.map((o, j) => (j === i ? { ...it, level } : o)); ed.notice = null;
+    rebuild();
+  }
   // 벽 가구의 높이를 NUDGE 만큼 올리거나(dir 1) 내린다. 바닥 위, 천장 아래, 서버 범위 안으로 자른다.
   // 고른 가구는 이어서 누르는 동안 한 걸음으로 묶는다 (tag). 커서에 붙은 새 가구도 올리고 내릴 수 있다. 끌고 있는 가구는 놓은 뒤에 바꾼다.
   function lift(dir) {
@@ -944,6 +953,7 @@ export function setupEdit(ctx) {
     flushFn(); endMove(); ed.sel = null; ed.press = null; ed.notice = null;
     if (ed.rdown) { ed.rdown = null; ctx.editCam.panEnd(); }
     ed.preview = ctx.editPreview = v;
+    ctx.glowMarksOn = !v; ctx.syncGlowMarks(); // 팔로워로 보는 동안은 작은 빛의 구슬도 숨긴다
     canvas.style.cursor = '';
   }
   const overDock = ev => { const d = root.querySelector('.ed-dock')?.getBoundingClientRect(); return !!d && ev.clientX >= d.left && ev.clientX <= d.right && ev.clientY >= d.top && ev.clientY <= d.bottom; };
@@ -968,6 +978,7 @@ export function setupEdit(ctx) {
     ed.mountKey = mountKeyOf(ctx.layout.items); // 이 마운트의 더미와 창 (rebuild 가 비교한다)
     ed.shell = shellOf(ctx.layout); ed.name = typeof resume?.name === 'string' ? resume.name : ctx.savedName; ctx.showName(ed.name);
     ed.preview = ctx.editPreview = false;
+    ctx.glowMarksOn = true; ctx.syncGlowMarks(); // 작은 빛(furniture.js)은 꾸미기에서만 구슬이 보인다
     ed.saved = savedKey();
     ctx.editCam.reset(); if (resume?.plan) ctx.editCam.setPlan(true); // 색을 바꾸며 다시 마운트해도 평면도는 이어 간다
     ed.rdown = null; viewKey = '';
@@ -980,6 +991,7 @@ export function setupEdit(ctx) {
     const had = !!ed.move || !!ed.fnTimer;
     ed.move = null; ed.press = null; ed.sel = null; ed.on = false; ed.rdown = null; ed.preview = ctx.editPreview = false;
     grid.visible = tile.visible = wallTile.visible = false; clearGhosts(); showZones(null);
+    ctx.glowMarksOn = false; ctx.syncGlowMarks();
     ctx.editCam.reset(); // 방 카메라로는 loop.js 가 데려간다
     canvas.style.cursor = '';
     if (had) rebuild();
@@ -1001,8 +1013,8 @@ export function setupEdit(ctx) {
     if (c.op === 'palhover') { if (!ed.preview) previewPalette(c.palette ?? null); return; } // 걸음도 상태 알림도 아니다
     if (c.op === 'parthover') { if (!ed.preview && Number.isInteger(c.index)) previewPart(c.index, c.part, c.colour ?? null); return; }
     if (ed.preview) return; // 팔로워로 보는 동안에는 고치지 않는다
-    if (c.op !== 'fn' && c.op !== 'lift') { ed.tag = null; flushFn(); }
-    if (c.op === 'lift') flushFn();
+    if (c.op !== 'fn' && c.op !== 'lift' && c.op !== 'level') { ed.tag = null; flushFn(); }
+    if (c.op === 'lift' || c.op === 'level') flushFn();
     switch (c.op) {
       case 'arm': if (c.template && typeof c.template === 'object') arm(c.template); break;
       case 'rotate': rotate(c.dir === -1 ? -1 : 1); break;
@@ -1013,6 +1025,7 @@ export function setupEdit(ctx) {
       case 'time': if (c.value !== ed.time) { pushUndo(); setTime(c.value); } break;
       case 'fn': if (Number.isInteger(c.index)) setFn(c.index, c.fn); break;
       case 'lit': toggleLit(); break;
+      case 'level': stepLevel(c.dir === -1 ? -1 : 1); break;
       case 'select': endMove(); select(Number.isInteger(c.index) && c.index < ed.items.length ? c.index : null); break;
       case 'cancel': cancel(); break;
       case 'reset': reset(); break;
