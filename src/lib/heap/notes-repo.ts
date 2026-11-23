@@ -12,6 +12,7 @@ import {
 import type { Fail, HeapChangesPosition } from "@/lib/heap/repo";
 import { planScreen, recordScreenEvent, type SaveNotice } from "@/lib/moderation/repo";
 import type { ScreenResult } from "@/lib/moderation/screen";
+import { MODERATION_TEXT } from "@/lib/moderation/policy";
 
 // 쪽지 트리의 DB 접근. repo.ts가 길어서 따로 뒀고, 규칙은 repo.ts와 같다 (쿼리는 이 파일에만, 실패는 { ok: false, reason }).
 // 방 주인(owner) = heap_rooms.creator_id. 역할 검사는 하지 않고 방 주인인지만 서버에서 확인한다.
@@ -72,6 +73,8 @@ export type HeapNote = {
   reply?: HeapNoteReply;
   // 방 주인에게만 있다. 아직 읽지 않았으면 true.
   unread?: boolean;
+  // 판정 상태 (0013). 공개면 없다. removed는 모두에게(본문은 삭제 문구), blocked·held는 작성자에게만 온다.
+  screen?: "removed" | "blocked" | "held";
 };
 
 export type HeapNotesState = { notes: HeapNote[]; noteRevealAt: Date | null; unreadNotes: number };
@@ -260,6 +263,7 @@ function noteSelect(executor: Executor) {
       hiddenAt: heapNotes.hiddenAt,
       ownerReadAt: heapNotes.ownerReadAt,
       createdAt: heapNotes.createdAt,
+      screenStatus: heapNotes.screenStatus,
       replyBody: heapNoteReplies.body,
       replyFont: heapNoteReplies.font,
       replyFontSize: heapNoteReplies.fontSize,
@@ -280,6 +284,8 @@ function toNote(row: NoteRow, ctx: NoteContext, viewerId: string | null): HeapNo
   const owner = viewerId !== null && viewerId === ctx.creatorId;
   // 숨긴 쪽지는 작성자와 방 주인(되돌리기용)에게만 보인다.
   if (row.hiddenAt !== null && !mine && !owner) return null;
+  // 판정에 걸린 쪽지(blocked, held)는 작성자에게만 보인다. 트리에 걸리지 않은 채 쪽지함에 있다.
+  if ((row.screenStatus === "blocked" || row.screenStatus === "held") && !mine) return null;
   // 봉인 중에는 작성자 말고는 닫혀 있다. 방 주인은 이른 검토가 켜져 있을 때만 읽는다 (서버가 레이아웃에서 읽은 값).
   const sealed = ctx.sealedNow && !mine && !(owner && ctx.ownerEarly);
   const note: HeapNote = {
@@ -298,6 +304,13 @@ function toNote(row: NoteRow, ctx: NoteContext, viewerId: string | null): HeapNo
     angle: row.posAngle,
     createdAt: row.createdAt,
   };
+  if (row.screenStatus !== "published") note.screen = row.screenStatus;
+  // 내려간 쪽지는 자리를 지키고 삭제 문구만 보인다 (문서 8장). 이름과 답장도 내린다. 원문은 검토 화면에서만 본다.
+  if (row.screenStatus === "removed") {
+    note.name = null;
+    note.body = MODERATION_TEXT.removed;
+    return note;
+  }
   if (!sealed) {
     note.body = row.body;
     if (row.replyBody !== null && row.replyFont !== null && row.replyCreatedAt !== null) {
@@ -318,6 +331,7 @@ export async function countUnreadNotes(roomId: string, viewerId: string | null):
       eq(heapNotes.roomId, roomId),
       isNull(heapNotes.ownerReadAt),
       isNull(heapNotes.hiddenAt),
+      eq(heapNotes.screenStatus, "published"),
       ne(heapNotes.authorId, viewerId),
       sql`exists (select 1 from ${heapRooms} where ${heapRooms.id} = ${heapNotes.roomId} and ${heapRooms.creatorId} = ${viewerId})`,
     ),

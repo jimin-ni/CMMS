@@ -87,7 +87,13 @@ export type HeapPiece = {
   updatedAt: Date;
 };
 
-export type HeapGuestbookEntry = { id: string; name: string; createdAt: Date };
+// screen: 판정 상태. published가 아니면 실려 온다. removed는 모두에게(이름은 비운다), blocked·held는 쓴 사람에게만 온다.
+export type HeapGuestbookEntry = {
+  id: string;
+  name: string;
+  createdAt: Date;
+  screen?: "removed" | "blocked" | "held";
+};
 
 export type HeapVisitCounts = { today: number; total: number };
 
@@ -375,18 +381,37 @@ export async function listVotingPieces(roomId: string, viewerId: string | null):
     .limit(HEAP_POLICY.snapshotPiecesMax);
 }
 
-function guestbookSelect(roomId: string, extra?: SQL) {
-  return db
-    .select({ id: heapGuestbook.id, name: heapGuestbook.name, createdAt: heapGuestbook.createdAt })
-    .from(heapGuestbook)
-    .where(and(eq(heapGuestbook.roomId, roomId), extra))
-    .orderBy(desc(heapGuestbook.createdAt), asc(heapGuestbook.id));
+// 보는 사람에게 보일 방명록 줄: 공개, 내려간 줄(자리 표시), 내가 쓴 숨김 줄.
+function guestbookVisible(viewerId: string | null): SQL {
+  const open = sql`${heapGuestbook.screenStatus} in ('published', 'removed')`;
+  return viewerId === null ? open : (or(open, eq(heapGuestbook.userId, viewerId)) as SQL);
+}
+
+const guestbookColumns = {
+  id: heapGuestbook.id,
+  name: heapGuestbook.name,
+  createdAt: heapGuestbook.createdAt,
+  screenStatus: heapGuestbook.screenStatus,
+};
+
+// 내려간 줄은 이름을 비워서 보낸다. 화면이 같은 자리에 삭제 문구를 쓴다 (문서 8장).
+function toGuestbookEntry(row: { id: string; name: string; createdAt: Date; screenStatus: string }): HeapGuestbookEntry {
+  const entry: HeapGuestbookEntry = { id: row.id, name: row.name, createdAt: row.createdAt };
+  if (row.screenStatus === "removed") return { ...entry, name: "", screen: "removed" };
+  if (row.screenStatus === "blocked" || row.screenStatus === "held") entry.screen = row.screenStatus;
+  return entry;
 }
 
 // 최근 것부터 limit개
-export async function listGuestbook(roomId: string, limit: number): Promise<HeapGuestbookEntry[]> {
+export async function listGuestbook(roomId: string, limit: number, viewerId: string | null): Promise<HeapGuestbookEntry[]> {
   if (!isUuid(roomId)) return [];
-  return guestbookSelect(roomId).limit(limit);
+  const rows = await db
+    .select(guestbookColumns)
+    .from(heapGuestbook)
+    .where(and(eq(heapGuestbook.roomId, roomId), guestbookVisible(viewerId)))
+    .orderBy(desc(heapGuestbook.createdAt), asc(heapGuestbook.id))
+    .limit(limit);
+  return rows.map(toGuestbookEntry);
 }
 
 // TODAY는 한국 시간 날짜 기준
@@ -447,7 +472,7 @@ export async function getRoomSnapshot(
       .where(and(eq(heapPieces.roomId, room.id), eq(heapPieces.status, "voting")))
       .orderBy(desc(heapPieces.createdAt), asc(heapPieces.id))
       .limit(HEAP_POLICY.snapshotPiecesMax),
-    listGuestbook(room.id, HEAP_POLICY.guestbookPageSize),
+    listGuestbook(room.id, HEAP_POLICY.guestbookPageSize, viewerId),
     getVisitCounts(room.id),
     listCreatorChannels(room.creatorId),
     getNotesState(room.id, viewerId),
@@ -472,7 +497,7 @@ export async function getRoomSnapshot(
 // 목록은 (시각, id) 오름차순으로 changesPageSize개씩 끊어 읽는다. since는 방명록과 조각 각각의 기준 지점이다.
 // 한도에 닿은 목록은 마지막 줄에서 이어 가고, 다 읽은 목록은 서버 시각 - 겹침으로 옮긴다.
 // 너무 오래된 기준점은 changesMaxLookbackMs 안으로 당긴다.
-const isoMicros = (column: SQL | typeof heapGuestbook.createdAt | typeof heapPieces.updatedAt) =>
+const isoMicros = (column: SQL | typeof heapGuestbook.createdAt | typeof heapGuestbook.statusChangedAt | typeof heapPieces.updatedAt) =>
   sql<string>`to_char(${column} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
 
 export async function getRoomChangesSince(
@@ -501,20 +526,17 @@ export async function getRoomChangesSince(
 
   const [guestbookRows, changedRows, visits, noteChanges] = await Promise.all([
     db
-      .select({
-        id: heapGuestbook.id,
-        name: heapGuestbook.name,
-        createdAt: heapGuestbook.createdAt,
-        ts: isoMicros(heapGuestbook.createdAt),
-      })
+      // 커서는 status_changed_at이다 (0013). 새 줄과 판정 상태가 바뀐 줄(내려감, 검토 후 공개)이 함께 온다.
+      .select({ ...guestbookColumns, ts: isoMicros(heapGuestbook.statusChangedAt) })
       .from(heapGuestbook)
       .where(
         and(
           eq(heapGuestbook.roomId, roomId),
-          sql`(${heapGuestbook.createdAt}, ${heapGuestbook.id}) > (${from.guestbook.ts}::timestamptz, ${from.guestbook.id}::uuid)`,
+          guestbookVisible(viewerId),
+          sql`(${heapGuestbook.statusChangedAt}, ${heapGuestbook.id}) > (${from.guestbook.ts}::timestamptz, ${from.guestbook.id}::uuid)`,
         ),
       )
-      .orderBy(asc(heapGuestbook.createdAt), asc(heapGuestbook.id))
+      .orderBy(asc(heapGuestbook.statusChangedAt), asc(heapGuestbook.id))
       .limit(pageSize),
     pieceSelect(db, viewerId, { ts: isoMicros(heapPieces.updatedAt) })
       .where(
@@ -540,11 +562,7 @@ export async function getRoomChangesSince(
   };
 
   // 기준점용 ts 열은 응답에 싣지 않는다.
-  const guestbook: HeapGuestbookEntry[] = guestbookRows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    createdAt: row.createdAt,
-  }));
+  const guestbook: HeapGuestbookEntry[] = guestbookRows.map(toGuestbookEntry);
   const changed: HeapPiece[] = changedRows.map((row) => {
     const piece: Partial<typeof row> = { ...row };
     delete piece.ts;
