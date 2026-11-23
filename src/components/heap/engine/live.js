@@ -69,7 +69,64 @@ export function setupLive(ctx) {
 
   // 방명록: 이름과 날짜만. 줄은 DB 행 { id, name, createdAt(ISO) } 이고 최신이 먼저이며, 페이지, 폴링, 방문자 자신의 제출에서 id 로 합친다.
   // screen(0013): removed 는 이름 자리에 서버가 삭제 문구를 넣어 보낸다. blocked·held 는 쓴 사람에게만 온다.
-  const gbRow = e => ({ id: e.id, name: e.name, createdAt: e.createdAt, ...(e.screen ? { screen: e.screen } : {}) });
+  const gbRow = e => ({ id: e.id, name: e.name, createdAt: e.createdAt, ...(e.screen ? { screen: e.screen } : {}), ...(e.mine ? { mine: true } : {}) });
+  // 0013 남의 줄: 신고(방 주인·관리자), 차단(방 주인·관리자는 쓰기 막기, 다른 사람은 나에게서 가리기). 확인은 그 줄 안에서 한 번 더 묻는다.
+  const canModerate = !!DATA.canModerate;
+  let gbAsk = null; // { id, kind: 'report' | 'block' }
+  let gbGuardBusy = false;
+  function gbTools(e) {
+    const box = el('span', 'gb-tools');
+    if (gbAsk?.id === e.id) {
+      box.appendChild(el('em', null, gbAsk.kind === 'report' ? '신고할까요?' : canModerate ? '쓰기를 막을까요?' : '나에게서 가릴까요?'));
+      const yes = el('button', 'gb-act', '예'); yes.type = 'button';
+      const no = el('button', 'gb-act', '아니요'); no.type = 'button';
+      yes.onclick = () => gbConfirm(e.id, gbAsk.kind);
+      no.onclick = () => { gbAsk = null; renderGuestbook(); };
+      box.append(yes, no);
+      return box;
+    }
+    if (canModerate && e.screen !== 'removed' && opts.reportPost) {
+      const b = el('button', 'gb-act', '신고'); b.type = 'button';
+      b.onclick = () => { gbAsk = { id: e.id, kind: 'report' }; renderGuestbook(); };
+      box.appendChild(b);
+    }
+    if (canModerate ? opts.blockAuthor : opts.hidePerson) {
+      const b = el('button', 'gb-act', '차단'); b.type = 'button';
+      b.onclick = () => { gbAsk = { id: e.id, kind: 'block' }; renderGuestbook(); };
+      box.appendChild(b);
+    }
+    return box;
+  }
+  async function gbConfirm(id, kind) {
+    if (gbGuardBusy) return;
+    gbGuardBusy = true; gbAsk = null;
+    let res;
+    try {
+      res = kind === 'report' ? await opts.reportPost('guestbook', id)
+        : canModerate ? await opts.blockAuthor('guestbook', id) : await opts.hidePerson('guestbook', id);
+    } catch { res = { ok: false, error: '처리하지 못했어요. 잠시 뒤 다시 시도해 주세요.' }; }
+    gbGuardBusy = false;
+    if (ctx.disposed) return;
+    if (!res?.ok) { $('gb-msg').textContent = res?.error ?? '처리하지 못했어요.'; renderGuestbook(); return; }
+    if (kind === 'report') {
+      const r = gbRows.get(id);
+      if (r) gbRows.set(id, { ...r, name: opts.removedText ?? '', screen: 'removed' });
+      $('gb-msg').textContent = '신고했어요. 이름을 내렸어요';
+    } else if (canModerate) {
+      $('gb-msg').textContent = '차단했어요';
+    } else {
+      hideGuestbookRows(res.hiddenGuestbookIds ?? []);
+      ctx.mergeTreeNotes?.([], res.hiddenNoteIds ?? []);
+      ctx.refreshBlocked?.();
+      $('gb-msg').textContent = '차단했어요. 이제 보이지 않아요';
+    }
+    renderGuestbook();
+  }
+  function hideGuestbookRows(ids) {
+    for (const id of ids) gbRows.delete(id);
+    if (!$('guestbook').hidden) renderGuestbook();
+  }
+  ctx.hideGuestbookRows = hideGuestbookRows;
   const gbRows = new Map((DATA.guestbook || []).map(e => [e.id, gbRow(e)]));
   const gbSorted = () => [...gbRows.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt) || (a.id < b.id ? 1 : -1));
   function renderGuestbook() {
@@ -84,6 +141,7 @@ export function setupLive(ctx) {
       const row = el('div', e.screen ? `gb-row ${e.screen === 'removed' ? 'removed' : 'mine-only'}` : 'gb-row');
       row.appendChild(el('span', null, e.name));
       row.appendChild(el('small', null, e.screen === 'blocked' || e.screen === 'held' ? `나에게만 보여요 · ${fmtDay(e.createdAt)}` : fmtDay(e.createdAt)));
+      if (opts.signedIn && !e.mine && !e.screen?.match(/^(blocked|held)$/)) row.appendChild(gbTools(e));
       list.appendChild(row);
     }
   }

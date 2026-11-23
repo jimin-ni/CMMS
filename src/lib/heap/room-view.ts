@@ -80,6 +80,7 @@ function toRoomData(
       name: entry.name,
       createdAt: entry.createdAt.toISOString(),
       ...(entry.screen ? { screen: entry.screen } : {}),
+      ...(entry.mine ? { mine: true } : {}),
     })),
     visits: snapshot.visits,
     // 쪽지: Date는 ISO 문자열로 (실시간 읽기와 같은 모양). 봉인된 쪽지는 body와 reply가 이미 없다.

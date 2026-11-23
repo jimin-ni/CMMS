@@ -94,6 +94,10 @@
 /* 0013: 내려간 이름(삭제 문구)과 판정에 걸려 쓴 사람에게만 보이는 이름 */
 .heap-room .gb-row.removed span:first-child { font-weight: 400; color: var(--cp-ash); }
 .heap-room .gb-row.mine-only span:first-child { opacity: 0.55; }
+.heap-room .gb-row .gb-tools { flex: none; display: inline-flex; align-items: baseline; gap: 6px; }
+.heap-room .gb-row .gb-tools em { font: 400 12px/1.4 var(--cp-ui); font-style: normal; color: var(--cp-ash); }
+.heap-room .gb-row .gb-act { border: 0; background: none; padding: 2px 4px; font: 600 12px/1.4 var(--cp-ui); color: var(--cp-ash); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.heap-room .gb-row .gb-act:hover { color: var(--cp-ink); }
 .heap-room .gb-form { display: flex; gap: 10px; }
 .heap-room .gb-form input { flex: 1; min-width: 0; height: 38px; font: 400 16px var(--cp-ui); padding: 0 16px; border-radius: 4px; border: 1px solid var(--cp-ash); background: var(--cp-white); color: var(--cp-ink); }
 .heap-room .gb-form input::placeholder { color: var(--cp-ash); }

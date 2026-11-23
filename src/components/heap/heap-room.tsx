@@ -24,6 +24,9 @@ import { usePrefs } from "@/lib/settings/prefs";
 import type { HeapChannelPlatform } from "@/lib/heap/platform";
 import type { ReelClass } from "@/lib/heap/caps";
 import { toEngineNote } from "./engine/tree-ids";
+import { blockHeapAuthorAction, hidePersonAction, reportHeapPostAction } from "@/lib/heap/moderation-actions";
+import type { HeapSurface } from "@/lib/moderation/repo";
+import { MODERATION_TEXT } from "@/lib/moderation/policy";
 import { RoomBgm } from "./room-bgm";
 import { ANIM_TEST, DEBUG_ON, saveDebugFlags } from "./engine/debug-flags";
 import { authClient } from "@/lib/auth-client";
@@ -420,6 +423,11 @@ export function HeapRoom({
             : result;
         },
         deleteNote: (noteId: string) => deleteNoteAction(noteId),
+        // 0013 신고·차단 (쪽지와 방명록 공통). surface 는 "note" 또는 "guestbook", id 는 글 id 다.
+        reportPost: (surface: HeapSurface, id: string) => reportHeapPostAction(surface, id),
+        blockAuthor: (surface: HeapSurface, id: string) => blockHeapAuthorAction(surface, id),
+        hidePerson: (surface: HeapSurface, id: string) => hidePersonAction(surface, id),
+        removedText: MODERATION_TEXT.removed,
         // 방 주인의 도구 (engine/tree-owner.js). replyNote 의 note 는 엔진 모양으로 바꿔 준다.
         replyNote: async (noteId: string, input: unknown) => {
           const result = await replyNoteAction(noteId, input);
@@ -620,6 +628,13 @@ export function HeapRoom({
         </button>
         <button id="tree-del" className="btn ghost" type="button" hidden>
           지우기
+        </button>
+        {/* 0013: 남의 쪽지. 신고는 방 주인·관리자, 차단은 방 주인·관리자에게는 쓰기 막기, 다른 사람에게는 나에게서 가리기 */}
+        <button id="tree-report" className="btn ghost" type="button" hidden>
+          신고
+        </button>
+        <button id="tree-block" className="btn ghost" type="button" hidden>
+          차단
         </button>
       </div>
       {/* 방 주인의 답장 쓰기 (tree-owner.js): 팬 종이 옆에 선 답장 종이 위에 겹치는 글상자와 아래 조작 줄 (글씨체, 글씨 크기, 접어서 넣기, 취소) */}

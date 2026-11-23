@@ -96,6 +96,8 @@ export type HeapGuestbookEntry = {
   name: string;
   createdAt: Date;
   screen?: "removed" | "blocked" | "held";
+  // 보는 사람이 쓴 줄 (신고·차단 단추를 내지 않는다). 작성자 id 대신 이것만 싣는다.
+  mine?: boolean;
 };
 
 export type HeapVisitCounts = { today: number; total: number };
@@ -406,9 +408,10 @@ function toGuestbookEntry(
   row: { id: string; userId: string; name: string; createdAt: Date; screenStatus: string },
   viewerId: string | null,
 ): HeapGuestbookEntry | null {
-  const view = screenView(row.screenStatus, viewerId !== null && row.userId === viewerId);
+  const mine = viewerId !== null && row.userId === viewerId;
+  const view = screenView(row.screenStatus, mine);
   if (view === "hide") return null;
-  const entry: HeapGuestbookEntry = { id: row.id, name: row.name, createdAt: row.createdAt };
+  const entry: HeapGuestbookEntry = { id: row.id, name: row.name, createdAt: row.createdAt, ...(mine ? { mine } : {}) };
   if (view === "removed") return { ...entry, name: MODERATION_TEXT.removed, screen: "removed" };
   if (view === "own") entry.screen = row.screenStatus as "blocked" | "held";
   return entry;
