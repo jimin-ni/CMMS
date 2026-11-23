@@ -8,7 +8,7 @@
     "types": "wrangler types",
     "test": "vitest run",
     "check": "wrangler types && tsc --noEmit -p . && tsc --noEmit -p test",
-    "bots": "node scripts/bots.mjs"
+    "bots": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/bots.mjs"
   },
   "devDependencies": {
     "@cloudflare/vitest-plugin": "^1.9.0",
