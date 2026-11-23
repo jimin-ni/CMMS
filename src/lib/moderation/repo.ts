@@ -6,6 +6,9 @@ import { db } from "@/lib/db";
 import {
   bubbleMessages,
   bubbleRooms,
+  heapGuestbook,
+  heapNotes,
+  heapRooms,
   moderationAccessLog,
   moderationEvents,
   sanctionAppeals,
@@ -15,9 +18,9 @@ import {
 } from "@/lib/schema";
 import type { Viewer } from "@/lib/session";
 import { MODERATION_POLICY } from "./policy";
-import type { ScreenResult } from "./screen";
+import type { ScreenResult, Surface } from "./screen";
 
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+export type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Executor = typeof db | Tx;
 
 const P = MODERATION_POLICY;
@@ -60,21 +63,46 @@ export async function getWriteBlock(userId: string, roomOwnerId: string): Promis
 
 // ─── 판정 전 도배 방지 (문서 13장) ───
 
-export async function chatPreScreenBlock(
-  userId: string,
-  normalizedHash: string,
-): Promise<{ kind: "repeat" } | { kind: "cooldown"; seconds: number } | null> {
-  const [repeat] = await db
-    .select({ one: sql`1` })
-    .from(bubbleMessages)
-    .where(
-      and(
-        eq(bubbleMessages.senderId, userId),
-        eq(bubbleMessages.normalizedHash, normalizedHash),
-        sql`${bubbleMessages.createdAt} > now() - ${P.repeatWindowMs}::int * interval '1 millisecond'`,
-      ),
-    )
-    .limit(1);
+export type PreScreenBlock = { kind: "repeat" } | { kind: "cooldown"; seconds: number } | null;
+
+export async function chatPreScreenBlock(userId: string, normalizedHash: string): Promise<PreScreenBlock> {
+  return preScreenBlock("chat", userId, normalizedHash);
+}
+
+// 같은 글 반복(표면마다 그 표면의 내 글)과 위반 직후 대기(표면마다)
+export async function preScreenBlock(surface: Surface, userId: string, normalizedHash: string): Promise<PreScreenBlock> {
+  const since = (col: typeof bubbleMessages.createdAt | typeof heapNotes.createdAt | typeof heapGuestbook.createdAt) =>
+    sql`${col} > now() - ${P.repeatWindowMs}::int * interval '1 millisecond'`;
+  const repeatQuery =
+    surface === "chat"
+      ? db
+          .select({ one: sql`1` })
+          .from(bubbleMessages)
+          .where(
+            and(
+              eq(bubbleMessages.senderId, userId),
+              eq(bubbleMessages.normalizedHash, normalizedHash),
+              since(bubbleMessages.createdAt),
+            ),
+          )
+      : surface === "note"
+        ? db
+            .select({ one: sql`1` })
+            .from(heapNotes)
+            .where(
+              and(eq(heapNotes.authorId, userId), eq(heapNotes.normalizedHash, normalizedHash), since(heapNotes.createdAt)),
+            )
+        : db
+            .select({ one: sql`1` })
+            .from(heapGuestbook)
+            .where(
+              and(
+                eq(heapGuestbook.userId, userId),
+                eq(heapGuestbook.normalizedHash, normalizedHash),
+                since(heapGuestbook.createdAt),
+              ),
+            );
+  const [repeat] = await repeatQuery.limit(1);
   if (repeat) return { kind: "repeat" };
 
   const [last] = await db
@@ -85,7 +113,7 @@ export async function chatPreScreenBlock(
     .where(
       and(
         eq(moderationEvents.userId, userId),
-        eq(moderationEvents.surface, "chat"),
+        eq(moderationEvents.surface, surface),
         eq(moderationEvents.source, "auto"),
         eq(moderationEvents.countsAsStrike, true),
       ),
@@ -118,7 +146,7 @@ export async function countStrikes(userId: string, exec: Executor = db): Promise
   return Number(row?.n ?? 0);
 }
 
-// 차단 범위의 예전 공개 글을 모두 내린다 (문서 9-2). 쪽지·방명록은 연결할 때 여기에 더한다.
+// 차단 범위의 예전 공개 글(채팅, 쪽지, 방명록)을 모두 내린다 (문서 9-2).
 async function takeDownPosts(tx: Tx, userId: string, roomOwnerId: string | null) {
   await tx
     .update(bubbleMessages)
@@ -134,6 +162,30 @@ async function takeDownPosts(tx: Tx, userId: string, roomOwnerId: string | null)
               tx.select({ id: bubbleRooms.id }).from(bubbleRooms).where(eq(bubbleRooms.creatorId, roomOwnerId)),
             )
           : undefined,
+      ),
+    );
+  // 힙의 변경 읽기 커서는 잠금 뒤 실제 시각(clock_timestamp)을 쓴다 (heap/repo.ts와 같다).
+  const ownerHeapRooms = roomOwnerId
+    ? tx.select({ id: heapRooms.id }).from(heapRooms).where(eq(heapRooms.creatorId, roomOwnerId))
+    : null;
+  await tx
+    .update(heapNotes)
+    .set({ screenStatus: "removed", updatedAt: sql`clock_timestamp()` })
+    .where(
+      and(
+        eq(heapNotes.authorId, userId),
+        eq(heapNotes.screenStatus, "published"),
+        ownerHeapRooms ? inArray(heapNotes.roomId, ownerHeapRooms) : undefined,
+      ),
+    );
+  await tx
+    .update(heapGuestbook)
+    .set({ screenStatus: "removed", statusChangedAt: sql`clock_timestamp()` })
+    .where(
+      and(
+        eq(heapGuestbook.userId, userId),
+        eq(heapGuestbook.screenStatus, "published"),
+        ownerHeapRooms ? inArray(heapGuestbook.roomId, ownerHeapRooms) : undefined,
       ),
     );
 }
@@ -160,57 +212,104 @@ export type SaveNotice =
   | { kind: "hold_review" }
   | { kind: "hold_self_harm" };
 
+// 판정 결과를 저장 계획으로 바꾼다. 세 표면(채팅, 쪽지, 방명록)이 이 함수 하나를 쓴다.
+// 글을 넣는 트랜잭션 안에서 부르고, 같은 트랜잭션에서 글을 plan.status로 넣은 뒤 recordScreenEvent를 부른다.
+export type ScreenPlan = {
+  status: "published" | "blocked" | "held";
+  event: null | {
+    kind: "abuse" | "contact" | "self_harm";
+    strike: boolean;
+    review: "none" | "pending";
+  };
+  notice: SaveNotice["kind"];
+};
+
+export async function planScreen(
+  tx: Tx,
+  userId: string,
+  result: ScreenResult,
+  // 방 주인·관리자: 판정 결과와 관계없이 바로 게시하고, 걸리면 사후 확인 기록만 남긴다 (문서 3-2).
+  privileged: boolean,
+): Promise<ScreenPlan> {
+  await lockUser(tx, userId);
+  const kindOf = (o: ScreenResult["outcome"]) =>
+    o === "contact" ? "contact" : o === "hold_self_harm" ? "self_harm" : "abuse";
+
+  if (result.outcome === "publish") return { status: "published", event: null, notice: "published" };
+  if (privileged) {
+    return {
+      status: "published",
+      event: { kind: kindOf(result.outcome), strike: false, review: "pending" },
+      notice: "published",
+    };
+  }
+  if (result.outcome === "block") {
+    return { status: "blocked", event: { kind: "abuse", strike: true, review: "none" }, notice: "blocked" };
+  }
+  if (result.outcome === "contact") {
+    const [prior] = await tx
+      .select({ one: sql`1` })
+      .from(moderationEvents)
+      .where(and(eq(moderationEvents.userId, userId), eq(moderationEvents.kind, "contact")))
+      .limit(1);
+    return prior
+      ? { status: "blocked", event: { kind: "contact", strike: true, review: "none" }, notice: "blocked" }
+      : { status: "blocked", event: { kind: "contact", strike: false, review: "none" }, notice: "contact_first" };
+  }
+  if (result.outcome === "hold_self_harm") {
+    return { status: "held", event: { kind: "self_harm", strike: false, review: "pending" }, notice: "hold_self_harm" };
+  }
+  return { status: "held", event: { kind: "abuse", strike: false, review: "pending" }, notice: "hold_review" };
+}
+
+// 글을 넣은 뒤 같은 트랜잭션에서 부른다. 판정 기록을 남기고, 경고면 자동 차단까지 본다.
+export async function recordScreenEvent(
+  tx: Tx,
+  args: {
+    userId: string;
+    roomOwnerId: string;
+    surface: Surface;
+    targetId: string;
+    result: ScreenResult;
+    plan: ScreenPlan;
+  },
+): Promise<SaveNotice> {
+  const { plan, result } = args;
+  if (!plan.event) return { kind: "published" };
+
+  await tx.insert(moderationEvents).values({
+    userId: args.userId,
+    roomOwnerId: args.roomOwnerId,
+    surface: args.surface,
+    targetId: args.targetId,
+    source: "auto",
+    kind: plan.event.kind,
+    countsAsStrike: plan.event.strike,
+    reasons: result.reasons,
+    scores: result.scores,
+    openaiStatus: result.openai,
+    versions: result.versions,
+    reviewStatus: plan.event.review,
+  });
+
+  if (plan.notice === "blocked") {
+    const { strikes, autoBlocked } = await applyAutoBlock(tx, args.userId);
+    return { kind: "blocked", strikes, autoBlocked };
+  }
+  return { kind: plan.notice } as SaveNotice;
+}
+
 export async function saveChatMessage(args: {
   roomId: string;
   roomOwnerId: string;
   senderId: string;
   body: string;
   result: ScreenResult;
-  // 방 주인·관리자: 판정 결과와 관계없이 바로 게시하고, 걸리면 사후 확인 기록만 남긴다 (문서 3-2).
   privileged: boolean;
 }): Promise<SaveNotice> {
   const { result } = args;
   return db.transaction(async (tx) => {
-    await lockUser(tx, args.senderId);
-
-    type Plan = {
-      status: "published" | "blocked" | "held";
-      event: null | {
-        kind: "abuse" | "contact" | "self_harm";
-        strike: boolean;
-        review: "none" | "pending";
-      };
-      notice: SaveNotice["kind"];
-    };
-    const kindOf = (o: ScreenResult["outcome"]) =>
-      o === "contact" ? "contact" : o === "hold_self_harm" ? "self_harm" : "abuse";
-
-    let plan: Plan;
-    if (result.outcome === "publish") {
-      plan = { status: "published", event: null, notice: "published" };
-    } else if (args.privileged) {
-      plan = {
-        status: "published",
-        event: { kind: kindOf(result.outcome), strike: false, review: "pending" },
-        notice: "published",
-      };
-    } else if (result.outcome === "block") {
-      plan = { status: "blocked", event: { kind: "abuse", strike: true, review: "none" }, notice: "blocked" };
-    } else if (result.outcome === "contact") {
-      const [prior] = await tx
-        .select({ one: sql`1` })
-        .from(moderationEvents)
-        .where(and(eq(moderationEvents.userId, args.senderId), eq(moderationEvents.kind, "contact")))
-        .limit(1);
-      plan = prior
-        ? { status: "blocked", event: { kind: "contact", strike: true, review: "none" }, notice: "blocked" }
-        : { status: "blocked", event: { kind: "contact", strike: false, review: "none" }, notice: "contact_first" };
-    } else if (result.outcome === "hold_self_harm") {
-      plan = { status: "held", event: { kind: "self_harm", strike: false, review: "pending" }, notice: "hold_self_harm" };
-    } else {
-      plan = { status: "held", event: { kind: "abuse", strike: false, review: "pending" }, notice: "hold_review" };
-    }
-
+    const plan = await planScreen(tx, args.senderId, result, args.privileged);
     const [msg] = await tx
       .insert(bubbleMessages)
       .values({
@@ -222,29 +321,14 @@ export async function saveChatMessage(args: {
         normalizedHash: result.normalizedHash,
       })
       .returning({ id: bubbleMessages.id });
-
-    if (!plan.event) return { kind: "published" };
-
-    await tx.insert(moderationEvents).values({
+    return recordScreenEvent(tx, {
       userId: args.senderId,
       roomOwnerId: args.roomOwnerId,
       surface: "chat",
       targetId: msg.id,
-      source: "auto",
-      kind: plan.event.kind,
-      countsAsStrike: plan.event.strike,
-      reasons: result.reasons,
-      scores: result.scores,
-      openaiStatus: result.openai,
-      versions: result.versions,
-      reviewStatus: plan.event.review,
+      result,
+      plan,
     });
-
-    if (plan.notice === "blocked") {
-      const { strikes, autoBlocked } = await applyAutoBlock(tx, args.senderId);
-      return { kind: "blocked", strikes, autoBlocked };
-    }
-    return { kind: plan.notice } as SaveNotice;
   });
 }
 

@@ -23,6 +23,8 @@ import { REEL_KEY } from "@/lib/heap/layout";
 import { getNotesState, listNoteChanges, type HeapNote } from "@/lib/heap/notes-repo";
 import { likePattern } from "@/lib/heap/search";
 import type { ImportCandidate } from "@/lib/heap/import";
+import { planScreen, recordScreenEvent, type SaveNotice } from "@/lib/moderation/repo";
+import type { ScreenResult } from "@/lib/moderation/screen";
 
 // 힙 미니룸의 DB 접근은 전부 이 파일에 둔다. 서버에서만 불러 쓴다 (Server Component, Server Action, Route Handler).
 // 역할(creator, admin) 검사는 부르는 쪽이 하고, 여기서는 데이터로 알 수 있는 것만 검사한다
@@ -600,8 +602,11 @@ export async function addGuestbookEntry(
   roomId: string,
   userId: string,
   name: string,
+  // 판정 결과. 부르는 쪽(actions.ts)이 트랜잭션 밖에서 screenText로 먼저 판정한다.
+  screening: { result: ScreenResult; privileged: boolean },
 ): Promise<
-  { ok: true; entry: HeapGuestbookEntry } | Fail<"not-found" | "invalid-name" | "rate-limited">
+  | { ok: true; entry: HeapGuestbookEntry; notice: SaveNotice }
+  | Fail<"not-found" | "invalid-name" | "rate-limited">
 > {
   if (!isUuid(roomId)) return fail("not-found");
   const trimmed = name.trim();
@@ -609,7 +614,10 @@ export async function addGuestbookEntry(
   if (length < 1 || length > HEAP_POLICY.guestbookNameMaxChars) return fail("invalid-name");
 
   return db.transaction(async (tx) => {
-    const rooms = await tx.select({ id: heapRooms.id }).from(heapRooms).where(eq(heapRooms.id, roomId));
+    const rooms = await tx
+      .select({ id: heapRooms.id, creatorId: heapRooms.creatorId })
+      .from(heapRooms)
+      .where(eq(heapRooms.id, roomId));
     if (!rooms[0]) return fail("not-found");
 
     await lockUserInRoom(tx, "guestbook", roomId, userId);
@@ -621,14 +629,34 @@ export async function addGuestbookEntry(
         gte(heapGuestbook.createdAt, seoulDayStart),
       ),
     );
+    // 숨김 줄(판정에 걸린 줄)도 하루 제한에 센다 (문서 13장).
     if (today >= HEAP_POLICY.guestbookEntriesPerDay) return fail("rate-limited");
 
+    const { result, privileged } = screening;
+    const plan = await planScreen(tx, userId, result, privileged);
     const [entry] = await tx
       .insert(heapGuestbook)
       // 트랜잭션 시작 시각(now()) 대신 잠금을 얻은 뒤의 시각을 찍는다. 실시간 읽기 커서와 맞추기 위해서다.
-      .values({ roomId, userId, name: trimmed, createdAt: sql`clock_timestamp()` })
+      .values({
+        roomId,
+        userId,
+        name: trimmed,
+        createdAt: clockNow,
+        statusChangedAt: clockNow,
+        screenStatus: plan.status,
+        screenedAt: clockNow,
+        normalizedHash: result.normalizedHash,
+      })
       .returning({ id: heapGuestbook.id, name: heapGuestbook.name, createdAt: heapGuestbook.createdAt });
-    return { ok: true as const, entry };
+    const notice = await recordScreenEvent(tx, {
+      userId,
+      roomOwnerId: rooms[0].creatorId,
+      surface: "guestbook",
+      targetId: entry.id,
+      result,
+      plan,
+    });
+    return { ok: true as const, entry, notice };
   });
 }
 

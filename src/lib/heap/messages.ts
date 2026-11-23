@@ -1,3 +1,5 @@
+import { MODERATION_TEXT } from "@/lib/moderation/policy";
+
 // 힙 액션이 돌려주는 실패 이유(reason)와 화면에 보여 줄 문구를 나눠 둔다.
 // "use server" 파일은 함수만 내보낼 수 있어서 이 표는 따로 둔다.
 export const HEAP_MESSAGES = {
@@ -42,6 +44,12 @@ export const HEAP_MESSAGES = {
   "not-author": "내가 쓴 쪽지만 지울 수 있어요.",
   "invalid-reveal": "공개 시각이 올바르지 않아요.",
   "notes-sealed": "공개 시각이 되기 전에는 쪽지를 열 수 없어요.",
+  // AI 스크리닝 (쪽지, 방명록). 문구는 moderation/policy.ts의 MODERATION_TEXT와 같다. 대기 초는 액션이 넣는다.
+  "write-blocked": MODERATION_TEXT.writeBlocked,
+  "under-age": MODERATION_TEXT.underAge,
+  repeat: MODERATION_TEXT.repeat,
+  cooldown: MODERATION_TEXT.cooldown(60),
+  "note-too-many-links": MODERATION_TEXT.tooManyLinks,
 } as const;
 
 export type HeapReason = keyof typeof HEAP_MESSAGES;

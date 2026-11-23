@@ -10,6 +10,8 @@ import {
   NOTE_TINT_IDS,
 } from "@/lib/heap/policy";
 import type { Fail, HeapChangesPosition } from "@/lib/heap/repo";
+import { planScreen, recordScreenEvent, type SaveNotice } from "@/lib/moderation/repo";
+import type { ScreenResult } from "@/lib/moderation/screen";
 
 // 쪽지 트리의 DB 접근. repo.ts가 길어서 따로 뒀고, 규칙은 repo.ts와 같다 (쿼리는 이 파일에만, 실패는 { ok: false, reason }).
 // 방 주인(owner) = heap_rooms.creator_id. 역할 검사는 하지 않고 방 주인인지만 서버에서 확인한다.
@@ -410,8 +412,10 @@ export async function addNote(
   userId: string,
   roomId: string,
   rawInput: unknown,
+  // 판정 결과. 부르는 쪽(actions.ts)이 트랜잭션 밖에서 screenText로 먼저 판정한다.
+  screening: { result: ScreenResult; privileged: boolean },
 ): Promise<
-  | { ok: true; note: HeapNote; evictedId: string | null }
+  | { ok: true; note: HeapNote; evictedId: string | null; notice: SaveNotice }
   | Fail<"not-found" | "no-tree" | "invalid-note" | "invalid-note-name" | "invalid-note-style" | "invalid-note-spot" | "note-spot-taken" | "notes-per-day">
 > {
   if (!isUuid(roomId)) return fail("not-found");
@@ -420,7 +424,10 @@ export async function addNote(
   const input = parsed.value;
 
   return db.transaction(async (tx) => {
-    const rooms = await tx.select({ id: heapRooms.id, layout: heapRooms.layout }).from(heapRooms).where(eq(heapRooms.id, roomId));
+    const rooms = await tx
+      .select({ id: heapRooms.id, layout: heapRooms.layout, creatorId: heapRooms.creatorId })
+      .from(heapRooms)
+      .where(eq(heapRooms.id, roomId));
     if (!rooms[0]) return fail("not-found");
     // 트리가 없는 방에는 새 쪽지를 받지 않는다. 읽기와 숨기기는 그대로 둔다: 트리를 나중에 치워도 주인이 옛 쪽지를 다룰 수 있게.
     if (!hasTree(rooms[0].layout)) return fail("no-tree");
@@ -438,7 +445,9 @@ export async function addNote(
       .where(eq(heapAttempts.key, counterKey));
     if ((used[0]?.count ?? 0) >= HEAP_POLICY.notesPerDay) return fail("notes-per-day");
 
-    let spot = input.spot;
+    // 판정 계획을 자리 검사보다 먼저 정한다. 숨김 쪽지는 트리에 걸리지 않는다: 자리를 차지하지 않고 남의 쪽지를 내리지도 않는다.
+    const plan = await planScreen(tx, userId, screening.result, screening.privileged);
+    let spot = plan.status === "published" ? input.spot : null;
     let evictId: string | null = null;
     if (spot) {
       const hung = await tx
@@ -522,11 +531,22 @@ export async function addNote(
         posAngle: spot?.angle ?? null,
         createdAt: clockNow,
         updatedAt: clockNow,
+        screenStatus: plan.status,
+        screenedAt: clockNow,
+        normalizedHash: screening.result.normalizedHash,
       })
       .returning({ id: heapNotes.id });
+    const notice = await recordScreenEvent(tx, {
+      userId,
+      roomOwnerId: rooms[0].creatorId,
+      surface: "note",
+      targetId: created.id,
+      result: screening.result,
+      plan,
+    });
     const note = await loadNote(tx, created.id, userId);
     if (!note) throw new Error("note vanished after insert");
-    return { ok: true as const, note, evictedId };
+    return { ok: true as const, note, evictedId, notice };
   });
 }
 
