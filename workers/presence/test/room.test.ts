@@ -24,8 +24,8 @@ type Conn = {
 };
 
 async function open(room: string, token: string, origin = ORIGIN): Promise<Response> {
-  return exports.default.fetch(`http://presence.test/room/${room}?t=${encodeURIComponent(token)}`, {
-    headers: { Upgrade: "websocket", Origin: origin },
+  return exports.default.fetch(`http://presence.test/room/${room}`, {
+    headers: { Upgrade: "websocket", Origin: origin, "Sec-WebSocket-Protocol": `presence.v1, ${token}` },
   });
 }
 
@@ -38,6 +38,7 @@ async function connect(room: string, token?: string): Promise<Conn> {
   let resolveClosed!: (code: number) => void;
   const closed = new Promise<number>((r) => (resolveClosed = r));
   ws.addEventListener("message", (e) => {
+    if (e.data === "pong") return;
     const m = JSON.parse(e.data as string);
     msgs.push(m);
     for (const w of [...waiters]) {
@@ -87,6 +88,24 @@ describe("worker entry", () => {
     const t = await ticket(room);
     await connect(room, t);
     expect((await open(room, t)).status).toBe(401);
+  });
+
+  it("rejects a ticket in the url instead of the subprotocol", async () => {
+    const room = roomId();
+    const t = await ticket(room);
+    const res = await exports.default.fetch(`http://presence.test/room/${room}?t=${encodeURIComponent(t)}`, {
+      headers: { Upgrade: "websocket", Origin: ORIGIN },
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("echoes the subprotocol", async () => {
+    const room = roomId();
+    const res = await open(room, await ticket(room));
+    expect(res.status).toBe(101);
+    expect(res.headers.get("Sec-WebSocket-Protocol")).toBe("presence.v1");
+    res.webSocket!.accept();
+    res.webSocket!.close(1000);
   });
 
   it("rejects non-websocket", async () => {
@@ -183,5 +202,58 @@ describe("room", () => {
     const got = await b.next((m) => m.t === "state");
     expect(got.state).toBe("away");
     expect(b.msgs.some((m) => m.t === "teleport")).toBe(false);
+  });
+});
+
+describe("liveness and late joiners", () => {
+  it("answers ping with pong", async () => {
+    const room = roomId();
+    const a = await connect(room);
+    a.ws.send("ping");
+    const got = await new Promise<string>((resolve) => {
+      a.ws.addEventListener("message", (e) => {
+        if (e.data === "pong") resolve("pong");
+      });
+    });
+    expect(got).toBe("pong");
+  });
+
+  it("a silent socket loses its place, a pinging one keeps it", async () => {
+    const room = roomId();
+    const alive = await connect(room);
+    const silent = await connect(room);
+    const helloSilent = await silent.next((m) => m.t === "hello");
+    // 테스트 설정의 끊김 기준은 600ms. alive 만 그 사이 ping 을 보낸다
+    await new Promise((r) => setTimeout(r, 400));
+    alive.ws.send("ping");
+    await new Promise((r) => setTimeout(r, 400));
+    const late = await connect(room);
+    expect(await silent.closed).toBe(4008);
+    await alive.next((m) => m.t === "leave" && m.peer === helloSilent.you);
+    const helloLate = await late.next((m) => m.t === "hello");
+    expect((helloLate.peers as unknown[]).length).toBe(1);
+  });
+
+  it("hello tells a late joiner who is seated and where", async () => {
+    const room = roomId();
+    const a = await connect(room);
+    const helloA = await a.next((m) => m.t === "hello");
+    const b = await connect(room);
+    a.ws.send(JSON.stringify({ t: "sit", p: [1, 0.45, 2], ry: 1.5, kind: "seat", seat: "k3f9qa:01" }));
+    await b.next((m) => m.t === "sit");
+    a.ws.send(JSON.stringify({ t: "snap", p: [9, 9], ry: 0, state: "sit" }));
+    await b.next((m) => m.t === "snap");
+    const c = await connect(room);
+    const helloC = await c.next((m) => m.t === "hello");
+    const peerA = (helloC.peers as Record<string, unknown>[]).find((p) => p.peer === helloA.you);
+    expect(peerA).toMatchObject({ state: "sit", p: [1, 2], sit: { p: [1, 0.45, 2], ry: 1.5, kind: "seat", seat: "k3f9qa:01" } });
+  });
+
+  it("cuts a long display name", async () => {
+    const room = roomId();
+    const a = await connect(room);
+    await connect(room, await ticket(room, { n: "가".repeat(200) }));
+    const join = await a.next((m) => m.t === "join");
+    expect((join.name as string).length).toBe(24);
   });
 });

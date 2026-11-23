@@ -1,4 +1,6 @@
 // 방 함께 있기(presence) 워커. 방 하나 = Durable Object 하나 (docs/dev/presence.md).
+// 비밀값 PRESENCE_TICKET_SECRET 은 여기 두지 않는다: 배포 전에 `npx wrangler secret put PRESENCE_TICKET_SECRET`.
+// 로컬(wrangler dev)은 .dev.vars 가 아래 vars 를 덮는다 (ALLOWED_ORIGINS=http://localhost:3000).
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "cmms-presence",
@@ -8,5 +10,13 @@
     "bindings": [{ "name": "ROOM", "class_name": "Room" }]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Room"] }],
-  "observability": { "enabled": true }
+  "vars": {
+    // 웹소켓을 열 수 있는 사이트 (쉼표로 여러 개)
+    "ALLOWED_ORIGINS": "https://creators-mini-rooms.onrender.com"
+  },
+  // 오류와 console 로그만 남긴다. 요청마다 자동으로 남는 기록(invocation logs)은 끈다: 방문자 정보를 모으지 않는다
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "invocation_logs": false }
+  }
 }
