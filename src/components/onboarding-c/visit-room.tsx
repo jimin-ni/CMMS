@@ -40,6 +40,7 @@ export function VisitRoom({
             canEdit={canEdit}
             owner={owner}
             signInHere
+            presence
           />
         </div>
         <RoomTour

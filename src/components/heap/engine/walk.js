@@ -1,23 +1,13 @@
 // 걷는 사람: 모양, 이동, 앉기, 걸음 움직임.
 import * as THREE from 'three';
-import { flat } from './draw.js';
-import { tone } from './palette.js';
+import { makeFigure, seatLegs, stepGait, turnToward, SIT_DROP, WALK_SPEED } from './figure.js';
 
 export function setupWalk(ctx) {
   const { C, WALLS, DOOR, scene, toast, setHint, syncUI, SEAT, enterSort } = ctx;
 
   // ---------- 걷는 사람 ----------
-  const me = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.25, 0.45, 7), tone(C, 'accent')); body.position.y = 0.5;
-  const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.26, 1), flat('#f2cfb3')); head.position.y = 0.95;
-  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.28, 7, 4, 0, Math.PI * 2, 0, Math.PI / 2), flat('#3a2a22')); hair.position.set(0, 0.98, -0.02);
-  const legL = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.3, 5), tone(C, 'olive')), legR = legL.clone();
-  legL.geometry.translate(0, -0.15, 0); legL.position.set(-0.09, 0.3, 0); legR.position.set(0.09, 0.3, 0);
-  const eyeGeo = new THREE.SphereGeometry(0.035, 5, 4), eyeMat = flat('#2a2230');
-  const eyeL = new THREE.Mesh(eyeGeo, eyeMat), eyeR = new THREE.Mesh(eyeGeo, eyeMat);
-  eyeL.position.set(-0.09, 0.97, 0.23); eyeR.position.set(0.09, 0.97, 0.23);
-  for (const m of [body, head, hair, legL, legR]) { m.castShadow = true; me.add(m); }
-  me.add(eyeL, eyeR);
+  const fig = makeFigure(C);
+  const me = fig.group, { legL, legR } = fig;
   if (ctx.doorSpot) { me.position.copy(ctx.doorSpot); me.rotation.y = Math.atan2(WALLS[DOOR.wall].n.x, WALLS[DOOR.wall].n.z); }
   else me.position.set(2.2, 0, 2.4);
   scene.add(me);
@@ -138,7 +128,6 @@ export function setupWalk(ctx) {
   const nearDoor = () => !!ctx.doorSpot && me.position.distanceTo(ctx.doorSpot) < 0.7;
   const UP = new THREE.Vector3(-1, 0, -1).normalize(), RIGHT = new THREE.Vector3(1, 0, -1).normalize();
   const mv = new THREE.Vector3();
-  let walkPhase = 0;
   function arrived() {
     if (ctx.waypoints.length) { ctx.walkTo = ctx.waypoints.shift(); return; }
     const a = ctx.arrive; ctx.walkTo = null; ctx.arrive = null;
@@ -149,7 +138,7 @@ export function setupWalk(ctx) {
   function stepCharacter(dt) {
     if (ctx.perch) {
       if (ctx.anyOverlay() || !WALK_KEYS.some(k => ctx.keys.has(k))) { // 앉아 있다: 걷기 키를 누를 때까지 자세를 유지한다
-        me.position.set(ctx.perch.pos.x, ctx.perch.pos.y - 0.28, ctx.perch.pos.z); me.rotation.y = ctx.perch.yaw; legL.rotation.x = legR.rotation.x = -1.2;
+        me.position.set(ctx.perch.pos.x, ctx.perch.pos.y - SIT_DROP, ctx.perch.pos.z); me.rotation.y = ctx.perch.yaw; seatLegs(fig);
         return;
       }
       unperch();
@@ -166,29 +155,24 @@ export function setupWalk(ctx) {
       mv.subVectors(ctx.walkTo, me.position).setY(0);
       const gap = mv.length();
       // 자리는 stand 점에서만 들어서므로 그 위로 마지막 걸음이 넘치지 않는다: 한 걸음 안이면 방문자가 자리에 앉는다
-      if (ctx.arrive === 'seat' && !ctx.waypoints.length && gap <= 2.4 * dt) { me.position.x = ctx.walkTo.x; me.position.z = ctx.walkTo.z; mv.set(0, 0, 0); return arrived(); }
+      if (ctx.arrive === 'seat' && !ctx.waypoints.length && gap <= WALK_SPEED * dt) { me.position.x = ctx.walkTo.x; me.position.z = ctx.walkTo.z; mv.set(0, 0, 0); return arrived(); }
       if (gap < (ctx.waypoints.length ? 0.2 : 0.08)) { mv.set(0, 0, 0); return arrived(); }
       mv.normalize();
     }
     const moving = mv.lengthSq() > 0;
     if (moving) {
       const before = me.position.clone();
-      me.position.addScaledVector(mv, 2.4 * dt); ctx.collide(me.position);
-      if (ctx.walkTo && me.position.distanceTo(before) < 0.2 * 2.4 * dt) {
+      me.position.addScaledVector(mv, WALK_SPEED * dt); ctx.collide(me.position);
+      if (ctx.walkTo && me.position.distanceTo(before) < 0.2 * WALK_SPEED * dt) {
         if (ctx.waypoints.length) return arrived();
         if ((ctx.arrive === 'sit' && nearTable()) || (ctx.arrive === 'sort' && nearShelf()) || (ctx.arrive === 'door' && nearDoor()) || ctx.arrive === 'slot') return arrived();
         ctx.walkTo = null; ctx.arrive = null;
       }
-      const want = Math.atan2(mv.x, mv.z);
-      let dr = want - me.rotation.y; dr = Math.atan2(Math.sin(dr), Math.cos(dr));
-      me.rotation.y += dr * Math.min(1, dt * 12);
-      walkPhase += dt * 11;
-    } else walkPhase = 0;
-    const swing = Math.sin(walkPhase) * 0.6;
-    legL.rotation.x = swing; legR.rotation.x = -swing;
-    me.position.y = moving ? Math.abs(Math.sin(walkPhase)) * 0.04 : 0;
+      turnToward(fig, mv.x, mv.z, dt);
+    }
+    stepGait(fig, moving, dt);
     setHint(nearTable() ? 'near' : nearShelf() ? 'nearShelf' : nearDoor() ? 'nearDoor' : ctx.nearTree?.() ? 'nearTree' : 'room');
   }
 
-  Object.assign(ctx, { unperch, me, nearTable, nearShelf, nearDoor, sitOn, walkRoute, stepCharacter, stepCue, legL, legR });
+  Object.assign(ctx, { unperch, me, fig, nearTable, nearShelf, nearDoor, sitOn, walkRoute, stepCharacter, stepCue, legL, legR });
 }

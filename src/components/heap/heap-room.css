@@ -542,3 +542,12 @@
 .heap-room .tb-text { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .heap-room .panel.confirm { width: min(300px, 100%); padding: 18px 16px 14px; gap: 14px; align-items: center; }
 .heap-room .panel.confirm p { margin: 0; font-size: 15px; text-align: center; }
+
+/* 방 함께 있기 설정 (heap-room.tsx 의 PresenceControls) */
+.heap-room .presence-ctl { position: relative; pointer-events: auto; }
+.heap-room .presence-panel { position: absolute; bottom: calc(100% + 8px); left: 0; width: 260px; padding: 12px; display: grid; gap: 8px; background: var(--cp-white); color: var(--cp-ink); border: 1px solid var(--cp-ink); border-radius: 4px; font: 500 13px/1.45 var(--cp-ui); }
+.heap-room .presence-panel label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+.heap-room .presence-panel fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 4px; }
+.heap-room .presence-panel fieldset:disabled, .heap-room .presence-panel input:disabled + * { opacity: 0.5; }
+.heap-room .presence-panel legend { font-weight: 700; margin-bottom: 2px; }
+.heap-room .presence-seen { margin: 0; font-weight: 700; }

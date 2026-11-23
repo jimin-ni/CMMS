@@ -1,0 +1,295 @@
+# Furniture model id table
+
+Scheme: `set-purpose-n`. `alias` = old id (Kenney name, or engine hand type with `/style`). `groups` = search groups (purpose; sofas also chair; rows with a season tag also seasonal). Placement is tagged only when not floor (lamps tag floor too). `seat:<rule>` names the catalogue `seats` rule. `surface` = catalogue has `tops`. `slot:<fn>` = the model can carry that function; `feature` marks every row with a slot. `basic` / `holiday` name the theme. `cmms` rows are a later step. Approved by Yoon 2026-11-23.
+
+| new_id | alias | set | purpose | n | groups | tags | label | old_category | note |
+|---|---|---|---|---|---|---|---|---|---|
+| basic-bed-1 | bedSingle | basic | bed | 1 | bed | wood surface basic | 싱글 침대 | bed |  |
+| basic-bed-2 | bedDouble | basic | bed | 2 | bed | wide wood surface basic | 더블 침대 | bed |  |
+| basic-bed-3 | bedBunk | basic | bed | 3 | bed | tall wood surface basic | 2층 침대 | bed |  |
+| basic-desk-1 | desk | basic | desk | 1 | desk | wood surface basic | 책상 | table | catalogue slots must drop slot:pc |
+| basic-desk-2 | deskCorner | basic | desk | 2 | desk | corner wood surface basic | ㄴ자형 책상 | table | catalogue slots must drop slot:pc |
+| basic-table-1 | tableCoffee | basic | table | 1 | table | low long wood surface basic | 직사각형 나무 탁자 | table |  |
+| basic-table-2 | tableCoffeeGlass | basic | table | 2 | table | low long metal glass modern surface basic | 직사각형 유리 탁자 | table |  |
+| basic-table-3 | tableCoffeeSquare | basic | table | 3 | table | low square wood surface basic | 정사각형 나무 탁자 | table |  |
+| basic-table-4 | tableCoffeeGlassSquare | basic | table | 4 | table | low square metal glass modern surface basic | 정사각형 유리 탁자 | table |  |
+| basic-table-5 | table | basic | table | 5 | table | long wood surface basic | 식탁 | table |  |
+| basic-table-6 | tableCloth | basic | table | 6 | table | long cloth wood surface basic | 식탁보 있는 식탁 | table |  |
+| basic-table-7 | tableGlass | basic | table | 7 | table | long metal glass modern surface basic | 유리 식탁 | table |  |
+| basic-table-8 | tableCross | basic | table | 8 | table | long wood surface basic | 피크닉 테이블 | table |  |
+| basic-table-9 | tableCrossCloth | basic | table | 9 | table | long cloth wood surface basic | 식탁보 있는 피크닉 테이블 | table |  |
+| basic-table-10 | tableRound | basic | table | 10 | table | round wood surface basic | 원형 탁자 | table |  |
+| basic-table-11 | sideTable | basic | table | 11 | table | long wood surface basic | 좁은 탁자 | table |  |
+| basic-table-12 | sideTableDrawers | basic | table | 12 | table | long drawer wood surface basic | 서랍 있는 좁은 탁자 | table |  |
+| basic-chair-1 | chair | basic | chair | 1 | chair | wood seat:chair surface basic | 의자 | chair |  |
+| basic-chair-2 | chairCushion | basic | chair | 2 | chair | cushion wood seat:chair surface basic | 방석 의자 | chair |  |
+| basic-chair-3 | chairRounded | basic | chair | 3 | chair | round wood seat:chair surface basic | 둥근 의자 | chair |  |
+| basic-chair-4 | chairModernCushion | basic | chair | 4 | chair | cushion metal modern seat:chair surface basic | 금속 의자 | chair |  |
+| basic-chair-5 | chairModernFrameCushion | basic | chair | 5 | chair | cushion metal modern seat:chair surface basic | 둥근 금속 의자 | chair |  |
+| basic-chair-6 | chairDesk | basic | chair | 6 | chair | cushion metal cloth modern seat:chair surface basic | 책상 의자 | chair |  |
+| basic-chair-7 | stoolBar | basic | chair | 7 | chair | tall round wood seat:chair surface basic | 등받이 없는 둥근 의자 | chair |  |
+| basic-chair-8 | stoolBarSquare | basic | chair | 8 | chair | tall square wood seat:chair surface basic | 등받이 없는 의자 | chair |  |
+| basic-chair-9 | bench | basic | chair | 9 | chair | wood seat:chair surface basic | 벤치 | chair | was bench group |
+| basic-chair-10 | benchCushion | basic | chair | 10 | chair | cushion wood seat:chair surface basic | 방석 벤치 | chair | was bench group |
+| basic-chair-11 | benchCushionLow | basic | chair | 11 | chair | cushion low wood seat:chair surface basic | 등받이 없는 벤치 | chair | was bench group |
+| basic-chair-12 | loungeChairRelax | basic | chair | 12 | chair | cushion cloth seat:sofa surface basic | 안마의자 | sofa | lounge chair kept in chair (you sent only 1인 소파 and 1인 넓은 소파 to sofa); keeps seat:sofa |
+| basic-sofa-1 | loungeChair | basic | sofa | 1 | sofa chair | cushion cloth seat:sofa surface basic | 1인 소파 | sofa |  |
+| basic-sofa-2 | loungeDesignChair | basic | sofa | 2 | sofa chair | cushion wide cloth modern seat:sofa surface basic | 1인 넓은 소파 | sofa |  |
+| basic-sofa-3 | loungeSofa | basic | sofa | 3 | sofa chair | cushion cloth seat:sofa surface basic | 2인 소파 | sofa |  |
+| basic-sofa-4 | loungeSofaLong | basic | sofa | 4 | sofa chair | cushion long cloth seat:sofa surface basic | ㄴ자형 소파 | sofa |  |
+| basic-sofa-5 | loungeSofaCorner | basic | sofa | 5 | sofa chair | cushion corner cloth seat:sofa surface basic | 코너 소파 | sofa |  |
+| basic-sofa-6 | loungeDesignSofa | basic | sofa | 6 | sofa chair | cushion long cloth modern seat:sofa surface basic | 넓은 2인 소파 | sofa |  |
+| basic-sofa-7 | loungeDesignSofaCorner | basic | sofa | 7 | sofa chair | cushion corner wide cloth modern seat:sofa surface basic | 코너 넓은 2인 소파 | sofa |  |
+| basic-sofa-8 | loungeSofaOttoman | basic | sofa | 8 | sofa chair | cushion small low cloth seat:sofa surface basic | 소파 발받침대 | sofa | footstool; sofa seat rule gives seat at 0.37 of 0.46 height |
+| basic-lamp-1 | lampRoundFloor | basic | lamp | 1 | lamp | round floor tall metal light basic | 스탠드 조명 | lamp |  |
+| basic-lamp-2 | lampSquareFloor | basic | lamp | 2 | lamp | square floor tall modern light basic | 기둥형 조명 | lamp |  |
+| basic-lamp-3 | lampRoundTable | basic | lamp | 3 | lamp | round table light basic | 탁상 조명 | lamp |  |
+| basic-lamp-4 | lampSquareTable | basic | lamp | 4 | lamp | square table modern light basic | 사각형 탁상 조명 | lamp |  |
+| basic-lamp-5 | lampSquareCeiling | basic | lamp | 5 | lamp | square ceiling modern light basic | 사각형 천장 조명 | lamp |  |
+| basic-lamp-6 | lampWall | basic | lamp | 6 | lamp | wall modern light basic | 벽 부착형 조명 | lamp |  |
+| basic-rug-1 | rugRound | basic | rug | 1 | rug | round cloth seat:floor basic | 둥근 러그 | rug |  |
+| basic-rug-2 | rugSquare | basic | rug | 2 | rug | square cloth seat:floor basic | 정사각형 러그 | rug |  |
+| basic-rug-3 | rugRectangle | basic | rug | 3 | rug | long cloth seat:floor basic | 직사각형 러그 | rug |  |
+| basic-rug-4 | rugRounded | basic | rug | 4 | rug | long cloth seat:floor basic | 타원형 러그 | rug |  |
+| basic-rug-5 | rugDoormat | basic | rug | 5 | rug | small cloth basic | 현관 러그 | rug | no longer seatable (Yoon) |
+| basic-plant-1 | pottedPlant | basic | plant | 1 | plant | tall floor wood basic | 화분 1형(난초) | plant |  |
+| basic-plant-2 | plantSmall1 | basic | plant | 2 | plant | small table wood basic | 화분 2형(침엽수) | plant |  |
+| basic-plant-3 | plantSmall2 | basic | plant | 3 | plant | small table wood basic | 화분 3형(원통모양 활엽수) | plant |  |
+| basic-plant-4 | plantSmall3 | basic | plant | 4 | plant | small table wood basic | 화분 4형(뿔모양 활엽수) | plant |  |
+| basic-shelf-1 | bookcaseOpenLow | basic | shelf | 1 | shelf | low open wood surface slot:keepsake basic feature | 낮은 개방형 책장 | shelf |  |
+| basic-shelf-2 | bookcaseOpen | basic | shelf | 2 | shelf | tall open wood surface slot:keepsake basic feature | 높은 개방형 책장 | shelf |  |
+| basic-shelf-3 | bookcaseClosed | basic | shelf | 3 | shelf | tall wood surface slot:keepsake basic feature | 책장 | shelf |  |
+| basic-shelf-4 | bookcaseClosedDoors | basic | shelf | 4 | shelf | tall doors wood surface slot:keepsake basic feature | 닫힌 책장 | shelf |  |
+| basic-shelf-5 | bookcaseClosedWide | basic | shelf | 5 | shelf | wide wood surface slot:keepsake basic feature | 넓은 책장 | shelf |  |
+| basic-shelf-6 | cabinetBed | basic | shelf | 6 | shelf | small wood surface slot:keepsake basic feature | 침대 곁 서랍 | decor | nightstand; was cabinet; catalogue slots must add slot:keepsake |
+| basic-shelf-7 | cabinetBedDrawer | basic | shelf | 7 | shelf | small drawer wood surface slot:keepsake basic feature | 침대 곁 2구 서랍 | decor | nightstand; was cabinet; catalogue slots must add slot:keepsake |
+| basic-shelf-8 | cabinetBedDrawerTable | basic | shelf | 8 | shelf | small drawer wood surface slot:keepsake basic feature | 서랍 있는 협탁 | decor | nightstand; was cabinet; catalogue slots must add slot:keepsake |
+| basic-shelf-9 | cabinetTelevision | basic | shelf | 9 | shelf | long low wood surface slot:keepsake basic feature | TV장 | shelf | TV stand; was cabinet |
+| basic-shelf-10 | cabinetTelevisionDoors | basic | shelf | 10 | shelf | long low doors wood surface slot:keepsake basic feature | 문 달린 TV장 | shelf | TV stand; was cabinet |
+| basic-kitchen-1 | kitchenCabinet | basic | kitchen | 1 | kitchen | doors wood surface basic | 하부장 | kitchen |  |
+| basic-kitchen-2 | kitchenCabinetDrawer | basic | kitchen | 2 | kitchen | drawer wood surface basic | 서랍 하부장 | kitchen |  |
+| basic-kitchen-3 | kitchenCabinetCornerInner | basic | kitchen | 3 | kitchen | corner wood surface basic | 구석 하부장 | kitchen |  |
+| basic-kitchen-4 | kitchenCabinetCornerRound | basic | kitchen | 4 | kitchen | corner round wood surface basic | 구석 둥근 하부장 | kitchen |  |
+| basic-kitchen-5 | kitchenSink | basic | kitchen | 5 | kitchen | wood surface basic | 싱크대 | kitchen |  |
+| basic-kitchen-6 | kitchenStove | basic | kitchen | 6 | kitchen | wood metal surface basic | 가스레인지 오븐 | kitchen |  |
+| basic-kitchen-7 | kitchenStoveElectric | basic | kitchen | 7 | kitchen | wood metal modern surface basic | 인덕션 오븐 | kitchen |  |
+| basic-kitchen-8 | kitchenCabinetUpper | basic | kitchen | 8 | kitchen | wall doors wood basic | 상부장 | kitchen |  |
+| basic-kitchen-9 | kitchenCabinetUpperDouble | basic | kitchen | 9 | kitchen | wall doors wood basic | 양문 상부장 | kitchen |  |
+| basic-kitchen-10 | kitchenCabinetUpperLow | basic | kitchen | 10 | kitchen | wall low wood basic | 작은 상부장 | kitchen |  |
+| basic-kitchen-11 | kitchenCabinetUpperCorner | basic | kitchen | 11 | kitchen | wall corner open wood basic | 열린 상부장 | kitchen |  |
+| basic-kitchen-12 | hoodModern | basic | kitchen | 12 | kitchen | wall metal modern basic | 소형 레인지 후드 | kitchen |  |
+| basic-kitchen-13 | hoodLarge | basic | kitchen | 13 | kitchen | wall metal modern basic | 대형 레인지 후드 | kitchen |  |
+| basic-kitchen-14 | kitchenBar | basic | kitchen | 14 | kitchen | long wood surface basic | 바 테이블 | kitchen |  |
+| basic-kitchen-15 | kitchenBarEnd | basic | kitchen | 15 | kitchen | small wood surface basic | 바 테이블 모서리 | kitchen |  |
+| basic-kitchen-16 | kitchenFridgeSmall | basic | kitchen | 16 | kitchen | surface basic | 작은 1인 냉장고 | kitchen |  |
+| basic-kitchen-17 | kitchenFridge | basic | kitchen | 17 | kitchen | tall surface basic | 큰 1인 냉장고 | kitchen |  |
+| basic-kitchen-18 | kitchenFridgeLarge | basic | kitchen | 18 | kitchen | tall wide modern surface basic | 2인 냉장고 | kitchen |  |
+| basic-kitchen-19 | kitchenFridgeBuiltIn | basic | kitchen | 19 | kitchen | tall wood modern surface basic | 빌트인 냉장고 | kitchen |  |
+| basic-bath-1 | toilet | basic | bath | 1 | bath | round surface basic | 작은 변기 | kitchen |  |
+| basic-bath-2 | toiletSquare | basic | bath | 2 | bath | square modern surface basic | 사각형 변기 | kitchen |  |
+| basic-bath-3 | bathroomSink | basic | bath | 3 | bath | round surface basic | 세면대 | kitchen |  |
+| basic-bath-4 | bathroomSinkSquare | basic | bath | 4 | bath | square modern surface basic | 사각형 세면대 | kitchen |  |
+| basic-bath-5 | bathroomCabinet | basic | bath | 5 | bath | wall small wood surface basic | 화장실 수납장 | kitchen |  |
+| basic-bath-6 | bathroomCabinetDrawer | basic | bath | 6 | bath | drawer wood surface basic | 화장실 하부장 | kitchen |  |
+| basic-bath-7 | bathroomMirror | basic | bath | 7 | bath | wall wood glass basic | 화장실 거울 | kitchen |  |
+| basic-bath-8 | bathtub | basic | bath | 8 | bath | long surface basic | 욕조 | kitchen |  |
+| basic-bath-9 | shower | basic | bath | 9 | bath | square tall glass modern surface basic | 사각형 샤워부스 | kitchen |  |
+| basic-bath-10 | showerRound | basic | bath | 10 | bath | round tall glass modern surface basic | 둥근 샤워부스 | kitchen |  |
+| basic-appliance-1 | kitchenMicrowave | basic | appliance | 1 | appliance | table metal modern surface basic | 전자레인지 | kitchen |  |
+| basic-appliance-2 | kitchenCoffeeMachine | basic | appliance | 2 | appliance | table metal modern surface basic | 커피 머신 | kitchen |  |
+| basic-appliance-3 | toaster | basic | appliance | 3 | appliance | table small metal surface basic | 토스트기 | kitchen |  |
+| basic-appliance-4 | kitchenBlender | basic | appliance | 4 | appliance | table small metal glass surface basic | 믹서기 | kitchen |  |
+| basic-appliance-5 | washer | basic | appliance | 5 | appliance | metal modern surface basic | 세탁기 | decor |  |
+| basic-appliance-6 | dryer | basic | appliance | 6 | appliance | modern surface basic | 건조기 | decor |  |
+| basic-appliance-7 | washerDryerStacked | basic | appliance | 7 | appliance | tall modern surface basic | 세탁기와 건조기 | decor |  |
+| basic-appliance-8 | ceilingFan | basic | appliance | 8 | appliance | ceiling wood light basic | 실링팬 | decor |  |
+| basic-decor-1 | pillow | basic | decor | 1 | decor | cushion cloth basic | 쿠션 | decor |  |
+| basic-decor-2 | pillowLong | basic | decor | 2 | decor | cushion long cloth basic | 긴 쿠션 | decor |  |
+| basic-decor-3 | pillowBlue | basic | decor | 3 | decor | cushion small cloth basic | 파란 쿠션 | decor |  |
+| basic-decor-4 | pillowBlueLong | basic | decor | 4 | decor | cushion long cloth basic | 긴 파란 쿠션 | decor |  |
+| basic-decor-5 | books | basic | decor | 5 | decor | table cloth surface basic | 책 더미 | decor |  |
+| basic-decor-6 | bear | basic | decor | 6 | decor | wall wood basic | 곰 머리 | decor | mounted bear head |
+| basic-decor-7 | televisionModern | basic | decor | 7 | decor | wide metal modern surface slot:music slot:latest basic feature | TV | screen | was screen |
+| basic-decor-8 | televisionVintage | basic | decor | 8 | decor | wood metal surface slot:latest basic feature | 구형 TV | screen | was screen; catalogue slots must add slot:latest |
+| basic-decor-9 | televisionAntenna | basic | decor | 9 | decor | table small metal basic | TV 안테나 | screen | was screen |
+| basic-decor-10 | computerScreen | basic | decor | 10 | decor | table metal modern surface slot:pc basic feature | 모니터 | screen | was screen |
+| basic-decor-11 | laptop | basic | decor | 11 | decor | table metal modern surface slot:pc basic feature | 노트북 | screen | was screen |
+| basic-decor-12 | computerKeyboard | basic | decor | 12 | decor | table small metal modern surface basic | 키보드 | screen | was screen |
+| basic-decor-13 | computerMouse | basic | decor | 13 | decor | table small metal modern surface basic | 마우스 | screen | was screen |
+| basic-decor-14 | radio | basic | decor | 14 | decor | table wood metal surface slot:music basic feature | 라디오 | audio | was audio |
+| basic-decor-15 | speakerSmall | basic | decor | 15 | decor | small wood metal surface slot:music basic feature | 작은 스피커 | audio | was audio |
+| basic-decor-16 | speaker | basic | decor | 16 | decor | tall wood surface slot:music basic feature | 큰 스피커 | audio | was audio |
+| basic-decor-17 | cardboardBoxClosed | basic | decor | 17 | decor | square surface basic | 닫힌 박스 | decor |  |
+| basic-decor-18 | cardboardBoxOpen | basic | decor | 18 | decor | square basic | 열린 박스 | decor |  |
+| basic-decor-19 | trashcan | basic | decor | 19 | decor | metal surface basic | 쓰레기통 | decor |  |
+| basic-decor-20 | coatRack | basic | decor | 20 | decor | wall wood surface basic | 벽걸이 행거 | decor |  |
+| basic-decor-21 | coatRackStanding | basic | decor | 21 | decor | tall wood basic | 스탠딩 행거 | decor |  |
+| basic-structure-1 | wall | basic | structure | 1 | structure | basic | 벽 | decor |  |
+| basic-structure-2 | wallHalf | basic | structure | 2 | structure | basic | 반 벽 | decor |  |
+| basic-structure-3 | wallCorner | basic | structure | 3 | structure | corner basic | 구석 벽 | decor |  |
+| basic-structure-4 | wallCornerRond | basic | structure | 4 | structure | corner round basic | 둥근 벽 | decor | Kenney typo Rond = Round; alias keeps the typo |
+| basic-structure-5 | wallDoorway | basic | structure | 5 | structure | basic | 문틀 벽 | decor |  |
+| basic-structure-6 | wallDoorwayWide | basic | structure | 6 | structure | wide basic | 넓은 문틀 | decor |  |
+| basic-structure-7 | wallWindow | basic | structure | 7 | structure | basic | 창문 | decor |  |
+| basic-structure-8 | wallWindowSlide | basic | structure | 8 | structure | modern basic | 미닫이 창문 | decor |  |
+| basic-structure-9 | paneling | basic | structure | 9 | structure | wall wood surface basic | 패널 | decor |  |
+| basic-structure-10 | doorway | basic | structure | 10 | structure | wood surface basic | 문 | decor |  |
+| basic-structure-11 | doorwayFront | basic | structure | 11 | structure | modern surface basic | 현관 | decor |  |
+| basic-structure-12 | doorwayOpen | basic | structure | 12 | structure | wood surface basic | 문틀 | decor |  |
+| basic-structure-13 | floorFull | basic | structure | 13 | structure | square wood surface basic | 바닥 | decor |  |
+| basic-structure-14 | floorHalf | basic | structure | 14 | structure | wood surface basic | 반 바닥 | decor |  |
+| basic-structure-15 | floorCorner | basic | structure | 15 | structure | corner wood surface basic | 구석 바닥 | decor |  |
+| basic-structure-16 | floorCornerRound | basic | structure | 16 | structure | corner round wood surface basic | 둥근 구석 바닥 | decor |  |
+| basic-structure-17 | stairs | basic | structure | 17 | structure | wood surface basic | 계단 | decor |  |
+| basic-structure-18 | stairsOpen | basic | structure | 18 | structure | wood surface basic | 개방형 계단 | decor |  |
+| basic-structure-19 | stairsOpenSingle | basic | structure | 19 | structure | wood metal modern surface basic | 개방형 계단 2형 | decor |  |
+| basic-structure-20 | stairsCorner | basic | structure | 20 | structure | corner wood surface basic | 꺾인 계단 | decor |  |
+| holiday-chair-1 | holidayBenchShort | holiday | chair | 1 | chair | wood seat:chair holiday surface | 홀리데이 작은 벤치 | 크리스마스 | NEW seat: was not seatable |
+| holiday-chair-2 | holidayBench | holiday | chair | 2 | chair | wood long seat:chair holiday surface | 홀리데이 큰 벤치 | 크리스마스 | NEW seat: was not seatable |
+| holiday-lamp-1 | holidayLantern | holiday | lamp | 1 | lamp | metal floor tall light holiday surface | 가로등 | 크리스마스 | street lantern; engine lights lamps by shade material, check GLB has one |
+| holiday-lamp-2 | holidayLanternHanging | holiday | lamp | 2 | lamp | metal ceiling light holiday | 걸이형 랜턴 | 크리스마스 | engine lights lamps by shade material, check GLB has one |
+| holiday-plant-1 | holidayTree | holiday | plant | 1 | plant | tall holiday | 전나무 | 크리스마스 | plain pine |
+| holiday-plant-2 | holidayTreeSnowA | holiday | plant | 2 | plant seasonal | tall winter holiday | 눈 덮인 전나무 1형 | 크리스마스 |  |
+| holiday-plant-3 | holidayTreeSnowB | holiday | plant | 3 | plant seasonal | tall winter holiday | 눈 덮인 전나무 2형 | 크리스마스 |  |
+| holiday-plant-4 | holidayTreeSnowC | holiday | plant | 4 | plant seasonal | tall winter holiday | 눈 덮인 전나무 3형 | 크리스마스 |  |
+| holiday-plant-5 | holidayTreeDecorated | holiday | plant | 5 | plant seasonal | tall christmas holiday slot:tree feature | 크리스마스 트리 | 크리스마스 |  |
+| holiday-plant-6 | holidayTreeDecoratedSnow | holiday | plant | 6 | plant seasonal | tall christmas winter holiday | 눈 덮인 크리스마스 트리 | 크리스마스 |  |
+| holiday-decor-1 | holidayWreath | holiday | decor | 1 | decor seasonal | wall christmas holiday | 리스 | 크리스마스 |  |
+| holiday-decor-2 | holidayWreathDecorated | holiday | decor | 2 | decor seasonal | wall christmas holiday | 장식 리스 | 크리스마스 |  |
+| holiday-decor-3 | holidayLightsColored | holiday | decor | 3 | decor seasonal | wall christmas light holiday | 색색 전구 줄 | 크리스마스 | string lights; decor, not lamp (lamp would make the engine light them) |
+| holiday-decor-4 | holidayLightsRed | holiday | decor | 4 | decor seasonal | wall christmas light holiday | 빨간 전구 줄 | 크리스마스 |  |
+| holiday-decor-5 | holidayLightsGreen | holiday | decor | 5 | decor seasonal | wall christmas light holiday | 초록 전구 줄 | 크리스마스 |  |
+| holiday-decor-6 | holidaySockRed | holiday | decor | 6 | decor seasonal | wall christmas holiday | 빨간 양말 | 크리스마스 |  |
+| holiday-decor-7 | holidaySockRedCane | holiday | decor | 7 | decor seasonal | wall christmas holiday | 사탕 든 빨간 양말 | 크리스마스 |  |
+| holiday-decor-8 | holidaySockGreen | holiday | decor | 8 | decor seasonal | wall christmas holiday | 초록 양말 | 크리스마스 |  |
+| holiday-decor-9 | holidaySockGreenCane | holiday | decor | 9 | decor seasonal | wall christmas holiday | 사탕 든 초록 양말 | 크리스마스 |  |
+| holiday-decor-10 | holidayCandyCaneRed | holiday | decor | 10 | decor seasonal | small christmas holiday | 빨간 지팡이 사탕 | 크리스마스 |  |
+| holiday-decor-11 | holidayCandyCaneGreen | holiday | decor | 11 | decor seasonal | small christmas holiday | 초록 지팡이 사탕 | 크리스마스 |  |
+| holiday-decor-12 | holidayGingerbreadMan | holiday | decor | 12 | decor seasonal | small christmas holiday | 진저브레드 남자 | 크리스마스 |  |
+| holiday-decor-13 | holidayGingerbreadWoman | holiday | decor | 13 | decor seasonal | small christmas holiday | 진저브레드 여자 | 크리스마스 |  |
+| holiday-decor-14 | holidayNutcracker | holiday | decor | 14 | decor seasonal | tall wood christmas holiday surface | 호두까기 인형 | 크리스마스 |  |
+| holiday-decor-15 | holidayReindeer | holiday | decor | 15 | decor seasonal | christmas holiday | 순록 | 크리스마스 |  |
+| holiday-decor-16 | holidayPresentACube | holiday | decor | 16 | decor seasonal | square christmas holiday | 정사각형 흰 선물 상자 | 크리스마스 |  |
+| holiday-decor-17 | holidayPresentARectangle | holiday | decor | 17 | decor seasonal | long christmas holiday | 직사각형 흰 선물 상자 | 크리스마스 |  |
+| holiday-decor-18 | holidayPresentARound | holiday | decor | 18 | decor seasonal | round christmas holiday | 둥근 흰 선물 상자 | 크리스마스 |  |
+| holiday-decor-19 | holidayPresentBCube | holiday | decor | 19 | decor seasonal | square christmas holiday | 정사각형 초록 선물 상자 | 크리스마스 |  |
+| holiday-decor-20 | holidayPresentBRectangle | holiday | decor | 20 | decor seasonal | long christmas holiday | 직사각형 초록 선물 상자 | 크리스마스 |  |
+| holiday-decor-21 | holidayPresentBRound | holiday | decor | 21 | decor seasonal | round christmas holiday | 둥근 초록 선물 상자 | 크리스마스 |  |
+| holiday-decor-22 | holidaySnowman | holiday | decor | 22 | decor seasonal | winter holiday | 눈사람 | 크리스마스 |  |
+| holiday-decor-23 | holidaySnowmanHat | holiday | decor | 23 | decor seasonal | winter holiday surface | 모자 쓴 눈사람 | 크리스마스 |  |
+| holiday-decor-24 | holidaySnowflakeA | holiday | decor | 24 | decor seasonal | small winter holiday surface | 눈송이 1형 | 크리스마스 |  |
+| holiday-decor-25 | holidaySnowflakeB | holiday | decor | 25 | decor seasonal | small winter holiday surface | 눈송이 2형 | 크리스마스 |  |
+| holiday-decor-26 | holidaySnowflakeC | holiday | decor | 26 | decor seasonal | small winter holiday | 눈송이 3형 | 크리스마스 |  |
+| holiday-decor-27 | holidaySled | holiday | decor | 27 | decor seasonal | wood winter holiday surface | 썰매 | 크리스마스 |  |
+| holiday-decor-28 | holidaySledLong | holiday | decor | 28 | decor seasonal | wood long winter holiday surface | 긴 썰매 | 크리스마스 |  |
+| holiday-decor-29 | holidayHanukkahMenorah | holiday | decor | 29 | decor seasonal | metal table hanukkah holiday | 메노라 | 크리스마스 |  |
+| holiday-decor-30 | holidayHanukkahMenorahCandles | holiday | decor | 30 | decor seasonal | metal table hanukkah light holiday | 촛불 켠 메노라 | 크리스마스 |  |
+| holiday-decor-31 | holidayHanukkahDreidel | holiday | decor | 31 | decor seasonal | wood small table hanukkah holiday | 드레이들 | 크리스마스 |  |
+| holiday-decor-32 | holidayKwanzaaKinara | holiday | decor | 32 | decor seasonal | wood table kwanzaa holiday surface | 키나라 | 크리스마스 |  |
+| holiday-decor-33 | holidayKwanzaaKinaraAlternative | holiday | decor | 33 | decor seasonal | wood table kwanzaa holiday surface | 키나라 2형 | 크리스마스 |  |
+| holiday-decor-34 | holidayKwanzaaKikombe | holiday | decor | 34 | decor seasonal | small table kwanzaa holiday surface | 키콤베 잔 | 크리스마스 |  |
+| holiday-decor-35 | holidayFestivusPole | holiday | decor | 35 | decor seasonal | metal tall festivus holiday | 페스티버스 기둥 | 크리스마스 | season tag festivus is new |
+| holiday-decor-36 | holidayTrainLocomotive | holiday | decor | 36 | decor seasonal | metal small christmas holiday surface | 장난감 기관차 | 크리스마스 | toy train |
+| holiday-decor-37 | holidayTrainTender | holiday | decor | 37 | decor seasonal | metal small christmas holiday surface | 장난감 탄수차 | 크리스마스 | toy train |
+| holiday-decor-38 | holidayTrainWagon | holiday | decor | 38 | decor seasonal | metal small christmas holiday surface | 장난감 객차 | 크리스마스 | toy train |
+| holiday-decor-39 | holidayTrainWagonShort | holiday | decor | 39 | decor seasonal | metal small christmas holiday surface | 짧은 장난감 객차 | 크리스마스 | toy train |
+| holiday-decor-40 | holidayTrainWagonFlat | holiday | decor | 40 | decor seasonal | metal small christmas holiday surface | 장난감 평판 화차 | 크리스마스 | toy train |
+| holiday-decor-41 | holidayTrainWagonFlatShort | holiday | decor | 41 | decor seasonal | metal small christmas holiday surface | 짧은 장난감 평판 화차 | 크리스마스 | toy train |
+| holiday-decor-42 | holidayTrainWagonLogs | holiday | decor | 42 | decor seasonal | metal wood small christmas holiday surface | 통나무 실은 장난감 화차 | 크리스마스 | toy train |
+| holiday-structure-1 | holidayCabinWall | holiday | structure | 1 | structure | wood holiday | 통나무 벽 | 크리스마스 |  |
+| holiday-structure-2 | holidayCabinWallLow | holiday | structure | 2 | structure | wood low holiday | 낮은 통나무 벽 | 크리스마스 |  |
+| holiday-structure-3 | holidayCabinWallRoof | holiday | structure | 3 | structure | wood holiday | 박공 통나무 벽 | 크리스마스 |  |
+| holiday-structure-4 | holidayCabinWallRoofCenter | holiday | structure | 4 | structure | wood holiday | 가운데 박공 통나무 벽 | 크리스마스 |  |
+| holiday-structure-5 | holidayCabinWallWreath | holiday | structure | 5 | structure | wood christmas holiday | 리스 단 통나무 벽 | 크리스마스 |  |
+| holiday-structure-6 | holidayCabinCorner | holiday | structure | 6 | structure | wood corner holiday | 통나무 기둥 | 크리스마스 |  |
+| holiday-structure-7 | holidayCabinCornerBottom | holiday | structure | 7 | structure | wood corner holiday | 아래 통나무 기둥 | 크리스마스 |  |
+| holiday-structure-8 | holidayCabinCornerLogs | holiday | structure | 8 | structure | wood corner holiday surface | 구석 통나무 벽 | 크리스마스 |  |
+| holiday-structure-9 | holidayCabinWindowA | holiday | structure | 9 | structure | wood holiday surface | 통나무 창문 1형 | 크리스마스 |  |
+| holiday-structure-10 | holidayCabinWindowB | holiday | structure | 10 | structure | wood holiday surface | 통나무 창문 2형 | 크리스마스 |  |
+| holiday-structure-11 | holidayCabinWindowC | holiday | structure | 11 | structure | wood holiday surface | 통나무 창문 3형 | 크리스마스 |  |
+| holiday-structure-12 | holidayCabinWindowLarge | holiday | structure | 12 | structure | wood wide holiday surface | 큰 통나무 창문 | 크리스마스 |  |
+| holiday-structure-13 | holidayCabinDoorway | holiday | structure | 13 | structure | wood holiday surface | 통나무 문틀 | 크리스마스 |  |
+| holiday-structure-14 | holidayCabinDoorwayLeft | holiday | structure | 14 | structure | wood holiday | 왼쪽 통나무 문틀 | 크리스마스 |  |
+| holiday-structure-15 | holidayCabinDoorwayRight | holiday | structure | 15 | structure | wood holiday | 오른쪽 통나무 문틀 | 크리스마스 |  |
+| holiday-structure-16 | holidayCabinDoorwayCenter | holiday | structure | 16 | structure | wood holiday | 통나무 문틀 윗부분 | 크리스마스 | h 0.26: lintel piece only |
+| holiday-structure-17 | holidayCabinDoorRotate | holiday | structure | 17 | structure | wood holiday surface | 통나무 문 | 크리스마스 |  |
+| holiday-structure-18 | holidayCabinOverhangDoorway | holiday | structure | 18 | structure | wood holiday surface | 처마 있는 통나무 문틀 | 크리스마스 |  |
+| holiday-structure-19 | holidayCabinOverhangDoorRotate | holiday | structure | 19 | structure | wood holiday surface | 처마 있는 통나무 문 | 크리스마스 |  |
+| holiday-structure-20 | holidayCabinFence | holiday | structure | 20 | structure | wood low holiday | 통나무 울타리 | 크리스마스 |  |
+| holiday-structure-21 | holidayCabinRoof | holiday | structure | 21 | structure | holiday | 지붕 | 크리스마스 |  |
+| holiday-structure-22 | holidayCabinRoofPoint | holiday | structure | 22 | structure | holiday | 뾰족 지붕 | 크리스마스 |  |
+| holiday-structure-23 | holidayCabinRoofCorner | holiday | structure | 23 | structure | corner holiday | 구석 지붕 | 크리스마스 |  |
+| holiday-structure-24 | holidayCabinRoofDormer | holiday | structure | 24 | structure | holiday | 지붕창 | 크리스마스 |  |
+| holiday-structure-25 | holidayCabinRoofChimney | holiday | structure | 25 | structure | holiday | 굴뚝 지붕 | 크리스마스 |  |
+| holiday-structure-26 | holidayCabinRoofTop | holiday | structure | 26 | structure | wood holiday | 용마루 | 크리스마스 |  |
+| holiday-structure-27 | holidayCabinRoofSnow | holiday | structure | 27 | structure | winter holiday | 눈 덮인 지붕 | 크리스마스 |  |
+| holiday-structure-28 | holidayCabinRoofSnowPoint | holiday | structure | 28 | structure | winter holiday surface | 눈 덮인 뾰족 지붕 | 크리스마스 |  |
+| holiday-structure-29 | holidayCabinRoofSnowCorner | holiday | structure | 29 | structure | corner winter holiday | 눈 덮인 구석 지붕 | 크리스마스 |  |
+| holiday-structure-30 | holidayCabinRoofSnowDormer | holiday | structure | 30 | structure | winter holiday surface | 눈 덮인 지붕창 | 크리스마스 |  |
+| holiday-structure-31 | holidayCabinRoofSnowChimney | holiday | structure | 31 | structure | winter holiday | 눈 덮인 굴뚝 지붕 | 크리스마스 |  |
+| holiday-structure-32 | holidayFloorWood | holiday | structure | 32 | structure | wood square holiday | 나무 바닥 | 크리스마스 |  |
+| holiday-structure-33 | holidayFloorWoodSnow | holiday | structure | 33 | structure | wood square winter holiday | 눈 덮인 나무 바닥 | 크리스마스 |  |
+| holiday-structure-34 | holidayFloorStone | holiday | structure | 34 | structure | square holiday | 돌 바닥 | 크리스마스 |  |
+| holiday-structure-35 | holidaySnowFlat | holiday | structure | 35 | structure | winter holiday surface | 눈 바닥 | 크리스마스 |  |
+| holiday-structure-36 | holidaySnowFlatLarge | holiday | structure | 36 | structure | wide winter holiday | 넓은 눈 바닥 | 크리스마스 |  |
+| holiday-structure-37 | holidaySnowPile | holiday | structure | 37 | structure | winter holiday | 눈 더미 | 크리스마스 |  |
+| holiday-structure-38 | holidaySnowBunker | holiday | structure | 38 | structure | winter holiday | 눈 벽 | 크리스마스 |  |
+| holiday-structure-39 | holidayRocksSmall | holiday | structure | 39 | structure | holiday winter | 작은 바위 | 크리스마스 | terrain |
+| holiday-structure-40 | holidayRocksMedium | holiday | structure | 40 | structure | holiday winter | 중간 바위 | 크리스마스 | terrain |
+| holiday-structure-41 | holidayRocksLarge | holiday | structure | 41 | structure | wide holiday winter | 큰 바위 | 크리스마스 | terrain |
+| holiday-structure-42 | holidayTrainsetRailStraight | holiday | structure | 42 | structure | metal holiday | 직선 선로 | 크리스마스 |  |
+| holiday-structure-43 | holidayTrainsetRailCorner | holiday | structure | 43 | structure | metal corner holiday | 구석 선로 | 크리스마스 |  |
+| holiday-structure-44 | holidayTrainsetRailBend | holiday | structure | 44 | structure | metal holiday | 굽은 선로 | 크리스마스 |  |
+| holiday-structure-45 | holidayTrainsetRailDetailedStraight | holiday | structure | 45 | structure | metal holiday | 침목 있는 직선 선로 | 크리스마스 |  |
+| holiday-structure-46 | holidayTrainsetRailDetailedCorner | holiday | structure | 46 | structure | metal corner holiday | 침목 있는 구석 선로 | 크리스마스 |  |
+| holiday-structure-47 | holidayTrainsetRailDetailedBend | holiday | structure | 47 | structure | metal holiday surface | 침목 있는 굽은 선로 | 크리스마스 |  |
+| cmms-bed-1 | bed | cmms | bed | 1 | bed | wide feature | 침대 | (hand type) | LATER STEP. not seatable today |
+| cmms-table-1 | lowTable | cmms | table | 1 | table | low wide | 좌식 탁자 | (hand type) | LATER STEP. carries its own rug {w,d} |
+| cmms-shelf-1 | shelf | cmms | shelf | 1 | shelf | low wood slot:keepsake feature | 앨범 책장 (낮은) | (hand type) | LATER STEP. style absent or "low" |
+| cmms-shelf-2 | shelf/tall | cmms | shelf | 2 | shelf | tall wood slot:keepsake feature | 앨범 책장 (키 큰) | (hand type) | LATER STEP. style "tall" |
+| cmms-lamp-1 | lamp | cmms | lamp | 1 | lamp | floor light | 조명 | (hand type) | LATER STEP. |
+| cmms-plant-1 | plant | cmms | plant | 1 | plant | floor | 화분 | (hand type) | LATER STEP. item.size scales it |
+| cmms-plant-2 | snake | cmms | plant | 2 | plant | floor | 산세베리아 | (hand type) | LATER STEP. |
+| cmms-decor-1 | books | cmms | decor | 1 | decor | table | 책 더미 | (hand type) | LATER STEP. |
+| cmms-decor-2 | frame | cmms | decor | 2 | decor | wall slot:keepsake feature | 벽 액자 | (hand type) | LATER STEP. |
+| cmms-decor-3 | poster | cmms | decor | 3 | decor | wall | 포스터 | (hand type) | LATER STEP. |
+| cmms-decor-4 | calendar | cmms | decor | 4 | decor | table slot:calendar feature | 탁상 달력 | (hand type) | LATER STEP. |
+| cmms-decor-5 | guestbook | cmms | decor | 5 | decor | table | 방명록 | (hand type) | LATER STEP. feature object |
+| cmms-decor-6 | guestbook/stand | cmms | decor | 6 | decor | wood | 방명록 (받침째) | (hand type) | LATER STEP. style "stand"; feature object |
+| cmms-decor-7 | screen | cmms | decor | 7 | decor | wall wide | 스크린 | (hand type) | LATER STEP. was screen |
+| cmms-decor-8 | projector | cmms | decor | 8 | decor |  | 영사기 | (hand type) | LATER STEP. was screen |
+| cmms-decor-9 | phone | cmms | decor | 9 | decor | small table | 휴대폰 | (hand type) | LATER STEP. was screen |
+| cmms-heap-1 | heap | cmms | heap | 1 | heap |  | 사진 더미 | (hand type) | LATER STEP. NEW PURPOSE heap proposed (not in closed list) |
+| cmms-heap-2 | heap/box | cmms | heap | 2 | heap |  | 사진 더미 (상자) | (hand type) | LATER STEP. style "box"; NEW PURPOSE heap proposed |
+| cmms-structure-1 | window | cmms | structure | 1 | structure | wall | 창문 | (hand type) | LATER STEP. cuts a hole in the wall; w,h per item |
+| cmms-structure-2 | door | cmms | structure | 2 | structure | wall | 문 | (hand type) | LATER STEP. layout.door, not a layout item today |
+
+## Counts
+
+- basic-bed: 3
+- basic-desk: 2
+- basic-table: 12
+- basic-chair: 12
+- basic-sofa: 8
+- basic-lamp: 6
+- basic-rug: 5
+- basic-plant: 4
+- basic-shelf: 10
+- basic-kitchen: 19
+- basic-bath: 10
+- basic-appliance: 8
+- basic-decor: 21
+- basic-structure: 20
+- holiday-chair: 2
+- holiday-lamp: 2
+- holiday-plant: 6
+- holiday-decor: 42
+- holiday-structure: 47
+- cmms-bed: 1
+- cmms-table: 1
+- cmms-shelf: 2
+- cmms-lamp: 1
+- cmms-plant: 2
+- cmms-decor: 9
+- cmms-heap: 2
+- cmms-structure: 2

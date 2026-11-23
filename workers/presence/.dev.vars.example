@@ -1,0 +1,3 @@
+# .dev.vars 로 복사해서 값을 채운다. Next .env.local 의 PRESENCE_TICKET_SECRET 과 같은 값.
+PRESENCE_TICKET_SECRET=
+ALLOWED_ORIGINS=http://localhost:3000

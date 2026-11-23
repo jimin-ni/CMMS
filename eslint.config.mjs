@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // presence 워커는 자기 tsconfig와 테스트로 검사한다 (workers/presence).
+    "workers/**",
   ]),
 ]);
 

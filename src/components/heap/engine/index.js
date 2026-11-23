@@ -32,6 +32,7 @@ import { setupPanels } from './panels.js';
 import { setupTree } from './tree.js';
 import { setupLive } from './live.js';
 import { setupInput } from './input.js';
+import { setupPresence } from './presence.js';
 import { setupPath } from './path.js';
 import { setupEdit } from './edit.js';
 import { setupDockThumbs } from './dock-thumbs.js';
@@ -65,7 +66,7 @@ const HIDDEN = ['cardview', 'visit', 'albumrow', 'stand', 'flip', 'srclink', 'ej
  * 쪽지 쓰기(tree-write.js): opts.addNote(input) 는 { ok, note(엔진 모양), evictedId } 또는 { ok: false, reason, message }, opts.deleteNote(id) 는 { ok } 또는 { ok: false, reason, message }, opts.signIn() 은 로그인 화면으로 보내고, opts.openWrite 가 참이면 트리 모드와 쓰기 판을 열고 opts.consumeWrite() 를 부른다.
  * 쪽지 트리: opts.treeNotes (tree-ids.js 의 toEngineNote 로 바꾼 목록, 없으면 빈 트리), opts.noteRevealAt (ISO 또는 null), opts.isOwner, opts.unreadNotes. 폴링(live.js)이 같은 변환으로 합친다.
  * @param {HTMLElement} root
- * @param {{ roomId: string, roomUuid: string, dataBase: string, modelBase?: string, data: any, viewerName: string | null, signedIn: boolean, pollMs: number, bubbleHref: string, navigate: (href: string) => void, parseLink: (url: string) => ({ platform: string, externalId: string, wide: boolean | null } | null), parseMusic: (url: string) => ({ video: string | null, list: string | null } | null), isSafeLink: (v: unknown) => boolean, isWebLink: (v: unknown) => boolean, isEmail: (v: unknown) => boolean, recordVisit: () => Promise<any>, addGuestbook: (name: string) => Promise<any>, onNavigate: (roomId: string) => void, itemHalfExtents: (item: any) => ({ hx: number, hz: number } | null), placementError: (item: any, room: { w: number, d: number }, table: { x: number, z: number }) => (string | null), surfaces?: any, policy: { frameY: number, frameWallMargin: number, groundColour?: string }, treeNotes?: any[], noteRevealAt?: string | null, isOwner?: boolean, unreadNotes?: number, addNote?: (input: any) => Promise<any>, deleteNote?: (noteId: string) => Promise<any>, replyNote?: (noteId: string, input: any) => Promise<any>, setHidden?: (noteId: string, hidden: boolean) => Promise<any>, markNoteRead?: (noteId: string) => Promise<any>, refetchNotes?: () => Promise<any>, signIn?: () => void, askSignIn?: () => void, openWrite?: boolean, consumeWrite?: () => void, resume?: any }} opts
+ * @param {{ roomId: string, roomUuid: string, dataBase: string, modelBase?: string, data: any, viewerName: string | null, signedIn: boolean, pollMs: number, bubbleHref: string, navigate: (href: string) => void, parseLink: (url: string) => ({ platform: string, externalId: string, wide: boolean | null } | null), parseMusic: (url: string) => ({ video: string | null, list: string | null } | null), isSafeLink: (v: unknown) => boolean, isWebLink: (v: unknown) => boolean, isEmail: (v: unknown) => boolean, recordVisit: () => Promise<any>, addGuestbook: (name: string) => Promise<any>, onNavigate: (roomId: string) => void, itemHalfExtents: (item: any) => ({ hx: number, hz: number } | null), placementError: (item: any, room: { w: number, d: number }, table: { x: number, z: number }) => (string | null), surfaces?: any, policy: { frameY: number, frameWallMargin: number, groundColour?: string }, treeNotes?: any[], noteRevealAt?: string | null, isOwner?: boolean, unreadNotes?: number, addNote?: (input: any) => Promise<any>, deleteNote?: (noteId: string) => Promise<any>, replyNote?: (noteId: string, input: any) => Promise<any>, setHidden?: (noteId: string, hidden: boolean) => Promise<any>, markNoteRead?: (noteId: string) => Promise<any>, refetchNotes?: () => Promise<any>, signIn?: () => void, askSignIn?: () => void, openWrite?: boolean, consumeWrite?: () => void, resume?: any, presence?: any }} opts
  * @returns {() => void}
  */
 export function mountRoom(root, opts) {
@@ -123,6 +124,7 @@ async function run(ctx) {
   setupTree(ctx); // 쪽지 트리 모드. ctx.goTo(modes.js), ctx.me(walk.js)는 쓸 때 읽으므로 여기서 세워도 된다
   setupLive(ctx);
   setupInput(ctx);
+  setupPresence(ctx); // 방 함께 있기 (opts.presence 가 있을 때만). 내 캐릭터(walk.js), 더미 자리(props.js), 오버레이(input.js)를 읽는다
   setupNav(ctx); // 온보딩 내비게이션 바의 이동 훅 (heap:go). 보내지 않으면 아무 일도 없다
   setupPath(ctx);
   setupDockThumbs(ctx); // 꾸미기 가구 목록의 그림 (heap:thumb)

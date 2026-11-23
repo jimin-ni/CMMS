@@ -5,17 +5,22 @@
 //   heap-room.tsx 가 꾸미기 밖에서 heap:viewtime 으로 엔진에 넘긴다. 아직 고르지 않았으면(null) 방 주인이 정한 시간대 그대로다.
 // - language, theme, volume: 고르면 저장만 한다. 아직 화면에 반영하는 곳이 없다 (다국어, 다크 모드, 소리 재생이 아직 없다).
 //   예외: volume.music 은 방의 배경음악(heap/room-bgm.tsx)이 쓴다.
+// - presence: 방 함께 있기 (heap-room.tsx, docs/dev/presence.md). show 는 이름 공개 규칙(입장 티켓에 서명된다),
+//   hideMe 는 나를 숨김(연결하지 않는다. 다른 사람도 보이지 않는다), hideOthers 는 다른 사람 숨김(나는 계속 보인다).
 import { useSyncExternalStore } from "react";
 
 export const LANGUAGES = ["ko", "en"] as const;
 export const THEMES = ["light", "dark"] as const;
 export const ROOM_TIMES = ["auto", "morning", "noon", "dusk", "night"] as const;
 export const VOLUME_KEYS = ["video", "music", "effects"] as const;
+export const NAME_SHOWS = ["hidden", "creators", "followers"] as const;
 
 export type Language = (typeof LANGUAGES)[number];
 export type Theme = (typeof THEMES)[number];
 export type RoomTime = (typeof ROOM_TIMES)[number];
 export type VolumeKey = (typeof VOLUME_KEYS)[number];
+export type NameShow = (typeof NAME_SHOWS)[number];
+export type PresencePrefs = { show: NameShow; hideMe: boolean; hideOthers: boolean };
 
 export type Prefs = {
   language: Language;
@@ -23,6 +28,7 @@ export type Prefs = {
   roomTime: RoomTime | null;
   // 0~100
   volume: Record<VolumeKey, number>;
+  presence: PresencePrefs;
 };
 
 export const DEFAULT_PREFS: Prefs = {
@@ -31,6 +37,8 @@ export const DEFAULT_PREFS: Prefs = {
   roomTime: null,
   // 배경음악은 꺼진 채(0) 시작한다. 설정의 소리 쪽에서 키우면 그때부터 튼다 (room-bgm.tsx).
   volume: { video: 80, music: 0, effects: 70 },
+  // 이름은 기본으로 가린다 (모두에게 "방문자")
+  presence: { show: "hidden", hideMe: false, hideOthers: false },
 };
 
 const KEY = "cmms:prefs";
@@ -51,6 +59,7 @@ function parse(raw: string | null): Prefs {
     // 깨진 값
   }
   const vol = (v.volume && typeof v.volume === "object" ? v.volume : {}) as Record<string, unknown>;
+  const pres = (v.presence && typeof v.presence === "object" ? v.presence : {}) as Record<string, unknown>;
   return {
     language: pick(LANGUAGES, v.language, DEFAULT_PREFS.language),
     theme: pick(THEMES, v.theme, DEFAULT_PREFS.theme),
@@ -59,6 +68,11 @@ function parse(raw: string | null): Prefs {
       video: level(vol.video, DEFAULT_PREFS.volume.video),
       music: level(vol.music, DEFAULT_PREFS.volume.music),
       effects: level(vol.effects, DEFAULT_PREFS.volume.effects),
+    },
+    presence: {
+      show: pick(NAME_SHOWS, pres.show, DEFAULT_PREFS.presence.show),
+      hideMe: pres.hideMe === true,
+      hideOthers: pres.hideOthers === true,
     },
   };
 }
