@@ -25,7 +25,7 @@ import type { HeapChannelPlatform } from "@/lib/heap/platform";
 import type { ReelClass } from "@/lib/heap/caps";
 import { toEngineNote } from "./engine/tree-ids";
 import { RoomBgm } from "./room-bgm";
-import { ANIM_TEST, DEBUG_ON, saveDebugFlags } from "./engine/debug-flags";
+import { ANIM_TEST, DEBUG_ON, SHADOW_TEST, saveDebugFlags } from "./engine/debug-flags";
 import { authClient } from "@/lib/auth-client";
 
 // 디버그 값은 페이지가 뜰 때 정해지고 바뀌지 않는다
@@ -183,6 +183,14 @@ export function HeapRoom({
     ANIM_TEST[key] = !ANIM_TEST[key];
     saveDebugFlags();
     setAnimTest({ ...ANIM_TEST });
+  };
+  // 그림자 보기: all 그대로, room 방 밖 그림자 감추기, none 모두 감추기 (engine/shell.js 의 applyShadowMode)
+  const [shadowMode, setShadowMode] = useState(SHADOW_TEST.mode);
+  const pickShadow = (mode: string) => {
+    SHADOW_TEST.mode = mode;
+    saveDebugFlags();
+    setShadowMode(mode);
+    rootRef.current?.dispatchEvent(new CustomEvent("heap:shadow"));
   };
   const debugSignOut = async () => {
     await authClient.signOut();
@@ -541,6 +549,14 @@ export function HeapRoom({
                 <button type="button" aria-pressed={animTest.bauble} onClick={() => toggleAnim("bauble")}>
                   장식 열기 {animTest.bauble ? "켬" : "끔"}
                 </button>
+                <label className="debug-select">
+                  그림자
+                  <select value={shadowMode} onChange={(e) => pickShadow(e.target.value)}>
+                    <option value="all">그대로</option>
+                    <option value="room">방 밖 감추기</option>
+                    <option value="none">모두 감추기</option>
+                  </select>
+                </label>
                 {signedIn && (
                   <button type="button" onClick={debugSignOut}>
                     로그아웃

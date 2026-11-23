@@ -101,6 +101,10 @@ export function setupDev(ctx) {
     } else if (cmd === 'walk') { ctx.walkRoute(new THREE.Vector3(e.detail.at[0], 0, e.detail.at[1]), null); cb({ walking: !!ctx.walkTo, camGoal: !!ctx.camGoal }); } // 바닥 클릭과 같은 길로 걷기 (detail.at = [x, z])
     else if (cmd === 'me') cb({ x: ctx.me.position.x, y: ctx.me.position.y, z: ctx.me.position.z, ry: ctx.me.rotation.y, legL: ctx.legL.rotation.x, mode: ctx.mode, perch: !!ctx.perch, walking: !!ctx.walkTo }); // 내 캐릭터 자리와 자세 (걷기 시험)
     else if (cmd === 'state') cb({ ground: (g => g ? { visible: g.visible, y: g.position.y, img: g.material.map?.image?.width } : null)(ctx.scene.getObjectByName('ground')), layoutGround: ctx.layout.ground ?? null, mode: ctx.mode, slots: ctx.build.slots.map(s => s.fn?.kind), slotMeshes: ctx.build.slotMeshes.length, seatMeshes: ctx.build.seatMeshes.length });
+    else if (cmd === 'lights') cb({ // 그림자와 불빛 시험: 해 그림자, 땅이 그림자를 받는지, 램프마다 불빛 세기와 작은 빛 구슬이 보이는지
+      sunShadow: !!ctx.sun?.castShadow, groundShadow: ctx.ground ? ctx.ground.receiveShadow : null,
+      lamps: ctx.build.lamps.map(l => ({ light: l.light ? +l.light.intensity.toFixed(2) : null, fixed: l.fixed ?? null, mark: l.mark ? l.mark.visible : null })),
+    });
     else if (cmd === 'export') {
       const { GLTFExporter } = await import('three/examples/jsm/exporters/GLTFExporter.js');
       // Blender 의 목록에서 알아보도록 가구 묶음에 이름을 붙인다 (엔진은 이름을 쓰지 않는다)
