@@ -7,6 +7,7 @@ export type PresenceStatus = "idle" | "connecting" | "open" | "closed" | "full" 
 // 서버가 보내는 메시지. 모양 검사는 엔진(presence.js)이 쓰는 필드만 한다. "reset" 은 연결이 끊겼다는 이 파일의 신호다.
 export type PresenceIn = { t: string; [key: string]: unknown };
 export type PresenceOut = { t: string; [key: string]: unknown };
+export type PeerSnapshot = { peer: string; name: string; colour: number; state: string; p: [number, number] | null; ry: number };
 
 export type PresenceClient = {
   start(): void;
@@ -16,6 +17,8 @@ export type PresenceClient = {
   status(): PresenceStatus;
   // 디버그 사이드바용: 보낸·받은 메시지 수
   counts(): { sent: number; recv: number };
+  // 지금 같은 방에 있는 사람들의 마지막 모습. 엔진이 늦게 뜨거나 다시 마운트될 때 이것으로 시작한다
+  peers(): PeerSnapshot[];
   close(): void;
 };
 
@@ -52,6 +55,30 @@ export function createPresenceClient(opts: Options): PresenceClient {
   let recv = 0;
   const listeners = new Set<(m: PresenceIn) => void>();
   const statusListeners = new Set<(s: PresenceStatus) => void>();
+  const known = new Map<string, PeerSnapshot>();
+
+  // 받은 메시지로 사람 목록을 고친다 (서버 room.ts 의 applyToState 와 같은 규칙)
+  const track = (m: PresenceIn) => {
+    if (m.t === "hello") {
+      known.clear();
+      for (const p of (m.peers as PeerSnapshot[]) ?? []) known.set(p.peer, { ...p });
+      return;
+    }
+    if (m.t === "reset") return known.clear();
+    if (m.t === "join") {
+      known.set(String(m.peer), { peer: String(m.peer), name: String(m.name), colour: Number(m.colour) || 0, state: "idle", p: null, ry: 0 });
+      return;
+    }
+    if (m.t === "leave") return void known.delete(String(m.peer));
+    const k = known.get(String(m.peer));
+    if (!k) return;
+    const xz = (v: unknown) => (Array.isArray(v) && v.length >= 2 ? ([Number(v[0]), Number(v[v.length === 3 ? 2 : 1])] as [number, number]) : null);
+    if (m.t === "walk") { const pts = m.pts as unknown[]; k.p = xz(pts[pts.length - 1]); k.state = "walk"; }
+    else if (m.t === "pos" || m.t === "stand") { k.p = xz(m.p); k.ry = Number(m.ry); k.state = m.t === "pos" ? "walk" : "idle"; }
+    else if (m.t === "sit") { k.p = xz(m.p); k.ry = Number(m.ry); k.state = "sit"; }
+    else if (m.t === "snap") { k.p = xz(m.p); k.ry = Number(m.ry); k.state = String(m.state); }
+    else if (m.t === "state") k.state = String(m.state);
+  };
 
   const setStatus = (s: PresenceStatus) => {
     if (s === status) return;
@@ -59,6 +86,7 @@ export function createPresenceClient(opts: Options): PresenceClient {
     for (const fn of statusListeners) fn(s);
   };
   const emit = (m: PresenceIn) => {
+    track(m);
     for (const fn of listeners) fn(m);
   };
 
@@ -149,6 +177,7 @@ export function createPresenceClient(opts: Options): PresenceClient {
     },
     status: () => status,
     counts: () => ({ sent, recv }),
+    peers: () => [...known.values()].map((p) => ({ ...p })),
     close() {
       stopped = true;
       if (timer !== null) cancel(timer);

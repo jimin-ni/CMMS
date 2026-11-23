@@ -532,6 +532,7 @@ export function HeapRoom({
                     로그아웃
                   </button>
                 )}
+                {presence && <PresenceDebug clientRef={presenceRef} />}
               </div>
             )}
           </div>
@@ -851,5 +852,32 @@ export function HeapRoom({
       <div id="fade" />
       <p id="status">방 꾸미는 중…</p>
     </div>
+  );
+}
+
+// 디버그 사이드바의 방 함께 있기 줄: 연결 상태, 초당 보낸/받은 메시지 수, 같이 있는 사람(peer id 와 이름만).
+function PresenceDebug({ clientRef }: { clientRef: { current: PresenceClient | null } }) {
+  const [view, setView] = useState({ status: "-", rate: "0/0", peers: "" });
+  useEffect(() => {
+    let last = clientRef.current?.counts() ?? { sent: 0, recv: 0 };
+    const id = setInterval(() => {
+      const c = clientRef.current;
+      if (!c) return setView({ status: "꺼짐", rate: "0/0", peers: "" });
+      const now = c.counts();
+      setView({
+        status: c.status(),
+        rate: `${now.sent - last.sent}/${now.recv - last.recv}`,
+        peers: c.peers().map((p) => `${p.name}(${p.peer}) ${p.state}`).join(", "),
+      });
+      last = now;
+    }, 1000);
+    return () => clearInterval(id);
+  }, [clientRef]);
+  return (
+    <p className="debug-presence">
+      함께 있기: {view.status} · 초당 보냄/받음 {view.rate}
+      <br />
+      {view.peers || "다른 사람 없음"}
+    </p>
   );
 }

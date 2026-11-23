@@ -32,6 +32,7 @@ import { setupPanels } from './panels.js';
 import { setupTree } from './tree.js';
 import { setupLive } from './live.js';
 import { setupInput } from './input.js';
+import { setupPresence } from './presence.js';
 import { setupPath } from './path.js';
 import { setupEdit } from './edit.js';
 import { setupDockThumbs } from './dock-thumbs.js';
@@ -123,6 +124,7 @@ async function run(ctx) {
   setupTree(ctx); // 쪽지 트리 모드. ctx.goTo(modes.js), ctx.me(walk.js)는 쓸 때 읽으므로 여기서 세워도 된다
   setupLive(ctx);
   setupInput(ctx);
+  setupPresence(ctx); // 방 함께 있기 (opts.presence 가 있을 때만). 내 캐릭터(walk.js), 더미 자리(props.js), 오버레이(input.js)를 읽는다
   setupNav(ctx); // 온보딩 내비게이션 바의 이동 훅 (heap:go). 보내지 않으면 아무 일도 없다
   setupPath(ctx);
   setupDockThumbs(ctx); // 꾸미기 가구 목록의 그림 (heap:thumb)

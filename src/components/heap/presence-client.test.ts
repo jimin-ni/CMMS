@@ -130,6 +130,27 @@ describe("presence client", () => {
     expect(timers).toEqual([]);
   });
 
+  it("keeps the current peers for a late or remounted engine", async () => {
+    const { client, flush } = setup();
+    client.start();
+    await flush();
+    const s = FakeSocket.last!;
+    s.fire("open");
+    const msg = (m: unknown) => s.fire("message", { data: JSON.stringify(m) });
+    msg({ t: "hello", you: "me", peers: [{ peer: "a", name: "가", colour: 1, state: "idle", p: null, ry: 0 }] });
+    msg({ t: "join", peer: "b", name: "나", colour: 2 });
+    msg({ t: "snap", peer: "a", p: [1, 2], ry: 0.5, state: "busy" });
+    msg({ t: "walk", peer: "b", pts: [[0, 0], [3, 4]] });
+    expect(client.peers()).toEqual([
+      { peer: "a", name: "가", colour: 1, state: "busy", p: [1, 2], ry: 0.5 },
+      { peer: "b", name: "나", colour: 2, state: "walk", p: [3, 4], ry: 0 },
+    ]);
+    msg({ t: "leave", peer: "a" });
+    expect(client.peers().map((p) => p.peer)).toEqual(["b"]);
+    s.fire("close", { code: 1006 });
+    expect(client.peers()).toEqual([]);
+  });
+
   it("close() stops reconnecting", async () => {
     const { client, timers, flush } = setup();
     client.start();
