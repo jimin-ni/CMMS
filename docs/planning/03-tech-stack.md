@@ -15,7 +15,7 @@
 | 캐시·요청 제한 | Redis (Render Key Value) | [가설] | 요청 제한, 반응 예측 캐시. 지금은 메시지 전송 제한만 DB 조회로 처리 |
 | AI | TypeSafe AI Jev (`jev-latest`), 서버 라우트에서만 호출 | [결정] (2026-11-11) | 반응 목록에서 하나를 고르는 선택형 응답, 짧은 지연. API 키 노출 방지 |
 | 테스트 | Vitest (단위), Playwright (E2E) | [가설] | 핵심 흐름 자동 검증. 지금은 저장소 밖의 Playwright 스크립트로 수동 검증만 함 |
-| 배포 | Render (웹 서비스 + PostgreSQL), GitHub 연동 자동 배포 | [결정] | 기존 팀 결정 사항. 웹 서비스 배포는 아직 안 함 |
+| 배포 | Render (웹 서비스 + PostgreSQL), GitHub 연동 자동 배포 | [결정] | 기존 팀 결정 사항. 웹 서비스는 Render 무료 플랜으로 배포됨 (1-2절) |
 | 도메인 | .xyz | [결정] | 기존 팀 결정 사항 |
 
 ## 1-1. 사용 버전 (2026-11-12, main 기준)
@@ -37,6 +37,23 @@
 | 타입 | `@types/node`, `@types/react`, `@types/pg` | 20.19.43, 19.3.0, 8.23.1 | |
 | AI | TypeSafe AI Jev | `jev-latest` (2026-11-11 응답 기준 `jev-1.14.0`) | 엔드포인트 `https://api.typesafe.ai/v1/systemone`. 모델은 `BUBBLE_PREVIEW_MODEL`로 바꿀 수 있음 |
 | 검증 도구 | `playwright-core` + Microsoft Edge | 1.48.2 | 프로젝트 의존성이 아님. 3인 브라우저 테스트에만 사용 |
+
+## 1-2. 배포 환경 (2026-11-23)
+
+- [사실] 웹 서비스가 Render에 배포되어 있습니다.
+- [사실] 플랜: Free, $0 / month, 0.1 CPU, 512 MB RAM.
+- [사실] DB는 같은 Render의 공유 PostgreSQL(`cmms-db-01`, Singapore)을 씁니다.
+
+환경 변수는 두 곳에 따로 씁니다.
+
+| 환경 | 위치 | 비고 |
+|---|---|---|
+| 배포 | Render 대시보드의 웹 서비스 > Environment 탭 | `BETTER_AUTH_URL`은 배포 주소로 둠 |
+| 로컬 | 각자 PC의 `.env.local` | Git에 올리지 않음 |
+
+- 키 목록의 기준은 값 없는 템플릿 `.env.example`입니다.
+- 새 키를 추가하면 `.env.example`, Render Environment 탭, 각자의 `.env.local`을 함께 고칩니다.
+- 실제 값은 저장소, 채팅, 이슈, 문서에 쓰지 않습니다.
 
 ## 2. 실시간 통신 방식
 
@@ -123,6 +140,6 @@ Render 트랙은 Render Workflows를 사용해야 대상이 됩니다. 다음 �
 
 ## 7. 확인이 필요한 사항
 
-- Render 무료 플랜의 유휴 시 중지 여부와 WebSocket 지원 조건
+- Render 무료 플랜(0.1 CPU, 512 MB)의 유휴 시 중지 여부와 WebSocket 지원 조건
 - AI API 1회 호출의 지연 시간과 원가 (PoC로 측정)
 - 에러 추적 도구의 무료 플랜 범위
