@@ -4,23 +4,43 @@ import { flat } from './draw.js';
 import { tone } from './palette.js';
 
 export const WALK_SPEED = 2.4; // 미터/초
-export const SIT_DROP = 0.28; // 의자 자리 높이에서 몸을 내리는 양
+export const SIT_DROP = 0.17; // 의자 자리 높이에서 몸을 내리는 양 (SPIKE minimi: 몸 밑면 0.17)
 export const SIT_LEGS = -1.2; // 앉은 다리 각도
 
-// 몸 색: 없으면 방 팔레트의 accent. 머리, 눈, 다리 색은 모두 같다.
+// SPIKE (2026-11-24, uncommitted): minimi concept, variant "short hair · cardigan" from .claude/session-artifacts/minimi/render.mjs
+// 몸 색: 없으면 방 팔레트의 accent.
 export function makeFigure(C, bodyMat) {
   const group = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.25, 0.45, 7), bodyMat ?? tone(C, 'accent')); body.position.y = 0.5;
-  const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.26, 1), flat('#f2cfb3')); head.position.y = 0.95;
-  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.28, 7, 4, 0, Math.PI * 2, 0, Math.PI / 2), flat('#3a2a22')); hair.position.set(0, 0.98, -0.02);
-  const legL = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.3, 5), tone(C, 'olive')), legR = legL.clone();
-  legL.geometry.translate(0, -0.15, 0); legL.position.set(-0.09, 0.3, 0); legR.position.set(0.09, 0.3, 0);
-  const eyeGeo = new THREE.SphereGeometry(0.035, 5, 4), eyeMat = flat('#2a2230');
-  const eyeL = new THREE.Mesh(eyeGeo, eyeMat), eyeR = new THREE.Mesh(eyeGeo, eyeMat);
-  eyeL.position.set(-0.09, 0.97, 0.23); eyeR.position.set(0.09, 0.97, 0.23);
-  for (const m of [body, head, hair, legL, legR]) { m.castShadow = true; group.add(m); }
-  group.add(eyeL, eyeR);
-  return { group, legL, legR, phase: 0 };
+  const skin = flat('#efcdb2'), hairM = flat('#3a2a22'), topM = bodyMat ?? tone(C, 'accent'), bottomM = tone(C, 'olive'), shoeM = flat('#4a3426');
+  hairM.side = THREE.DoubleSide;
+  const add = (geo, mat, x = 0, y = 0, z = 0, parent = group, shadow = true) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = shadow; parent.add(m); return m; };
+  // 다리: 엉덩이(0.18)에서 흔든다. 발은 다리에 붙어 같이 움직인다
+  const legs = [-0.085, 0.085].map(x => {
+    const leg = add(new THREE.CylinderGeometry(0.058, 0.062, 0.13, 7), bottomM, x, 0.18);
+    leg.geometry.translate(0, -0.065, 0);
+    const foot = add(new THREE.SphereGeometry(0.075, 7, 5), shoeM, 0, -0.14, 0.03, leg); foot.scale.set(1, 0.6, 1.35);
+    return leg;
+  });
+  const prof = [[0.0, 0.17], [0.15, 0.17], [0.185, 0.19], [0.2, 0.25], [0.18, 0.36], [0.14, 0.44], [0.07, 0.47], [0.0, 0.475]].map(([r, y]) => new THREE.Vector2(r, y));
+  add(new THREE.LatheGeometry(prof, 9), topM);
+  add(new THREE.BoxGeometry(0.05, 0.27, 0.02), flat('#e9dcc6'), 0, 0.31, 0.19).rotation.x = -0.12;
+  for (const y of [0.24, 0.31, 0.38]) add(new THREE.SphereGeometry(0.014, 5, 4), flat('#6e4a30'), 0, y, 0.205 - (y - 0.24) * 0.12, group, false);
+  for (const s of [-1, 1]) {
+    const arm = new THREE.Group(); arm.position.set(0.17 * s, 0.42, 0); arm.rotation.z = 0.32 * s; group.add(arm);
+    add(new THREE.CapsuleGeometry(0.048, 0.12, 2, 7), topM, 0, -0.09, 0, arm);
+    add(new THREE.IcosahedronGeometry(0.05, 0), skin, 0, -0.19, 0.005, arm);
+  }
+  const HY = 0.70, HR = 0.265;
+  add(new THREE.IcosahedronGeometry(HR, 1), skin, 0, HY).scale.set(1.04, 0.97, 0.96);
+  const eyeM = flat('#2a2230'), blushM = flat('#e58f7c');
+  for (const x of [-0.088, 0.088]) {
+    add(new THREE.SphereGeometry(0.026, 6, 5), eyeM, x, HY - 0.025, HR * 0.9, group, false).scale.set(1, 1.25, 0.6);
+    add(new THREE.SphereGeometry(0.034, 6, 4), blushM, x * 1.62, HY - 0.085, HR * 0.8, group, false).scale.set(1, 0.55, 0.35);
+  }
+  const hr = HR + 0.022;
+  add(new THREE.SphereGeometry(hr, 14, 9, 0, Math.PI * 2, 0, Math.PI * 0.4), hairM, 0, HY + 0.01, -0.01);
+  add(new THREE.SphereGeometry(hr, 14, 9, Math.PI * 0.75, Math.PI * 1.5, 0, Math.PI * 0.62), hairM, 0, HY, -0.005);
+  return { group, legL: legs[0], legR: legs[1], phase: 0 };
 }
 
 // 움직이는 방향(dir, 길이 무관)으로 몸을 부드럽게 돌린다.
