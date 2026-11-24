@@ -187,7 +187,7 @@ export function HeapRoom({
     saveDebugFlags();
     setAnimTest({ ...ANIM_TEST });
   };
-  // 그림자 보기: all 그대로, room 방 밖 그림자 감추기, none 모두 감추기 (engine/shell.js 의 applyShadowMode)
+  // 그림자 보기: room 방 안만(기본), all 방 밖까지, none 모두 감추기 (engine/shell.js 의 applyShadowMode)
   const [shadowMode, setShadowMode] = useState(SHADOW_TEST.mode);
   const pickShadow = (mode: string) => {
     SHADOW_TEST.mode = mode;
@@ -576,8 +576,8 @@ export function HeapRoom({
                 <label className="debug-select">
                   그림자
                   <select value={shadowMode} onChange={(e) => pickShadow(e.target.value)}>
-                    <option value="all">그대로</option>
-                    <option value="room">방 밖 감추기</option>
+                    <option value="all">방 밖까지</option>
+                    <option value="room">방 안만 (기본)</option>
                     <option value="none">모두 감추기</option>
                   </select>
                 </label>
