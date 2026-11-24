@@ -13,9 +13,24 @@ const TY = 0.58; // 안쪽 땅(얼음) 윗면
 const LAND_R = 0.81; // 안쪽 땅 반지름 (받침 높이에서 유리 안쪽)
 export const GLOBE_HEIGHT = CY + R;
 
-// 바다: 땅 원판을 x = LAND_R cos(SEA_A) 의 직선(수평선)으로 자른 오른쪽 반달 영역. 원판 넓이의 20% 가 되는 자리다
-// (활꼴 넓이 비율 (θ - sin θ) / 2π = 0.2 → θ ≈ 2.113, 현까지 거리 = cos(θ / 2) ≈ 0.491)
-const SEA_A = Math.acos(0.491);
+// 바다: 땅 원판을 현(수평선)으로 자른 반달 영역. 원판 넓이의 20% 가 되는 자리다
+// (활꼴 넓이 비율 (θ - sin θ) / 2π = 0.2 → θ ≈ 2.113, 현까지 거리 = cos(θ / 2) ≈ 0.491). SEA_A 는 현의 반각이다.
+// SEA_DIR: 바다 가운데 방향 (모양 좌표의 각도, 0 이면 오른쪽 +x). 오른쪽에서 정면(+z) 쪽으로 90도의 30% 만큼 돌렸다.
+// 모양 좌표 (sx, sy) 는 눕힌 뒤 (sx, -sy) 자리가 되므로 정면 쪽은 음의 각도다
+const SEA_A = Math.acos(0.491), SEA_DIR = -0.3 * Math.PI / 2;
+// 얼음과 바다의 경계: 현을 따라 각진 물결로 흔든다 (꺾인 점 WAVE_N 개, 물결 세 번)
+const WAVE_N = 9, WAVE_AMP = 0.055;
+function shoreline(r) {
+  const a = new THREE.Vector2(Math.cos(SEA_DIR - SEA_A), Math.sin(SEA_DIR - SEA_A)).multiplyScalar(r);
+  const b = new THREE.Vector2(Math.cos(SEA_DIR + SEA_A), Math.sin(SEA_DIR + SEA_A)).multiplyScalar(r);
+  const n = new THREE.Vector2(Math.cos(SEA_DIR), Math.sin(SEA_DIR)); // 바다 쪽
+  const pts = [];
+  for (let i = 1; i <= WAVE_N; i++) {
+    const t = i / (WAVE_N + 1);
+    pts.push(a.clone().lerp(b, t).addScaledVector(n, WAVE_AMP * Math.sin(t * Math.PI * 3) * (i % 2 ? 1 : 0.6)));
+  }
+  return { a, b, pts }; // a → b 는 바다 호의 시작과 끝. pts 는 a 에서 b 쪽으로 늘어선 물결 점
+}
 
 function seeded(seed) {
   let a = seed >>> 0;
@@ -55,7 +70,8 @@ function makeKit(rand) {
 }
 
 // 물범: 종이 접기 같은 각진 흰 몸. 등을 대고 누워 머리를 들고 앞을(+z) 본다. 머리는 지역 -x, 꼬리는 +x 쪽이고
-// 몸이 U 자로 휘어 꼬리지느러미가 위로 들린다. 앞발 하나는 가슴 위로 들고, 하나는 옆으로 내린다
+// 몸이 U 자로 휘어 꼬리지느러미가 위로 들린다. 앞발 하나는 가슴 위로 들고, 하나는 옆으로 내린다.
+// 몸은 면이 적은 이십면체(세분 0)를 크고 둥글게 써서 뭉툭하다
 export function buildSeal(kit = makeKit(seeded(7))) {
   const { add, shaded, plain, tone } = kit;
   const g = new THREE.Group(), white = '#f2f4f8', shadow = '#e3e7ef', black = plain('#141418', { roughness: 0.35 });
@@ -63,25 +79,25 @@ export function buildSeal(kit = makeKit(seeded(7))) {
     const m = add(g, tone(new THREE.IcosahedronGeometry(r, detail), colour, 0.12), shaded, x, y, z);
     m.scale.set(sx, sy, sz); m.rotation.set(rx, ry, rz); return m;
   };
-  part(0.12, 1, white, [0.03, 0.085, 0], [1.35, 0.72, 1]); // 배
-  part(0.11, 1, white, [-0.12, 0.145, 0.005], [1.1, 1, 1], [0, 0, -0.6]); // 가슴
-  part(0.078, 1, white, [0.17, 0.11, 0], [1.3, 0.8, 0.85], [0, 0, 0.6]); // 꼬리 쪽 몸
-  part(0.095, 1, white, [-0.2, 0.285, 0.02], [1, 0.95, 1]); // 머리
-  part(0.046, 1, white, [-0.18, 0.262, 0.1], [1.15, 0.8, 1]); // 주둥이
+  part(0.15, 0, white, [0.02, 0.1, 0], [1.25, 0.82, 1.1], [0.3, 0, 0]); // 배
+  part(0.14, 0, white, [-0.11, 0.16, 0.01], [1.05, 1.05, 1.08], [0, 0.4, -0.5]); // 가슴
+  part(0.1, 0, white, [0.16, 0.115, 0], [1.25, 0.85, 1], [0, 0, 0.55]); // 꼬리 쪽 몸
+  part(0.11, 0, white, [-0.2, 0.3, 0.025], [1, 0.95, 1], [0.2, 0.3, 0]); // 머리
+  part(0.055, 0, white, [-0.18, 0.268, 0.105], [1.15, 0.8, 1]); // 주둥이
   // 크고 검은 눈, 코
-  part(0.024, 0, '#141418', [-0.245, 0.315, 0.09], [1, 1, 0.45], [0, -0.35, 0]).material = black;
-  part(0.024, 0, '#141418', [-0.145, 0.33, 0.095], [1, 1, 0.45], [0, 0.35, 0]).material = black;
-  part(0.021, 0, '#141418', [-0.18, 0.28, 0.142], [1.2, 0.8, 0.6]).material = black;
+  part(0.026, 0, '#141418', [-0.25, 0.33, 0.1], [1, 1, 0.45], [0, -0.35, 0]).material = black;
+  part(0.026, 0, '#141418', [-0.14, 0.345, 0.105], [1, 1, 0.45], [0, 0.35, 0]).material = black;
+  part(0.023, 0, '#141418', [-0.18, 0.29, 0.155], [1.2, 0.8, 0.6]).material = black;
   // 수염: 주둥이 양옆에서 세 가닥씩 바깥으로
   const pts = [];
-  for (const s of [-1, 1]) for (const dy of [-0.018, 0, 0.018]) pts.push(-0.18 + s * 0.03, 0.262, 0.13, -0.18 + s * 0.13, 0.262 + dy * 2.4, 0.12);
+  for (const s of [-1, 1]) for (const dy of [-0.018, 0, 0.018]) pts.push(-0.18 + s * 0.035, 0.27, 0.145, -0.18 + s * 0.14, 0.27 + dy * 2.4, 0.135);
   g.add(new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(pts, 3)), new THREE.LineBasicMaterial({ color: '#2a2a30' })));
   // 앞발: 가슴 위로 든 것과 옆으로 내린 것
-  part(0.055, 0, shadow, [-0.03, 0.24, 0.09], [0.5, 1.25, 0.9], [0.3, 0, -0.35]);
-  part(0.05, 0, shadow, [-0.14, 0.075, 0.105], [0.5, 1.2, 0.85], [0.5, 0, 0.6]);
+  part(0.065, 0, shadow, [-0.03, 0.27, 0.11], [0.55, 1.2, 0.95], [0.3, 0, -0.35]);
+  part(0.06, 0, shadow, [-0.14, 0.08, 0.13], [0.55, 1.15, 0.9], [0.5, 0, 0.6]);
   // 두 갈래로 벌어져 위로 들린 꼬리지느러미
   for (const s of [-1, 1]) {
-    const t = add(g, tone(new THREE.ConeGeometry(0.05, 0.15, 4), shadow, 0.1), shaded, 0.275, 0.2, s * 0.035);
+    const t = add(g, tone(new THREE.ConeGeometry(0.06, 0.15, 4), shadow, 0.1), shaded, 0.28, 0.21, s * 0.04);
     t.scale.set(1, 1, 0.3); t.rotation.set(s * 0.45, 0, -0.55);
   }
   return g;
@@ -176,16 +192,23 @@ function glowTexture() {
 }
 
 // 눈: 유리 구 안에서만 떨어지는 작은 팔면체 입자. start(ms) 동안 위에서 새로 내리고(다시 부르면 시간을 새로 잰다),
-// 시간이 끝나면 새로 내리지 않고 남은 눈이 바닥에 닿는 대로 사라진다
+// 시간이 끝나면 새로 내리지 않고 남은 눈이 바닥이나 유리에 닿는 대로 사라진다.
+// 떨어지는 방향은 step 이 받는 down(글로브 지역 좌표의 아래)이다: 글로브를 돌려도 눈은 세상의 아래로 내린다
 function buildSnow(count, rand) {
   const mesh = new THREE.InstancedMesh(new THREE.OctahedronGeometry(0.022, 0), new THREE.MeshStandardMaterial({ color: '#ffffff', flatShading: true, emissive: '#dfeaf5', emissiveIntensity: 0.35 }), count);
   mesh.frustumCulled = false; mesh.castShadow = false;
   const pos = new Float32Array(count * 3), spin = new Float32Array(count * 3), speed = new Float32Array(count), phase = new Float32Array(count), alive = new Uint8Array(count);
-  const dummy = new THREE.Object3D(), TOP = CY + 0.8, FLOOR = TY + 0.01;
-  const radiusAt = y => Math.sqrt(Math.max(0, R * R - (y - CY) ** 2)) * 0.86;
-  function spawn(i, y) {
-    const r = radiusAt(y) * Math.sqrt(rand()), a = rand() * Math.PI * 2;
-    pos.set([Math.sin(a) * r, y, Math.cos(a) * r], i * 3);
+  const dummy = new THREE.Object3D(), FLOOR = TY + 0.01, IN = 0.86; // IN: 눈이 머무는 구의 반지름 (유리 안쪽)
+  const C = new THREE.Vector3(0, CY, 0), down = new THREE.Vector3(0, -1, 0), u = new THREE.Vector3(), w = new THREE.Vector3(), p = new THREE.Vector3();
+  const sideways = () => { // down 에 수직인 두 방향 (흔들림과 뿌리는 원판)
+    u.set(Math.abs(down.y) < 0.9 ? 0 : 1, Math.abs(down.y) < 0.9 ? 1 : 0, 0).cross(down).normalize();
+    w.crossVectors(down, u);
+  };
+  // along: 구 중심에서 down 쪽으로 얼마나 (-IN 은 맨 위). 그 높이의 원판 안 아무 곳에 둔다
+  function spawn(i, along) {
+    const r = Math.sqrt(Math.max(0, IN * IN - along * along)) * Math.sqrt(rand()), a = rand() * Math.PI * 2;
+    p.copy(C).addScaledVector(down, along).addScaledVector(u, Math.cos(a) * r).addScaledVector(w, Math.sin(a) * r);
+    p.toArray(pos, i * 3);
     spin.set([rand() * 6, rand() * 6, rand() * 6], i * 3);
     speed[i] = 0.22 + rand() * 0.18; phase[i] = rand() * 10; alive[i] = 1;
   }
@@ -199,27 +222,32 @@ function buildSnow(count, rand) {
     mesh.instanceMatrix.needsUpdate = true;
   }
   write();
+  sideways();
   return {
     mesh,
     get active() { return left > 0; },
     start(ms = 3000) {
-      if (left <= 0) for (let i = 0; i < count; i++) if (!alive[i]) spawn(i, FLOOR + rand() * (TOP - FLOOR));
+      if (left <= 0) for (let i = 0; i < count; i++) if (!alive[i]) spawn(i, (rand() * 2 - 1) * IN * 0.95);
       left = ms / 1000;
     },
     stop() { left = 0; alive.fill(0); write(); },
-    step(dt) {
+    // localDown: 글로브 지역 좌표의 아래 방향 (없으면 지역 -y)
+    step(dt, localDown) {
       if (left <= 0 && !alive.some(Boolean)) return;
+      if (localDown) { down.copy(localDown).normalize(); sideways(); }
       left = Math.max(0, left - dt); t += dt;
       for (let i = 0; i < count; i++) {
         if (!alive[i]) continue;
         const k = i * 3;
-        pos[k + 1] -= speed[i] * dt;
-        pos[k] += Math.sin(t * 1.7 + phase[i]) * 0.05 * dt; // 좌우로 흔들린다
-        pos[k + 2] += Math.cos(t * 1.3 + phase[i]) * 0.05 * dt;
+        p.fromArray(pos, k).addScaledVector(down, speed[i] * dt)
+          .addScaledVector(u, Math.sin(t * 1.7 + phase[i]) * 0.05 * dt) // 좌우로 흔들린다
+          .addScaledVector(w, Math.cos(t * 1.3 + phase[i]) * 0.05 * dt);
         spin[k] += dt * 1.2; spin[k + 1] += dt * 0.8;
-        if (pos[k + 1] < FLOOR) { if (left > 0) spawn(i, TOP); else { alive[i] = 0; continue; } }
-        const lim = radiusAt(pos[k + 1]), h = Math.hypot(pos[k], pos[k + 2]); // 유리 밖으로 나가지 않는다
-        if (h > lim) { pos[k] *= lim / h; pos[k + 2] *= lim / h; }
+        // 땅 위에 닿았거나 아래쪽 유리에 닿았다: 내리는 중이면 맨 위에서 다시, 아니면 사라진다
+        const landed = p.y < FLOOR || (p.distanceTo(C) > IN && p.clone().sub(C).dot(down) > 0);
+        if (landed) { if (left > 0) spawn(i, -IN * 0.95); else alive[i] = 0; continue; }
+        if (p.distanceTo(C) > IN) p.sub(C).setLength(IN).add(C); // 유리 밖으로 나가지 않는다
+        p.toArray(pos, k);
       }
       write();
     },
@@ -229,7 +257,7 @@ function buildSnow(count, rand) {
 /**
  * 스노우 글로브 전체를 짓는다.
  * @param {{ unit?: number }} [opts] unit: 모델 1 단위가 세상에서 몇인지 (root 에 줄 배율). 집 앞 불빛의 거리와 세기를 맞춘다
- * @returns {{ root: THREE.Group, hitMeshes: THREE.Mesh[], sealZone: THREE.Mesh, catZone: THREE.Mesh, snow: ReturnType<typeof buildSnow>, setGlow: (k: number) => void, dispose: () => void }}
+ * @returns {{ root: THREE.Group, hitMeshes: THREE.Mesh[], sealZone: THREE.Mesh, catZone: THREE.Mesh, snow: ReturnType<typeof buildSnow>, setGlow: (k: number) => void, setInvite: (k: number) => void, dispose: () => void }}
  */
 export function buildSnowGlobe({ unit = 1 } = {}) {
   const kit = makeKit(seeded(2026));
@@ -249,31 +277,39 @@ export function buildSnowGlobe({ unit = 1 } = {}) {
     const geo = new THREE.ExtrudeGeometry(shape, { depth: h, bevelEnabled: false, curveSegments });
     geo.rotateX(-Math.PI / 2); return geo;
   };
-  const ice = new THREE.Shape(); ice.absarc(0, 0, LAND_R, SEA_A, Math.PI * 2 - SEA_A, false); ice.closePath();
+  // 얼음: 바다 호의 끝(b)에서 큰 호를 돌아 시작(a)까지, 그다음 물결 점을 따라 b 로 돌아온다. 바다: 작은 호 a → b, 물결 점을 거꾸로
+  const shore = shoreline(LAND_R);
+  const ice = new THREE.Shape(); ice.absarc(0, 0, LAND_R, SEA_DIR + SEA_A, SEA_DIR - SEA_A + Math.PI * 2, false);
+  for (const p of shore.pts) ice.lineTo(p.x, p.y);
+  ice.closePath();
   add(root, tone(slab(ice, TY - BASE_TOP, 14), '#eef5fa', 0.07), shaded, 0, BASE_TOP, 0);
-  const seaTop = TY - 0.03, sea = new THREE.Shape(); sea.absarc(0, 0, LAND_R - 0.004, -SEA_A, SEA_A, false); sea.closePath();
+  const seaTop = TY - 0.03, sea = new THREE.Shape(); sea.absarc(0, 0, LAND_R - 0.004, SEA_DIR - SEA_A, SEA_DIR + SEA_A, false);
+  for (const p of [...shore.pts].reverse()) sea.lineTo(p.x, p.y);
+  sea.closePath();
   add(root, tone(slab(sea, seaTop - BASE_TOP, 5), '#2f7fb8', 0.14), plain('#ffffff', { vertexColors: true, roughness: 0.3 }), 0, BASE_TOP, 0);
   // 바다에 뜬 얼음 조각, 얼음 위의 눈 더미와 청록 덤불
-  for (const [x, z, s] of [[0.6, 0.12, 0.065], [0.62, -0.2, 0.05], [0.53, -0.38, 0.04]]) {
-    const f = add(root, tone(new THREE.DodecahedronGeometry(s, 0), '#f7fbff'), shaded, x, seaTop, z);
+  for (const [r, da, s] of [[0.6, 0.15, 0.065], [0.63, -0.25, 0.05], [0.55, -0.5, 0.04]]) { // 바다 가운데 방향에서 da 만큼 돌린 자리
+    const a = SEA_DIR + da, f = add(root, tone(new THREE.DodecahedronGeometry(s, 0), '#f7fbff'), shaded, Math.cos(a) * r, seaTop, -Math.sin(a) * r);
     f.scale.y = 0.4;
   }
-  for (const [x, z, s, c] of [[-0.62, 0.22, 0.1, '#ffffff'], [-0.05, -0.62, 0.09, '#ffffff'], [-0.18, 0.63, 0.07, '#ffffff'], [0.3, 0.2, 0.05, '#2b8c96'], [-0.45, 0.05, 0.045, '#2b8c96']]) {
+  for (const [x, z, s, c] of [[-0.62, 0.22, 0.1, '#ffffff'], [-0.05, -0.62, 0.09, '#ffffff'], [-0.18, 0.63, 0.07, '#ffffff'], [0.2, 0.12, 0.05, '#2b8c96'], [-0.45, 0.05, 0.045, '#2b8c96']]) {
     const m = add(root, tone(new THREE.IcosahedronGeometry(s, 0), c, 0.08), shaded, x, TY, z);
     m.scale.y = 0.45;
   }
 
+  // 누르기를 기다리는 반짝임: 집, 물범, 고양이는 따로 만든 재질을 써서 그것만 흐린 노란빛으로 빛난다 (setInvite)
+  const invite = { ...kit, shaded: plain('#ffffff', { vertexColors: true, emissive: '#fff2a8', emissiveIntensity: 0 }) };
   const lights = [];
-  const house = buildHouse(kit, lights); house.position.set(-0.04, TY, -0.14); root.add(house);
+  const house = buildHouse(invite, lights); house.position.set(-0.04, TY, -0.14); root.add(house);
   for (const [x, z, h] of [[-0.4, -0.38, 1.25], [0.3, -0.42, 1.05], [-0.2, -0.6, 1.4], [0.33, -0.14, 0.75]]) {
     const t = buildTree(kit, h); t.position.set(x, TY, z); t.rotation.y = rand() * Math.PI; root.add(t);
   }
 
   // 물범과 고양이는 앞쪽 얼음 위에 나란히 있다. 둘 둘레의 보이지 않는 구는 누르기 영역이다 (globe.js)
-  const seal = buildSeal(kit); seal.position.set(-0.28, TY, 0.36); seal.rotation.y = 0.2; seal.scale.setScalar(0.85); root.add(seal);
-  const cat = buildCat(kit); cat.position.set(0.17, TY, 0.44); cat.rotation.y = -0.25; root.add(cat);
+  const seal = buildSeal(invite); seal.position.set(-0.4, TY, 0.3); seal.rotation.y = 0.2; seal.scale.setScalar(0.85); root.add(seal);
+  const cat = buildCat(invite); cat.position.set(0.12, TY, 0.46); cat.rotation.y = -0.25; root.add(cat);
   const zone = (r, x, z, y) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 6), new THREE.MeshBasicMaterial({ visible: false })); m.position.set(x, y, z); root.add(m); return m; };
-  const sealZone = zone(0.25, -0.28, 0.36, TY + 0.15), catZone = zone(0.19, 0.17, 0.44, TY + 0.15);
+  const sealZone = zone(0.2, -0.4, 0.3, TY + 0.15), catZone = zone(0.17, 0.12, 0.46, TY + 0.15);
 
   // 창문 불빛이 번진다: 창마다 따뜻한 빛 원(스프라이트), 집 앞 눈밭을 비추는 작은 점광원. setGlow(k) 가 세기를 정한다 (0 방, 1 상세 화면)
   const glowMat = new THREE.SpriteMaterial({ map: glowTexture(), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false });
@@ -289,6 +325,7 @@ export function buildSnowGlobe({ unit = 1 } = {}) {
     lamp.intensity = (0.4 + 2.6 * k) * (0.3 * unit) ** 2; // 집 앞 0.3 거리에서 0.4 ~ 3
   }
   setGlow(0);
+  const setInvite = k => { invite.shaded.emissiveIntensity = k; };
 
   const snow = buildSnow(160, rand);
   root.add(snow.mesh);
@@ -309,5 +346,5 @@ export function buildSnowGlobe({ unit = 1 } = {}) {
     });
     glowMat.map.dispose();
   }
-  return { root, hitMeshes, sealZone, catZone, snow, setGlow, dispose };
+  return { root, hitMeshes, sealZone, catZone, snow, setGlow, setInvite, dispose };
 }

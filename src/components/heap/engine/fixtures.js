@@ -8,8 +8,8 @@ import { makeChip } from './chip.js';
 import { buildSnowGlobe, GLOBE_HEIGHT } from '../../snow-globe/model.js';
 
 // 좌식 탁자 위 스노우 글로브의 지역 자리: 사진 더미 뒤, 탁자 가운데 쪽. 사진 더미(heap.js)는 반지름 r 안을 비켜 간다.
-// view: 글로브 모드(globe.js)의 처음 카메라 방향 (탁자 지역, 탁자 뒤 왼쪽 위). 그 너머로 사진 더미와 탁자가 보인다. 집과 물범은 이쪽을 본다
-export const LOW_TABLE_GLOBE = { x: 0.45, z: -0.6, r: 0.24, view: [-0.3, 0.42, -0.85] };
+// 정면(집 앞, 지역 +z)은 탁자 앞 방석(지역 (0, 1.4), props.js 의 SEAT)을 본다: 더미를 보는 사람에게 정면이 보인다
+export const LOW_TABLE_GLOBE = { x: 0.45, z: -0.6, r: 0.24 };
 
 export function setupFixtures(ctx) {
   const { BUILD, C, box } = ctx;
@@ -47,13 +47,13 @@ export function setupFixtures(ctx) {
     const mug = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.055, 0.12, 8), tone(C, 'paper')); mug.position.set(1.05, T.top + 0.06, 0.6); mug.castShadow = true; g.add(mug);
     const coffee = new THREE.Mesh(new THREE.CircleGeometry(0.052, 8), flat('#4a2f1e')); coffee.rotation.x = -Math.PI / 2; coffee.position.set(1.05, T.top + 0.115, 0.6); g.add(coffee);
     // 사진 더미가 놓인 탁자에는 더미 뒤에 스노우 글로브를 둔다. 높이는 세로 사진(0.3)보다 20% 크다.
-    // 누르면 글로브 모드로 다가간다 (panels.js 의 openSlot → globe.js). 더미는 이 자리를 비켜 간다 (heap.js)
+    // 누르면 글로브가 떠올라 화면 가운데로 온다 (panels.js 의 openSlot → globe.js). 더미는 이 자리를 비켜 간다 (heap.js)
     if (build.items.some(o => o.type === 'heap' && Math.abs(o.x - it.x) < 1.3 && Math.abs(o.z - it.z) < 0.9 && Math.abs((o.y || 0) - T.top) < 0.03)) {
       const unit = GLOBE_SIZE / GLOBE_HEIGHT, globe = buildSnowGlobe({ unit });
       globe.root.scale.setScalar(unit); globe.root.position.set(GLOBE_AT.x, T.top, GLOBE_AT.z);
-      globe.root.rotation.y = Math.atan2(GLOBE_AT.view[0], GLOBE_AT.view[2]); // 집 앞(지역 +z)이 글로브 모드의 카메라를 본다
+      globe.root.rotation.y = Math.atan2(0 - GLOBE_AT.x, 1.4 - GLOBE_AT.z); // 집 앞(지역 +z)이 방석을 본다
       g.add(globe.root);
-      build.globe = { ...globe, view: GLOBE_AT.view };
+      build.globe = { ...globe, unit, anchor: g }; // anchor: 글로브가 붙는 탁자 묶음 (globe.js 가 띄웠다가 돌려 붙인다)
       tap(build, it, 'globe', globe.hitMeshes);
     }
     return { hw: T.w / 2 + 0.25, hd: T.d / 2 + 0.25 };

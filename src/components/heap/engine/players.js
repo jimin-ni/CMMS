@@ -110,7 +110,7 @@ export function setupPlayers(ctx) {
   }
   function resetMusic() { dockFrame.replaceChildren(); dock.hidden = true; ctx.musicUrl = null; ctx.musicParsed = null; root.style.removeProperty('--music-w'); }
   function closeMusic() { resetMusic(); announceMusic(); }
-  // 음악 플레이어가 열렸는지(heap:music, detail: true | false)를 바뀔 때만 알린다. heap-room.tsx 의 배경음악이 듣고 줄였다가 다시 켠다 (room-bgm.tsx).
+  // 음악 플레이어가 열렸는지(heap:music, detail: true | false)를 바뀔 때만 알린다. 지금 듣는 곳은 없다 (방 배경음악을 지웠다).
   let musicOn = false;
   function announceMusic() {
     if (musicOn === !dock.hidden) return;
