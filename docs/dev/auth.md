@@ -66,4 +66,4 @@
 
 - 크리에이터 인증 승인 화면 (관리자 전용)
 - 인증 화면 디자인 다듬기
-- 배포 시 `BETTER_AUTH_URL`과 `BETTER_AUTH_SECRET`을 Render 환경 변수에 설정
+- 배포 환경 변수: `BETTER_AUTH_URL`과 `BETTER_AUTH_SECRET`은 Render 대시보드의 Environment 탭에 둡니다. 로컬은 `.env.local`에 둡니다 (`docs/planning/03-tech-stack.md` 1-2절)
