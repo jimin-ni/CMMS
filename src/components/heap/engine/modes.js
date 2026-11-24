@@ -1,5 +1,6 @@
 // 방, 앉기, 상영, 책장 모드와 카드 집기.
 import * as THREE from 'three';
+import { HEAP_SIT_Y } from './figure.js';
 
 export function setupModes(ctx) {
   const {
@@ -17,15 +18,17 @@ export function setupModes(ctx) {
 
   function sit() {
     if (!SEAT || !SIT_CAM) return; // 사진 더미가 없는 방
-    ctx.mode = 'sit'; ctx.walkTo = null; ctx.arrive = null; ctx.waypoints = []; ctx.perch = null;
-    me.position.copy(SEAT); me.rotation.y = ctx.seatFace ?? Math.PI; // 서서 보는 더미는 옆에 서서 더미를 본다 (props.js)
+    ctx.mode = 'sit'; ctx.walkTo = null; ctx.arrive = null; ctx.waypoints = []; ctx.perch = null; ctx.sitMove = null;
+    // 방석으로 옮겨 앉는다 (loop.js 가 SETTLE_TIME 동안 옮긴다). 서서 보는 더미는 옆에 서서 더미를 본다 (props.js)
+    ctx.heapMove = { t: 0, stand: me.position.clone().setY(0), seat: new THREE.Vector3(SEAT.x, HEAP_SIT_Y, SEAT.z), yawStand: me.rotation.y, yawSeat: ctx.seatFace ?? Math.PI };
     setHint('sit'); goTo(SIT_CAM); syncUI();
     requestPile(NEAR);
   }
   function stand() {
     if (ctx.held) putBack();
-    ctx.mode = 'room'; ctx.hovered = null; controls.enabled = false; ctx.camGoal = null;
-    me.position.copy(SEAT).add(new THREE.Vector3(0.6, 0, 0.5));
+    ctx.mode = 'room'; ctx.hovered = null; controls.enabled = false; ctx.camGoal = null; ctx.heapMove = null;
+    // 방석 옆 바닥으로 일어선다 (walk.js 의 sitMove 가 옮긴다)
+    ctx.sitMove = { dir: -1, t: 1, stand: SEAT.clone().add(new THREE.Vector3(0.6, 0, 0.5)).setY(0), seatPos: me.position.clone(), yawStand: me.rotation.y, yawSeat: me.rotation.y };
     setHint('room'); syncUI();
   }
   function glowCard(c, v) { // 두 면이 자기 그림으로 빛나, 어두운 방에서도 카드가 읽힌다
