@@ -31,13 +31,13 @@ export default function MakersPage() {
             <span className="text-sm text-ash">개발자 소개 보기</span>
           </span>
         </Link>
-        <a href={MAKER_LINKS.gyuno} target="_blank" rel="noopener noreferrer" className={card}>
+        <Link href={MAKER_LINKS.gyuno} className={card}>
           <CharacterBadge kind="cat" label="흰색과 검은색 얼룩 고양이" />
           <span>
             <b className="block text-lg font-medium text-ink">고양이 · 규노</b>
-            <span className="text-sm text-ash">개발자 소개 보기 (LinkedIn)</span>
+            <span className="text-sm text-ash">개발자 소개 보기</span>
           </span>
-        </a>
+        </Link>
       </div>
     </main>
   );

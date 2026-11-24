@@ -5,6 +5,6 @@ export const MAKER_LINKS = {
   repo: "https://github.com/jimin-ni/CMMS",
   // 물범: 지민 프로필 (아직 개발 예정 페이지)
   jimin: "/makers/jimin",
-  // 고양이: 규노 프로필 (지금은 링크드인)
-  gyuno: "https://www.linkedin.com/in/gyunohyun/",
+  // 고양이: 규노 프로필 (아직 개발 예정 페이지)
+  gyuno: "/makers/gyuno",
 } as const;

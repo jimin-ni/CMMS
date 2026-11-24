@@ -534,9 +534,9 @@ export function HeapRoom({
                 <Link href={MAKER_LINKS.jimin} className="btn ghost">
                   물범 · 지민
                 </Link>
-                <a href={MAKER_LINKS.gyuno} target="_blank" rel="noopener noreferrer" className="btn ghost">
+                <Link href={MAKER_LINKS.gyuno} className="btn ghost">
                   고양이 · 규노
-                </a>
+                </Link>
               </>
             )}
             {canEdit && ready && mode === "room" && !editing && (

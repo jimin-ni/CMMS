@@ -2,7 +2,7 @@
 // 글로브가 탁자에서 떠올라 카메라 앞 화면 가운데로 다가온다. 카메라는 그대로라 뒤로 사진 더미와 탁자가 보인다.
 // 방은 어두워지고 집 창문의 불빛이 번진다. 끌면 카메라가 아니라 글로브가 돈다. 돌리는 동안에도 눈은 세상의 아래로 내린다.
 // 들어올 때, 돌릴 때, 빈 곳을 누를 때 3초 동안 눈이 내린다 (내리는 중에 다시 하면 3초를 새로 잰다).
-// 누르기: 물범과 그 둘레는 지민 프로필, 고양이와 그 둘레는 규노 프로필(새 탭), 글로브의 나머지는 제작자 소개.
+// 누르기: 물범과 그 둘레는 지민 프로필, 고양이와 그 둘레는 규노 프로필, 글로브의 나머지는 제작자 소개.
 // Esc 나 단추로 물러나면 글로브가 탁자의 제자리로 돌아간다.
 // 아직 글로브 속을 누른 적이 없으면 집, 물범, 고양이가 흐린 노란빛으로 반짝인다 (모든 모드에서).
 import * as THREE from 'three';
@@ -88,8 +88,7 @@ export function setupGlobe(ctx) {
   function globeClick(ray) {
     const target = pick(ray);
     if (target) tried = true;
-    if (target === 'gyuno') window.open(MAKER_LINKS.gyuno, '_blank', 'noopener,noreferrer');
-    else if (target) opts.navigate(MAKER_LINKS[target]);
+    if (target) opts.navigate(MAKER_LINKS[target]);
     else snow();
   }
 
