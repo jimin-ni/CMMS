@@ -31,6 +31,10 @@ export function setupTreeOwner(ctx, T, W) {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const bar = $('tree-tools'), replyBtn = $('tree-reply'), hideBtn = $('tree-hide');
+  // 0013 남의 쪽지: 신고(방 주인·관리자), 차단(방 주인·관리자는 쓰기 막기, 다른 사람은 나에게서 가리기)
+  const reportBtn = $('tree-report'), blockBtn = $('tree-block');
+  const canModerate = !!opts.data?.canModerate;
+  let guardBusy = false;
   const sheetEl = $('tree-rsheet'), ta = $('tr-text'), ctl = $('tr-ctl'), countEl = $('tr-count');
   const fontsEl = $('tr-fonts'), sizeEl = $('tr-size');
   const foldBtn = $('tr-fold'), cancelBtn = $('tr-cancel');
@@ -233,6 +237,46 @@ export function setupTreeOwner(ctx, T, W) {
     const id = o.id;
     W.ask('이 쪽지를 숨길까요? 다른 사람에게는 보이지 않아요.', '숨기기', '취소', () => doHide(id, true));
   });
+  async function guard(run, okText) {
+    guardBusy = true;
+    let res;
+    try { res = await run(); } catch { res = { ok: false, error: '처리하지 못했어요. 잠시 뒤 다시 시도해 주세요.' }; }
+    guardBusy = false;
+    if (ctx.disposed) return null;
+    toast(res?.ok ? okText : res?.error ?? '처리하지 못했어요.');
+    return res?.ok ? res : null;
+  }
+  // 내린 쪽지는 자리를 지키고 삭제 문구로 바뀐다 (서버와 같은 모양. 다음 폴링이 같은 값을 다시 준다)
+  const asRemoved = d => ({ ...d, screen: 'removed', msg: opts.removedText ?? '', name: null, reply: undefined, replyFont: undefined, replySize: undefined });
+  on(reportBtn, 'click', () => {
+    const o = T.opened();
+    if (isOff(reportBtn) || !o || !opts.reportPost) return;
+    const id = o.id;
+    W.ask('이 쪽지를 신고할까요? 쪽지가 내려가고 쓴 사람에게 경고가 1회 쌓여요.', '신고', '취소', async () => {
+      if (!(await guard(() => opts.reportPost('note', id), '신고했어요. 쪽지를 내렸어요'))) return;
+      const d = T.noteById(id);
+      if (d) { const next = asRemoved(d); ctx.mergeTreeNotes([next], []); if (T.opened()?.id === id && st === 'idle') T.reviseOpened(next, next); }
+    });
+  });
+  on(blockBtn, 'click', () => {
+    const o = T.opened();
+    if (isOff(blockBtn) || !o) return;
+    const id = o.id;
+    if (canModerate) {
+      W.ask('이 사람이 글을 쓸 수 없게 차단할까요? 이 사람이 쓴 글도 모두 내려가요.', '차단', '취소', async () => {
+        await guard(() => opts.blockAuthor('note', id), '차단했어요');
+      });
+      return;
+    }
+    W.ask('이 사람의 쪽지와 방명록, 방 안 모습을 나에게서 가릴까요? 마이페이지에서 다시 풀 수 있어요.', '차단', '취소', async () => {
+      const res = await guard(() => opts.hidePerson('note', id), '차단했어요. 이제 보이지 않아요');
+      if (!res) return;
+      T.dismissNote();
+      ctx.mergeTreeNotes([], res.hiddenNoteIds ?? []);
+      ctx.hideGuestbookRows?.(res.hiddenGuestbookIds ?? []);
+      opts.refreshBlocked?.();
+    });
+  });
   on(replyBtn, 'click', () => {
     if (!isOff(replyBtn)) { startReply(); return; }
     // 흐린 단추를 눌러도 이유는 알려 준다 (펼쳐지는 중에는 곧 켜지니 말하지 않는다)
@@ -301,6 +345,16 @@ export function setupTreeOwner(ctx, T, W) {
       setDisabled(replyBtn, !ok || sealed);
       replyBtn.title = sealed ? '공개일 이후에 답장할 수 있어요' : '';
       setDisabled(hideBtn, !ok);
+    }
+    // 남의 쪽지 (로그인한 사람만). 봉인돼 글이 안 보이는 쪽지에는 신고를 내지 않는다.
+    const other = !!o && !o.data.mine && !!opts.signedIn && !T.pending() && st === 'idle' && !W.active() && !W.confirming();
+    const showReport = other && canModerate && !o.data.sealed && o.data.screen !== 'removed' && !!opts.reportPost;
+    const showBlock = other && (canModerate ? !!opts.blockAuthor : !!opts.hidePerson);
+    if (reportBtn.hidden === showReport) reportBtn.hidden = !showReport;
+    if (blockBtn.hidden === showBlock) blockBtn.hidden = !showBlock;
+    if (showReport || showBlock) {
+      const off = !settled(o) || guardBusy;
+      setDisabled(reportBtn, off); setDisabled(blockBtn, off);
     }
     const anyShown = [...bar.children].some(b => !b.hidden);
     if (bar.hidden === anyShown) bar.hidden = !anyShown;

@@ -10,6 +10,11 @@ import {
   NOTE_TINT_IDS,
 } from "@/lib/heap/policy";
 import type { Fail, HeapChangesPosition } from "@/lib/heap/repo";
+import { planScreen, recordScreenEvent, type SaveNotice } from "@/lib/moderation/repo";
+import type { ScreenResult } from "@/lib/moderation/screen";
+import { MODERATION_TEXT } from "@/lib/moderation/policy";
+import { screenView } from "@/lib/heap/screen-view";
+import { notBlockedBy } from "@/lib/heap/blocks-repo";
 
 // 쪽지 트리의 DB 접근. repo.ts가 길어서 따로 뒀고, 규칙은 repo.ts와 같다 (쿼리는 이 파일에만, 실패는 { ok: false, reason }).
 // 방 주인(owner) = heap_rooms.creator_id. 역할 검사는 하지 않고 방 주인인지만 서버에서 확인한다.
@@ -70,6 +75,8 @@ export type HeapNote = {
   reply?: HeapNoteReply;
   // 방 주인에게만 있다. 아직 읽지 않았으면 true.
   unread?: boolean;
+  // 판정 상태 (0013). 공개면 없다. removed는 모두에게(본문은 삭제 문구), blocked·held는 작성자에게만 온다.
+  screen?: "removed" | "blocked" | "held";
 };
 
 export type HeapNotesState = { notes: HeapNote[]; noteRevealAt: Date | null; unreadNotes: number };
@@ -258,6 +265,7 @@ function noteSelect(executor: Executor) {
       hiddenAt: heapNotes.hiddenAt,
       ownerReadAt: heapNotes.ownerReadAt,
       createdAt: heapNotes.createdAt,
+      screenStatus: heapNotes.screenStatus,
       replyBody: heapNoteReplies.body,
       replyFont: heapNoteReplies.font,
       replyFontSize: heapNoteReplies.fontSize,
@@ -278,6 +286,9 @@ function toNote(row: NoteRow, ctx: NoteContext, viewerId: string | null): HeapNo
   const owner = viewerId !== null && viewerId === ctx.creatorId;
   // 숨긴 쪽지는 작성자와 방 주인(되돌리기용)에게만 보인다.
   if (row.hiddenAt !== null && !mine && !owner) return null;
+  // 판정에 걸린 쪽지(blocked, held)는 작성자에게만 보인다. 트리에 걸리지 않은 채 쪽지함에 있다.
+  const view = screenView(row.screenStatus, mine);
+  if (view === "hide") return null;
   // 봉인 중에는 작성자 말고는 닫혀 있다. 방 주인은 이른 검토가 켜져 있을 때만 읽는다 (서버가 레이아웃에서 읽은 값).
   const sealed = ctx.sealedNow && !mine && !(owner && ctx.ownerEarly);
   const note: HeapNote = {
@@ -296,6 +307,13 @@ function toNote(row: NoteRow, ctx: NoteContext, viewerId: string | null): HeapNo
     angle: row.posAngle,
     createdAt: row.createdAt,
   };
+  if (view !== "plain") note.screen = row.screenStatus as "removed" | "blocked" | "held";
+  // 내려간 쪽지는 자리를 지키고 삭제 문구만 보인다 (문서 8장). 이름과 답장도 내린다. 원문은 검토 화면에서만 본다.
+  if (view === "removed") {
+    note.name = null;
+    note.body = MODERATION_TEXT.removed;
+    return note;
+  }
   if (!sealed) {
     note.body = row.body;
     if (row.replyBody !== null && row.replyFont !== null && row.replyCreatedAt !== null) {
@@ -316,7 +334,9 @@ export async function countUnreadNotes(roomId: string, viewerId: string | null):
       eq(heapNotes.roomId, roomId),
       isNull(heapNotes.ownerReadAt),
       isNull(heapNotes.hiddenAt),
+      eq(heapNotes.screenStatus, "published"),
       ne(heapNotes.authorId, viewerId),
+      notBlockedBy(viewerId, heapNotes.authorId),
       sql`exists (select 1 from ${heapRooms} where ${heapRooms.id} = ${heapNotes.roomId} and ${heapRooms.creatorId} = ${viewerId})`,
     ),
   );
@@ -334,7 +354,7 @@ export async function listNotes(roomId: string, viewerId: string | null): Promis
         ? undefined
         : or(isNull(heapNotes.hiddenAt), eq(heapNotes.authorId, viewerId));
   const rows = await noteSelect(db)
-    .where(and(eq(heapNotes.roomId, roomId), visible))
+    .where(and(eq(heapNotes.roomId, roomId), visible, notBlockedBy(viewerId, heapNotes.authorId)))
     .orderBy(asc(heapNotes.createdAt), asc(heapNotes.id));
   return rows.flatMap((row) => toNote(row, ctx, viewerId) ?? []);
 }
@@ -371,6 +391,7 @@ export async function listNoteChanges(
       .where(
         and(
           eq(heapNotes.roomId, roomId),
+          notBlockedBy(viewerId, heapNotes.authorId),
           sql`(${heapNotes.updatedAt}, ${heapNotes.id}) > (${from.ts}::timestamptz, ${from.id}::uuid)`,
         ),
       )
@@ -410,8 +431,10 @@ export async function addNote(
   userId: string,
   roomId: string,
   rawInput: unknown,
+  // 판정 결과. 부르는 쪽(actions.ts)이 트랜잭션 밖에서 screenText로 먼저 판정한다.
+  screening: { result: ScreenResult; privileged: boolean },
 ): Promise<
-  | { ok: true; note: HeapNote; evictedId: string | null }
+  | { ok: true; note: HeapNote; evictedId: string | null; notice: SaveNotice }
   | Fail<"not-found" | "no-tree" | "invalid-note" | "invalid-note-name" | "invalid-note-style" | "invalid-note-spot" | "note-spot-taken" | "notes-per-day">
 > {
   if (!isUuid(roomId)) return fail("not-found");
@@ -420,7 +443,10 @@ export async function addNote(
   const input = parsed.value;
 
   return db.transaction(async (tx) => {
-    const rooms = await tx.select({ id: heapRooms.id, layout: heapRooms.layout }).from(heapRooms).where(eq(heapRooms.id, roomId));
+    const rooms = await tx
+      .select({ id: heapRooms.id, layout: heapRooms.layout, creatorId: heapRooms.creatorId })
+      .from(heapRooms)
+      .where(eq(heapRooms.id, roomId));
     if (!rooms[0]) return fail("not-found");
     // 트리가 없는 방에는 새 쪽지를 받지 않는다. 읽기와 숨기기는 그대로 둔다: 트리를 나중에 치워도 주인이 옛 쪽지를 다룰 수 있게.
     if (!hasTree(rooms[0].layout)) return fail("no-tree");
@@ -438,7 +464,9 @@ export async function addNote(
       .where(eq(heapAttempts.key, counterKey));
     if ((used[0]?.count ?? 0) >= HEAP_POLICY.notesPerDay) return fail("notes-per-day");
 
-    let spot = input.spot;
+    // 판정 계획을 자리 검사보다 먼저 정한다. 숨김 쪽지는 트리에 걸리지 않는다: 자리를 차지하지 않고 남의 쪽지를 내리지도 않는다.
+    const plan = await planScreen(tx, userId, screening.result, screening.privileged);
+    let spot = plan.status === "published" ? input.spot : null;
     let evictId: string | null = null;
     if (spot) {
       const hung = await tx
@@ -522,11 +550,22 @@ export async function addNote(
         posAngle: spot?.angle ?? null,
         createdAt: clockNow,
         updatedAt: clockNow,
+        screenStatus: plan.status,
+        screenedAt: clockNow,
+        normalizedHash: screening.result.normalizedHash,
       })
       .returning({ id: heapNotes.id });
+    const notice = await recordScreenEvent(tx, {
+      userId,
+      roomOwnerId: rooms[0].creatorId,
+      surface: "note",
+      targetId: created.id,
+      result: screening.result,
+      plan,
+    });
     const note = await loadNote(tx, created.id, userId);
     if (!note) throw new Error("note vanished after insert");
-    return { ok: true as const, note, evictedId };
+    return { ok: true as const, note, evictedId, notice };
   });
 }
 

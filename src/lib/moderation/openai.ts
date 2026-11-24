@@ -10,7 +10,8 @@ export type OpenAIModeration =
       categories: Record<string, boolean>;
       scores: Record<string, number>;
     }
-  | { status: "skipped_no_key" | "skipped_rate" | "skipped_breaker" | "error" | "timeout" };
+  // skipped_surface: 그 표면은 OpenAI를 부르지 않는다 (방명록 이름 12자, 문서 4장 기본값)
+  | { status: "skipped_no_key" | "skipped_rate" | "skipped_breaker" | "skipped_surface" | "error" | "timeout" };
 
 export type Moderate = (text: string, userId: string) => Promise<OpenAIModeration>;
 

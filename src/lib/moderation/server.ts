@@ -96,7 +96,8 @@ export async function screenText(input: ScreenInput): Promise<ScreenResult> {
   return screen(input, {
     lexicon: lists.lexicon,
     extraPatterns: lists.patterns,
-    moderate: moderateWithOpenAI,
+    // 방명록 이름(12자)은 짧아 OpenAI 판정이 흔들린다. 평가셋으로 확인하기 전까지 사전·regex만 쓴다 (문서 4장).
+    moderate: input.surface === "guestbook" ? async () => ({ status: "skipped_surface" }) : moderateWithOpenAI,
     trace: DEBUG ? makeTrace(input, lists.lexicon.version) : undefined,
   });
 }

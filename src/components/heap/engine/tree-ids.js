@@ -65,5 +65,7 @@ export function toEngineNote(n) {
   if (Number.isFinite(n.fontSize)) out.fontSize = n.fontSize;
   if (typeof n.ornament === 'string') out.kind = n.ornament;
   if (typeof n.ornamentColor === 'string') out.main = n.ornamentColor;
+  // 0013 판정 상태: removed 는 모두에게(글은 서버가 삭제 문구로 바꿔 보낸다), blocked·held 는 작성자에게만 온다
+  if (n.screen === 'removed' || n.screen === 'blocked' || n.screen === 'held') out.screen = n.screen;
   return out;
 }

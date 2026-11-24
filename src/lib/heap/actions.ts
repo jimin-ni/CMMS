@@ -3,9 +3,10 @@
 import { heapRequiredError, validateLayout } from "./layout";
 import { HEAP_POLICY } from "./policy";
 import { HEAP_MESSAGES, type HeapReason } from "./messages";
-import { addGuestbookEntry, getRoomBySlug, recordVisit, saveRoomLayout } from "./repo";
+import { addGuestbookEntry, getRoomBySlug, getRoomOwnerId, recordVisit, saveRoomLayout } from "./repo";
 import {
   addNote,
+  parseNoteInput,
   deleteOwnNote,
   getNotesState,
   markNoteRead,
@@ -16,13 +17,47 @@ import {
   type HeapNote,
 } from "./notes-repo";
 import { checkRoomName } from "./slug";
-import { getViewer } from "@/lib/session";
+import { getViewer, type Viewer } from "@/lib/session";
+import { countLinks } from "@/lib/moderation/contact";
+import { noticeFor, type ModerationNotice } from "@/lib/moderation/notice";
+import { MODERATION_POLICY, MODERATION_TEXT } from "@/lib/moderation/policy";
+import { getWriteBlock, preScreenBlock } from "@/lib/moderation/repo";
+import { hashNormalized, type ScreenResult, type Surface } from "@/lib/moderation/screen";
+import { screenText } from "@/lib/moderation/server";
 
 // reason은 코드가 분기하는 값이고, message는 화면에 보여 줄 문구다.
 export type HeapFail<R extends HeapReason> = { ok: false; reason: R; message: string };
 
 function fail<R extends HeapReason>(reason: R): HeapFail<R> {
   return { ok: false, reason, message: HEAP_MESSAGES[reason] };
+}
+
+type ModerationReason = "not-found" | "write-blocked" | "under-age" | "repeat" | "cooldown" | "note-too-many-links";
+
+// 쪽지·방명록 쓰기 전 확인과 판정 (문서 3-2, 9장, 13장). 버블 채팅 전송(bubble/actions.ts)과 같은 순서다:
+// 쓰기 차단 → 링크 수 → 같은 글 반복·위반 직후 대기 → 판정. 판정은 DB 트랜잭션 밖에서 한다 (OpenAI 호출이 느릴 수 있다).
+// 방 주인과 관리자는 확인을 건너뛰고 판정 후 바로 게시된다 (걸리면 사후 확인 기록만).
+async function screenForHeap(
+  viewer: Viewer,
+  roomId: string,
+  surface: Extract<Surface, "note" | "guestbook">,
+  text: string,
+): Promise<{ ok: true; screening: { result: ScreenResult; privileged: boolean } } | HeapFail<ModerationReason>> {
+  const ownerId = await getRoomOwnerId(roomId);
+  if (!ownerId) return fail("not-found");
+  const privileged = viewer.role === "admin" || viewer.id === ownerId;
+  if (!privileged) {
+    const block = await getWriteBlock(viewer.id, ownerId);
+    if (block) return fail(block.reason === "under_age" ? "under-age" : "write-blocked");
+    if (surface === "note" && countLinks(text) > MODERATION_POLICY.maxLinksPerPost) return fail("note-too-many-links");
+    const pre = await preScreenBlock(surface, viewer.id, hashNormalized(text));
+    if (pre?.kind === "repeat") return fail("repeat");
+    if (pre?.kind === "cooldown") {
+      return { ok: false, reason: "cooldown", message: MODERATION_TEXT.cooldown(pre.seconds) };
+    }
+  }
+  const result = await screenText({ text, surface, authorId: viewer.id });
+  return { ok: true, screening: { result, privileged } };
 }
 
 // 방 방문 기록. 로그인하지 않았으면 아무것도 하지 않는다 (오류가 아니다).
@@ -46,18 +81,27 @@ export async function addGuestbookAction(
   roomId: string,
   name: string,
 ): Promise<
-  | { ok: true; entry: GuestbookEntryDto }
-  | HeapFail<"not-signed-in" | "not-found" | "invalid-name" | "rate-limited">
+  | { ok: true; entry: GuestbookEntryDto; notice?: ModerationNotice }
+  | HeapFail<"not-signed-in" | "invalid-name" | "rate-limited" | ModerationReason>
 > {
   const viewer = await getViewer();
   if (!viewer) return fail("not-signed-in");
   if (typeof roomId !== "string") return fail("not-found");
   if (typeof name !== "string") return fail("invalid-name");
+  const trimmed = name.trim();
+  const length = Array.from(trimmed).length;
+  if (length < 1 || length > HEAP_POLICY.guestbookNameMaxChars) return fail("invalid-name");
 
-  const result = await addGuestbookEntry(roomId, viewer.id, name);
+  const gate = await screenForHeap(viewer, roomId, "guestbook", trimmed);
+  if (!gate.ok) return gate;
+  const result = await addGuestbookEntry(roomId, viewer.id, trimmed, gate.screening);
   if (!result.ok) return fail(result.reason);
   const { entry } = result;
-  return { ok: true, entry: { id: entry.id, name: entry.name, createdAt: entry.createdAt.toISOString() } };
+  return {
+    ok: true,
+    entry: { id: entry.id, name: entry.name, createdAt: entry.createdAt.toISOString() },
+    notice: noticeFor(result.notice),
+  };
 }
 
 // 꾸미기 저장. 방 주인만. 형식 검사는 서버에서 다시 한다 (클라이언트 값을 믿지 않는다).
@@ -120,10 +164,10 @@ export async function addNoteAction(
   roomId: string,
   input: unknown,
 ): Promise<
-  | { ok: true; note: HeapNoteDto; evictedId: string | null }
+  | { ok: true; note: HeapNoteDto; evictedId: string | null; notice?: ModerationNotice }
   | HeapFail<
       | "not-signed-in"
-      | "not-found"
+      | ModerationReason
       | "invalid-note"
       | "invalid-note-name"
       | "invalid-note-style"
@@ -137,9 +181,15 @@ export async function addNoteAction(
   if (!viewer) return fail("not-signed-in");
   if (typeof roomId !== "string") return fail("not-found");
 
-  const result = await addNote(viewer.id, roomId, input);
+  const parsed = parseNoteInput(input);
+  if (!parsed.ok) return fail(parsed.reason);
+  // 표시 이름과 본문을 함께 판정한다 (문서 4장). 익명 쪽지도 판정한다.
+  const text = [parsed.value.displayName, parsed.value.body].filter(Boolean).join("\n");
+  const gate = await screenForHeap(viewer, roomId, "note", text);
+  if (!gate.ok) return gate;
+  const result = await addNote(viewer.id, roomId, input, gate.screening);
   if (!result.ok) return fail(result.reason);
-  return { ok: true, note: toNoteDto(result.note), evictedId: result.evictedId };
+  return { ok: true, note: toNoteDto(result.note), evictedId: result.evictedId, notice: noticeFor(result.notice) };
 }
 
 // 내가 쓴 쪽지 지우기
