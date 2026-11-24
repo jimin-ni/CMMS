@@ -4,7 +4,7 @@
 // 다른 사람 캐릭터는 입력 레이캐스트 목록에 없으므로 왼쪽 클릭은 뒤의 바닥이나 가구로 간다. 캐릭터끼리는 부딪히지 않는다.
 import * as THREE from 'three';
 import { flat } from './draw.js';
-import { makeFigure, seatLegs, stepGait, turnToward, wrapAngle, SIT_DROP, WALK_SPEED } from './figure.js';
+import { makeFigure, seatLegs, stepGait, turnToward, wrapAngle, SIT_DROP, HEAP_SIT_Y, WALK_SPEED } from './figure.js';
 import { disposeScene } from './util.js';
 
 // 다른 사람 몸 색 (서버가 주는 colour 0..7). 방의 흙빛과 어울리는 따뜻한 색들
@@ -233,7 +233,7 @@ export function setupPresence(ctx) {
       if (it.seat) {
         g.position.set(it.seat.p.x, it.seat.p.y - SIT_DROP, it.seat.p.z); g.rotation.y = it.seat.ry; seatLegs(it.fig);
       } else if (it.atHeap && it.heapSpot) {
-        g.position.set(it.heapSpot.p.x, -0.18, it.heapSpot.p.z); g.rotation.y = it.heapSpot.ry; seatLegs(it.fig);
+        g.position.set(it.heapSpot.p.x, HEAP_SIT_Y, it.heapSpot.p.z); g.rotation.y = it.heapSpot.ry; seatLegs(it.fig);
       } else {
         const goal = it.path[0] ?? it.target;
         if (goal) {
