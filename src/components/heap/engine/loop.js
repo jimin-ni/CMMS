@@ -77,6 +77,7 @@ export function setupLoop(ctx) {
   function frame() {
     if (ctx.disposed) return;
     const rawDt = clock.getDelta(), dt = Math.min(rawDt, 0.05), t = clock.elapsedTime, a = reduced ? 1 : 1 - Math.exp(-dt * 7);
+    ctx.globeStep?.(Math.min(rawDt, 0.1)); // 스노우 글로브의 떠오르기, 눈, 반짝임, 글로브 모드의 어둠과 창문 불빛 (globe.js)
     ctx.treeStep?.(t, rawDt); // 쪽지 트리 (tree.js): 트리 모드의 fov, 쪽지 움직임, 불빛. 카메라 분기보다 먼저 돈다
     if (ctx.mode === 'edit') { // 꾸미기는 자기 카메라(edit-camera.js)를 쓰고, 걷는 사람은 문 앞에 세워 둔다
       if (ctx.editPreview) roomCam(a); else ctx.editCam.step(a); // 팔로워로 보기는 방 카메라다 (edit.js)
@@ -86,7 +87,7 @@ export function setupLoop(ctx) {
       roomCam(a);
     } else {
       camera.up.copy(Yv); // 앉기와 궤도 컨트롤은 Y 가 위인 카메라를 전제한다
-      const seated = ctx.mode === 'sit';
+      const seated = ctx.mode === 'sit' || ctx.globeFrom === 'sit'; // 앉아서 글로브를 보면 계속 앉아 있다
       me.position.y = seated ? -0.18 : 0; legL.rotation.x = legR.rotation.x = seated ? -1.2 : 0;
       if (ctx.camGoal) {
         camera.position.lerp(ctx.camGoal.pos, a); controls.target.lerp(ctx.camGoal.target, a); camera.lookAt(controls.target);
@@ -94,6 +95,7 @@ export function setupLoop(ctx) {
       } else if (ctx.mode === 'sit') controls.update();
     }
     ctx.presenceStep?.(Math.min(rawDt, 0.2)); // 함께 있는 다른 사람 캐릭터와 내 움직임 알리기 (presence.js). 모든 모드에서 돈다
+    ctx.sfxStep?.(Math.min(rawDt, 0.2)); // 걷는 발소리, 러그 위에서는 먹먹하게 (sfx.js)
     ctx.stepCue?.(Math.min(rawDt, 0.2)); // 가는 곳의 바닥 고리와 누른 물건의 빛 (walk.js). 더미 보기로 넘어가도 고리가 끝까지 사라지게 모드와 상관없이 돈다
     ctx.sparkleStep?.(Math.min(rawDt, 0.2)); // 누를 수 있는 물건 위의 반짝임 (sparkle.js)
     if (ctx.toastTimer > 0 && (ctx.toastTimer -= rawDt) <= 0) $('toast').textContent = '';
@@ -101,7 +103,7 @@ export function setupLoop(ctx) {
     for (const d of ctx.build.phoneDots ?? []) d.visible = blink;
     tickClock();
     const lampNow = Math.max(0, ctx.lampBase + Math.sin(t * 1.3) * 0.05);
-    for (const l of ctx.build.lamps) if (l.light) l.light.intensity = lampNow;
+    for (const l of ctx.build.lamps) if (l.light) l.light.intensity = l.fixed ?? lampNow; // 작은 빛(fixed)은 주인이 고른 세기 그대로
     stepMotes(t);
     // 카드
     const tn = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);

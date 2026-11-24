@@ -8,7 +8,7 @@ import type { Moderate, OpenAIModeration } from "./openai";
 import { MODERATION_POLICY } from "./policy";
 import { findPattern } from "./patterns";
 
-export type Surface = "chat" | "note" | "guestbook";
+export type Surface = "chat" | "note" | "guestbook" | "nickname";
 
 export type ScreenInput = {
   text: string; // 원문

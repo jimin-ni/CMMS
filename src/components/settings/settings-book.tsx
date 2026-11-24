@@ -10,7 +10,6 @@ import {
   type Language,
   type RoomTime,
   type Theme,
-  type VolumeKey,
 } from "@/lib/settings/prefs";
 
 export function SettingsBook() {
@@ -19,7 +18,6 @@ export function SettingsBook() {
       <LanguagePage />
       <ThemePage />
       <RoomTimePage />
-      <SoundPage />
     </Book>
   );
 }
@@ -143,43 +141,6 @@ function RoomTimePage() {
         </div>
       </fieldset>
       {roomTime === null && <p className="ob-hand sb-note">아직 고르지 않았어요: 방 주인이 정한 시간대로 보여요</p>}
-    </Page>
-  );
-}
-
-const VOLUME_LABELS: [VolumeKey, string, string][] = [
-  ["video", "재생 영상 소리", "Video"],
-  ["music", "배경음악", "Music"],
-  ["effects", "효과음", "Effects"],
-];
-
-function SoundPage() {
-  const { volume } = usePrefs();
-  return (
-    <Page no={4} tag="sound" title="sound">
-      <fieldset className="sb-field">
-        <legend className="ob-rounded sb-legend">
-          소리 <small>Sound</small>
-        </legend>
-        {VOLUME_LABELS.map(([key, label, sub]) => (
-          <label key={key} className="sb-slider">
-            <span className="sb-slider-head">
-              <b className="ob-rounded">{label}</b>
-              <small>{sub}</small>
-              <output className="ob-pixel">{volume[key]}</output>
-            </span>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={5}
-              value={volume[key]}
-              onChange={(e) => setPrefs({ volume: { ...volume, [key]: Number(e.target.value) } })}
-              style={{ "--fill": `${volume[key]}%` } as React.CSSProperties}
-            />
-          </label>
-        ))}
-      </fieldset>
     </Page>
   );
 }

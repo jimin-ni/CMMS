@@ -49,6 +49,8 @@ next-env.d.ts
 # audio whose license forbids redistributing original files (docs/planning/10-audio.md §3)
 /public/audio/**/*-mixkit-*
 /public/audio/**/*-pixabay-*
+# 출처를 모르는 영사기 효과음. 출처와 라이선스를 확인할 때까지 각자 로컬에만 둔다 (10-audio.md §4)
+/public/audio/sfx/projector0*.mp3
 
 # AI 스크리닝 사전 원본과 평가셋 (docs/planning/12-ai-screening.md 5-2, 18-1). 공개 저장소에 넣지 않는다.
 /.moderation-private/

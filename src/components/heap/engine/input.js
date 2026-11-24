@@ -35,7 +35,8 @@ export function setupInput(ctx) {
     if (ctx.mode === 'sit' && ctx.held && k === 'f') flip();
     if (k === 'escape') {
       for (const id of OVERLAYS) if (!$(id).hidden) { $(id).hidden = true; return; }
-      if (ctx.mode === 'sort') exitSort();
+      if (ctx.mode === 'globe') ctx.exitGlobe();
+      else if (ctx.mode === 'sort') exitSort();
       else if (ctx.mode === 'tree') ctx.treeEscape(); // 열린 쪽지를 접고, 한 번 더 누르면 나간다 (tree.js)
       else if (ctx.held) putBack();
       else if (ctx.mode === 'sit') stand();
@@ -69,9 +70,15 @@ export function setupInput(ctx) {
       canvas.style.cursor = 'grabbing';
       return;
     }
+    if (ctx.mode === 'globe' && down && ev.buttons) { // 글로브 모드의 끌기: 카메라가 아니라 글로브를 돌린다 (globe.js)
+      ctx.globeDrag(ev.clientX - (down.lx ?? down.x), ev.clientY - (down.ly ?? down.y));
+      down.lx = ev.clientX; down.ly = ev.clientY; canvas.style.cursor = 'grabbing';
+      return;
+    }
     if (ev.buttons) return;
     rayFrom(ev);
     if (ctx.mode === 'sort') { canvas.style.cursor = ctx.shelf && ray.intersectObjects(ctx.shelf.albums.flatMap(a => [a.mesh, a.label]), false).length ? 'pointer' : 'default'; return; }
+    if (ctx.mode === 'globe') { canvas.style.cursor = ctx.globeHover(ray) ? 'pointer' : 'grab'; return; }
     if (ctx.mode === 'room') { canvas.style.cursor = ray.intersectObjects([...ctx.build.slotMeshes, ...ctx.build.seatMeshes], false).length ? 'pointer' : ''; return; }
     if (ctx.mode !== 'sit' || ctx.camGoal) return;
     const hit = ray.intersectObjects([...pickables, ...ctx.build.slotMeshes], false)[0];
@@ -90,6 +97,7 @@ export function setupInput(ctx) {
     if (ctx.mode === 'tree') return; // 트리 모드의 누르기는 tree.js 가 받는다: 아래의 방 걷기로 흘러가면 안 된다
     if (wasDrag || !d || Math.hypot(ev.clientX - d.x, ev.clientY - d.y) > 6) return;
     rayFrom(ev);
+    if (ctx.mode === 'globe') return ctx.globeClick(ray); // 글로브 모드 (globe.js): 카메라가 자리로 가는 중에도 받는다 (글로브가 카메라를 따라온다)
     if (ctx.camGoal) return;
     if (ctx.mode === 'sort') { const h = ctx.shelf && ray.intersectObjects(ctx.shelf.albums.flatMap(a => [a.mesh, a.label]), false)[0]; if (h) albumAction(h.object.userData.album); return; }
     if (ctx.mode === 'sit') {

@@ -1,6 +1,6 @@
 # 10. 배경음악·효과음 출처와 라이선스
 
-작성: 2026-11-18. 후보 목록은 팀 문서 "공모전 배경음악·효과음 출처 목록"(2026-11-18)을 기준으로 했습니다.
+작성: 2026-11-18. 고침: 2026-11-24 (배경음악 삭제, 걷기 효과음 적용, 영사기 효과음 저장소에서 뺌). 후보 목록은 팀 문서 "공모전 배경음악·효과음 출처 목록"(2026-11-18)을 기준으로 했습니다.
 
 ## 1. 공모전 규정 대조
 
@@ -50,25 +50,36 @@
 
 | 파일 | 항목 | 원본 | 길이 | 라이선스 | 출처 표기 | 커밋 |
 |---|---|---|---|---|---|---|
-| `bgm/bgm-warm-retro-soul-backbeat-budgetpixel.mp3` | 배경음악 1 (방의 기본 배경음악) | [Warm Retro Soul Backbeat](https://budgetpixel.com/background-music/warm-retro-soul-backbeat-13196076) | 45.1초 | CC BY 4.0 | 필요 | 함 |
-| `sfx/floor-walk-freesound-543685.mp3` | 마룻바닥 걷기 1 | [Freesound 543685](https://freesound.org/s/543685/) (미리듣기 MP3) | 0:24 | CC0 | 불필요 | 함 |
+| ~~`bgm/bgm-warm-retro-soul-backbeat-budgetpixel.mp3`~~ | 배경음악 1 (방의 기본 배경음악). 2026-11-24 지움 | [Warm Retro Soul Backbeat](https://budgetpixel.com/background-music/warm-retro-soul-backbeat-13196076) | 45.1초 | CC BY 4.0 | 필요 | 지움 |
+| `sfx/floor-walk-freesound-543685.mp3` | 마룻바닥 걷기 1 (방의 발소리로 씀) | [Freesound 543685](https://freesound.org/s/543685/) (미리듣기 MP3) | 0:24 | CC0 | 불필요 | 함 |
 | `sfx/floor-creak-freesound-347851.mp3` | 마룻바닥 걷기 2 | [Freesound 347851](https://freesound.org/s/347851/) (미리듣기 MP3) | 약 1:21 | CC0 | 불필요 | 함 |
 | `sfx/floor-walk-oga-83765.wav` | 마룻바닥 걷기 3 | [OpenGameArt: Steps in wood floor](https://opengameart.org/node/83765) | 약 3.5초 | CC0 | 불필요 | 함 |
 | `sfx/projector-start-stop-mixkit-3013.mp3` | 영사기 켜기 1 | Mixkit 3013 (Bell & Howell start/stop) | 0:29 | Mixkit Free | 불필요 | 안 함 (§3) |
 | `sfx/projector-working-mixkit-1441.mp3` | 영사기 켜기 2 | Mixkit 1441 (Vintage film projector working) | 0:24 | Mixkit Free | 불필요 | 안 함 (§3) |
 | `sfx/projector-hum-mixkit-1443.mp3` | 영사기 켜기 3 | Mixkit 1443 (Antique movie projector hum) | 0:30 | Mixkit Free | 불필요 | 안 함 (§3) |
-| `bgm/carol-christmas-lullaby-mixkit-985.mp3` | 잔잔한 캐롤 1 (쪽지 트리 모드 배경음악) | Mixkit 985 (Christmas Lullaby, Michael Ramir C.) | 1:46 | Mixkit Free | 불필요 | 안 함 (§3) |
+| `bgm/carol-christmas-lullaby-mixkit-985.mp3` | 잔잔한 캐롤 1 (쪽지 트리 모드 배경음악이었음. 지금은 쓰지 않고 로컬에 둠) | Mixkit 985 (Christmas Lullaby, Michael Ramir C.) | 1:46 | Mixkit Free | 불필요 | 안 함 (§3) |
+| `sfx/walk01.mp3` | `floor-walk-freesound-543685.mp3`와 같은 파일 (내용이 같음) | Freesound 543685 | 약 22초 | CC0 | 불필요 | 함 |
+| `sfx/walk-carpet01.wav` | `floor-walk-oga-83765.wav`와 같은 파일. 이름은 카펫이지만 나무 바닥 소리 | OpenGameArt 83765 | 약 3.5초 | CC0 | 불필요 | 함 |
+| `sfx/projector01.mp3` ~ `projector03.mp3` | 영사기 소리 | [미정] 출처 모름. 길이가 위 Mixkit 영사기 파일(24~30초)과 다름 | 약 61~67초 | [미정] | [미정] | 2026-11-18에 커밋됐다가 2026-11-24에 뺌 |
 
 Freesound 원본 파일(WAV 등)은 로그인해야 받을 수 있어 미리듣기 MP3(128kbps)를 받았습니다. 음질이 부족하면 로그인 후 원본으로 바꿉니다.
 
 A Christmas Carol(Mixkit 896)은 2026-11-18에 쓰지 않기로 하고 지웠습니다.
 
-### 쓰는 곳 (`src/components/heap/room-bgm.tsx`)
+- [결정] (2026-11-24) 영사기 파일 3개는 출처를 모릅니다. 공개 저장소에서 빼고(`git rm --cached`), `.gitignore`에 넣어 각자 로컬에만 둡니다. 예전 커밋 기록에는 남아 있습니다. 출처와 라이선스를 확인하면 다시 넣거나 CC0 음원으로 바꿉니다.
+- `walk01.mp3`와 `walk-carpet01.wav`는 다른 파일과 내용이 같아 쓰지 않습니다.
 
-- 방에서는 기본 배경음악을 반복 재생합니다. 쪽지 트리 모드에 들어가면 캐롤로 바꿔 반복 재생하고, 나오면 기본 배경음악으로 돌아갑니다.
-- 영사기로 영상을 보거나 방의 음악 플레이어(오른쪽 위)가 열려 있으면 배경음악을 2초 동안 줄여 멈춥니다. 닫으면 2초 동안 키워 다시 켭니다. iOS Safari는 소리 크기를 바꿀 수 없어 2초 뒤에 바로 멈춥니다.
-- 소리 크기는 설정의 배경음악 값을 따릅니다.
-- 캐롤 파일이 없으면(저장소와 배포본) 트리 모드에서도 기본 배경음악을 계속 틉니다.
+### 배경음악 삭제 [결정] (2026-11-24)
+
+- 방 배경음악(`room-bgm.tsx`)과 기본 곡 파일, 설정의 소리 크기(재생 영상, 배경음악, 효과음)를 지웠습니다. 예전에 저장된 소리 크기 값은 읽을 때 버립니다.
+- 캐롤 파일은 로컬에 그대로 둡니다. 지금은 어디에서도 틀지 않습니다.
+
+### 쓰는 곳: 걷기 효과음 (`src/components/heap/engine/sfx.js`)
+
+- 내 캐릭터가 방 모드에서 걷는 동안 `floor-walk-freesound-543685.mp3`를 반복 재생하고, 멈추면 0.06초 안에 줄여 끕니다. 1.5초 이상 서 있으면 오디오를 멈춰 둡니다. 다른 사람 캐릭터의 발소리는 내지 않습니다.
+- 러그 위에서는 같은 소리를 저역 필터(500Hz)로 먹먹하게 냅니다. 러그는 카탈로그의 `rug` 가구와 좌식 탁자에 딸린 러그입니다. 카펫 발소리 음원을 받으면 그 파일로 바꿉니다(§5).
+- 브라우저는 사용자 동작 전에 소리를 막으므로, 방에서 첫 클릭이나 키 입력 때 파일을 받아 오디오를 켭니다. 파일이 없으면 소리 없이 걷습니다.
+- 소리 크기 설정은 없습니다. 값은 `sfx.js`의 `LEVEL`에서 바꿉니다.
 
 ## 5. 받지 못한 파일
 
@@ -77,11 +88,12 @@ A Christmas Carol(Mixkit 896)은 2026-11-18에 쓰지 않기로 하고 지웠습
 | Pixabay 곡과 효과음 (배경음악 4·5, 동물의 숲 감성 2곡, 버튼 클릭 3개, 방 문 열기 3개) | 사이트가 자동 접속을 막음 | 브라우저에서 직접 받기. 파일 이름에 `-pixabay-`를 넣어 커밋에서 빼기 (§3) |
 | BudgetPixel: Dusty Porch Memories, "lofi, nostalgic, mellow, warm, piano, wobbly", Christmas Morning Warmth | 라이브러리에서 같은 이름의 곡을 찾지 못함 | 원래 곡 주소 확인. 비슷한 곡: [Nostalgic Tape Lofi Piano](https://budgetpixel.com/background-music/nostalgic-tape-lofi-piano-985a8df4), [Fireside Lofi Christmas](https://budgetpixel.com/background-music/fireside-lofi-christmas-fc1dfad4) |
 | ElevenLabs Book page turning | 로그인 필요. 무료 플랜 조건 미확인 | 무료 플랜 상업 이용 조건 확인 후 받기 |
-| 카펫 걷기, 책장에서 책 꺼내기 | 무료 음원 없음 | Freesound에서 CC0 필터로 재검색 |
+| 카펫 걷기, 책장에서 책 꺼내기 | 무료 음원 없음. 카펫은 지금 마룻바닥 발소리에 저역 필터를 걸어 대신함 | Freesound에서 CC0 필터로 재검색 |
+| 영사기 소리 (출처가 확인된 것) | `projector01~03.mp3`의 출처를 모름 (§4) | 출처 확인 또는 CC0 음원 찾기 |
 | 방 문 열기 3번 (Bedroom Door Opens 1) | 파일별 라이선스 미확인 | Pixabay 파일 페이지에서 확인 |
 
 ## 6. 출처 표기 (앱 크레딧 화면용)
 
-CC BY 4.0 음원은 앱 안의 크레딧(예: 설정 또는 마이페이지 하단)에 아래 문구를 그대로 넣습니다.
+CC BY 4.0 음원은 앱 안의 크레딧(예: 설정 또는 마이페이지 하단)에 아래 문구를 그대로 넣습니다. 2026-11-24에 아래 곡을 지워서, 지금은 넣을 문구가 없습니다. 다시 쓰면 넣습니다.
 
-- "Warm Retro Soul Backbeat" by BudgetPixel AI (https://budgetpixel.com/background-music/warm-retro-soul-backbeat-13196076) — CC BY 4.0
+- (지움) "Warm Retro Soul Backbeat" by BudgetPixel AI (https://budgetpixel.com/background-music/warm-retro-soul-backbeat-13196076) — CC BY 4.0

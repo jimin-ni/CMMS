@@ -22,10 +22,14 @@ type Room = { w: number; d: number; h?: number };
 //   heap 사진 더미(방에 하나까지, style "box" 면 신발상자) · lowTable 좌식 탁자(러그, 방석, 머그째, rug 로 러그 크기)
 //   phone 휴대폰 · guestbook 방명록 공책(style "stand" 면 나무 받침째) · screen 벽 스크린 · poster 벽 포스터 · window 창(w, h)
 //   projector 영사기 (꾸밈만, 하는 일은 없다. 렌즈가 지역 -z 를 본다)
+//   glow 작은 빛: 보이지 않고 빛만 낸다. 늘 켜져 있고 level(1..5, 없으면 3)이 세기다 (engine/furniture.js)
 const HAND_TYPES = new Set([
   "bed", "shelf", "plant", "snake", "lamp", "books", "frame", "calendar",
-  "heap", "lowTable", "phone", "guestbook", "screen", "poster", "window", "projector",
+  "heap", "lowTable", "phone", "guestbook", "screen", "poster", "window", "projector", "glow",
 ]);
+// 작은 빛의 세기 단계
+export const GLOW_LEVEL_MIN = 1;
+export const GLOW_LEVEL_MAX = 5;
 // 벽에 거는 손 가구. 바닥을 차지하지 않고, 액자처럼 뒷벽(z = -d/2, 0도)이나 왼쪽 벽(x = -w/2, 90도)에 붙는다.
 // 액자와 달리 높이 y(가운데)를 고른다. 폭과 높이는 엔진(furniture.js, shell.js)이 짓는 틀 포함 크기다. window 는 item.w, item.h 에 틀 0.16 을 더한다.
 export const WALL_HAND: Record<string, { w: number; h: number } | null> = {
@@ -50,6 +54,7 @@ export const HAND_FOOTPRINT: Record<string, { w: number; d: number }> = {
   phone: { w: 0.2, d: 0.35 },
   guestbook: { w: 0.5, d: 0.36 },
   projector: { w: 0.3, d: 0.42 },
+  glow: { w: 0.2, d: 0.2 },
 };
 const MODEL_BY_ID = new Map(catalogue.models.map((model) => [model.id, model]));
 // 불을 켜고 끌 수 있는 가구: 손으로 만드는 lamp, 그리고 카탈로그 category가 lamp인 모델
@@ -91,10 +96,10 @@ function unknownKey(obj: Obj, allowed: readonly string[]): string | null {
 function checkItem(raw: unknown, index: number): Fail | { item: Obj } {
   const at = `items[${index}]`;
   if (!isObj(raw)) return { error: `${at}: 객체가 아니에요.` };
-  const bad = unknownKey(raw, ["type", "x", "z", "rot", "size", "model", "tint", "y", "fn", "lit", "colors", "plant", "style", "rug", "w", "h"]);
+  const bad = unknownKey(raw, ["type", "x", "z", "rot", "size", "model", "tint", "y", "fn", "lit", "colors", "plant", "style", "rug", "w", "h", "level"]);
   if (bad) return { error: `${at}: 알 수 없는 필드 ${bad}` };
 
-  const { type, x, z, rot, size, model, tint, y, fn, lit, colors, plant, style, rug, w, h } = raw;
+  const { type, x, z, rot, size, model, tint, y, fn, lit, colors, plant, style, rug, w, h, level } = raw;
   // plant: 앨범 책장(shelf) 위 화분을 둘지. false 만 저장한다 (없으면 둔다)
   if (plant !== undefined && (type !== "shelf" || typeof plant !== "boolean")) return { error: `${at}: plant는 shelf에만 true/false로 쓸 수 있어요.` };
   if (typeof type !== "string" || !(type === "model" || HAND_TYPES.has(type))) {
@@ -161,6 +166,14 @@ function checkItem(raw: unknown, index: number): Fail | { item: Obj } {
       return { error: `${at}: lit는 조명에만 쓸 수 있어요.` };
     }
     item.lit = lit;
+  }
+  if (level !== undefined) {
+    // 작은 빛(glow)의 세기. 정수 단계만
+    if (type !== "glow") return { error: `${at}: level은 작은 빛에만 쓸 수 있어요.` };
+    if (!Number.isInteger(level) || (level as number) < GLOW_LEVEL_MIN || (level as number) > GLOW_LEVEL_MAX) {
+      return { error: `${at}: level은 ${GLOW_LEVEL_MIN}~${GLOW_LEVEL_MAX} 사이 정수여야 해요.` };
+    }
+    item.level = level;
   }
   if (colors !== undefined) {
     // 가구 하나만 따로 칠한 색 (색 묶음 C2, parts.ts). 모델 가구에만, 그 모델이 가진 부분에만

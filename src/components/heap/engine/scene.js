@@ -58,18 +58,26 @@ export function setupScene(ctx) {
     const solid = Math.hypot(RX, RZ) + 0.5, M = solid + 3 - Math.min(RX, RZ);
     const gw = 2 * RX + 2 * M, gd = 2 * RZ + 2 * M, px = 1024 / Math.max(gw, gd);
     const c = makeCanvas(Math.round(gw * px), Math.round(gd * px)), g = c.getContext('2d');
-    const cx = c.width / 2, cy = c.height / 2;
-    const fade = g.createRadialGradient(cx, cy, solid * px, cx, cy, (solid + 3) * px);
-    fade.addColorStop(0, groundColour); fade.addColorStop(1, groundColour + '00');
-    g.fillStyle = fade; g.fillRect(0, 0, c.width, c.height);
-    // 접지 그림자: 방 바닥(벽 두께 포함) 둘레를 흐리게 어둡힌다
-    g.filter = `blur(${Math.round(0.25 * px)}px)`; g.fillStyle = 'rgba(40, 28, 18, 0.35)';
-    g.fillRect(cx - (RX + 0.25) * px, cy - (RZ + 0.25) * px, (2 * RX + 0.35) * px, (2 * RZ + 0.35) * px);
-    g.filter = 'none';
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(gw, gd), new THREE.MeshStandardMaterial({ map: canvasTexture(c), transparent: true, roughness: 1 }));
+    const cx = c.width / 2, cy = c.height / 2, tex = canvasTexture(c);
+    // contact: 접지 그림자를 그릴지. 디버그 그림자 보기(shell.js 의 applyShadowMode)가 끌 때만 false 로 다시 칠한다
+    const paint = (contact = true) => {
+      g.clearRect(0, 0, c.width, c.height);
+      const fade = g.createRadialGradient(cx, cy, solid * px, cx, cy, (solid + 3) * px);
+      fade.addColorStop(0, groundColour); fade.addColorStop(1, groundColour + '00');
+      g.fillStyle = fade; g.fillRect(0, 0, c.width, c.height);
+      if (contact) { // 접지 그림자: 방 바닥(벽 두께 포함) 둘레를 흐리게 어둡힌다
+        g.filter = `blur(${Math.round(0.25 * px)}px)`; g.fillStyle = 'rgba(40, 28, 18, 0.35)';
+        g.fillRect(cx - (RX + 0.25) * px, cy - (RZ + 0.25) * px, (2 * RX + 0.35) * px, (2 * RZ + 0.35) * px);
+        g.filter = 'none';
+      }
+      tex.needsUpdate = true;
+    };
+    paint();
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(gw, gd), new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 1 }));
     // 1 mm 아래: 바닥 널과 벽의 밑면과 한 평면에 두지 않는다
     ground.name = 'ground'; ground.rotation.x = -Math.PI / 2; ground.position.set(0, ctx.groundY - 0.001, 0);
     ground.receiveShadow = true; scene.add(ground);
+    ctx.ground = ground; ctx.paintGround = paint;
   }
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(2 * RX, 2 * RZ), new THREE.MeshBasicMaterial({ visible: false }));
   floor.rotation.x = -Math.PI / 2; scene.add(floor);
