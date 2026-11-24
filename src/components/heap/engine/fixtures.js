@@ -5,6 +5,11 @@ import * as THREE from 'three';
 import { flat, makeCanvas, canvasTexture } from './draw.js';
 import { tone, mark } from './palette.js';
 import { makeChip } from './chip.js';
+import { buildSnowGlobe, GLOBE_HEIGHT } from '../../snow-globe/model.js';
+
+// 좌식 탁자 위 스노우 글로브의 지역 자리: 사진 더미 뒤, 탁자 가운데 쪽. 사진 더미(heap.js)는 반지름 r 안을 비켜 간다.
+// 정면(집 앞, 지역 +z)은 탁자 앞 방석(지역 (0, 1.4), props.js 의 SEAT)을 본다: 더미를 보는 사람에게 정면이 보인다
+export const LOW_TABLE_GLOBE = { x: 0.45, z: -0.6, r: 0.24 };
 
 export function setupFixtures(ctx) {
   const { BUILD, C, box } = ctx;
@@ -23,7 +28,8 @@ export function setupFixtures(ctx) {
   // 좌식 탁자: 윗판 2.6 x 1.8, 높이 0.56. 러그(rug: { w, d }, 없으면 3.8 x 2.9), 앞쪽 방석, 머그를 함께 둔다.
   // 이 탁자 위의 사진 더미는 방석에 앉아 본다 (props.js)
   const T = { w: 2.6, d: 1.8, top: 0.56 };
-  BUILD.lowTable = (g, it) => {
+  const GLOBE_SIZE = 0.36, GLOBE_AT = LOW_TABLE_GLOBE;
+  BUILD.lowTable = (g, it, build) => {
     const rugC = makeCanvas(256, 192), rugTex = canvasTexture(rugC);
     const paintRug = () => {
       const r = rugC.getContext('2d'); r.fillStyle = C.paper; r.fillRect(0, 0, 256, 192);
@@ -34,12 +40,22 @@ export function setupFixtures(ctx) {
     paintRug();
     const rug = new THREE.Mesh(new THREE.PlaneGeometry(it.rug?.w ?? 3.8, it.rug?.d ?? 2.9), new THREE.MeshStandardMaterial({ map: rugTex, roughness: 1 }));
     rug.material.userData.repaint = paintRug;
-    rug.rotation.x = -Math.PI / 2; rug.position.set(0, 0.006, 0.15); rug.receiveShadow = true; g.add(rug);
+    rug.rotation.x = -Math.PI / 2; rug.position.set(0, 0.006, 0.15); rug.receiveShadow = true; g.add(rug); build.rugMeshes.push(rug);
     box(T.w, 0.08, T.d, tone(C, 'woodB'), 0, T.top - 0.04, 0, { parent: g });
     for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(0.12, T.top - 0.08, 0.12, tone(C, 'woodDark'), sx * (T.w / 2 - 0.15), (T.top - 0.08) / 2, sz * (T.d / 2 - 0.15), { parent: g });
     box(0.75, 0.1, 0.75, tone(C, 'accent'), 0, 0.05, T.d / 2 + 0.5, { cast: false, parent: g });
     const mug = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.055, 0.12, 8), tone(C, 'paper')); mug.position.set(1.05, T.top + 0.06, 0.6); mug.castShadow = true; g.add(mug);
     const coffee = new THREE.Mesh(new THREE.CircleGeometry(0.052, 8), flat('#4a2f1e')); coffee.rotation.x = -Math.PI / 2; coffee.position.set(1.05, T.top + 0.115, 0.6); g.add(coffee);
+    // 사진 더미가 놓인 탁자에는 더미 뒤에 스노우 글로브를 둔다. 높이는 세로 사진(0.3)보다 20% 크다.
+    // 누르면 글로브가 떠올라 화면 가운데로 온다 (panels.js 의 openSlot → globe.js). 더미는 이 자리를 비켜 간다 (heap.js)
+    if (build.items.some(o => o.type === 'heap' && Math.abs(o.x - it.x) < 1.3 && Math.abs(o.z - it.z) < 0.9 && Math.abs((o.y || 0) - T.top) < 0.03)) {
+      const unit = GLOBE_SIZE / GLOBE_HEIGHT, globe = buildSnowGlobe({ unit });
+      globe.root.scale.setScalar(unit); globe.root.position.set(GLOBE_AT.x, T.top, GLOBE_AT.z);
+      globe.root.rotation.y = Math.atan2(0 - GLOBE_AT.x, 1.4 - GLOBE_AT.z); // 집 앞(지역 +z)이 방석을 본다
+      g.add(globe.root);
+      build.globe = { ...globe, unit, anchor: g }; // anchor: 글로브가 붙는 탁자 묶음 (globe.js 가 띄웠다가 돌려 붙인다)
+      tap(build, it, 'globe', globe.hitMeshes);
+    }
     return { hw: T.w / 2 + 0.25, hd: T.d / 2 + 0.25 };
   };
 

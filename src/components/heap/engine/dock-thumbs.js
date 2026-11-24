@@ -52,7 +52,7 @@ export function setupDockThumbs(ctx) {
   // 버리는 build 에 짓는다: 기능 슬롯은 build !== ctx.build 라 시작하지 않는다 (slots.js). 재질은 방과 나눠 쓰는 것(tone)이 있어 버리지 않고,
   // 이 묶음이 만든 기하만 버린다. 아무 메시도 없으면(창문은 shell.js 가 짓는다) null.
   function drawHand(item) {
-    const build = { group: null, groups: [], obst: [], items: [item], lamps: [], slots: [], slotMeshes: [], seats: [], seatMeshes: [], loads: new Set() };
+    const build = { group: null, groups: [], obst: [], items: [item], lamps: [], slots: [], slotMeshes: [], seats: [], seatMeshes: [], rugMeshes: [], loads: new Set() };
     const g = new THREE.Group(), irand = ctx.irand;
     let s = 7; ctx.irand = () => (s = (s * 16807) % 2147483647) / 2147483647; // 러그 무늬 같은 것이 방의 난수 수열을 건드리지 않게
     try { if (!ctx.BUILD[item.type]?.(g, item, build)) return null; } finally { ctx.irand = irand; }

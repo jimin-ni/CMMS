@@ -93,6 +93,7 @@ export function setupTime(ctx) {
   ctx.lampBase = 3.2; ctx.readGlow = 0; let nextClock = 0;
   function applyTime(hour) {
     const k = timeAt(hour);
+    ctx.baseExposure = k.exposure; // 글로브 모드(globe.js)는 이 값에서 방을 어둡힌다
     renderer.toneMappingExposure = k.exposure;
     lastK = k; paintBackdrop();
     setCol(hemi.color, k.hemiSky); setCol(hemi.groundColor, k.hemiGround); hemi.intensity = k.hemiI;

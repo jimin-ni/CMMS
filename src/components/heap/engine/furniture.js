@@ -192,6 +192,7 @@ export function setupFurniture(ctx) {
           if (glow) shades.push(o);
         }
         o.castShadow = !rug && !o.material.transparent; o.receiveShadow = true;
+        if (rug) build.rugMeshes.push(o);
       });
       const hold = new THREE.Group();
       hold.scale.setScalar(ctx.scaleOf(m.entry)); hold.position.y = (it.y || 0) + (rug ? 0.012 : 0); // 러그는 바닥 바로 위에 눕혀 둘이 깜박이지 않게 한다
@@ -302,14 +303,15 @@ export function setupFurniture(ctx) {
   //   lamps: 이 build 의 램프들, 각각 { light, shades, off } (위의 MAX_LAMP_LIGHTS 참고). 작은 빛은 fixed(고정 세기)와 mark(꾸미기의 구슬)도 갖는다
   //   slots: its functions, { it, fn, start? } each · slotMeshes: the meshes a click can hit, each with userData.slot (see the slots section above)
   //   seats / seatMeshes: addSeats 참고
+  //   rugMeshes: 러그의 메시. 그 위를 걸으면 발소리가 먹먹해진다 (sfx.js)
   //   loads: 이 build 가 아직 기다리는 기념품 썸네일 (다음 build 가 바꿀 때 취소한다)
-  ctx.build = { group: null, groups: [], obst: [], items: [], lamps: [], slots: [], slotMeshes: [], seats: [], seatMeshes: [], loads: new Set() };
+  ctx.build = { group: null, groups: [], obst: [], items: [], lamps: [], slots: [], slotMeshes: [], seats: [], seatMeshes: [], rugMeshes: [], loads: new Set() };
   function buildItems(items, first = false) {
     if (ctx.build.group) { for (const l of ctx.build.lamps) l.light?.dispose(); scene.remove(ctx.build.group); disposeScene(ctx.build.group, ctx.KEPT); }
     shelfParts.length = 0; ctx.shelf = null;
     if (ctx.build.loads.size) ctx.cancelThumbs(ctx.build.loads); // 바뀐 가구가 아직 받던 썸네일은 여기서 멈춘다
     // groups[i]: items[i] 로 지은 그룹 (userData.itemIndex = i). 꾸미기(edit.js)가 메시에서 가구를 찾고, 끄는 동안 이 그룹만 옮긴다.
-    const build = ctx.build = { group: new THREE.Group(), groups: [], obst: [], items, lamps: [], slots: [], slotMeshes: [], seats: [], seatMeshes: [], loads: new Set() };
+    const build = ctx.build = { group: new THREE.Group(), groups: [], obst: [], items, lamps: [], slots: [], slotMeshes: [], seats: [], seatMeshes: [], rugMeshes: [], loads: new Set() };
     scene.add(build.group);
     items.forEach((it, i) => {
       // 첫 빌드는 방이 늘 써 온 공용 난수 수열을 쓴다. 다시 지을 때는 목록 순서로 가구마다 시드를 주므로
