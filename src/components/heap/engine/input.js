@@ -35,7 +35,8 @@ export function setupInput(ctx) {
     if (ctx.mode === 'sit' && ctx.held && k === 'f') flip();
     if (k === 'escape') {
       for (const id of OVERLAYS) if (!$(id).hidden) { $(id).hidden = true; return; }
-      if (ctx.mode === 'sort') exitSort();
+      if (ctx.mode === 'globe') ctx.exitGlobe();
+      else if (ctx.mode === 'sort') exitSort();
       else if (ctx.mode === 'tree') ctx.treeEscape(); // 열린 쪽지를 접고, 한 번 더 누르면 나간다 (tree.js)
       else if (ctx.held) putBack();
       else if (ctx.mode === 'sit') stand();
@@ -72,6 +73,7 @@ export function setupInput(ctx) {
     if (ev.buttons) return;
     rayFrom(ev);
     if (ctx.mode === 'sort') { canvas.style.cursor = ctx.shelf && ray.intersectObjects(ctx.shelf.albums.flatMap(a => [a.mesh, a.label]), false).length ? 'pointer' : 'default'; return; }
+    if (ctx.mode === 'globe') { canvas.style.cursor = ctx.globeHover(ray) ? 'pointer' : 'grab'; return; }
     if (ctx.mode === 'room') { canvas.style.cursor = ray.intersectObjects([...ctx.build.slotMeshes, ...ctx.build.seatMeshes], false).length ? 'pointer' : ''; return; }
     if (ctx.mode !== 'sit' || ctx.camGoal) return;
     const hit = ray.intersectObjects([...pickables, ...ctx.build.slotMeshes], false)[0];
@@ -91,6 +93,7 @@ export function setupInput(ctx) {
     if (wasDrag || !d || Math.hypot(ev.clientX - d.x, ev.clientY - d.y) > 6) return;
     rayFrom(ev);
     if (ctx.camGoal) return;
+    if (ctx.mode === 'globe') return ctx.globeClick(ray); // 글로브 모드 (globe.js)
     if (ctx.mode === 'sort') { const h = ctx.shelf && ray.intersectObjects(ctx.shelf.albums.flatMap(a => [a.mesh, a.label]), false)[0]; if (h) albumAction(h.object.userData.album); return; }
     if (ctx.mode === 'sit') {
       const hits = ray.intersectObjects([...pickables, ...ctx.build.slotMeshes], false);

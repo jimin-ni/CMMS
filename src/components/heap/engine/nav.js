@@ -18,6 +18,7 @@ export function setupNav(ctx) {
   // 걷는 방 모드로 돌린다. 각 모드를 나가는 함수가 집은 사진, 상영 중인 사진, 쪽지 판을 정리한다.
   function toRoom() {
     for (const id of OVERLAYS) $(id).hidden = true;
+    if (ctx.mode === 'globe') ctx.exitGlobe();
     if (ctx.mode === 'tree') ctx.exitTree();
     else if (ctx.mode === 'sort') ctx.exitSort();
     else if (ctx.mode === 'sit') ctx.stand();

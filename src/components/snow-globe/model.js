@@ -1,19 +1,21 @@
 // 제작자 소개로 가는 로우폴리 스노우 글로브 모델. three 만 쓰는 순수 모듈이다.
-// 미니룸 좌식 탁자 위의 작은 글로브(heap/engine/fixtures.js), 가까이 보는 화면(snow-globe-view.tsx),
-// 제작자 소개 페이지의 캐릭터 그림(character-badge.tsx)이 같은 모델을 쓴다.
+// 미니룸 좌식 탁자 위의 글로브(heap/engine/fixtures.js, globe.js)와 제작자 소개 페이지의 캐릭터 그림(character-badge.tsx)이 쓴다.
 //
-// 단위: 유리 구의 반지름이 1 이다. 받침 바닥이 y 0, 전체 높이는 GLOBE_HEIGHT 다.
+// 단위: 유리 구의 반지름이 1 이다. 받침 바닥이 y 0, 전체 높이는 GLOBE_HEIGHT 다. 집과 물범, 고양이의 앞이 지역 +z 다.
 // 모든 재질은 flatShading 이라 면이 각져 보인다. 정해진 시드의 난수를 써서 매번 같은 모양이 나온다.
 import * as THREE from 'three';
 
 const R = 1; // 유리 구 반지름
-const CY = 1.02; // 유리 구 중심 높이
+export const GLOBE_CENTRE_Y = 1.02; // 유리 구 중심 높이
+const CY = GLOBE_CENTRE_Y;
 const BASE_TOP = 0.46; // 나무 받침 윗면
 const TY = 0.58; // 안쪽 땅(얼음) 윗면
+const LAND_R = 0.81; // 안쪽 땅 반지름 (받침 높이에서 유리 안쪽)
 export const GLOBE_HEIGHT = CY + R;
 
-// 바다는 땅 원판의 20% (72도) 부채꼴이고 +x 쪽(오른편)에 있다. 각도는 CylinderGeometry 와 같다: x = r sin θ, z = r cos θ
-const SEA_START = Math.PI * 0.3, SEA_LEN = Math.PI * 0.4;
+// 바다: 땅 원판을 x = LAND_R cos(SEA_A) 의 직선(수평선)으로 자른 오른쪽 반달 영역. 원판 넓이의 20% 가 되는 자리다
+// (활꼴 넓이 비율 (θ - sin θ) / 2π = 0.2 → θ ≈ 2.113, 현까지 거리 = cos(θ / 2) ≈ 0.491)
+const SEA_A = Math.acos(0.491);
 
 function seeded(seed) {
   let a = seed >>> 0;
@@ -47,33 +49,40 @@ function makeKit(rand) {
     m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true;
     parent.add(m); return m;
   };
-  return { rand, plain, shaded, add, tone: (geo, colour, spread = 0.08) => facets(geo, colour, spread, rand) };
+  // 창문 불빛: 톤 매핑을 받지 않아 방이 어두워져도(상세 화면) 밝게 남는다
+  const lit = new THREE.MeshBasicMaterial({ color: '#ffd58a', toneMapped: false });
+  return { rand, plain, shaded, add, lit, tone: (geo, colour, spread = 0.08) => facets(geo, colour, spread, rand) };
 }
 
-// 물범: 머리가 지역 +x 쪽이다. 흰 각진 몸통을 살짝 젖혀 누워 앞발을 들고, 꼬리지느러미는 두 갈래다
+// 물범: 종이 접기 같은 각진 흰 몸. 등을 대고 누워 머리를 들고 앞을(+z) 본다. 머리는 지역 -x, 꼬리는 +x 쪽이고
+// 몸이 U 자로 휘어 꼬리지느러미가 위로 들린다. 앞발 하나는 가슴 위로 들고, 하나는 옆으로 내린다
 export function buildSeal(kit = makeKit(seeded(7))) {
   const { add, shaded, plain, tone } = kit;
-  const g = new THREE.Group(), white = '#f3f5f7', black = plain('#1d1d22', { roughness: 0.4 });
-  const body = add(g, tone(new THREE.IcosahedronGeometry(0.13, 1), white, 0.1), shaded, 0, 0.085, 0);
-  body.scale.set(1.5, 0.72, 0.85); body.rotation.z = 0.28;
-  const head = add(g, tone(new THREE.IcosahedronGeometry(0.092, 1), white, 0.1), shaded, 0.18, 0.2, 0);
-  head.rotation.z = 0.35;
-  for (const s of [-1, 1]) add(g, new THREE.IcosahedronGeometry(0.014, 0), black, 0.245, 0.235, s * 0.042);
-  add(g, new THREE.IcosahedronGeometry(0.016, 0), black, 0.272, 0.2, 0);
-  // 수염: 코 양옆에서 세 가닥씩
+  const g = new THREE.Group(), white = '#f2f4f8', shadow = '#e3e7ef', black = plain('#141418', { roughness: 0.35 });
+  const part = (r, detail, colour, [x, y, z], [sx, sy, sz], [rx, ry, rz] = [0, 0, 0]) => {
+    const m = add(g, tone(new THREE.IcosahedronGeometry(r, detail), colour, 0.12), shaded, x, y, z);
+    m.scale.set(sx, sy, sz); m.rotation.set(rx, ry, rz); return m;
+  };
+  part(0.12, 1, white, [0.03, 0.085, 0], [1.35, 0.72, 1]); // 배
+  part(0.11, 1, white, [-0.12, 0.145, 0.005], [1.1, 1, 1], [0, 0, -0.6]); // 가슴
+  part(0.078, 1, white, [0.17, 0.11, 0], [1.3, 0.8, 0.85], [0, 0, 0.6]); // 꼬리 쪽 몸
+  part(0.095, 1, white, [-0.2, 0.285, 0.02], [1, 0.95, 1]); // 머리
+  part(0.046, 1, white, [-0.18, 0.262, 0.1], [1.15, 0.8, 1]); // 주둥이
+  // 크고 검은 눈, 코
+  part(0.024, 0, '#141418', [-0.245, 0.315, 0.09], [1, 1, 0.45], [0, -0.35, 0]).material = black;
+  part(0.024, 0, '#141418', [-0.145, 0.33, 0.095], [1, 1, 0.45], [0, 0.35, 0]).material = black;
+  part(0.021, 0, '#141418', [-0.18, 0.28, 0.142], [1.2, 0.8, 0.6]).material = black;
+  // 수염: 주둥이 양옆에서 세 가닥씩 바깥으로
   const pts = [];
-  for (const s of [-1, 1]) for (const dy of [-0.012, 0, 0.012]) pts.push(0.262, 0.195, s * 0.02, 0.29, 0.19 + dy * 2.2, s * 0.09);
-  const whiskers = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(pts, 3)), new THREE.LineBasicMaterial({ color: '#8a8f96' }));
-  g.add(whiskers);
-  // 든 앞발: 가슴 양옆에서 위와 바깥으로
+  for (const s of [-1, 1]) for (const dy of [-0.018, 0, 0.018]) pts.push(-0.18 + s * 0.03, 0.262, 0.13, -0.18 + s * 0.13, 0.262 + dy * 2.4, 0.12);
+  g.add(new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(pts, 3)), new THREE.LineBasicMaterial({ color: '#2a2a30' })));
+  // 앞발: 가슴 위로 든 것과 옆으로 내린 것
+  part(0.055, 0, shadow, [-0.03, 0.24, 0.09], [0.5, 1.25, 0.9], [0.3, 0, -0.35]);
+  part(0.05, 0, shadow, [-0.14, 0.075, 0.105], [0.5, 1.2, 0.85], [0.5, 0, 0.6]);
+  // 두 갈래로 벌어져 위로 들린 꼬리지느러미
   for (const s of [-1, 1]) {
-    const f = add(g, tone(new THREE.IcosahedronGeometry(0.05, 0), '#e9edf1'), shaded, 0.1, 0.19, s * 0.1);
-    f.scale.set(0.5, 1.4, 0.32); f.rotation.set(s * -0.5, 0, -0.5);
-  }
-  // 갈라진 꼬리지느러미
-  for (const s of [-1, 1]) {
-    const t = add(g, tone(new THREE.ConeGeometry(0.045, 0.13, 4), '#e9edf1'), shaded, -0.25, 0.05, s * 0.04);
-    t.scale.set(1, 1, 0.35); t.rotation.set(0, s * 0.45, Math.PI / 2);
+    const t = add(g, tone(new THREE.ConeGeometry(0.05, 0.15, 4), shadow, 0.1), shaded, 0.275, 0.2, s * 0.035);
+    t.scale.set(1, 1, 0.3); t.rotation.set(s * 0.45, 0, -0.55);
   }
   return g;
 }
@@ -105,43 +114,72 @@ export function buildCat(kit = makeKit(seeded(11))) {
   return g;
 }
 
-// 나무: 원뿔 세 단과 눈 덮인 끝
+// 나무: 눈에 덮인 가늘고 높은 원뿔. 밑동에 청록 잎이 띠처럼 드러난다
 function buildTree(kit, h) {
   const { add, shaded, plain, tone } = kit;
   const g = new THREE.Group();
-  add(g, new THREE.CylinderGeometry(0.025 * h, 0.03 * h, 0.12 * h, 5), plain('#6e4528'), 0, 0.06 * h, 0);
-  [[0.17, 0.2, 0.2], [0.13, 0.18, 0.33], [0.09, 0.15, 0.45]].forEach(([r, ch, y]) => {
-    add(g, tone(new THREE.ConeGeometry(r * h, ch * h, 6), '#2f6b4f', 0.12), shaded, 0, y * h, 0);
-  });
-  add(g, tone(new THREE.ConeGeometry(0.045 * h, 0.06 * h, 6), '#ffffff', 0.05), shaded, 0, 0.53 * h, 0);
+  add(g, new THREE.CylinderGeometry(0.018, 0.022, 0.05, 5), plain('#6e4528'), 0, 0.025, 0);
+  add(g, tone(new THREE.ConeGeometry(0.095, 0.16 * h, 7), '#2b8c96', 0.12), shaded, 0, 0.04 + 0.08 * h, 0);
+  add(g, tone(new THREE.ConeGeometry(0.085, 0.5 * h, 7), '#f7f9fc', 0.07), shaded, 0, 0.1 + 0.25 * h, 0);
   return g;
 }
 
-function buildHouse(kit) {
-  const { add, shaded, plain, tone } = kit;
-  const g = new THREE.Group();
-  add(g, tone(new THREE.BoxGeometry(0.34, 0.24, 0.28), '#d9a877', 0.1), shaded, 0, 0.12, 0);
-  // 박공 지붕: 세모 기둥을 x 로 눕힌다. 붉은 지붕 위에 조금 작은 흰 눈 지붕을 얹어 처마만 붉게 보인다
-  const prism = (r, len) => {
-    const geo = new THREE.CylinderGeometry(r, r, len, 3);
-    geo.rotateZ(Math.PI / 2); geo.rotateX(-Math.PI / 2);
-    return geo;
-  };
-  add(g, tone(prism(0.22, 0.42), '#b8473d'), shaded, 0, 0.24 + 0.11, 0);
-  add(g, tone(prism(0.2, 0.44), '#fbfdff', 0.05), shaded, 0, 0.24 + 0.135, 0);
-  add(g, tone(new THREE.BoxGeometry(0.05, 0.12, 0.05), '#8c5a3c'), shaded, 0.1, 0.44, -0.04);
-  add(g, new THREE.BoxGeometry(0.07, 0.13, 0.01), plain('#5b3a26'), 0.06, 0.065, 0.142);
-  const lit = plain('#ffd27a', { emissive: '#ffb347', emissiveIntensity: 0.7 });
-  add(g, new THREE.BoxGeometry(0.06, 0.06, 0.01), lit, -0.08, 0.13, 0.142);
-  add(g, new THREE.BoxGeometry(0.01, 0.06, 0.06), lit, 0.172, 0.13, 0);
+// 집: 가파른 박공의 붉은 A 자 집. 두꺼운 눈 지붕, 굴뚝, 정면에 창 세 개(박공의 둥근 창, 양옆 네모 창)와 유리창 달린 현관문.
+// lights 에 불빛이 번지는 자리(집 지역 좌표)를 넣는다
+function buildHouse(kit, lights) {
+  const { add, shaded, plain, tone, lit } = kit;
+  const g = new THREE.Group(), W = 0.17, WALL = 0.13, APEX = 0.4, D = 0.32;
+  // 정면 오각형을 깊이 D 로 민다 (앞면이 z = D / 2)
+  const front = new THREE.Shape([new THREE.Vector2(-W, 0), new THREE.Vector2(W, 0), new THREE.Vector2(W, WALL), new THREE.Vector2(0, APEX), new THREE.Vector2(-W, WALL)]);
+  const body = new THREE.ExtrudeGeometry(front, { depth: D, bevelEnabled: false });
+  body.translate(0, 0, -D / 2);
+  add(g, tone(body, '#c8323a', 0.12), shaded);
+  // 벽의 가로 널 띠
+  const trim = plain('#9e2229');
+  for (const y of [0.035, 0.07, 0.105]) add(g, new THREE.BoxGeometry(2 * W + 0.004, 0.006, D + 0.004), trim, 0, y, 0);
+  // 지붕: 두 경사면에 두꺼운 눈 판을 얹는다. 처마가 앞뒤와 옆으로 조금 나온다
+  const run = W, rise = APEX - WALL, slope = Math.hypot(run, rise), ang = Math.atan2(rise, run), T = 0.05;
+  for (const s of [-1, 1]) {
+    const snow = add(g, tone(new THREE.BoxGeometry(slope + 0.07, T, D + 0.06), '#fbfdff', 0.06), shaded);
+    const nx = s * Math.sin(ang), ny = Math.cos(ang); // 경사면 바깥 방향
+    snow.position.set(s * run / 2 + nx * T / 2 + s * 0.012, WALL + rise / 2 + ny * T / 2, 0);
+    snow.rotation.z = -s * ang;
+  }
+  // 굴뚝 (붉은 벽돌, 눈 뚜껑)
+  add(g, tone(new THREE.BoxGeometry(0.055, 0.14, 0.055), '#b3262e'), shaded, 0.08, 0.37, -0.06);
+  add(g, tone(new THREE.BoxGeometry(0.07, 0.025, 0.07), '#ffffff', 0.04), shaded, 0.08, 0.45, -0.06);
+  // 정면 창: 둥근 창, 양옆 네모 창 (흰 창틀, 십자 창살), 현관문의 유리
+  const z = D / 2 + 0.002, frame = plain('#f4eee6');
+  const pane = (geo, x, y) => { add(g, geo, lit, x, y, z + 0.002).castShadow = false; lights.push(new THREE.Vector3(x, y, z)); };
+  add(g, new THREE.CircleGeometry(0.042, 10), frame, 0, 0.255, z);
+  pane(new THREE.CircleGeometry(0.032, 10), 0, 0.255);
+  for (const s of [-1, 1]) {
+    add(g, new THREE.PlaneGeometry(0.068, 0.062), frame, s * 0.105, 0.075, z);
+    pane(new THREE.PlaneGeometry(0.052, 0.048), s * 0.105, 0.075);
+    add(g, new THREE.PlaneGeometry(0.004, 0.048), frame, s * 0.105, 0.075, z + 0.004);
+    add(g, new THREE.PlaneGeometry(0.052, 0.004), frame, s * 0.105, 0.075, z + 0.004);
+  }
+  add(g, new THREE.BoxGeometry(0.07, 0.125, 0.012), plain('#5b3424'), 0, 0.0625, z);
+  pane(new THREE.PlaneGeometry(0.036, 0.034), 0, 0.09);
+  add(g, new THREE.BoxGeometry(0.1, 0.012, 0.03), plain('#ffffff'), 0, 0.006, z + 0.015); // 현관 앞 눈
   return g;
+}
+
+// 불빛 번짐: 가운데가 밝고 가장자리로 사라지는 따뜻한 원. 더하기 혼합이라 겹치면 더 밝다
+function glowTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const x = c.getContext('2d'), grad = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255,214,140,1)'); grad.addColorStop(0.35, 'rgba(255,170,80,0.45)'); grad.addColorStop(1, 'rgba(255,140,50,0)');
+  x.fillStyle = grad; x.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return t;
 }
 
 // 눈: 유리 구 안에서만 떨어지는 작은 팔면체 입자. start(ms) 동안 위에서 새로 내리고(다시 부르면 시간을 새로 잰다),
 // 시간이 끝나면 새로 내리지 않고 남은 눈이 바닥에 닿는 대로 사라진다
 function buildSnow(count, rand) {
   const mesh = new THREE.InstancedMesh(new THREE.OctahedronGeometry(0.022, 0), new THREE.MeshStandardMaterial({ color: '#ffffff', flatShading: true, emissive: '#dfeaf5', emissiveIntensity: 0.35 }), count);
-  mesh.frustumCulled = false;
+  mesh.frustumCulled = false; mesh.castShadow = false;
   const pos = new Float32Array(count * 3), spin = new Float32Array(count * 3), speed = new Float32Array(count), phase = new Float32Array(count), alive = new Uint8Array(count);
   const dummy = new THREE.Object3D(), TOP = CY + 0.8, FLOOR = TY + 0.01;
   const radiusAt = y => Math.sqrt(Math.max(0, R * R - (y - CY) ** 2)) * 0.86;
@@ -168,6 +206,7 @@ function buildSnow(count, rand) {
       if (left <= 0) for (let i = 0; i < count; i++) if (!alive[i]) spawn(i, FLOOR + rand() * (TOP - FLOOR));
       left = ms / 1000;
     },
+    stop() { left = 0; alive.fill(0); write(); },
     step(dt) {
       if (left <= 0 && !alive.some(Boolean)) return;
       left = Math.max(0, left - dt); t += dt;
@@ -189,53 +228,70 @@ function buildSnow(count, rand) {
 
 /**
  * 스노우 글로브 전체를 짓는다.
- * @param {{ snow?: boolean }} [opts] snow: 눈 입자를 만들지 (미니룸의 작은 글로브는 만들지 않는다)
- * @returns {{ root: THREE.Group, hitMeshes: THREE.Mesh[], sealZone: THREE.Mesh, catZone: THREE.Mesh, snow: ReturnType<typeof buildSnow> | null, dispose: () => void }}
+ * @param {{ unit?: number }} [opts] unit: 모델 1 단위가 세상에서 몇인지 (root 에 줄 배율). 집 앞 불빛의 거리와 세기를 맞춘다
+ * @returns {{ root: THREE.Group, hitMeshes: THREE.Mesh[], sealZone: THREE.Mesh, catZone: THREE.Mesh, snow: ReturnType<typeof buildSnow>, setGlow: (k: number) => void, dispose: () => void }}
  */
-export function buildSnowGlobe({ snow = true } = {}) {
+export function buildSnowGlobe({ unit = 1 } = {}) {
   const kit = makeKit(seeded(2026));
   const { add, shaded, plain, tone, rand } = kit;
   const root = new THREE.Group(), hitMeshes = [];
 
   // 나무 받침: 팔각 단을 쌓는다. 아래 띠(짙은 나무), 위로 좁아지는 몸통, 홈 띠, 윗 테두리
-  const wood = (rb, rt, h, y, colour, spread = 0.16) => hitMeshes.push(add(root, tone(new THREE.CylinderGeometry(rt, rb, h, 8), colour, spread), shaded, 0, y + h / 2, 0));
+  const wood = (rb, rt, h, y, colour, spread = 0.16) => { hitMeshes.push(add(root, tone(new THREE.CylinderGeometry(rt, rb, h, 8), colour, spread), shaded, 0, y + h / 2, 0)); };
   wood(1.0, 0.98, 0.1, 0, '#6b4226');
   wood(0.95, 0.86, 0.28, 0.1, '#a0673a', 0.2);
   wood(0.885, 0.885, 0.03, 0.375, '#5e3920', 0.1);
   wood(0.89, 0.87, 0.055, BASE_TOP - 0.055, '#b97a45');
 
-  // 안쪽 땅: 얼음 80% (부채꼴 288도), 바다 20% (72도). 바다는 얼음보다 조금 낮고, 경계에는 얼음 절벽을 세운다
-  const iceH = TY - BASE_TOP;
-  add(root, tone(new THREE.CylinderGeometry(0.86, 0.82, iceH, 10, 1, false, SEA_START + SEA_LEN, Math.PI * 2 - SEA_LEN), '#eef5fa', 0.07), shaded, 0, BASE_TOP + iceH / 2, 0);
-  const seaH = iceH - 0.03;
-  add(root, tone(new THREE.CylinderGeometry(0.85, 0.82, seaH, 3, 1, false, SEA_START, SEA_LEN), '#3f8fc6', 0.12), plain('#ffffff', { vertexColors: true, roughness: 0.35 }), 0, BASE_TOP + seaH / 2, 0);
-  for (const a of [SEA_START, SEA_START + SEA_LEN]) {
-    const cliff = add(root, tone(new THREE.BoxGeometry(0.84, iceH, 0.02), '#dbe9f3'), shaded, Math.sin(a) * 0.42, BASE_TOP + iceH / 2, Math.cos(a) * 0.42);
-    cliff.rotation.y = a - Math.PI / 2;
-  }
-  // 바다에 뜬 얼음 조각, 얼음 위의 눈 더미
-  for (const [r, a, s] of [[0.55, 0.42, 0.07], [0.7, 0.55, 0.05], [0.42, 0.6, 0.045]]) {
-    const f = add(root, tone(new THREE.DodecahedronGeometry(s, 0), '#f7fbff'), shaded, Math.sin(Math.PI * a) * r, BASE_TOP + seaH, Math.cos(Math.PI * a) * r);
+  // 안쪽 땅: 원판을 x = LAND_R cos(SEA_A) 의 직선으로 잘라 왼쪽 큰 쪽(80%)은 얼음, 오른쪽 반달(20%)은 한 단 낮은 바다다.
+  // 모양은 x-y 평면에 그려 위로 민 뒤 눕힌다 (모양의 y 는 -z 가 된다). 잘린 얼음 옆면이 바다 위 절벽이 된다
+  const slab = (shape, h, curveSegments) => {
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: h, bevelEnabled: false, curveSegments });
+    geo.rotateX(-Math.PI / 2); return geo;
+  };
+  const ice = new THREE.Shape(); ice.absarc(0, 0, LAND_R, SEA_A, Math.PI * 2 - SEA_A, false); ice.closePath();
+  add(root, tone(slab(ice, TY - BASE_TOP, 14), '#eef5fa', 0.07), shaded, 0, BASE_TOP, 0);
+  const seaTop = TY - 0.03, sea = new THREE.Shape(); sea.absarc(0, 0, LAND_R - 0.004, -SEA_A, SEA_A, false); sea.closePath();
+  add(root, tone(slab(sea, seaTop - BASE_TOP, 5), '#2f7fb8', 0.14), plain('#ffffff', { vertexColors: true, roughness: 0.3 }), 0, BASE_TOP, 0);
+  // 바다에 뜬 얼음 조각, 얼음 위의 눈 더미와 청록 덤불
+  for (const [x, z, s] of [[0.6, 0.12, 0.065], [0.62, -0.2, 0.05], [0.53, -0.38, 0.04]]) {
+    const f = add(root, tone(new THREE.DodecahedronGeometry(s, 0), '#f7fbff'), shaded, x, seaTop, z);
     f.scale.y = 0.4;
   }
-  for (const [x, z, s] of [[-0.62, 0.3, 0.1], [0.05, -0.62, 0.09], [-0.15, 0.62, 0.07], [0.4, -0.15, 0.06]]) {
-    const m = add(root, tone(new THREE.IcosahedronGeometry(s, 0), '#ffffff', 0.06), shaded, x, TY, z);
-    m.scale.y = 0.4;
+  for (const [x, z, s, c] of [[-0.62, 0.22, 0.1, '#ffffff'], [-0.05, -0.62, 0.09, '#ffffff'], [-0.18, 0.63, 0.07, '#ffffff'], [0.3, 0.2, 0.05, '#2b8c96'], [-0.45, 0.05, 0.045, '#2b8c96']]) {
+    const m = add(root, tone(new THREE.IcosahedronGeometry(s, 0), c, 0.08), shaded, x, TY, z);
+    m.scale.y = 0.45;
   }
 
-  const house = buildHouse(kit); house.position.set(-0.05, TY, -0.25); house.rotation.y = 0.15; root.add(house);
-  for (const [x, z, h] of [[-0.58, -0.12, 1.05], [0.34, -0.52, 0.9], [-0.3, -0.6, 0.75]]) {
+  const lights = [];
+  const house = buildHouse(kit, lights); house.position.set(-0.04, TY, -0.14); root.add(house);
+  for (const [x, z, h] of [[-0.4, -0.38, 1.25], [0.3, -0.42, 1.05], [-0.2, -0.6, 1.4], [0.33, -0.14, 0.75]]) {
     const t = buildTree(kit, h); t.position.set(x, TY, z); t.rotation.y = rand() * Math.PI; root.add(t);
   }
 
-  // 물범과 고양이는 앞쪽 얼음 위에 나란히 있다. 둘 둘레의 보이지 않는 구는 누르기 영역이다 (상세 화면)
-  const seal = buildSeal(kit); seal.position.set(-0.32, TY, 0.36); seal.rotation.y = 0.55; root.add(seal);
-  const cat = buildCat(kit); cat.position.set(0.14, TY, 0.46); cat.rotation.y = 0.5; root.add(cat);
+  // 물범과 고양이는 앞쪽 얼음 위에 나란히 있다. 둘 둘레의 보이지 않는 구는 누르기 영역이다 (globe.js)
+  const seal = buildSeal(kit); seal.position.set(-0.28, TY, 0.36); seal.rotation.y = 0.2; seal.scale.setScalar(0.85); root.add(seal);
+  const cat = buildCat(kit); cat.position.set(0.17, TY, 0.44); cat.rotation.y = -0.25; root.add(cat);
   const zone = (r, x, z, y) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 6), new THREE.MeshBasicMaterial({ visible: false })); m.position.set(x, y, z); root.add(m); return m; };
-  const sealZone = zone(0.25, -0.32, 0.36, TY + 0.12), catZone = zone(0.19, 0.14, 0.46, TY + 0.15);
+  const sealZone = zone(0.25, -0.28, 0.36, TY + 0.15), catZone = zone(0.19, 0.17, 0.44, TY + 0.15);
 
-  const flakes = snow ? buildSnow(160, rand) : null;
-  if (flakes) root.add(flakes.mesh);
+  // 창문 불빛이 번진다: 창마다 따뜻한 빛 원(스프라이트), 집 앞 눈밭을 비추는 작은 점광원. setGlow(k) 가 세기를 정한다 (0 방, 1 상세 화면)
+  const glowMat = new THREE.SpriteMaterial({ map: glowTexture(), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false });
+  const halos = lights.map(p => {
+    const s = new THREE.Sprite(glowMat); s.position.copy(p).add(house.position).add(new THREE.Vector3(0, 0, 0.03));
+    s.scale.setScalar(0.2); s.renderOrder = 1; root.add(s); return s;
+  });
+  const lamp = new THREE.PointLight('#ffb15c', 0, 1.1 * unit, 2);
+  lamp.position.set(-0.04, TY + 0.14, 0.2); root.add(lamp);
+  function setGlow(k) {
+    glowMat.opacity = 0.35 + 0.65 * k;
+    for (const s of halos) s.scale.setScalar(0.16 + 0.1 * k);
+    lamp.intensity = (0.4 + 2.6 * k) * (0.3 * unit) ** 2; // 집 앞 0.3 거리에서 0.4 ~ 3
+  }
+  setGlow(0);
+
+  const snow = buildSnow(160, rand);
+  root.add(snow.mesh);
 
   // 유리 돔: 각진 구. 안쪽 면을 먼저, 바깥 면을 나중에 그려 투명한 유리가 겹쳐 보인다. 하이라이트는 면마다 끊긴 반사광이다
   const glassGeo = new THREE.SphereGeometry(R, 14, 10);
@@ -243,14 +299,15 @@ export function buildSnowGlobe({ snow = true } = {}) {
     const m = new THREE.Mesh(glassGeo, new THREE.MeshPhongMaterial({ color: '#dff1ff', specular: '#ffffff', shininess: 90, flatShading: true, transparent: true, opacity, depthWrite: false, side }));
     m.position.y = CY; m.renderOrder = order; root.add(m); return m;
   };
-  glass(THREE.BackSide, 0.08, 1);
-  hitMeshes.push(glass(THREE.FrontSide, 0.16, 2));
+  glass(THREE.BackSide, 0.08, 2);
+  hitMeshes.push(glass(THREE.FrontSide, 0.16, 3));
 
   function dispose() {
     const done = new Set();
     root.traverse(o => {
       for (const r of [o.geometry, ...(Array.isArray(o.material) ? o.material : [o.material])]) if (r && !done.has(r)) { done.add(r); r.dispose(); }
     });
+    glowMat.map.dispose();
   }
-  return { root, hitMeshes, sealZone, catZone, snow: flakes, dispose };
+  return { root, hitMeshes, sealZone, catZone, snow, setGlow, dispose };
 }

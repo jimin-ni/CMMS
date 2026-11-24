@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { withNext } from "@/lib/next-path";
 import {
@@ -43,9 +42,7 @@ import { createPresenceClient, createPresenceHub, type PresenceClient, type Pres
 import { setPrefs, type NameShow } from "@/lib/settings/prefs";
 import { moneygraphyPixel, moneygraphyRounded, pretendard } from "@/app/fonts/onboarding";
 import "./heap-room.css";
-
-// 좌식 탁자 위 스노우 글로브를 가까이 보는 화면. three 를 쓰므로 누른 뒤에 브라우저에서만 불러온다
-const SnowGlobeView = dynamic(() => import("@/components/snow-globe/snow-globe-view").then((m) => m.SnowGlobeView), { ssr: false });
+import { MAKER_LINKS } from "@/components/snow-globe/links";
 
 // 크리에이터 정보(creator.json)는 public/heap/rooms/ 아래의 정적 파일이다. 나머지 방 데이터는 서버가 DB에서 읽어 data로 넘긴다.
 const DATA_BASE = "/heap/rooms/";
@@ -183,7 +180,6 @@ export function HeapRoom({
   const [mode, setMode] = useState("room");
   // 오른쪽 위 음악 플레이어가 열려 있는지(heap:music). 열려 있으면 배경음악을 줄여 멈춘다.
   const [musicOn, setMusicOn] = useState(false);
-  const [globeOpen, setGlobeOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   // 임시 디버그 사이드바 (engine/debug-flags.js). ?debug=1 일 때만. 서버 렌더와 맞추려고 마운트 뒤에 켠다.
   const debugOn = useSyncExternalStore(noSubscribe, () => DEBUG_ON, () => false);
@@ -408,8 +404,6 @@ export function HeapRoom({
         pollMs: HEAP_POLICY.pollIntervalMs,
         bubbleHref: data.bubbleHref,
         navigate: (href: string) => router.push(href),
-        // 좌식 탁자 위 스노우 글로브를 눌렀다 (engine/fixtures.js)
-        openGlobe: () => setGlobeOpen(true),
         askSignIn: signInHere ? () => root.dispatchEvent(new CustomEvent("heap:signin", { detail: "chat" })) : undefined,
         // 기념품 링크가 유튜브 게시물인지 알아보는 데 쓴다 (엔진이 썸네일 주소를 만든다)
         parseLink: parsePieceUrl,
@@ -499,7 +493,6 @@ export function HeapRoom({
 
       {/* 배경음악: 쪽지 트리 모드에서는 캐롤. 영사기로 영상을 보거나 음악 플레이어가 열려 있으면 천천히 줄여 멈춘다 (room-bgm.tsx) */}
       <RoomBgm tree={mode === "tree"} paused={mode === "watch" || musicOn} />
-      {globeOpen && <SnowGlobeView onClose={() => setGlobeOpen(false)} />}
 
       {/* 엔진이 mount마다 여기에 <canvas id="scene">을 새로 만들고, dispose 때 지운다. */}
       <div id="scene-host" />
@@ -538,6 +531,23 @@ export function HeapRoom({
             <button id="treeexit" className="btn ghost" type="button" hidden>
               트리에서 물러나기
             </button>
+            <button id="globeexit" className="btn ghost" type="button" hidden>
+              글로브에서 물러나기
+            </button>
+            {/* 스노우 글로브 모드(engine/globe.js)의 제작자 링크: 3D 를 누르지 않고도 갈 수 있게 */}
+            {mode === "globe" && (
+              <>
+                <Link href={MAKER_LINKS.makers} className="btn ghost">
+                  제작자 소개
+                </Link>
+                <Link href={MAKER_LINKS.jimin} className="btn ghost">
+                  물범 · 지민
+                </Link>
+                <a href={MAKER_LINKS.gyuno} target="_blank" rel="noopener noreferrer" className="btn ghost">
+                  고양이 · 규노
+                </a>
+              </>
+            )}
             {canEdit && ready && mode === "room" && !editing && (
               <button id="edit-open" className="btn ghost" type="button" onClick={() => setEditing(true)}>
                 꾸미기
@@ -592,6 +602,10 @@ export function HeapRoom({
         )}
       </div>
       <p id="toast" />
+      {/* 스노우 글로브 모드에서 눈이 내리는 3초 동안 보인다 (engine/globe.js) */}
+      <p id="globe-snow" aria-live="polite">
+        ❄ 눈이 내리는 중
+      </p>
       {/* 쪽지 쓰기 (tree-write.js): 3D 종이 위에 겹치는 글상자, 아래 조작 줄, 접은 쪽지를 끌어 걸 때의 안내 줄, 내 쪽지 지우기와 확인창 */}
       <div id="tree-sheet" hidden>
         <textarea
