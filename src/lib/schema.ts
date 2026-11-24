@@ -167,6 +167,20 @@ export const heapGuestbook = pgTable("heap_guestbook", {
   userId: text("user_id").notNull(),
   name: text("name").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  // 0013. 판정 상태. status_changed_at은 변경 읽기 커서다 (DB now()로만 넣는다).
+  screenStatus: text("screen_status", { enum: SCREEN_STATUSES }).notNull().default("published"),
+  screenedAt: timestamp("screened_at", { withTimezone: true }),
+  statusChangedAt: timestamp("status_changed_at", { withTimezone: true }).notNull().defaultNow(),
+  normalizedHash: text("normalized_hash"),
+});
+
+// 개인 차단 (0013). 보는 사람에게서만 상대의 쪽지·방명록·방 안 캐릭터를 가린다. 쓰기는 막지 않는다.
+export const heapBlocks = pgTable("heap_blocks", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  blockerId: text("blocker_id").notNull(),
+  blockedId: text("blocked_id").notNull(),
+  label: text("label").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // 방문 기록. 사용자당 하루 한 줄. visit_day는 한국 시간 날짜이며 DB 기본값만 쓴다.
@@ -238,6 +252,10 @@ export const heapNotes = pgTable("heap_notes", {
   ownerReadAt: timestamp("owner_read_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  // 0013. 판정 상태. 상태가 바뀌면 updated_at도 바꾼다 (쪽지의 변경 읽기 커서).
+  screenStatus: text("screen_status", { enum: SCREEN_STATUSES }).notNull().default("published"),
+  screenedAt: timestamp("screened_at", { withTimezone: true }),
+  normalizedHash: text("normalized_hash"),
 });
 
 // 방 주인의 답장. 쪽지 하나에 답장 하나.

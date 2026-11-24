@@ -309,11 +309,13 @@ function frontTexture(data, anisotropy) {
   g.font = `${nm.px}px "${font}"`; g.fillStyle = '#4a4034'; g.fillText(nm.text, x, ch * 0.875);
   const dt = fitLine(g, String(data.date ?? ''), 'system-ui, sans-serif', 40, 24, boxW);
   g.font = `${dt.px}px system-ui, sans-serif`; g.fillStyle = 'rgba(80,70,55,.7)'; g.fillText(dt.text, x, ch * 0.875 + 62);
-  if (data.hidden) { // 숨겨짐: 오른쪽 위의 작은 딱지
+  // 오른쪽 위의 작은 딱지: 방 주인이 숨김, 또는 판정에 걸려 작성자에게만 보이는 쪽지 (0013)
+  const tag = data.hidden ? '숨겨짐' : data.screen === 'blocked' ? '게시 안 됨' : data.screen === 'held' ? '검토 중' : null;
+  if (tag) {
     g.font = '600 44px system-ui, sans-serif'; g.textAlign = 'right'; g.textBaseline = 'middle';
-    const tw = g.measureText('숨겨짐').width, px = 22, rx = cw - 70 - tw - px * 2, ry = 52, rh = 64;
+    const tw = g.measureText(tag).width, px = 22, rx = cw - 70 - tw - px * 2, ry = 52, rh = 64;
     g.strokeStyle = 'rgba(90,80,64,.7)'; g.lineWidth = 3; g.beginPath(); g.roundRect(rx, ry, tw + px * 2, rh, rh / 2); g.stroke();
-    g.fillStyle = 'rgba(90,80,64,.85)'; g.fillText('숨겨짐', cw - 70 - px, ry + rh / 2 + 2);
+    g.fillStyle = 'rgba(90,80,64,.85)'; g.fillText(tag, cw - 70 - px, ry + rh / 2 + 2);
     g.textAlign = 'start'; g.textBaseline = 'alphabetic';
   }
   return texFrom(cv, anisotropy);

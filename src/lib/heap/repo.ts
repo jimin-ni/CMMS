@@ -23,6 +23,11 @@ import { REEL_KEY } from "@/lib/heap/layout";
 import { getNotesState, listNoteChanges, type HeapNote } from "@/lib/heap/notes-repo";
 import { likePattern } from "@/lib/heap/search";
 import type { ImportCandidate } from "@/lib/heap/import";
+import { planScreen, recordScreenEvent, type SaveNotice } from "@/lib/moderation/repo";
+import type { ScreenResult } from "@/lib/moderation/screen";
+import { MODERATION_TEXT } from "@/lib/moderation/policy";
+import { screenView } from "@/lib/heap/screen-view";
+import { notBlockedBy } from "@/lib/heap/blocks-repo";
 
 // 힙 미니룸의 DB 접근은 전부 이 파일에 둔다. 서버에서만 불러 쓴다 (Server Component, Server Action, Route Handler).
 // 역할(creator, admin) 검사는 부르는 쪽이 하고, 여기서는 데이터로 알 수 있는 것만 검사한다
@@ -85,7 +90,15 @@ export type HeapPiece = {
   updatedAt: Date;
 };
 
-export type HeapGuestbookEntry = { id: string; name: string; createdAt: Date };
+// screen: 판정 상태. published가 아니면 실려 온다. removed는 모두에게(이름 자리에 삭제 문구), blocked·held는 쓴 사람에게만 온다.
+export type HeapGuestbookEntry = {
+  id: string;
+  name: string;
+  createdAt: Date;
+  screen?: "removed" | "blocked" | "held";
+  // 보는 사람이 쓴 줄 (신고·차단 단추를 내지 않는다). 작성자 id 대신 이것만 싣는다.
+  mine?: boolean;
+};
 
 export type HeapVisitCounts = { today: number; total: number };
 
@@ -373,18 +386,47 @@ export async function listVotingPieces(roomId: string, viewerId: string | null):
     .limit(HEAP_POLICY.snapshotPiecesMax);
 }
 
-function guestbookSelect(roomId: string, extra?: SQL) {
-  return db
-    .select({ id: heapGuestbook.id, name: heapGuestbook.name, createdAt: heapGuestbook.createdAt })
-    .from(heapGuestbook)
-    .where(and(eq(heapGuestbook.roomId, roomId), extra))
-    .orderBy(desc(heapGuestbook.createdAt), asc(heapGuestbook.id));
+// 보는 사람에게 보일 방명록 줄: 공개, 내려간 줄(자리 표시), 내가 쓴 숨김 줄.
+// 내가 가린 사람(heap_blocks)의 줄은 빠진다.
+function guestbookVisible(viewerId: string | null): SQL {
+  const open = sql`${heapGuestbook.screenStatus} in ('published', 'removed')`;
+  if (viewerId === null) return open;
+  return and(or(open, eq(heapGuestbook.userId, viewerId)), notBlockedBy(viewerId, heapGuestbook.userId)) as SQL;
+}
+
+const guestbookColumns = {
+  id: heapGuestbook.id,
+  userId: heapGuestbook.userId,
+  name: heapGuestbook.name,
+  createdAt: heapGuestbook.createdAt,
+  screenStatus: heapGuestbook.screenStatus,
+};
+
+// 내려간 줄은 이름 대신 삭제 문구를 보낸다 (문서 8장). 원문은 검토 화면에서만 본다.
+// SQL(guestbookVisible)이 이미 거르지만 여기서 한 번 더 본다. 작성자 id는 응답에 싣지 않는다.
+function toGuestbookEntry(
+  row: { id: string; userId: string; name: string; createdAt: Date; screenStatus: string },
+  viewerId: string | null,
+): HeapGuestbookEntry | null {
+  const mine = viewerId !== null && row.userId === viewerId;
+  const view = screenView(row.screenStatus, mine);
+  if (view === "hide") return null;
+  const entry: HeapGuestbookEntry = { id: row.id, name: row.name, createdAt: row.createdAt, ...(mine ? { mine } : {}) };
+  if (view === "removed") return { ...entry, name: MODERATION_TEXT.removed, screen: "removed" };
+  if (view === "own") entry.screen = row.screenStatus as "blocked" | "held";
+  return entry;
 }
 
 // 최근 것부터 limit개
-export async function listGuestbook(roomId: string, limit: number): Promise<HeapGuestbookEntry[]> {
+export async function listGuestbook(roomId: string, limit: number, viewerId: string | null): Promise<HeapGuestbookEntry[]> {
   if (!isUuid(roomId)) return [];
-  return guestbookSelect(roomId).limit(limit);
+  const rows = await db
+    .select(guestbookColumns)
+    .from(heapGuestbook)
+    .where(and(eq(heapGuestbook.roomId, roomId), guestbookVisible(viewerId)))
+    .orderBy(desc(heapGuestbook.createdAt), asc(heapGuestbook.id))
+    .limit(limit);
+  return rows.flatMap((row) => toGuestbookEntry(row, viewerId) ?? []);
 }
 
 // TODAY는 한국 시간 날짜 기준
@@ -445,7 +487,7 @@ export async function getRoomSnapshot(
       .where(and(eq(heapPieces.roomId, room.id), eq(heapPieces.status, "voting")))
       .orderBy(desc(heapPieces.createdAt), asc(heapPieces.id))
       .limit(HEAP_POLICY.snapshotPiecesMax),
-    listGuestbook(room.id, HEAP_POLICY.guestbookPageSize),
+    listGuestbook(room.id, HEAP_POLICY.guestbookPageSize, viewerId),
     getVisitCounts(room.id),
     listCreatorChannels(room.creatorId),
     getNotesState(room.id, viewerId),
@@ -470,7 +512,7 @@ export async function getRoomSnapshot(
 // 목록은 (시각, id) 오름차순으로 changesPageSize개씩 끊어 읽는다. since는 방명록과 조각 각각의 기준 지점이다.
 // 한도에 닿은 목록은 마지막 줄에서 이어 가고, 다 읽은 목록은 서버 시각 - 겹침으로 옮긴다.
 // 너무 오래된 기준점은 changesMaxLookbackMs 안으로 당긴다.
-const isoMicros = (column: SQL | typeof heapGuestbook.createdAt | typeof heapPieces.updatedAt) =>
+const isoMicros = (column: SQL | typeof heapGuestbook.createdAt | typeof heapGuestbook.statusChangedAt | typeof heapPieces.updatedAt) =>
   sql<string>`to_char(${column} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
 
 export async function getRoomChangesSince(
@@ -499,20 +541,17 @@ export async function getRoomChangesSince(
 
   const [guestbookRows, changedRows, visits, noteChanges] = await Promise.all([
     db
-      .select({
-        id: heapGuestbook.id,
-        name: heapGuestbook.name,
-        createdAt: heapGuestbook.createdAt,
-        ts: isoMicros(heapGuestbook.createdAt),
-      })
+      // 커서는 status_changed_at이다 (0013). 새 줄과 판정 상태가 바뀐 줄(내려감, 검토 후 공개)이 함께 온다.
+      .select({ ...guestbookColumns, ts: isoMicros(heapGuestbook.statusChangedAt) })
       .from(heapGuestbook)
       .where(
         and(
           eq(heapGuestbook.roomId, roomId),
-          sql`(${heapGuestbook.createdAt}, ${heapGuestbook.id}) > (${from.guestbook.ts}::timestamptz, ${from.guestbook.id}::uuid)`,
+          guestbookVisible(viewerId),
+          sql`(${heapGuestbook.statusChangedAt}, ${heapGuestbook.id}) > (${from.guestbook.ts}::timestamptz, ${from.guestbook.id}::uuid)`,
         ),
       )
-      .orderBy(asc(heapGuestbook.createdAt), asc(heapGuestbook.id))
+      .orderBy(asc(heapGuestbook.statusChangedAt), asc(heapGuestbook.id))
       .limit(pageSize),
     pieceSelect(db, viewerId, { ts: isoMicros(heapPieces.updatedAt) })
       .where(
@@ -538,11 +577,7 @@ export async function getRoomChangesSince(
   };
 
   // 기준점용 ts 열은 응답에 싣지 않는다.
-  const guestbook: HeapGuestbookEntry[] = guestbookRows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    createdAt: row.createdAt,
-  }));
+  const guestbook: HeapGuestbookEntry[] = guestbookRows.flatMap((row) => toGuestbookEntry(row, viewerId) ?? []);
   const changed: HeapPiece[] = changedRows.map((row) => {
     const piece: Partial<typeof row> = { ...row };
     delete piece.ts;
@@ -600,8 +635,11 @@ export async function addGuestbookEntry(
   roomId: string,
   userId: string,
   name: string,
+  // 판정 결과. 부르는 쪽(actions.ts)이 트랜잭션 밖에서 screenText로 먼저 판정한다.
+  screening: { result: ScreenResult; privileged: boolean },
 ): Promise<
-  { ok: true; entry: HeapGuestbookEntry } | Fail<"not-found" | "invalid-name" | "rate-limited">
+  | { ok: true; entry: HeapGuestbookEntry; notice: SaveNotice }
+  | Fail<"not-found" | "invalid-name" | "rate-limited">
 > {
   if (!isUuid(roomId)) return fail("not-found");
   const trimmed = name.trim();
@@ -609,7 +647,10 @@ export async function addGuestbookEntry(
   if (length < 1 || length > HEAP_POLICY.guestbookNameMaxChars) return fail("invalid-name");
 
   return db.transaction(async (tx) => {
-    const rooms = await tx.select({ id: heapRooms.id }).from(heapRooms).where(eq(heapRooms.id, roomId));
+    const rooms = await tx
+      .select({ id: heapRooms.id, creatorId: heapRooms.creatorId })
+      .from(heapRooms)
+      .where(eq(heapRooms.id, roomId));
     if (!rooms[0]) return fail("not-found");
 
     await lockUserInRoom(tx, "guestbook", roomId, userId);
@@ -621,14 +662,34 @@ export async function addGuestbookEntry(
         gte(heapGuestbook.createdAt, seoulDayStart),
       ),
     );
+    // 숨김 줄(판정에 걸린 줄)도 하루 제한에 센다 (문서 13장).
     if (today >= HEAP_POLICY.guestbookEntriesPerDay) return fail("rate-limited");
 
+    const { result, privileged } = screening;
+    const plan = await planScreen(tx, userId, result, privileged);
     const [entry] = await tx
       .insert(heapGuestbook)
       // 트랜잭션 시작 시각(now()) 대신 잠금을 얻은 뒤의 시각을 찍는다. 실시간 읽기 커서와 맞추기 위해서다.
-      .values({ roomId, userId, name: trimmed, createdAt: sql`clock_timestamp()` })
+      .values({
+        roomId,
+        userId,
+        name: trimmed,
+        createdAt: clockNow,
+        statusChangedAt: clockNow,
+        screenStatus: plan.status,
+        screenedAt: clockNow,
+        normalizedHash: result.normalizedHash,
+      })
       .returning({ id: heapGuestbook.id, name: heapGuestbook.name, createdAt: heapGuestbook.createdAt });
-    return { ok: true as const, entry };
+    const notice = await recordScreenEvent(tx, {
+      userId,
+      roomOwnerId: rooms[0].creatorId,
+      surface: "guestbook",
+      targetId: entry.id,
+      result,
+      plan,
+    });
+    return { ok: true as const, entry, notice };
   });
 }
 

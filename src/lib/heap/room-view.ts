@@ -79,6 +79,8 @@ function toRoomData(
       id: entry.id,
       name: entry.name,
       createdAt: entry.createdAt.toISOString(),
+      ...(entry.screen ? { screen: entry.screen } : {}),
+      ...(entry.mine ? { mine: true } : {}),
     })),
     visits: snapshot.visits,
     // 쪽지: Date는 ISO 문자열로 (실시간 읽기와 같은 모양). 봉인된 쪽지는 body와 reply가 이미 없다.
@@ -144,5 +146,6 @@ export async function loadRoomView(
   // 방 주인에게만: 첫 방 열기 체크리스트(setup-checklist.tsx)가 읽는 닉네임(방 이름을 지었는지 견준다)과,
   // 꾸미기의 채널 탭이 읽는 연결한 채널과 이 방의 영상 전부(뺀 것 포함).
   const owner = canEdit ? toOwnerData(snapshot, await listOwnerReels(snapshot.room.id, snapshot.room.layout)) : null;
-  return { data: toRoomData(snapshot, rooms, bubbleHref, changedSlugs), canEdit, owner };
+  const canModerate = viewer !== null && (viewer.role === "admin" || viewer.id === snapshot.room.creatorId);
+  return { data: { ...toRoomData(snapshot, rooms, bubbleHref, changedSlugs), canModerate }, canEdit, owner };
 }

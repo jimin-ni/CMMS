@@ -48,6 +48,8 @@ type Attachment = {
   seen: number;
   // 다른 사람 숨기기: 이 사람에게는 다른 사람 소식을 보내지 않는다
   muted: boolean;
+  // 개인 차단 (티켓의 h): 이 userKey 들의 소식은 이 사람에게 보내지 않는다
+  hides?: string[];
   // 서버가 먼저 닫은 소켓. leave 를 이미 보냈다
   gone?: boolean;
 };
@@ -74,6 +76,11 @@ function newPeerId(): string {
 
 // who 의 이름을 viewer 에게 보여 줄 모양으로. 방 주인은 언제나 이름이 보인다.
 // followers: 팔로워 관계(subscriptions)가 아직 없어 방에 있는 로그인한 사람 모두에게 보인다.
+// viewer 가 who 를 개인 차단했는가
+export function hides(viewer: { hides?: string[] }, who: { userKey: string }): boolean {
+  return !!viewer.hides?.includes(who.userKey);
+}
+
 export function nameFor(who: { name: string; rule: NameRule; owner: boolean }, viewer: { owner: boolean }): string {
   if (who.owner) return who.name;
   if (who.rule === "followers") return who.name;
@@ -193,6 +200,7 @@ export class Room extends DurableObject {
       sit: null,
       seen: Date.now(),
       muted: false,
+      ...(t.h?.length ? { hides: t.h } : {}),
     };
     this.ctx.acceptWebSocket(server);
     server.serializeAttachment(a);
@@ -272,7 +280,7 @@ export class Room extends DurableObject {
     const peers = this.live()
       .filter((x) => x !== ws)
       .map((x) => this.att(x))
-      .filter((x): x is Attachment => !!x)
+      .filter((x): x is Attachment => !!x && !hides(me, x))
       .map((x) => infoFor(x, me));
     ws.send(JSON.stringify({ t: "hello", you: me.peer, peers } satisfies ServerMsg));
   }
@@ -331,10 +339,11 @@ export class Room extends DurableObject {
   // msg 가 함수면 받는 사람마다 만든다 (이름 공개 규칙)
   private broadcast(from: WebSocket, msg: ServerMsg | ((viewer: Attachment) => ServerMsg)): void {
     const same = typeof msg === "function" ? null : JSON.stringify(msg);
+    const sender = this.att(from);
     for (const ws of this.live()) {
       if (ws === from) continue;
       const viewer = this.att(ws);
-      if (!viewer || viewer.muted) continue;
+      if (!viewer || viewer.muted || (sender && hides(viewer, sender))) continue;
       try {
         ws.send(same ?? JSON.stringify((msg as (v: Attachment) => ServerMsg)(viewer)));
       } catch {

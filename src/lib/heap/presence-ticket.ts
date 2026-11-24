@@ -22,7 +22,12 @@ export type PresenceTicket = {
   o: boolean;
   // 이름 공개 규칙
   v: NameRule;
+  // 개인 차단(0013 heap_blocks): 이 사람에게 보내지 않을 사람들의 userKey. 없으면 빈 목록과 같다.
+  // 티켓은 Sec-WebSocket-Protocol 머리글로 가므로 길이를 HIDE_MAX 개로 묶는다 (최근 차단부터).
+  h?: string[];
 };
+
+export const HIDE_MAX = 50;
 
 export type VerifyResult = { ok: true; t: PresenceTicket } | { ok: false; why: "format" | "sig" | "expired" | "room" };
 
@@ -73,7 +78,9 @@ function isTicket(v: unknown): v is PresenceTicket {
     typeof o.exp === "number" &&
     Number.isFinite(o.exp) &&
     typeof o.o === "boolean" &&
-    NAME_RULES.includes(o.v as NameRule)
+    NAME_RULES.includes(o.v as NameRule) &&
+    (o.h === undefined ||
+      (Array.isArray(o.h) && o.h.length <= HIDE_MAX && o.h.every((k) => typeof k === "string" && k.length <= 32)))
   );
 }
 

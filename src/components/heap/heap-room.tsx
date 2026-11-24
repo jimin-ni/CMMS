@@ -24,6 +24,9 @@ import { usePrefs } from "@/lib/settings/prefs";
 import type { HeapChannelPlatform } from "@/lib/heap/platform";
 import type { ReelClass } from "@/lib/heap/caps";
 import { toEngineNote } from "./engine/tree-ids";
+import { blockHeapAuthorAction, hidePersonAction, reportHeapPostAction } from "@/lib/heap/moderation-actions";
+import type { HeapSurface } from "@/lib/moderation/repo";
+import { MODERATION_TEXT } from "@/lib/moderation/policy";
 import { RoomBgm } from "./room-bgm";
 import { ANIM_TEST, DEBUG_ON, SHADOW_TEST, saveDebugFlags } from "./engine/debug-flags";
 import { authClient } from "@/lib/auth-client";
@@ -68,6 +71,8 @@ export type HeapNoteWire = {
 
 // page.tsx가 DB 스냅샷을 엔진이 쓰는 모양으로 바꿔 넘긴다. 날짜는 한국 시간 "YYYY.MM.DD" 문자열.
 export type HeapRoomData = {
+  // 0013: 이 방의 글을 신고하고 쓰기를 막을 수 있는가 (방 주인이나 관리자). 서버가 다시 확인한다.
+  canModerate?: boolean;
   // heap_rooms.id (uuid). 서버 액션과 실시간 읽기 주소가 이 값을 쓴다. 주소의 slug와 다르다.
   roomUuid: string;
   // 방 이름(heap_rooms.name). 화면 제목과 카드 뒷면에 쓴다.
@@ -284,6 +289,8 @@ export function HeapRoom({
   const presenceRef = useRef<PresenceClient | null>(null);
   const presencePrefs = usePrefs().presence;
   const hideOthersRef = useRef(presencePrefs.hideOthers);
+  // 개인 차단(0013)을 새로 걸면 올린다: 새 티켓(가린 사람 목록 h)으로 다시 붙는다
+  const [blockEpoch, setBlockEpoch] = useState(0);
   useEffect(() => {
     if (!presenceOn || presencePrefs.hideMe) return;
     const client = createPresenceClient({ roomUuid: data.roomUuid, show: presencePrefs.show });
@@ -296,7 +303,7 @@ export function HeapRoom({
       client.close();
       if (presenceRef.current === client) presenceRef.current = null;
     };
-  }, [presenceOn, data.roomUuid, presencePrefs.show, presencePrefs.hideMe, presenceHub]);
+  }, [presenceOn, data.roomUuid, presencePrefs.show, presencePrefs.hideMe, presenceHub, blockEpoch]);
   // 다른 사람 숨기기는 연결을 바꾸지 않고 서버에 알린다
   useEffect(() => {
     hideOthersRef.current = presencePrefs.hideOthers;
@@ -421,9 +428,17 @@ export function HeapRoom({
         // 쪽지 쓰기. addNote 는 서버 액션의 답을 그대로 주되 쪽지를 엔진 모양으로 바꿔 준다 (tree-ids.js). input = { body, tint, font, displayName, fontSize, ornament, ornamentColor, spot }
         addNote: async (input: unknown) => {
           const result = await addNoteAction(data.roomUuid, input);
-          return result.ok ? { ok: true as const, note: toEngineNote(result.note), evictedId: result.evictedId } : result;
+          return result.ok
+            ? { ok: true as const, note: toEngineNote(result.note), evictedId: result.evictedId, notice: result.notice }
+            : result;
         },
         deleteNote: (noteId: string) => deleteNoteAction(noteId),
+        // 0013 신고·차단 (쪽지와 방명록 공통). surface 는 "note" 또는 "guestbook", id 는 글 id 다.
+        reportPost: (surface: HeapSurface, id: string) => reportHeapPostAction(surface, id),
+        blockAuthor: (surface: HeapSurface, id: string) => blockHeapAuthorAction(surface, id),
+        hidePerson: (surface: HeapSurface, id: string) => hidePersonAction(surface, id),
+        removedText: MODERATION_TEXT.removed,
+        refreshBlocked: () => setBlockEpoch((n) => n + 1),
         // 방 주인의 도구 (engine/tree-owner.js). replyNote 의 note 는 엔진 모양으로 바꿔 준다.
         replyNote: async (noteId: string, input: unknown) => {
           const result = await replyNoteAction(noteId, input);
@@ -632,6 +647,13 @@ export function HeapRoom({
         </button>
         <button id="tree-del" className="btn ghost" type="button" hidden>
           지우기
+        </button>
+        {/* 0013: 남의 쪽지. 신고는 방 주인·관리자, 차단은 방 주인·관리자에게는 쓰기 막기, 다른 사람에게는 나에게서 가리기 */}
+        <button id="tree-report" className="btn ghost" type="button" hidden>
+          신고
+        </button>
+        <button id="tree-block" className="btn ghost" type="button" hidden>
+          차단
         </button>
       </div>
       {/* 방 주인의 답장 쓰기 (tree-owner.js): 팬 종이 옆에 선 답장 종이 위에 겹치는 글상자와 아래 조작 줄 (글씨체, 글씨 크기, 접어서 넣기, 취소) */}

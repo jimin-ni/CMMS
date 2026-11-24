@@ -10,6 +10,7 @@ import {
   listCreatorChannels,
 } from "@/lib/heap/repo";
 import { getNoteCounts } from "@/lib/heap/notes-repo";
+import { listMyBlocks } from "@/lib/heap/blocks-repo";
 import { MyBook, type MyCreatorData } from "@/components/mypage/my-book";
 import { LoadingScreen } from "@/components/onboarding-c/loading-screen";
 import { moneygraphyPixel, moneygraphyRounded, pretendard } from "@/app/fonts/onboarding";
@@ -22,6 +23,7 @@ async function MyPageContent() {
   const { user } = session;
   const role = (user as { role?: string | null }).role;
 
+  const blocks = await listMyBlocks(user.id);
   let creator: MyCreatorData | null = null;
   if (role === "creator" || role === "admin") {
     const [room, openRoomId, channels] = await Promise.all([
@@ -54,6 +56,7 @@ async function MyPageContent() {
         isAdmin: role === "admin",
       }}
       creator={creator}
+      blocks={blocks.map((b) => ({ id: b.id, label: b.label, createdAt: b.createdAt.toISOString() }))}
     />
   );
 }

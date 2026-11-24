@@ -10,6 +10,9 @@ const KIND_LABEL: Record<ReviewEvent["kind"], string> = {
   self_harm: "확인 필요 (자해)",
 };
 
+// 글이 쓰인 곳 (쪽지·방명록은 힙 방, 0013)
+const SURFACE_LABEL: Record<string, string> = { chat: "채팅", note: "쪽지", guestbook: "방명록" };
+
 const STATUS_LABEL: Record<string, string> = {
   published: "공개",
   blocked: "숨김",
@@ -99,6 +102,7 @@ function EventList({ events, decide }: { events: ReviewEvent[]; decide: boolean 
         <li key={e.id} className="flex flex-col gap-1 rounded-sm bg-white p-3 text-sm">
           <div className="flex flex-wrap items-center gap-2 text-xs text-ash">
             <span className="font-medium text-ink">{e.userName}</span>
+            <span>{SURFACE_LABEL[e.surface] ?? e.surface}</span>
             <span>{eventLabel(e)}</span>
             <span>{e.messageStatus ? STATUS_LABEL[e.messageStatus] : ""}</span>
             <span>{timeFormat.format(new Date(e.createdAt))}</span>
