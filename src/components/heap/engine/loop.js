@@ -95,6 +95,7 @@ export function setupLoop(ctx) {
       } else if (ctx.mode === 'sit') controls.update();
     }
     ctx.presenceStep?.(Math.min(rawDt, 0.2)); // 함께 있는 다른 사람 캐릭터와 내 움직임 알리기 (presence.js). 모든 모드에서 돈다
+    ctx.sfxStep?.(Math.min(rawDt, 0.2)); // 걷는 발소리, 러그 위에서는 먹먹하게 (sfx.js)
     ctx.stepCue?.(Math.min(rawDt, 0.2)); // 가는 곳의 바닥 고리와 누른 물건의 빛 (walk.js). 더미 보기로 넘어가도 고리가 끝까지 사라지게 모드와 상관없이 돈다
     ctx.sparkleStep?.(Math.min(rawDt, 0.2)); // 누를 수 있는 물건 위의 반짝임 (sparkle.js)
     if (ctx.toastTimer > 0 && (ctx.toastTimer -= rawDt) <= 0) $('toast').textContent = '';

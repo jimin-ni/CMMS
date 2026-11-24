@@ -40,7 +40,7 @@ export function setupFixtures(ctx) {
     paintRug();
     const rug = new THREE.Mesh(new THREE.PlaneGeometry(it.rug?.w ?? 3.8, it.rug?.d ?? 2.9), new THREE.MeshStandardMaterial({ map: rugTex, roughness: 1 }));
     rug.material.userData.repaint = paintRug;
-    rug.rotation.x = -Math.PI / 2; rug.position.set(0, 0.006, 0.15); rug.receiveShadow = true; g.add(rug);
+    rug.rotation.x = -Math.PI / 2; rug.position.set(0, 0.006, 0.15); rug.receiveShadow = true; g.add(rug); build.rugMeshes.push(rug);
     box(T.w, 0.08, T.d, tone(C, 'woodB'), 0, T.top - 0.04, 0, { parent: g });
     for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) box(0.12, T.top - 0.08, 0.12, tone(C, 'woodDark'), sx * (T.w / 2 - 0.15), (T.top - 0.08) / 2, sz * (T.d / 2 - 0.15), { parent: g });
     box(0.75, 0.1, 0.75, tone(C, 'accent'), 0, 0.05, T.d / 2 + 0.5, { cast: false, parent: g });

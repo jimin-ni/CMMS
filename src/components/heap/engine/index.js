@@ -21,6 +21,7 @@ import { setupShelf } from './shelf.js';
 import { setupTime } from './time.js';
 import { setupProps } from './props.js';
 import { setupWalk } from './walk.js';
+import { setupSfx } from './sfx.js';
 import { setupHeap } from './heap.js';
 import { setupThumbs } from './thumbs.js';
 import { setupLoop } from './loop.js';
@@ -112,6 +113,7 @@ async function run(ctx) {
   setupTime(ctx);
   setupProps(ctx);
   setupWalk(ctx);
+  setupSfx(ctx); // 걷는 발소리 (ctx.me 를 쓴다)
   setupHeap(ctx);
   setupThumbs(ctx);
   setupLoop(ctx);
