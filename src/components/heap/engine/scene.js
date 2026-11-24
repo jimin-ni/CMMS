@@ -59,8 +59,8 @@ export function setupScene(ctx) {
     const gw = 2 * RX + 2 * M, gd = 2 * RZ + 2 * M, px = 1024 / Math.max(gw, gd);
     const c = makeCanvas(Math.round(gw * px), Math.round(gd * px)), g = c.getContext('2d');
     const cx = c.width / 2, cy = c.height / 2, tex = canvasTexture(c);
-    // contact: 접지 그림자를 그릴지. 디버그 그림자 보기(shell.js 의 applyShadowMode)가 끌 때만 false 로 다시 칠한다
-    const paint = (contact = true) => {
+    // contact: 접지 그림자를 그릴지. 그림자는 방 안에만 보이므로 기본은 false. 디버그 그림자 보기(shell.js 의 applyShadowMode)의 all 만 true 로 다시 칠한다
+    const paint = (contact = false) => {
       g.clearRect(0, 0, c.width, c.height);
       const fade = g.createRadialGradient(cx, cy, solid * px, cx, cy, (solid + 3) * px);
       fade.addColorStop(0, groundColour); fade.addColorStop(1, groundColour + '00');
@@ -76,7 +76,7 @@ export function setupScene(ctx) {
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(gw, gd), new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 1 }));
     // 1 mm 아래: 바닥 널과 벽의 밑면과 한 평면에 두지 않는다
     ground.name = 'ground'; ground.rotation.x = -Math.PI / 2; ground.position.set(0, ctx.groundY - 0.001, 0);
-    ground.receiveShadow = true; scene.add(ground);
+    ground.receiveShadow = false; scene.add(ground); // 방 밖의 땅에는 해 그림자가 지지 않는다 (방 안의 바닥, 벽, 가구만 받는다)
     ctx.ground = ground; ctx.paintGround = paint;
   }
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(2 * RX, 2 * RZ), new THREE.MeshBasicMaterial({ visible: false }));
