@@ -1,6 +1,6 @@
 // 걷는 사람: 모양, 이동, 앉기, 걸음 움직임.
 import * as THREE from 'three';
-import { makeFigure, seatLegs, stepGait, turnToward, SIT_DROP, WALK_SPEED } from './figure.js';
+import { makeFigure, seatLegs, stepGait, turnToward, poseSettle, SETTLE_TIME, SIT_DROP, WALK_SPEED } from './figure.js';
 
 export function setupWalk(ctx) {
   const { C, WALLS, DOOR, scene, toast, setHint, syncUI, SEAT, enterSort } = ctx;
@@ -90,16 +90,20 @@ export function setupWalk(ctx) {
   function sitOn(seats, point) { // 이 가구에서 클릭한 자리에 가장 가까운 자리
     const s = seats.reduce((a, b) => (Math.hypot(a.pos.x - point.x, a.pos.z - point.z) <= Math.hypot(b.pos.x - point.x, b.pos.z - point.z) ? a : b));
     if (!ctx.seatUsable(s)) { toast('여기에는 앉을 수 없어요'); return; }
+    const from = (ctx.perch ? ctx.perchFrom : ctx.sitMove ? ctx.sitMove.stand : me.position).clone().setY(0); // 앉아 있거나 내려서는 중이면 내려설 바닥에서
     if (ctx.perch) unperch();
-    const from = me.position.clone().setY(0);
+    // 들어서는 쪽: stands 는 앞, 뒤, 왼쪽, 오른쪽 순서다 (furniture.js addSeats). 소파는 등받이 뒤에서 넘어 앉지 않고,
+    // 의자는 앞과 옆을 먼저, 뒤(책상에 붙은 의자를 빼서 앉을 때)는 마지막으로 고른다. 값은 길이에 더하는 미터다
+    const extra = s.kind === 'sofa' ? [0, Infinity, 0.6, 0.6] : s.kind === 'chair' ? [0, 1.2, 0.3, 0.3] : [];
     let best = null;
-    for (const st of s.stands) {
-      if (!ctx.walkFree(st.x, st.z)) continue;
+    s.stands.forEach((st, i) => {
+      const add = extra[i] ?? 0;
+      if (add === Infinity || !ctx.walkFree(st.x, st.z)) return;
       const path = ctx.planPath(from, st);
-      if (!path) continue;
-      let len = 0, prev = from; for (const p of path) { len += prev.distanceTo(p); prev = p; }
+      if (!path) return;
+      let len = add, prev = from; for (const p of path) { len += prev.distanceTo(p); prev = p; }
       if (!best || len < best.len) best = { st, path, len };
-    }
+    });
     if (!best) { toast('거기까지 갈 길이 없어요'); return; }
     ctx.seatTarget = s; ctx.seatFrom = best.st;
     followPath(best.path, 'seat', ctx.build.seatMeshes.filter(m => m.userData.seats === seats));
@@ -107,19 +111,23 @@ export function setupWalk(ctx) {
   function perchOn(s) {
     if (!s || !ctx.seatFrom || Math.hypot(me.position.x - ctx.seatFrom.x, me.position.z - ctx.seatFrom.z) > 0.3) return; // 걸음이 계획된 stand 점에서만
     ctx.perch = s; ctx.perchFrom = ctx.seatFrom; ctx.walkTo = null; ctx.arrive = null; ctx.waypoints = [];
+    // 자리로 옮겨 앉는다 (stepCharacter 가 SETTLE_TIME 동안 옮긴다)
+    ctx.sitMove = { dir: 1, t: 0, stand: me.position.clone().setY(0), seatPos: s.pos.clone().setY(s.pos.y - SIT_DROP), yawStand: me.rotation.y, yawSeat: s.yaw };
     setHint('perch'); syncUI();
   }
   function unperch() {
     if (!ctx.perch) return;
+    const s = ctx.perch, t = ctx.sitMove?.dir === 1 ? ctx.sitMove.t : 1; // 앉는 도중이면 거기서부터 거꾸로
     ctx.perch = null;
-    me.position.copy(ctx.perchFrom).setY(0); ctx.collide(me.position); // 자리에 들어선 바닥으로 되돌린다
+    // 자리에 들어선 바닥으로 내려선다. 다 내려서면 stepCharacter 가 바닥에 맞춘다
+    ctx.sitMove = { dir: -1, t, stand: ctx.perchFrom.clone().setY(0), seatPos: s.pos.clone().setY(s.pos.y - SIT_DROP), yawStand: s.yaw, yawSeat: s.yaw };
     setHint('room'); syncUI();
   }
   // 가구를 돌아가는 길 (path.js 의 A*). 가는 곳이 막혀 있으면 가장 가까운 빈 자리까지 간 뒤 동작한다.
   // meshes: 누른 물건 (도착할 때까지 빛난다)
   function walkRoute(to, action, meshes) {
+    const from = (ctx.perch ? ctx.perchFrom : ctx.sitMove ? ctx.sitMove.stand : me.position).clone().setY(0); // 앉아 있거나 내려서는 중이면 내려설 바닥에서
     if (ctx.perch) unperch();
-    const from = me.position.clone().setY(0);
     followPath(ctx.planPath(from, to, { snap: true }), action, meshes);
   }
 
@@ -136,6 +144,17 @@ export function setupWalk(ctx) {
   }
   const WALK_KEYS = ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
   function stepCharacter(dt) {
+    if (ctx.sitMove) { // 앉는 중이거나 일어서는 중: 다 옮길 때까지 걷지 않는다 (가려던 길은 그 뒤에 이어 간다)
+      const S = ctx.sitMove;
+      S.t += S.dir * dt / SETTLE_TIME;
+      if (S.dir > 0 && S.t >= 1) ctx.sitMove = null; // 아래의 앉은 자세로 이어진다
+      else if (S.dir < 0 && S.t <= 0) {
+        ctx.sitMove = null;
+        me.position.copy(S.stand); ctx.collide(me.position); me.rotation.y = S.yawStand;
+        fig.legL.rotation.x = fig.legR.rotation.x = 0;
+        return;
+      } else { poseSettle(fig, S.stand, S.seatPos, S.yawStand, S.yawSeat, Math.min(1, Math.max(0, S.t))); return; }
+    }
     if (ctx.perch) {
       if (ctx.anyOverlay() || !WALK_KEYS.some(k => ctx.keys.has(k))) { // 앉아 있다: 걷기 키를 누를 때까지 자세를 유지한다
         me.position.set(ctx.perch.pos.x, ctx.perch.pos.y - SIT_DROP, ctx.perch.pos.z); me.rotation.y = ctx.perch.yaw; seatLegs(fig);

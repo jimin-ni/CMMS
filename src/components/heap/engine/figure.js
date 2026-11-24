@@ -268,3 +268,15 @@ export function stepGait(fig, moving, dt) {
 }
 
 export function seatLegs(fig) { fig.legL.rotation.x = fig.legR.rotation.x = SIT_LEGS; }
+
+// 앉기와 일어서기: 바닥의 점(stand)과 앉은 몸의 자리(seat) 사이를 한 번에 건너뛰지 않고 SETTLE_TIME 동안 옮긴다.
+// t 0 = 서 있음, 1 = 앉음. 살짝 뛰어오르며 자리 쪽으로 돌고, 다리는 뒤쪽 절반에서 앞으로 뻗는다.
+export const SETTLE_TIME = 0.4;
+export function poseSettle(fig, stand, seat, yawStand, yawSeat, t) {
+  const e = t * t * (3 - 2 * t), g = fig.group;
+  g.position.lerpVectors(stand, seat, e);
+  g.position.y += Math.sin(Math.PI * t) * 0.06;
+  const dy = Math.atan2(Math.sin(yawSeat - yawStand), Math.cos(yawSeat - yawStand));
+  g.rotation.y = wrapAngle(yawStand + dy * Math.min(1, e * 1.4));
+  fig.legL.rotation.x = fig.legR.rotation.x = SIT_LEGS * ss(0.35, 1, t);
+}

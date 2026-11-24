@@ -4,7 +4,7 @@
 // 다른 사람 캐릭터는 입력 레이캐스트 목록에 없으므로 왼쪽 클릭은 뒤의 바닥이나 가구로 간다. 캐릭터끼리는 부딪히지 않는다.
 import * as THREE from 'three';
 import { flat } from './draw.js';
-import { makeFigure, seatLegs, stepGait, turnToward, wrapAngle, SIT_DROP, HEAP_SIT_Y, WALK_SPEED } from './figure.js';
+import { makeFigure, seatLegs, stepGait, turnToward, wrapAngle, poseSettle, SETTLE_TIME, SIT_DROP, HEAP_SIT_Y, WALK_SPEED } from './figure.js';
 import { disposeScene } from './util.js';
 
 // 다른 사람 몸 색 (서버가 주는 colour 0..7). 방의 흙빛과 어울리는 따뜻한 색들
@@ -230,10 +230,20 @@ export function setupPresence(ctx) {
       if (it.leaving && k >= 1) { dropPeer(peer, true); continue; }
 
       let moving = false;
-      if (it.seat) {
-        g.position.set(it.seat.p.x, it.seat.p.y - SIT_DROP, it.seat.p.z); g.rotation.y = it.seat.ry; seatLegs(it.fig);
-      } else if (it.atHeap && it.heapSpot) {
-        g.position.set(it.heapSpot.p.x, HEAP_SIT_Y, it.heapSpot.p.z); g.rotation.y = it.heapSpot.ry; seatLegs(it.fig);
+      // 앉기와 일어서기는 SETTLE_TIME 동안 옮긴다 (figure.js poseSettle). 일어설 때는 앉기 전에 서 있던 바닥으로 내려선 뒤에 걷는다
+      const sitTo = it.seat ? [it.seat.p.x, it.seat.p.y - SIT_DROP, it.seat.p.z, it.seat.ry]
+        : it.atHeap && it.heapSpot ? [it.heapSpot.p.x, HEAP_SIT_Y, it.heapSpot.p.z, it.heapSpot.ry] : null;
+      let A = it.sitAnim;
+      if (sitTo) {
+        if (!A || A.dir < 0) A = it.sitAnim = { dir: 1, t: A ? A.t : 0, stand: A ? A.stand : g.position.clone().setY(0), yawStand: A ? A.yawStand : g.rotation.y };
+        A.seatPos = new THREE.Vector3(sitTo[0], sitTo[1], sitTo[2]); A.yawSeat = sitTo[3];
+        A.t = Math.min(1, A.t + dt / SETTLE_TIME);
+        poseSettle(it.fig, A.stand, A.seatPos, A.yawStand, A.yawSeat, A.t);
+        if (A.t >= 1) seatLegs(it.fig);
+      } else if (A) {
+        A.dir = -1; A.t = Math.max(0, A.t - dt / SETTLE_TIME);
+        poseSettle(it.fig, A.stand, A.seatPos, A.yawStand, A.yawSeat, A.t);
+        if (A.t <= 0) { it.sitAnim = null; g.position.y = 0; }
       } else {
         const goal = it.path[0] ?? it.target;
         if (goal) {
@@ -259,7 +269,7 @@ export function setupPresence(ctx) {
       g.visible = visible;
       // 이름표: 머리 위를 화면 좌표로
       if (visible && rect) {
-        head.set(g.position.x, g.position.y + 1.35, g.position.z).project(camera);
+        head.set(g.position.x, g.position.y + 1.08, g.position.z).project(camera); // 머리카락 꼭대기 0.98 위로 조금
         const x = rect.left - rootRect.left + (head.x + 1) / 2 * rect.width, y = rect.top - rootRect.top + (1 - head.y) / 2 * rect.height;
         const onScreen = head.z < 1 && x > -50 && y > -50 && x < rootRect.width + 50 && y < rootRect.height + 50;
         it.tag.style.display = onScreen ? '' : 'none';

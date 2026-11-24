@@ -1,6 +1,6 @@
 // 카메라 구도, 크기 맞춤, 프레임 루프.
 import * as THREE from 'three';
-import { HEAP_SIT_Y, SIT_LEGS } from './figure.js';
+import { HEAP_SIT_Y, SIT_LEGS, SETTLE_TIME, poseSettle } from './figure.js';
 
 export function setupLoop(ctx) {
   const {
@@ -89,7 +89,11 @@ export function setupLoop(ctx) {
     } else {
       camera.up.copy(Yv); // 앉기와 궤도 컨트롤은 Y 가 위인 카메라를 전제한다
       const seated = ctx.mode === 'sit' || ctx.globeFrom === 'sit'; // 앉아서 글로브를 보면 계속 앉아 있다
-      me.position.y = seated ? HEAP_SIT_Y : 0; legL.rotation.x = legR.rotation.x = seated ? SIT_LEGS : 0;
+      const H = ctx.heapMove;
+      if (seated && H && H.t < 1) { // 방석으로 옮겨 앉는 중 (modes.js sit)
+        H.t = Math.min(1, H.t + (reduced ? 1 : dt / SETTLE_TIME));
+        poseSettle(ctx.fig, H.stand, H.seat, H.yawStand, H.yawSeat, H.t);
+      } else { me.position.y = seated ? HEAP_SIT_Y : 0; legL.rotation.x = legR.rotation.x = seated ? SIT_LEGS : 0; }
       if (ctx.camGoal) {
         camera.position.lerp(ctx.camGoal.pos, a); controls.target.lerp(ctx.camGoal.target, a); camera.lookAt(controls.target);
         if (camera.position.distanceTo(ctx.camGoal.pos) < 0.02 || reduced) { ctx.camGoal = null; controls.enabled = ctx.mode === 'sit' && !ctx.held && !ctx.dragging; }
