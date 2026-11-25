@@ -83,6 +83,15 @@
 .heap-room .debug-body button[aria-pressed="true"] { background: var(--clay); }
 .heap-room .debug-side button:focus-visible { outline: 3px solid var(--paper); outline-offset: 2px; }
 .heap-room .debug-select { display: flex; align-items: center; gap: 8px; font: 600 13px var(--ui); color: var(--paper); padding: 4px 6px; white-space: nowrap; }
+.heap-room .debug-body { max-height: 70vh; overflow-y: auto; }
+.heap-room .debug-fx { display: flex; flex-direction: column; gap: 4px; padding-top: 6px; border-top: 1px solid rgba(243, 234, 219, 0.2); width: 240px; }
+.heap-room .debug-fx-title { margin: 0; font: 600 12px var(--ui); color: var(--paper-dim, var(--paper)); }
+.heap-room .debug-fx-row { display: flex; gap: 4px; }
+.heap-room .debug-fx-row button:first-child { flex: 1; }
+.heap-room .debug-body .debug-fx-more { padding: 8px 10px; }
+.heap-room .debug-fx-slider { display: flex; flex-direction: column; gap: 2px; font: 500 12px var(--ui); color: var(--paper); padding: 2px 6px 4px; }
+.heap-room .debug-fx-slider span { display: flex; justify-content: space-between; }
+.heap-room .debug-fx-slider input { width: 100%; accent-color: var(--clay); }
 .heap-room .debug-select select { font: 600 13px var(--ui); color: var(--ink); background: var(--paper); border: 0; border-radius: 6px; padding: 4px 6px; }
 
 .heap-room #toast { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); margin: 0; font-family: var(--hand); font-size: 26px; line-height: 1.2; color: var(--ink); background: var(--paper); padding: 4px 18px 6px; border: 1px solid var(--clay); border-radius: 4px; pointer-events: none; text-align: center; }
