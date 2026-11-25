@@ -23,9 +23,10 @@ type Room = { w: number; d: number; h?: number };
 //   phone 휴대폰 · guestbook 방명록 공책(style "stand" 면 나무 받침째) · screen 벽 스크린 · poster 벽 포스터 · window 창(w, h)
 //   projector 영사기 (꾸밈만, 하는 일은 없다. 렌즈가 지역 -z 를 본다)
 //   glow 작은 빛: 보이지 않고 빛만 낸다. 늘 켜져 있고 level(1..5, 없으면 3)이 세기다 (engine/furniture.js)
+//   globe 스노우 글로브 (방에 하나까지). 누르면 떠올라 출처 목록을 보인다 (engine/fixtures.js, globe.js)
 const HAND_TYPES = new Set([
   "bed", "shelf", "plant", "snake", "lamp", "books", "frame", "calendar",
-  "heap", "lowTable", "phone", "guestbook", "screen", "poster", "window", "projector", "glow",
+  "heap", "lowTable", "phone", "guestbook", "screen", "poster", "window", "projector", "glow", "globe",
 ]);
 // 작은 빛의 세기 단계
 export const GLOW_LEVEL_MIN = 1;
@@ -55,6 +56,7 @@ export const HAND_FOOTPRINT: Record<string, { w: number; d: number }> = {
   guestbook: { w: 0.5, d: 0.36 },
   projector: { w: 0.3, d: 0.42 },
   glow: { w: 0.2, d: 0.2 },
+  globe: { w: 0.34, d: 0.34 },
 };
 const MODEL_BY_ID = new Map(catalogue.models.map((model) => [model.id, model]));
 // 불을 켜고 끌 수 있는 가구: 손으로 만드는 lamp, 그리고 카탈로그 category가 lamp인 모델
@@ -419,10 +421,12 @@ export function validateLayout(input: unknown): LayoutCheck {
         const items: Obj[] = [];
         let trees = 0;
         let heaps = 0;
+        let globes = 0;
         for (let i = 0; i < value.length; i++) {
           const r = checkItem(value[i], i);
           if ("error" in r) return fail(r.error);
           if (r.item.type === "heap" && ++heaps > 1) return fail(`items[${i}]: 사진 더미는 방에 하나까지예요.`);
+          if (r.item.type === "globe" && ++globes > 1) return fail(`items[${i}]: 스노우 글로브는 방에 하나까지예요.`);
           if ((r.item.fn as { kind?: string } | undefined)?.kind === "tree" && ++trees > HEAP_POLICY.treesPerRoom) {
             return fail(`items[${i}].fn: 쪽지 트리는 방에 ${HEAP_POLICY.treesPerRoom}개까지예요.`);
           }

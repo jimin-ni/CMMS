@@ -100,6 +100,20 @@
 /* 스노우 글로브 모드의 눈 표시 (engine/globe.js 가 .on 을 붙였다 뗀다) */
 .heap-room #globe-snow { position: absolute; top: 72px; left: 50%; transform: translateX(-50%); margin: 0; padding: 4px 14px; border-radius: 999px; background: rgba(255, 255, 255, 0.18); color: #fff8ec; font-size: 14px; backdrop-filter: blur(4px); pointer-events: none; opacity: 0; visibility: hidden; transition: opacity 0.5s, visibility 0.5s; }
 .heap-room #globe-snow.on { opacity: 1; visibility: visible; }
+/* 스노우 글로브 모드의 출처 목록: 가운데 떠오른 글로브를 가리지 않게 오른쪽에 둔다. 좁은 화면에서는 아래쪽 */
+.heap-room #globe-credits { position: absolute; top: 72px; right: 16px; width: min(300px, calc(100% - 32px)); max-height: calc(100cqh - 160px); z-index: 5; }
+.heap-room #globe-credits .panel-head { padding: 10px 16px; }
+.heap-room #globe-credits .panel-head b { font-size: 18px; }
+.heap-room #globe-credits .panel-body { padding: 14px 16px; gap: 12px; font-size: 13px; }
+.heap-room #globe-credits h3 { margin: 0 0 4px; font-size: 13px; font-weight: 700; }
+.heap-room #globe-credits ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.heap-room #globe-credits li { line-height: 1.4; }
+.heap-room #globe-credits a { color: inherit; text-decoration: underline; }
+.heap-room #globe-credits .lic { margin-left: 6px; padding: 0 6px; border: 1px solid currentColor; border-radius: 999px; font-size: 11px; white-space: nowrap; }
+.heap-room #globe-credits small { display: block; opacity: 0.7; }
+@media (max-width: 640px) {
+  .heap-room #globe-credits { top: auto; bottom: 72px; left: 16px; right: 16px; width: auto; max-height: 34cqh; }
+}
 /* 방명록: 가이드의 text-input 과 hairline-divider */
 .heap-room .gb-list { display: flex; flex-direction: column; border-top: 1px solid var(--cp-ink); }
 .heap-room .gb-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--cp-hair); font: 400 16px/1.5 var(--cp-ui); }

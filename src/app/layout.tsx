@@ -6,7 +6,7 @@ import { nunito, oswald, yangjin } from "@/app/fonts/brand";
 import { pretendard } from "@/app/fonts/onboarding";
 
 export const metadata: Metadata = {
-  title: "CMMS",
+  title: "Memoamo",
   description: "Creator Message Managing System",
 };
 
