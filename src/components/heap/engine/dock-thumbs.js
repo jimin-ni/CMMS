@@ -51,14 +51,17 @@ export function setupDockThumbs(ctx) {
   // 손으로 짓는 가구(방 소품)를 방과 같은 BUILD 로 지어 찍는다. item 은 독의 항목 모양 (room-editor.tsx 의 HAND_TEMPLATE).
   // 버리는 build 에 짓는다: 기능 슬롯은 build !== ctx.build 라 시작하지 않는다 (slots.js). 재질은 방과 나눠 쓰는 것(tone)이 있어 버리지 않고,
   // 이 묶음이 만든 기하만 버린다. 아무 메시도 없으면(창문은 shell.js 가 짓는다) null.
-  function drawHand(item) {
-    const build = { group: null, groups: [], obst: [], items: [item], lamps: [], slots: [], slotMeshes: [], seats: [], seatMeshes: [], rugMeshes: [], loads: new Set() };
+  // 카탈로그 모델을 안에 넣는 손 가구(좌식 탁자, furniture.js 의 fitModel)는 모델이 읽힐 때까지 기다린다 (build.waits). 그 메시의 기하는 캐시의 것이라 버리지 않는다
+  async function drawHand(item) {
+    const build = { group: null, groups: [], obst: [], items: [item], lamps: [], slots: [], slotMeshes: [], seats: [], seatMeshes: [], rugMeshes: [], loads: new Set(), thumb: true };
     const g = new THREE.Group(), irand = ctx.irand;
     let s = 7; ctx.irand = () => (s = (s * 16807) % 2147483647) / 2147483647; // 러그 무늬 같은 것이 방의 난수 수열을 건드리지 않게
     try { if (!ctx.BUILD[item.type]?.(g, item, build)) return null; } finally { ctx.irand = irand; }
+    if (build.waits) await Promise.all(build.waits);
+    if (ctx.disposed) return null;
     let meshes = 0; g.traverse(o => { if (o.isMesh) meshes++; });
     const url = meshes ? shoot(g) : null;
-    g.traverse(o => { if (o.isMesh) o.geometry.dispose(); });
+    g.traverse(o => { if (o.isMesh && !o.userData.cached) o.geometry.dispose(); });
     return url;
   }
 

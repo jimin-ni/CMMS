@@ -54,23 +54,26 @@ export function setupFurniture(ctx) {
   // 높이: 다리 0~0.06, 바닥판 0.06~0.10, 가운데 판 0.46~0.50, 윗판 0.88~0.92 (surfaces.ts 의 shelfLow 와 같다).
   // 판은 옆판 사이에만, 뒤판은 옆판 사이에만 둔다: 같은 평면에 겹치는 면이 없다.
   const LOW = { w: 1.6, d: 0.5, side: 0.05, legH: 0.06, t: 0.04, floors: [0.06, 0.46, 0.88], top: 0.92, albumH: 0.32, albumD: 0.24, slot: 0.105 };
+  // 모양은 Kenney 가구를 따른다 (2026-11-25): 모서리를 깎은 판(ctx.bevel), 옆판 위를 덮고 앞뒤로 조금 나온 윗판, 굵고 수가 적은 책.
+  // 칸의 높이(LOW.floors, LOW.top)는 그대로라 받침 높이(surfaces.ts)와 온보딩 자리는 바뀌지 않는다
   function lowShelf(g, it, build) {
-    const wood = tone(C, 'woodDark'), add = m => { shelfParts.push(m); return m; };
-    const inW = LOW.w - 2 * LOW.side, sx = LOW.w / 2 - LOW.side / 2, bodyH = LOW.top - LOW.legH;
+    const { bevel } = ctx, wood = tone(C, 'woodDark'), add = m => { shelfParts.push(m); return m; };
+    const inW = LOW.w - 2 * LOW.side, sx = LOW.w / 2 - LOW.side / 2, topY = LOW.floors[2], bodyH = topY - LOW.legH;
     for (const s of [-1, 1]) {
-      add(box(LOW.side, bodyH, LOW.d, wood, s * sx, LOW.legH + bodyH / 2, 0, { parent: g }));
-      for (const z of [-1, 1]) add(box(LOW.side, LOW.legH, LOW.side, wood, s * sx, LOW.legH / 2, z * (LOW.d / 2 - LOW.side / 2), { parent: g }));
+      add(bevel(LOW.side, bodyH, LOW.d, wood, s * sx, LOW.legH + bodyH / 2, 0, { parent: g }));
+      for (const z of [-1, 1]) add(box(LOW.side - 0.01, LOW.legH, LOW.side - 0.01, wood, s * sx, LOW.legH / 2, z * (LOW.d / 2 - LOW.side / 2 - 0.01), { parent: g }));
     }
     add(box(inW, bodyH, 0.03, wood, 0, LOW.legH + bodyH / 2, -LOW.d / 2 + 0.015, { parent: g }));
-    for (const y of LOW.floors) add(box(inW, LOW.t, LOW.d - 0.03, wood, 0, y + LOW.t / 2, 0.015, { parent: g }));
+    for (const y of LOW.floors.slice(0, 2)) add(box(inW, LOW.t, LOW.d - 0.03, wood, 0, y + LOW.t / 2, 0.015, { parent: g }));
+    add(bevel(LOW.w + 0.04, LOW.t, LOW.d + 0.03, wood, 0, topY + LOW.t / 2, 0.015, { r: 0.012, parent: g })); // 윗판: 옆판 위를 덮는다
     let n = 0;
     const book = (x, y0, th) => {
-      const h = 0.2 + ctx.irand() * 0.08;
-      add(box(th, h, 0.18, tone(C, `book:${n++}`), x, y0 + h / 2, -0.02, { parent: g }));
+      const h = 0.22 + ctx.irand() * 0.06;
+      add(bevel(th, h, 0.19, tone(C, `book:${n++}`), x, y0 + h / 2, -0.02, { r: 0.008, parent: g }));
     };
     // 아래 칸: 책으로 채우고 끝에 빈자리를 조금 남긴다
     const y1 = LOW.floors[0] + LOW.t;
-    for (let x = -inW / 2 + 0.01; x < inW / 2 - 0.12;) { const th = 0.03 + ctx.irand() * 0.02; book(x + th / 2, y1, th); x += th + 0.004; }
+    for (let x = -inW / 2 + 0.01; x < inW / 2 - 0.12;) { const th = 0.05 + ctx.irand() * 0.025; book(x + th / 2, y1, th); x += th + 0.006; }
     // 윗칸: 책 몇 권, 앨범, 책 몇 권, 앨범, ... 앨범 자리(slot)는 가장 두꺼운 앨범 폭이다
     const y2 = LOW.floors[1] + LOW.t;
     ctx.shelf = { group: g, albums: [], thick: { base: 0.05, per: 0.003, max: LOW.slot - 0.005 }, labelH: 0.24,
@@ -78,7 +81,7 @@ export function setupFurniture(ctx) {
       // 온보딩이 꽂는 앨범 자리 (intro.js): 아래 칸 오른쪽 끝의 빈 곳. 책은 inW / 2 - 0.07 앞에서 끝난다
       introSlot: { x: inW / 2 - 0.04, y: y1 + 0.15, z: 0.02, w: 0.07, h: 0.3, d: 0.29 } };
     let x = -inW / 2 + 0.01;
-    const books = () => { const k = 2 + Math.floor(ctx.irand() * 3); for (let i = 0; i < k; i++) { const th = 0.025 + ctx.irand() * 0.015; book(x + th / 2, y2, th); x += th + 0.004; } };
+    const books = () => { const k = 1 + Math.floor(ctx.irand() * 2); for (let i = 0; i < k; i++) { const th = 0.045 + ctx.irand() * 0.02; book(x + th / 2, y2, th); x += th + 0.006; } };
     ALBUMS.forEach((a, i) => {
       books();
       const lx = x + LOW.slot / 2; x += LOW.slot + 0.004;
@@ -90,7 +93,7 @@ export function setupFurniture(ctx) {
       label.position.set(lx, y2 + LOW.albumH / 2, LOW.albumD / 2 + 0.002); label.userData.album = a.key;
       g.add(m, label); add(m); add(label);
       ctx.shelf.albums.push({ ...a, mesh: m, label, lc, lt });
-      if (i === ALBUMS.length - 1) while (x < inW / 2 - 0.05) { const th = 0.025 + ctx.irand() * 0.015; book(x + th / 2, y2, th); x += th + 0.004; }
+      if (i === ALBUMS.length - 1) while (x < inW / 2 - 0.08) { const th = 0.045 + ctx.irand() * 0.02; book(x + th / 2, y2, th); x += th + 0.006; }
     });
     if (it.fn?.kind === 'keepsake') ctx.keepsakeObject(g, it, build, 'standee', 0.52, LOW.top, 0.06);
     return { hw: 0.85, hd: 0.55 };
@@ -115,15 +118,16 @@ export function setupFurniture(ctx) {
     },
     shelf(g, it, build) {
       if (it.style !== 'tall') return lowShelf(g, it, build);
-      const wood = tone(C, 'woodDark'), add = m => { shelfParts.push(m); return m; };
-      add(box(1.6, 2.2, 0.12, wood, 0, 1.1, -0.22, { parent: g }));
-      for (const sx of [-0.77, 0.77]) add(box(0.06, 2.2, 0.5, wood, sx, 1.1, 0, { parent: g }));
+      // 낮은 책장과 같은 모양 규칙: 깎은 옆판, 옆판 사이의 칸 판, 옆판을 덮고 조금 나온 윗판 (높이는 surfaces.ts 의 shelf 그대로)
+      const { bevel } = ctx, wood = tone(C, 'woodDark'), add = m => { shelfParts.push(m); return m; };
+      add(box(1.48, 2.175, 0.12, wood, 0, 1.0875, -0.22, { parent: g }));
+      for (const sx of [-0.77, 0.77]) add(bevel(0.06, 2.175, 0.5, wood, sx, 1.0875, 0, { parent: g }));
       for (let s = 0; s < 3; s++) {
-        add(box(1.6, 0.05, 0.5, wood, 0, 0.27 + s * 0.7, 0, { parent: g }));
+        add(box(1.48, 0.05, 0.5, wood, 0, 0.27 + s * 0.7, 0, { parent: g }));
         if (s === 1) continue;
-        for (let b = 0; b < 6; b++) { const h = 0.35 + ctx.irand() * 0.15; add(box(0.16, h, 0.3, tone(C, `book:${s * 6 + b}`), 0.6 - b * 0.22, 0.3 + s * 0.7 + h / 2, 0.02, { parent: g })); }
+        for (let b = 0; b < 6; b++) { const h = 0.35 + ctx.irand() * 0.15; add(bevel(0.16, h, 0.3, tone(C, `book:${s * 6 + b}`), 0.6 - b * 0.22, 0.3 + s * 0.7 + h / 2, 0.02, { r: 0.01, parent: g })); }
       }
-      add(box(1.6, 0.05, 0.5, wood, 0, 2.2, 0, { parent: g }));
+      add(bevel(1.64, 0.05, 0.53, wood, 0, 2.2, 0.015, { r: 0.012, parent: g }));
       if (it.plant !== false) pottedPlant(g, 0, 0, 2.22, 0.7); // plant: false 면 선반 위 화분을 두지 않는다 (벽이 낮은 방)
       if (it.fn?.kind === 'keepsake') ctx.keepsakeObject(g, it, build, 'standee', 0.52, 2.225, 0.06); // 선반 위의 기념품
       ctx.shelf = { group: g, albums: [] };
@@ -227,6 +231,37 @@ export function setupFurniture(ctx) {
       build.obst.push({ x: it.x, z: it.z, hw: swap ? hd : hw, hd: swap ? hw : hd, rhw: (swap ? m.size.z : m.size.x) / 2, rhd: (swap ? m.size.x : m.size.z) / 2, owner: it });
     });
     return {};
+  };
+
+  // 손 가구 안에 카탈로그 모델 하나를 상자 { w, h, d }(지역 좌표, 밑면 가운데가 x, y, z)에 맞춰 넣는다. 좌식 탁자가 쓴다 (fixtures.js).
+  // 모델은 방 팔레트로 물든다 (모델 가구와 같은 TINT). lay 면 모델을 앞으로 눕힌다 (세워 둔 쿠션을 방석으로).
+  // rug 면 그림자를 드리우지 않고 발소리가 먹먹해지는 러그 메시로 센다. 읽는 동안 가구가 바뀌면 버린다.
+  // 독의 그림(dock-thumbs.js, build.thumb)은 build.waits 를 기다린 뒤 찍는다. 메시의 기하는 캐시의 것이라 userData.cached 로 표시해 버리지 않게 한다
+  // as: 재질 이름 → 그 이름 대신 물들일 팔레트 열쇠 (예: 러그 가운데를 carpet 대신 종이 색으로)
+  ctx.fitModel = (g, build, id, { x = 0, y = 0, z = 0, w, h, d, lay = false, rug = false, as = {} }) => {
+    (build.waits ??= []).push(ctx.loadModel(id).then(m => {
+      if (!m || ctx.disposed || (!build.thumb && build !== ctx.build)) return;
+      const inst = m.root.clone(), own = new Map();
+      inst.traverse(o => {
+        if (!o.isMesh) return;
+        o.userData.cached = true;
+        const name = o.material.name, spec = as[name] ? 'tint:' + as[name] : specOf({}, name);
+        if (spec) {
+          if (!own.has(o.material)) { const c = o.material.clone(); c.color.set(palColour(C, spec)); mark(c, spec); own.set(o.material, c); }
+          o.material = own.get(o.material);
+        }
+        o.castShadow = !rug; o.receiveShadow = true;
+        if (rug) build.rugMeshes.push(o);
+      });
+      const inner = new THREE.Group(); inner.add(inst);
+      if (lay) inner.rotation.x = -Math.PI / 2;
+      inner.updateMatrixWorld(true);
+      const bb = new THREE.Box3().setFromObject(inner), size = bb.getSize(new THREE.Vector3()), c = bb.getCenter(new THREE.Vector3());
+      inner.position.set(-c.x, -bb.min.y, -c.z);
+      const outer = new THREE.Group(); outer.add(inner);
+      outer.scale.set(w / size.x, h / size.y, d / size.z); outer.position.set(x, y, z);
+      g.add(outer);
+    }));
   };
 
   // ---------- 가구 하나만 따로 칠하기 (색 묶음 C2) ----------
