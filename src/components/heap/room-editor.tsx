@@ -96,6 +96,8 @@ const GROUPS = [
   { label: "화면", cats: ["screen"] },
   { label: "소품", cats: ["decor"] },
   { label: "크리스마스", cats: ["크리스마스"] },
+  // 이야기 소품 (catalogue.json 의 _story). 맨 뒤에 둔다: 아래 groupOf 가 GROUPS[10] 을 소품 묶음으로 쓴다
+  { label: "먹방", cats: ["food"] },
 ];
 const KNOWN = GROUPS.flatMap((g) => g.cats);
 const groupOf = (m: Model) => GROUPS.find((g) => g.cats.includes(m.category)) ?? (m.category === "hand" ? null : GROUPS[10]);

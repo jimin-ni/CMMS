@@ -20,6 +20,7 @@
   "_screen": "screen: TV 화면 위치(파일 좌표, 크기 조정 전). 엔진이 최신 영상이나 음악 썸네일을 이 사각형에 그린다.",
   "_surface": "h: 모델의 키 (엔진 단위, 배율 적용 뒤). tops: 그 위에 물건을 세울 수 있는 면의 높이들 (가구의 밑면에서, 낮은 것부터). 둘 다 .claude/session-artifacts/heap-poc/tools/measure-tops.mjs 가 GLB에서 잰 값이니 손으로 고치지 말고 다시 돌리세요. tops가 있는 가구가 받침이에요 (러그, 조명, 화분, 벽·천장 가구는 재지 않아요). 얹는 것: 탁상 달력과, 앉는 가구(seats의 category)가 아니면서 바닥 넓이 w×d가 0.4 이하이고 h가 1.0 이하인 모델. 얹은 물건의 y는 받침의 y + 그 받침의 tops 중 하나예요 (src/lib/heap/surfaces.ts).",
   "_parts": "parts: 가구 하나만 따로 칠할 수 있는 부분 (item.colors 의 열쇠, 색 묶음 C2). wood 나무(wood, woodDark), fabric 천(carpet, carpetDarker, carpetBlue), pale 밝은 면(carpetWhite: 시트, 도기), metal 금속(metal*), leaf 잎(plant), paint 칠한 면(_defaultMat). GLB 의 재질 이름에서 .claude/session-artifacts/heap-poc/tools/measure-parts.mjs 가 적으니 손으로 고치지 마세요. 없으면 칠할 부분이 없는 모델이에요 (그림 한 장으로 칠한 크리스마스 키트).",
+  "_story": "cmms-story/: 이 프로젝트가 만든 이야기 소품 (category \"food\", 꾸미기 독의 \"먹방\" 묶음). Kenney Food Kit 의 방식을 따른다: 그림 한 장(colormap)으로 칠해 방 팔레트에 물들지 않는다. 파일은 실제 크기(미터)다. Kenney 는 탁상 소품을 실제보다 1.45 배쯤 크게 만든다 (토스터, 믹서, 책, 모니터, 작은 화분; 방 카메라에서 읽히게). 그래서 scale 0.725 = 0.5 (MODEL_SCALE 2.0 을 지운다) x 1.45 이고, w, d, h 는 그 배율을 곱한 값이다. 원본 .blend 와 짓는 스크립트는 blender/heap/props/. labelEn 은 영어 이름, tags 는 찾기 말(한국어, 영어)이다.",
   "models": [
     { "id": "bedDouble", "file": "kenney-furniture/bedDouble.glb", "label": "더블 침대", "category": "bed", "w": 1.91, "d": 2.25, "parts": ["wood", "fabric", "pale", "metal"], "h": 0.75, "tops": [0.52] },
     { "id": "bedSingle", "file": "kenney-furniture/bedSingle.glb", "label": "싱글 침대", "category": "bed", "w": 1.14, "d": 2.25, "parts": ["wood", "fabric", "pale", "metal"], "h": 0.75, "tops": [0.45, 0.52] },
@@ -260,6 +261,8 @@
     { "id": "holidayTreeSnowC", "file": "kenney-holiday/tree-snow-c.glb", "label": "Holiday Tree Snow C", "category": "크리스마스", "scale": 0.4, "w": 0.95, "d": 0.95, "h": 1.54 },
     { "id": "holidayTree", "file": "kenney-holiday/tree.glb", "label": "Holiday Tree", "category": "크리스마스", "scale": 0.4, "w": 0.95, "d": 0.95, "h": 1.54 },
     { "id": "holidayWreathDecorated", "file": "kenney-holiday/wreath-decorated.glb", "label": "Holiday Wreath Decorated", "category": "크리스마스", "scale": 0.5, "w": 0.67, "d": 0.26, "mount": "wall", "h": 0.76 },
-    { "id": "holidayWreath", "file": "kenney-holiday/wreath.glb", "label": "Holiday Wreath", "category": "크리스마스", "scale": 0.5, "w": 0.67, "d": 0.26, "mount": "wall", "h": 0.76 }
+    { "id": "holidayWreath", "file": "kenney-holiday/wreath.glb", "label": "Holiday Wreath", "category": "크리스마스", "scale": 0.5, "w": 0.67, "d": 0.26, "mount": "wall", "h": 0.76 },
+    { "id": "foodYangnyeomChicken", "file": "cmms-story/food-yangnyeom-chicken.glb", "label": "양념치킨 상자", "labelEn": "Yangnyeom chicken box", "category": "food", "scale": 0.725, "w": 0.32, "d": 0.45, "h": 0.2, "tags": ["양념치킨", "치킨", "프라이드치킨", "치킨 상자", "먹방", "첫 경험", "yangnyeom chicken", "fried chicken", "chicken box", "mukbang", "first time eating"] },
+    { "id": "propPhoneTripod", "file": "cmms-story/prop-phone-tripod.glb", "label": "삼각대 휴대폰", "labelEn": "Phone on mini tripod", "category": "food", "scale": 0.725, "w": 0.22, "d": 0.19, "h": 0.41, "tags": ["삼각대", "미니 삼각대", "휴대폰", "촬영", "먹방", "쇼츠", "tripod", "phone", "filming", "mukbang", "shorts"] }
   ]
 }
