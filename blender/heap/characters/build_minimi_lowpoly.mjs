@@ -7,7 +7,7 @@
 // Sizes follow the approved model sheet (.claude/session-artifacts/minimi/sheet/): 1 unit = 1 m, height 0.98, face +z.
 //
 // Names the engine relies on (src/components/heap/engine/figure.js):
-//   nodes      minimi (root) · leg.L / leg.R (pivot at the hip, 0.175)
+//   nodes      minimi (root) · leg_L / leg_R (pivot at the hip, 0.175; no dots, three.js drops them)
 //   materials  skin · hair · hair_whorl · eye · eye_light · blush · shirt · shirt_band · trousers · trouser_cuff · shoe · sole
 import { createRequire } from 'node:module';
 import { pathToFileURL, fileURLToPath } from 'node:url';
@@ -208,7 +208,8 @@ function meshes(group, set) {
 const root = new THREE.Group(); root.name = 'minimi';
 meshes(root, parts);
 for (const s of [-1, 1]) {
-  const hip = new THREE.Group(); hip.name = s < 0 ? 'leg.R' : 'leg.L'; hip.position.set(0.071 * s, 0.175, 0); root.add(hip);
+  // no dots in the name: three.js drops '.' from node names when it loads
+  const hip = new THREE.Group(); hip.name = s < 0 ? 'leg_R' : 'leg_L'; hip.position.set(0.071 * s, 0.175, 0); root.add(hip);
   meshes(hip, leg(s));
 }
 

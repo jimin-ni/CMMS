@@ -3,7 +3,7 @@
 // blender/heap/characters/build_minimi_lowpoly.mjs 가 모델 시트(단발, 2026-11-24 승인)의 치수로 만들었다.
 // 방에서 캐릭터는 70~100 px 라 삼각형 900 개 아래로, 보이지 않는 면 없이 만든다 (가구는 60~200 개).
 // 엔진이 기대는 이름:
-//   노드  leg.L / leg.R (엉덩이 0.175 에서 흔든다)
+//   노드  leg_L / leg_R (엉덩이 0.175 에서 흔든다. 점은 쓰지 않는다: three.js 가 읽을 때 이름에서 점을 지운다)
 //   재질  skin · hair · hair_whorl · eye · eye_light · blush · shirt · shirt_band · trousers · trouser_cuff · shoe · sole
 //   엔진은 재질을 이름으로 자기 재질로 바꾼다. 그래서 피부, 머리카락, 셔츠 색과 백반증이 파일을 고쳐도 그대로 된다.
 import * as THREE from 'three';
@@ -84,7 +84,8 @@ export function makeFigure(C, bodyMat, look) {
     o.castShadow = !decal;
     if (name === 'hair' || name === 'hair_whorl') hairMeshes.push(o);
   });
-  const legL = group.getObjectByName('leg.L') ?? new THREE.Group(), legR = group.getObjectByName('leg.R') ?? new THREE.Group();
+  const legL = group.getObjectByName('leg_L'), legR = group.getObjectByName('leg_R');
+  if (!legL || !legR) throw new Error('minimi.glb: leg_L / leg_R 노드가 없다');
 
   const fig = { group, legL, legR, phase: 0, look: { ...DEFAULT_LOOK } };
   fig.setLook = (next = {}) => {
