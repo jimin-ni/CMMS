@@ -1,4 +1,4 @@
-# memories
+# Memoamo
 A Creator's Room Filled Together with Fans
 
 ## 기능 명세서 간략
