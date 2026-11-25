@@ -103,10 +103,6 @@ export function setupDev(ctx) {
     else if (cmd === 'project') { // detail.at = [x, y, z] (월드) → 화면 좌표(px). 클릭 시험이 물건을 정확히 누르도록
       const v = new THREE.Vector3(...e.detail.at).project(ctx.camera), r = ctx.canvas.getBoundingClientRect();
       cb({ x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height });
-    } else if (cmd === 'globeZones') { // 스노우 글로브의 물범, 고양이 누르기 영역 가운데의 화면 좌표(px). 없으면 null (globe.js 시험)
-      const g = ctx.build.globe, r = ctx.canvas.getBoundingClientRect();
-      const at = m => { const v = m.getWorldPosition(new THREE.Vector3()).project(ctx.camera); return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height }; };
-      cb(g ? { seal: at(g.sealZone), cat: at(g.catZone) } : null);
     } else if (cmd === 'walk') { ctx.walkRoute(new THREE.Vector3(e.detail.at[0], 0, e.detail.at[1]), null); cb({ walking: !!ctx.walkTo, camGoal: !!ctx.camGoal }); } // 바닥 클릭과 같은 길로 걷기 (detail.at = [x, z])
     else if (cmd === 'sit') { ctx.sit(); cb({ mode: ctx.mode, goal: ctx.camGoal ? ctx.camGoal.target.toArray().map(v => +v.toFixed(2)) : null }); } // 더미 앞에 앉기 (방 모드에서). 카메라가 갈 곳을 돌려준다
     else if (cmd === 'programs') cb((ctx.renderer.info.programs ?? []).map(p => `${p.name} ${p.cacheKey}`)); // 지어진 셰이더 프로그램 (옮긴 뒤 새로 지어지는 것 찾기)

@@ -117,6 +117,8 @@ const HAND_MODELS: Model[] = [
   { id: `${HAND_PREFIX}glow`, label: "작은 빛", category: "hand" },
 ];
 const HAND_GROUP = "방 소품";
+// 소품 묶음(GROUPS 의 "소품")에 카탈로그 모델과 함께 내는 손 가구. 방 소품 묶음에는 나오지 않는다
+const DECOR_HANDS: Model[] = [{ id: `${HAND_PREFIX}globe`, label: "스노우 글로브", category: "decor" }];
 // 독의 손 가구 id → 커서에 붙일 항목 (x, z, rot 는 엔진이 정한다). 없는 id 는 { type: id } 다.
 // 벽에 거는 스크린, 포스터, 창의 높이는 엔진이 정한다 (edit.js 의 handDefaultY). 액자는 HEAP_POLICY.frameY 에 건다.
 const HAND_TEMPLATE: Record<string, Partial<Item>> = {
@@ -634,10 +636,13 @@ export function RoomEditor({
   // ---------- 가구 목록: 칩, 찾기, 최근 ----------
   const groups = GROUPS.map((g) => ({
     label: g.label,
-    models: placeable.filter((m) => g.cats.includes(m.category) || (g.cats.includes("decor") && !KNOWN.includes(m.category))),
+    models: [
+      ...placeable.filter((m) => g.cats.includes(m.category) || (g.cats.includes("decor") && !KNOWN.includes(m.category))),
+      ...DECOR_HANDS.filter((m) => g.cats.includes(m.category)),
+    ],
   })).filter((g) => g.models.length > 0);
   groups.push({ label: HAND_GROUP, models: HAND_MODELS });
-  const allModels = [...placeable, ...HAND_MODELS];
+  const allModels = [...placeable, ...HAND_MODELS, ...DECOR_HANDS];
   const byId = new Map(allModels.map((m) => [m.id, m]));
   const q = query.trim().toLowerCase();
   // 찾기: 이름(한국어 또는 영어), 모델 id 의 낱말, 묶음 이름. 낱말마다 모두 맞아야 한다 ("의자" 는 의자·소파 묶음 전체를 찾는다).

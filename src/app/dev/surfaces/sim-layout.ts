@@ -49,6 +49,7 @@ const MOVERS: Obj[] = [
   { type: "lowTable", x: -2, z: 2, rot: 0 },
   { type: "heap", x: -2, z: 2, y: 0.56 },
   { type: "phone", x: -1.2, z: 2.5, y: 0.56, rot: 0 },
+  { type: "globe", x: -2.6, z: 1.5, y: 0.56, rot: 0 },
   { type: "model", model: "cabinetTelevision", x: 3.5, z: -5.7, rot: 0 },
   { type: "model", model: "televisionModern", x: 3.5, z: -5.7, rot: 0, y: 0.62 },
   { type: "model", model: "books", x: 3.5, z: -5.7, rot: 0, y: 0.16 },

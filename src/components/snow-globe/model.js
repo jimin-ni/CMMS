@@ -1,5 +1,5 @@
-// 제작자 소개로 가는 로우폴리 스노우 글로브 모델. three 만 쓰는 순수 모듈이다.
-// 미니룸 좌식 탁자 위의 글로브(heap/engine/fixtures.js, globe.js)와 제작자 소개 페이지의 캐릭터 그림(character-badge.tsx)이 쓴다.
+// 로우폴리 스노우 글로브 모델. three 만 쓰는 순수 모듈이다.
+// 미니룸의 글로브 소품(heap/engine/fixtures.js 의 BUILD.globe, globe.js)이 쓴다.
 //
 // 단위: 유리 구의 반지름이 1 이다. 받침 바닥이 y 0, 전체 높이는 GLOBE_HEIGHT 다. 집과 물범, 고양이의 앞이 지역 +z 다.
 // 모든 재질은 flatShading 이라 면이 각져 보인다. 정해진 시드의 난수를 써서 매번 같은 모양이 나온다.
@@ -257,7 +257,7 @@ function buildSnow(count, rand) {
 /**
  * 스노우 글로브 전체를 짓는다.
  * @param {{ unit?: number }} [opts] unit: 모델 1 단위가 세상에서 몇인지 (root 에 줄 배율). 집 앞 불빛의 거리와 세기를 맞춘다
- * @returns {{ root: THREE.Group, hitMeshes: THREE.Mesh[], sealZone: THREE.Mesh, catZone: THREE.Mesh, snow: ReturnType<typeof buildSnow>, setGlow: (k: number) => void, setInvite: (k: number) => void, dispose: () => void }}
+ * @returns {{ root: THREE.Group, hitMeshes: THREE.Mesh[], snow: ReturnType<typeof buildSnow>, setGlow: (k: number) => void, dispose: () => void }}
  */
 // lamp: 밖에서 빌려준 점광원 (미니룸은 점광원 수를 늘 같게 두려고 자기 몫에서 빌려준다, heap/engine/furniture.js). 없으면 새로 만든다
 export function buildSnowGlobe({ unit = 1, lamp: lent = null } = {}) {
@@ -298,19 +298,15 @@ export function buildSnowGlobe({ unit = 1, lamp: lent = null } = {}) {
     m.scale.y = 0.45;
   }
 
-  // 누르기를 기다리는 반짝임: 집, 물범, 고양이는 따로 만든 재질을 써서 그것만 흐린 노란빛으로 빛난다 (setInvite)
-  const invite = { ...kit, shaded: plain('#ffffff', { vertexColors: true, emissive: '#fff2a8', emissiveIntensity: 0 }) };
   const lights = [];
-  const house = buildHouse(invite, lights); house.position.set(-0.04, TY, -0.14); root.add(house);
+  const house = buildHouse(kit, lights); house.position.set(-0.04, TY, -0.14); root.add(house);
   for (const [x, z, h] of [[-0.4, -0.38, 1.25], [0.3, -0.42, 1.05], [-0.2, -0.6, 1.4], [0.33, -0.14, 0.75]]) {
     const t = buildTree(kit, h); t.position.set(x, TY, z); t.rotation.y = rand() * Math.PI; root.add(t);
   }
 
-  // 물범과 고양이는 앞쪽 얼음 위에 나란히 있다. 둘 둘레의 보이지 않는 구는 누르기 영역이다 (globe.js)
-  const seal = buildSeal(invite); seal.position.set(-0.4, TY, 0.3); seal.rotation.y = 0.2; seal.scale.setScalar(0.85); root.add(seal);
-  const cat = buildCat(invite); cat.position.set(0.12, TY, 0.46); cat.rotation.y = -0.25; root.add(cat);
-  const zone = (r, x, z, y) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 6), new THREE.MeshBasicMaterial({ visible: false })); m.position.set(x, y, z); root.add(m); return m; };
-  const sealZone = zone(0.2, -0.4, 0.3, TY + 0.15), catZone = zone(0.17, 0.12, 0.46, TY + 0.15);
+  // 물범과 고양이는 앞쪽 얼음 위에 나란히 있다
+  const seal = buildSeal(kit); seal.position.set(-0.4, TY, 0.3); seal.rotation.y = 0.2; seal.scale.setScalar(0.85); root.add(seal);
+  const cat = buildCat(kit); cat.position.set(0.12, TY, 0.46); cat.rotation.y = -0.25; root.add(cat);
 
   // 창문 불빛이 번진다: 창마다 따뜻한 빛 원(스프라이트), 집 앞 눈밭을 비추는 작은 점광원. setGlow(k) 가 세기를 정한다 (0 방, 1 상세 화면)
   const glowMat = new THREE.SpriteMaterial({ map: glowTexture(), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false });
@@ -327,7 +323,6 @@ export function buildSnowGlobe({ unit = 1, lamp: lent = null } = {}) {
     lamp.intensity = (0.4 + 2.6 * k) * (0.3 * unit) ** 2; // 집 앞 0.3 거리에서 0.4 ~ 3
   }
   setGlow(0);
-  const setInvite = k => { invite.shaded.emissiveIntensity = k; };
 
   const snow = buildSnow(160, rand);
   root.add(snow.mesh);
@@ -348,5 +343,5 @@ export function buildSnowGlobe({ unit = 1, lamp: lent = null } = {}) {
     });
     glowMat.map.dispose();
   }
-  return { root, hitMeshes, sealZone, catZone, snow, setGlow, setInvite, dispose };
+  return { root, hitMeshes, snow, setGlow, dispose };
 }
