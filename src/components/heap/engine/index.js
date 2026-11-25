@@ -21,6 +21,7 @@ import { setupShelf } from './shelf.js';
 import { setupTime } from './time.js';
 import { setupProps } from './props.js';
 import { setupWalk } from './walk.js';
+import { loadFigure } from './figure.js';
 import { setupSfx } from './sfx.js';
 import { setupHeap } from './heap.js';
 import { setupThumbs } from './thumbs.js';
@@ -90,7 +91,8 @@ export function mountRoom(root, opts) {
 
 // 모듈을 세우는 순서가 방의 모습을 정한다: 난수 수열을 쓰는 순서(data, shell, furniture, heap)와 scene 에 붙이는 순서다.
 async function run(ctx) {
-  await setupData(ctx); // creator.json 을 기다리는 동안 dispose 될 수 있다
+  // creator.json 과 캐릭터 모델(minimi.glb)을 함께 기다린다. 기다리는 동안 dispose 될 수 있다
+  await Promise.all([setupData(ctx), loadFigure()]);
   if (ctx.disposed) return;
   setupHud(ctx);
   setupCardArt(ctx);
