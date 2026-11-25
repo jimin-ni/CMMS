@@ -29,13 +29,16 @@ export function setupLoop(ctx) {
   // 더미 보기: 더미(HOST)의 윗면 높이를 보고, 퍼진 넓이에 맞춰 다가간다. 원래 탁자(2.6 x 1.8)는 전과 같은 (0, 2.0, 2.1) 이고,
   // 상자나 작은 탁자는 더 가까이 (최소 0.55 배). 바닥에 둔 더미는 서서 내려다보는 높이다
   // 더미가 없는 방은 SIT_CAM 이 null 이다 (modes.js 의 sit 이 막는다)
-  let SIT_CAM = null;
-  if (HOST) {
-    const heapCentre = new THREE.Vector3(HOST.x, HOST.top, HOST.z);
+  // 꾸미기가 더미를 옮기면 heap.js 의 rehostHeap 이 rehostSitCam 으로 같은 객체를 고친다 (modes.js 가 마운트 때 받아 둔다)
+  const SIT_CAM = HOST ? { pos: new THREE.Vector3(), target: new THREE.Vector3() } : null;
+  function rehostSitCam() {
+    if (!SIT_CAM) return;
     const spanW = HOST.box ? HOST.boxW + 0.6 : HOST.w, spanD = HOST.box ? HOST.boxD + 0.45 : HOST.d; // 상자는 벽까지 담기게 조금 넉넉히
     const heapK = THREE.MathUtils.clamp(Math.max(spanW / 2.6, spanD / 1.8), 0.55, 1);
-    SIT_CAM = { pos: heapCentre.clone().add(new THREE.Vector3(0, 2.0 * heapK, 2.1 * heapK)), target: heapCentre.clone() };
+    SIT_CAM.target.set(HOST.x, HOST.top, HOST.z);
+    SIT_CAM.pos.copy(SIT_CAM.target).add(new THREE.Vector3(0, 2.0 * heapK, 2.1 * heapK));
   }
+  rehostSitCam();
 
   // 한 장 그리기. 방 효과(fx.js, ?debug=1)가 있으면 그 체인으로, 없으면 장면을 바로 그린다
   const draw = () => (ctx.draw ? ctx.draw() : renderer.render(scene, camera));
@@ -162,5 +165,5 @@ export function setupLoop(ctx) {
     e.detail(out);
   });
 
-  Object.assign(ctx, { SIT_CAM, resize, ROOM_CAM, frame });
+  Object.assign(ctx, { SIT_CAM, rehostSitCam, resize, ROOM_CAM, frame });
 }

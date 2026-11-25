@@ -259,7 +259,8 @@ function buildSnow(count, rand) {
  * @param {{ unit?: number }} [opts] unit: 모델 1 단위가 세상에서 몇인지 (root 에 줄 배율). 집 앞 불빛의 거리와 세기를 맞춘다
  * @returns {{ root: THREE.Group, hitMeshes: THREE.Mesh[], sealZone: THREE.Mesh, catZone: THREE.Mesh, snow: ReturnType<typeof buildSnow>, setGlow: (k: number) => void, setInvite: (k: number) => void, dispose: () => void }}
  */
-export function buildSnowGlobe({ unit = 1 } = {}) {
+// lamp: 밖에서 빌려준 점광원 (미니룸은 점광원 수를 늘 같게 두려고 자기 몫에서 빌려준다, heap/engine/furniture.js). 없으면 새로 만든다
+export function buildSnowGlobe({ unit = 1, lamp: lent = null } = {}) {
   const kit = makeKit(seeded(2026));
   const { add, shaded, plain, tone, rand } = kit;
   const root = new THREE.Group(), hitMeshes = [];
@@ -317,7 +318,8 @@ export function buildSnowGlobe({ unit = 1 } = {}) {
     const s = new THREE.Sprite(glowMat); s.position.copy(p).add(house.position).add(new THREE.Vector3(0, 0, 0.03));
     s.scale.setScalar(0.2); s.renderOrder = 1; root.add(s); return s;
   });
-  const lamp = new THREE.PointLight('#ffb15c', 0, 1.1 * unit, 2);
+  const lamp = lent ?? new THREE.PointLight('#ffb15c', 0, 1.1 * unit, 2);
+  if (lent) { lamp.color.set('#ffb15c'); lamp.distance = 1.1 * unit; lamp.decay = 2; }
   lamp.position.set(-0.04, TY + 0.14, 0.2); root.add(lamp);
   function setGlow(k) {
     glowMat.opacity = 0.35 + 0.65 * k;

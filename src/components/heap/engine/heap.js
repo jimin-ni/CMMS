@@ -16,23 +16,29 @@ export function setupHeap(ctx) {
   const pickables = [];
   // 더미가 없는 방(HOST null)도 카드는 만든다 (벽 포스터가 카드의 그림을 쓴다). 카드는 보이지 않고 집을 수 없다.
   const HOST = ctx.HOST ?? { x: 0, z: 0, top: 0, w: 1.2, d: 0.9, box: false, boxW: 1.12, boxD: 0.66, item: null };
-  // 같은 받침 위에 선 다른 물건(휴대폰, 방명록, 좌식 탁자의 머그)은 카드가 비켜 간다
-  const EXCL = [];
-  if (ctx.HOST) for (const o of layout.items || []) {
-    if (o === HOST.item || Math.abs((o.y || 0) - HOST.top) > 0.03 || Math.abs(o.x - HOST.x) > HOST.w / 2 + 0.3 || Math.abs(o.z - HOST.z) > HOST.d / 2 + 0.3) continue;
-    const e = ctx.opts.itemHalfExtents?.(o); if (e) EXCL.push({ x: o.x, z: o.z, r: Math.max(e.hx, e.hz) + 0.08 });
-  }
-  const lowT = ctx.HOST && (layout.items || []).find(o => o.type === 'lowTable' && Math.abs(o.x - HOST.x) < 1.3 && Math.abs(o.z - HOST.z) < 0.9 && Math.abs(HOST.top - 0.56) < 0.03);
-  if (lowT) { const a = THREE.MathUtils.degToRad(lowT.rot || 0); EXCL.push({ x: lowT.x + Math.cos(a) * 1.05 + Math.sin(a) * 0.6, z: lowT.z - Math.sin(a) * 1.05 + Math.cos(a) * 0.6, r: 0.18 });
-    const G = LOW_TABLE_GLOBE; EXCL.push({ x: lowT.x + Math.cos(a) * G.x + Math.sin(a) * G.z, z: lowT.z - Math.sin(a) * G.x + Math.cos(a) * G.z, r: G.r }); } // 머그와 스노우 글로브 (fixtures.js)
   const GAP = 0.0035, MAX_SLOPE = 0.32;
   // 더미의 모양: 'pile'(기본, 받침 위에 흩어진 더미) 또는 'box'(열린 신발상자 안에 쌓인 더미, heap 가구의 style "box"). 상자 안쪽 크기와 벽 높이는 BOX_IN.
   // 상자는 카드가 탁자에 어지럽게 퍼지지 않게 담는다. 카드를 집는 광선은 카드만 보므로 상자 벽이 막지 않는다.
   const BOX_IN = { w: 1.12, d: 0.66, h: 0.22, wall: 0.018, base: 0.012 };
-  const BOX = HOST.box ? { x: HOST.x, z: HOST.z, ...BOX_IN, w: HOST.boxW, d: HOST.boxD, floor: HOST.top + BOX_IN.base } : null;
-  const BASE = BOX ? BOX.floor : HOST.top;
-  // 흩어진 더미가 퍼지는 넓이: 받침 가장자리에서 m 만큼 안쪽. 가우스 퍼짐(sx, sz)도 받침 크기에 맞춘다 (원래 탁자 2.6 x 1.8 에서 0.42, 0.28)
-  const PM = Math.min(0.18, HOST.w * 0.15, HOST.d * 0.15), SX = Math.min(0.42, HOST.w * 0.16), SZ = Math.min(0.28, HOST.d * 0.155);
+  // 더미 자리에서 셈하는 값. 꾸미기가 더미를 옮기면 fit 이 다시 셈한다 (rehostHeap)
+  //   EXCL: 같은 받침 위에 선 다른 물건(휴대폰, 방명록, 좌식 탁자의 머그)은 카드가 비켜 간다
+  //   BASE: 카드가 놓이는 바닥 · PM, SX, SZ: 흩어진 더미가 퍼지는 넓이 (받침 가장자리에서 PM 안쪽, 가우스 퍼짐. 원래 탁자 2.6 x 1.8 에서 0.42, 0.28)
+  const EXCL = [];
+  let BOX = null, BASE = 0, PM = 0, SX = 0, SZ = 0;
+  function fit(items) {
+    EXCL.length = 0;
+    if (ctx.HOST) for (const o of items) {
+      if (o === HOST.item || o.type === 'heap' || Math.abs((o.y || 0) - HOST.top) > 0.03 || Math.abs(o.x - HOST.x) > HOST.w / 2 + 0.3 || Math.abs(o.z - HOST.z) > HOST.d / 2 + 0.3) continue;
+      const e = ctx.opts.itemHalfExtents?.(o); if (e) EXCL.push({ x: o.x, z: o.z, r: Math.max(e.hx, e.hz) + 0.08 });
+    }
+    const lowT = ctx.HOST && items.find(o => o.type === 'lowTable' && Math.abs(o.x - HOST.x) < 1.3 && Math.abs(o.z - HOST.z) < 0.9 && Math.abs(HOST.top - 0.56) < 0.03);
+    if (lowT) { const a = THREE.MathUtils.degToRad(lowT.rot || 0); EXCL.push({ x: lowT.x + Math.cos(a) * 1.05 + Math.sin(a) * 0.6, z: lowT.z - Math.sin(a) * 1.05 + Math.cos(a) * 0.6, r: 0.18 });
+      const G = LOW_TABLE_GLOBE; EXCL.push({ x: lowT.x + Math.cos(a) * G.x + Math.sin(a) * G.z, z: lowT.z - Math.sin(a) * G.x + Math.cos(a) * G.z, r: G.r }); } // 머그와 스노우 글로브 (fixtures.js)
+    BOX = HOST.box ? { x: HOST.x, z: HOST.z, ...BOX_IN, w: HOST.boxW, d: HOST.boxD, floor: HOST.top + BOX_IN.base } : null;
+    BASE = BOX ? BOX.floor : HOST.top;
+    PM = Math.min(0.18, HOST.w * 0.15, HOST.d * 0.15); SX = Math.min(0.42, HOST.w * 0.16); SZ = Math.min(0.28, HOST.d * 0.155);
+  }
+  fit(layout.items || []);
   const _inv = new THREE.Quaternion(), _v = new THREE.Vector3(), _n = new THREE.Vector3();
   // 놓여 있는 카드의 (x, z) 위 면 높이. (x, z) 가 카드 밖이면 -Infinity
   function surfaceAt(c, x, z) {
@@ -144,7 +150,8 @@ export function setupHeap(ctx) {
     cards.push(card); scene.add(card);
     return card;
   }
-  // 열린 상자: 바닥 판과 네 벽
+  // 열린 상자: 바닥 판과 네 벽. 더미를 옮기면 지운 뒤 새 자리에 다시 짓는다 (rehostHeap)
+  let boxGroup = null;
   function buildBox() {
     const g = new THREE.Group(); g.name = 'heap-box';
     const { w, d, h, wall: t } = BOX, mat = tone(C, 'woodDark'), y = HOST.top;
@@ -154,7 +161,7 @@ export function setupHeap(ctx) {
     box(t, h, d, mat, -(w + t) / 2, h / 2, 0, { parent: g });
     box(t, h, d, mat, (w + t) / 2, h / 2, 0, { parent: g });
     g.position.set(BOX.x, y, BOX.z);
-    scene.add(g);
+    scene.add(g); boxGroup = g;
     ctx.heapBoxParts = g.children; // 상자를 누르면 더미 앞으로 걸어가 선다 (input.js)
   }
   function buildHeap() {
@@ -165,6 +172,35 @@ export function setupHeap(ctx) {
     ctx.requestPile(ctx.FAR);
     paintPosters(made);
   }
+  // 꾸미기가 더미를 옮겼다 (edit.js): 방을 다시 마운트하지 않고 지금 카드를 새 자리에 다시 쌓는다. 텍스처와 메시는 그대로다.
+  // 카드는 옮긴 만큼 함께 가고, 새 받침의 넓이 안으로 당긴 뒤 한 번에 내려앉는다 (settle(true)).
+  // 더미가 생기거나 없어지면(HOST 가 있다가 없거나 그 반대) false: 그때는 다시 마운트해야 한다. 모양(style)이 바뀌어도 다시 마운트한다 (edit.js 가 가린다)
+  function rehostHeap(items) {
+    if (!ctx.HOST) return false;
+    const x0 = HOST.x, z0 = HOST.z;
+    if (!ctx.rehostProps(items)) return false;
+    fit(items);
+    const dx = HOST.x - x0, dz = HOST.z - z0;
+    for (const c of cards) {
+      if (!inPile(c)) continue;
+      const p = c.userData.place; p.x += dx; p.z += dz; clampPlace(p, c.userData.d);
+    }
+    if (boxGroup) { scene.remove(boxGroup); boxGroup.traverse(m => m.geometry?.dispose()); boxGroup = null; ctx.heapBoxParts = []; }
+    if (BOX) buildBox();
+    settle(true);
+    ctx.rehostSitCam?.();
+    hideHeap(false);
+    return true;
+  }
+  // 꾸미기에서 더미를 들고 있는 동안: 카드와 상자를 감추고 집을 수 없게 한다 (끄는 동안 카드가 제자리에 남아 보이지 않게)
+  let hiddenPicks = null;
+  function hideHeap(hide) {
+    if (!ctx.HOST || hide === !!hiddenPicks) return;
+    for (const c of cards) if (inPile(c)) c.visible = !hide;
+    if (boxGroup) boxGroup.visible = !hide;
+    if (hide) { hiddenPicks = pickables.splice(0); } else { pickables.push(...hiddenPicks); hiddenPicks = null; }
+  }
+
   // 포스터: 포스터 가구(fixtures.js)마다 가장 많이 본 쇼츠 하나씩, 목록 순서대로. 각각 자기 카드의 그림으로 그려서, 그 카드의 단계가 오는 대로 채워지고 선명해진다.
   // 텍스처는 ctx.posterTexAt(k) 이다 (가구를 다시 지어도 같은 텍스처). 고를 카드가 없는 포스터는 빈 그림이다.
   function paintPosters(list) {
@@ -191,6 +227,6 @@ export function setupHeap(ctx) {
 
   Object.assign(ctx, {
     paintPoster, cards, settle, clampPlace, toTop, startAnim, makeCard, pickables, inPile, supportAt,
-    restPose, stepAnim, buildHeap, refreshPosters,
+    restPose, stepAnim, buildHeap, refreshPosters, rehostHeap, hideHeap,
   });
 }

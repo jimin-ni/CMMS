@@ -25,13 +25,33 @@ export function setupFurniture(ctx) {
   // false 면 계속 꺼짐: 불빛도, 빛남도 없고 MAX_LAMP_LIGHTS 몫도 차지하지 않는다.
   const isLampModel = it => it.type === 'model' && ctx.catalogue?.models?.find(m => m.id === it.model)?.category === 'lamp';
   const isLit = o => o.lit !== false;
+  // 점광원 몫(pool): 방에는 늘 POOL 개의 점광원이 있다. 램프와 작은 빛(MAX_LAMP_LIGHTS 개까지)과 스노우 글로브(하나)가 빌려 쓰고,
+  // 빌리지 않은 것은 세기 0 으로 바닥 아래에 둔다. three 는 점광원의 수가 바뀌면 모든 셰이더를 다시 짓는다 (이 컴퓨터에서 0.6초, 약한 GPU 는 몇 초).
+  // 그래서 수는 늘 같게 둔다: 램프를 켜고 끄고 넣고 빼거나, 더미를 좌식 탁자에 올리고 내려도(글로브가 생기고 없어진다) 셰이더는 다시 지어지지 않는다.
+  // 독의 그림(dock-thumbs.js)처럼 방의 build 가 아닌 것에는 빌려주지 않고 새로 만든다 (자기 장면이다).
+  const POOL = MAX_LAMP_LIGHTS + 1;
+  const park = l => { l.intensity = 0; l.color.set(0xffb86b); l.distance = 9; l.decay = 1.2; l.position.set(0, -50, 0); scene.add(l); };
+  const pool = Array.from({ length: POOL }, () => { const l = new THREE.PointLight(); park(l); return l; });
+  const lent = new Map(); // 빌려준 점광원 → 빌린 build
+  ctx.lendLight = build => {
+    if (build !== ctx.build) return null;
+    const l = pool.find(x => !lent.has(x));
+    if (l) lent.set(l, build);
+    return l ?? null;
+  };
+  // 이 build 가 빌린 점광원을 장면으로 돌려받는다 (다시 짓기 전에: 묶음과 함께 지워지지 않게)
+  function takeBack(build) { for (const [l, b] of lent) if (b === build) { lent.delete(l); park(l); } }
   // 작은 빛(glow)은 빛만 내는 것이라 몫을 먼저 받는다: 작은 빛, 손으로 만든 램프, 램프 모델 순서다.
   function lampLight(build, it) {
     if (!isLit(it)) return null;
     const glows = build.items.filter(o => o.type === 'glow'), hand = build.items.filter(o => o.type === 'lamp' && isLit(o));
     const rank = it.type === 'glow' ? glows.indexOf(it)
       : glows.length + (it.type === 'lamp' ? hand.indexOf(it) : hand.length + build.items.filter(o => isLampModel(o) && isLit(o)).indexOf(it));
-    return rank < MAX_LAMP_LIGHTS ? new THREE.PointLight(0xffb86b, 3.2, 9, 1.2) : null;
+    if (rank >= MAX_LAMP_LIGHTS) return null;
+    if (build !== ctx.build) return new THREE.PointLight(0xffb86b, 3.2, 9, 1.2);
+    const l = ctx.lendLight(build);
+    if (l) l.intensity = 3.2;
+    return l;
   }
   // 작은 빛 (type "glow"): 보이지 않고 빛만 내는 가구. 시계를 따르지 않고 늘 켜져 있다. item.level(1..5, 없으면 3)이 세기다 (layout.ts 가 검사한다).
   // 꾸미기에서만 반투명한 구슬(mark)이 보여 집고 옮길 수 있다 (edit.js 가 ctx.glowMarksOn 을 정하고 syncGlowMarks 를 부른다). 독의 그림(dock-thumbs.js)에서도 보인다.
@@ -307,7 +327,7 @@ export function setupFurniture(ctx) {
   //   loads: 이 build 가 아직 기다리는 기념품 썸네일 (다음 build 가 바꿀 때 취소한다)
   ctx.build = { group: null, groups: [], obst: [], items: [], lamps: [], slots: [], slotMeshes: [], seats: [], seatMeshes: [], rugMeshes: [], loads: new Set() };
   function buildItems(items, first = false) {
-    if (ctx.build.group) { for (const l of ctx.build.lamps) l.light?.dispose(); scene.remove(ctx.build.group); disposeScene(ctx.build.group, ctx.KEPT); }
+    if (ctx.build.group) { takeBack(ctx.build); scene.remove(ctx.build.group); disposeScene(ctx.build.group, ctx.KEPT); }
     shelfParts.length = 0; ctx.shelf = null;
     if (ctx.build.loads.size) ctx.cancelThumbs(ctx.build.loads); // 바뀐 가구가 아직 받던 썸네일은 여기서 멈춘다
     // groups[i]: items[i] 로 지은 그룹 (userData.itemIndex = i). 꾸미기(edit.js)가 메시에서 가구를 찾고, 끄는 동안 이 그룹만 옮긴다.

@@ -47,7 +47,9 @@ export function setupInput(ctx) {
   on(window, 'blur', () => keys.clear());
 
   // 탁자 위에서 카드 끌기(앉은 모드). 궤도 컨트롤이 비켜서도록 capture 단계에 건다.
-  const deskPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -((HOST?.top ?? 0) + (HOST?.box ? 0.15 : 0.12))), _hit = new THREE.Vector3();
+  // 높이는 누를 때마다 HOST 에서 읽는다: 꾸미기가 더미를 옮기면 HOST 가 바뀐다 (heap.js 의 rehostHeap)
+  const deskPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), _hit = new THREE.Vector3();
+  const deskY = () => { deskPlane.constant = -((HOST?.top ?? 0) + (HOST?.box ? 0.15 : 0.12)); return deskPlane; };
   let down = null, dragOff = new THREE.Vector2();
   canvas.addEventListener('pointerdown', ev => {
     down = { x: ev.clientX, y: ev.clientY, card: null };
@@ -56,7 +58,7 @@ export function setupInput(ctx) {
     const hit = ray.intersectObjects(pickables, false)[0];
     if (hit) {
       down.card = hit.object.userData.card; controls.enabled = false;
-      if (ray.ray.intersectPlane(deskPlane, _hit)) dragOff.set(down.card.userData.place.x - _hit.x, down.card.userData.place.z - _hit.z); // 눌린 자리에서 잡은 오프셋
+      if (ray.ray.intersectPlane(deskY(), _hit)) dragOff.set(down.card.userData.place.x - _hit.x, down.card.userData.place.z - _hit.z); // 눌린 자리에서 잡은 오프셋
     }
   }, { capture: true });
   canvas.addEventListener('pointermove', ev => {

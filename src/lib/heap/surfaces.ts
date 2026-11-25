@@ -6,6 +6,7 @@ import { HEAP_POLICY } from "@/lib/heap/policy";
 // 받침(host): 윗면 높이(tops)를 가진 가구. 모델은 catalogue.json 의 tops (tools/measure-tops.mjs 가 GLB 에서 잰 값),
 // 손으로 만드는 가구는 아래 HAND 표 (engine/furniture.js 의 BUILD 치수에서 읽은 값).
 // 얹는 것(small): 탁상 달력과, 앉는 가구가 아니면서 바닥 넓이 w×d 가 SMALL_AREA 이하이고 키 h 가 SMALL_H 이하인 모델.
+// 작지 않은 모델도 받침보다 바닥 넓이가 크지 않으면 얹는다 (canRestOn). 안쪽 칸에는 칸 높이에 들어가는 것만 (fitsOnTop).
 // 얹은 물건의 y 는 받침의 y + 받침의 tops 중 하나다. 바닥에서 거꾸로 셈하지 않는다.
 
 type Obj = Record<string, unknown>;
@@ -72,6 +73,37 @@ export function isSmallItem(it: Obj): boolean {
   return e.w * e.d <= SMALL_AREA && (e.h == null || e.h <= SMALL_H);
 }
 
+// 받침 위에 얹을 수 없는 모델: 침대와 건물 조각(문틀, 계단, 바닥판, 벽판, 오두막 조각, 바위, 눈 바닥). 앉는 가구, 러그, 벽·천장 가구는 따로 뺀다
+const NEVER_ON = /^(doorway|stairs|floor|paneling|holidayCabin|holidayFloor|holidayRocks|holidaySnow(Flat|Bunker|Pile))/;
+// 안쪽 칸(위에 다른 면이 있는 면)에 넣을 때 물건의 키가 칸의 높이를 넘어도 되는 만큼
+export const SHELF_FIT_SLACK = 0.02;
+
+// 어느 받침 위에든 설 수 있는 것: 작은 가구, 그리고 앉는 가구·러그·벽·천장 가구·침대·건물 조각이 아닌 모델.
+// 작지 않은 모델은 받침보다 바닥 넓이가 크지 않을 때만 선다 (canRestOn). 판정 2026-11-25: TV 장 위의 옛날 TV, 탁자 위의 큰 화분
+export function canStack(it: Obj): boolean {
+  if (isSmallItem(it)) return true;
+  const e = entryOf(it);
+  return !!e && !e.mount && e.category !== "rug" && e.category !== "bed" && !SEAT_CATS.has(e.category) && !NEVER_ON.test(e.id);
+}
+
+const footArea = (it: Obj) => {
+  const e = itemHalfExtents({ ...it, rot: 0 });
+  return e ? 4 * e.hx * e.hz : Infinity;
+};
+
+// kid 를 host 위에 얹을 수 있는가. 작은 가구는 어느 받침에나, 그 밖의 얹을 수 있는 모델은 받침의 바닥 넓이 이하일 때
+export function canRestOn(kid: Obj, host: Obj): boolean {
+  if (kid === host || !surfaceTops(host) || !canStack(kid)) return false;
+  return isSmallItem(kid) || footArea(kid) <= footArea(host);
+}
+
+// host 의 n 번째 윗면에 kid 가 들어가는가. 꼭대기는 늘 들어간다. 안쪽 칸은 바로 위 면까지의 틈이 kid 의 키(모르면 0)보다 낮지 않아야 한다
+export function fitsOnTop(kid: Obj, host: Obj, n: number): boolean {
+  const tops = surfaceTops(host);
+  if (!tops || n >= tops.length - 1) return true;
+  return (itemHeight(kid) ?? 0) <= tops[n + 1] - tops[n] + SHELF_FIT_SLACK;
+}
+
 // kid 가 host 의 어느 윗면에 서 있으면 그 면의 높이(방 바닥에서), 아니면 null.
 // 가운데가 받침의 바닥 크기 안에 있고, 밑면과 그 면의 차이가 SURFACE_REST 안이어야 한다. 가장 가까운 면을 고른다.
 export function restingTop(kid: Obj, host: Obj): number | null {
@@ -97,10 +129,10 @@ export function settleItems(items: Obj[]): { items: Obj[]; moved: { index: numbe
     let changed = false;
     out.forEach((it, i) => {
       const y = (it.y as number | undefined) ?? 0;
-      if (!(y > 0) || !isSmallItem(it)) return;
+      if (!(y > 0) || !canStack(it)) return;
       let best: number | null = null;
       out.forEach((h, j) => {
-        if (j === i) return;
+        if (j === i || !canRestOn(it, h)) return;
         const t = restingTop(it, h);
         // 서버 한도보다 높은 윗면에는 앉히지 않는다: 저장이 거절된다 (codex)
         if (t !== null && t > HEAP_POLICY.layoutItemYMax) return;
@@ -117,4 +149,4 @@ export function settleItems(items: Obj[]): { items: Obj[]; moved: { index: numbe
   return { items: moved.length ? out : items, moved };
 }
 
-export const surfaces = { surfaceTops, itemHeight, isSmallItem, restingTop, settleItems, REST: SURFACE_REST };
+export const surfaces = { surfaceTops, itemHeight, isSmallItem, canStack, canRestOn, fitsOnTop, restingTop, settleItems, REST: SURFACE_REST };

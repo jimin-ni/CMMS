@@ -49,7 +49,7 @@ export function setupFixtures(ctx) {
     // 사진 더미가 놓인 탁자에는 더미 뒤에 스노우 글로브를 둔다. 높이는 세로 사진(0.3)보다 20% 크다.
     // 누르면 글로브가 떠올라 화면 가운데로 온다 (panels.js 의 openSlot → globe.js). 더미는 이 자리를 비켜 간다 (heap.js)
     if (build.items.some(o => o.type === 'heap' && Math.abs(o.x - it.x) < 1.3 && Math.abs(o.z - it.z) < 0.9 && Math.abs((o.y || 0) - T.top) < 0.03)) {
-      const unit = GLOBE_SIZE / GLOBE_HEIGHT, globe = buildSnowGlobe({ unit });
+      const unit = GLOBE_SIZE / GLOBE_HEIGHT, globe = buildSnowGlobe({ unit, lamp: ctx.lendLight(build) }); // 점광원은 방의 몫에서 빌린다 (furniture.js 의 POOL)
       globe.root.scale.setScalar(unit); globe.root.position.set(GLOBE_AT.x, T.top, GLOBE_AT.z);
       globe.root.rotation.y = Math.atan2(0 - GLOBE_AT.x, 1.4 - GLOBE_AT.z); // 집 앞(지역 +z)이 방석을 본다
       g.add(globe.root);

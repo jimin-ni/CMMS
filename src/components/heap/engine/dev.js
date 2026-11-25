@@ -108,6 +108,19 @@ export function setupDev(ctx) {
       const at = m => { const v = m.getWorldPosition(new THREE.Vector3()).project(ctx.camera); return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height }; };
       cb(g ? { seal: at(g.sealZone), cat: at(g.catZone) } : null);
     } else if (cmd === 'walk') { ctx.walkRoute(new THREE.Vector3(e.detail.at[0], 0, e.detail.at[1]), null); cb({ walking: !!ctx.walkTo, camGoal: !!ctx.camGoal }); } // 바닥 클릭과 같은 길로 걷기 (detail.at = [x, z])
+    else if (cmd === 'sit') { ctx.sit(); cb({ mode: ctx.mode, goal: ctx.camGoal ? ctx.camGoal.target.toArray().map(v => +v.toFixed(2)) : null }); } // 더미 앞에 앉기 (방 모드에서). 카메라가 갈 곳을 돌려준다
+    else if (cmd === 'programs') cb((ctx.renderer.info.programs ?? []).map(p => `${p.name} ${p.cacheKey}`)); // 지어진 셰이더 프로그램 (옮긴 뒤 새로 지어지는 것 찾기)
+    else if (cmd === 'pointLights') { // 장면의 점광원: 부모 사슬과 자리. 셰이더는 그 수가 바뀔 때마다 모두 다시 지어진다
+      const out = [];
+      ctx.scene.traverse(o => { if (!o.isPointLight) return; const chain = []; for (let p = o.parent; p && p !== ctx.scene; p = p.parent) chain.push(p.name || p.type + (p.userData.itemIndex != null ? '#' + p.userData.itemIndex : '')); const w = o.getWorldPosition(new THREE.Vector3()); out.push({ visible: o.visible, chain: chain.join('<'), at: w.toArray().map(v => +v.toFixed(2)) }); });
+      cb(out);
+    }
+    else if (cmd === 'heapInfo') { // 사진 더미 옮기기 시험: 더미 자리, 보는 자리, 카드 수와 보이는 카드, 카드 가운데의 평균 (더미 자리 근처여야 한다)
+      const cs = ctx.cards ?? [], vis = cs.filter(c => c.visible), m = new THREE.Vector3();
+      vis.forEach(c => m.add(c.position)); if (vis.length) m.divideScalar(vis.length);
+      cb({ host: ctx.HOST && { x: ctx.HOST.x, z: ctx.HOST.z, top: ctx.HOST.top, w: ctx.HOST.w, d: ctx.HOST.d }, seat: ctx.SEAT?.toArray(), sitCam: ctx.SIT_CAM?.target.toArray() ?? null,
+        cards: cs.length, visible: vis.length, pickables: ctx.pickables?.length ?? 0, mean: m.toArray().map(v => +v.toFixed(2)) });
+    }
     else if (cmd === 'me') cb({ x: ctx.me.position.x, y: ctx.me.position.y, z: ctx.me.position.z, ry: ctx.me.rotation.y, legL: ctx.legL.rotation.x, mode: ctx.mode, perch: !!ctx.perch, walking: !!ctx.walkTo }); // 내 캐릭터 자리와 자세 (걷기 시험)
     else if (cmd === 'state') cb({ ground: (g => g ? { visible: g.visible, y: g.position.y, img: g.material.map?.image?.width } : null)(ctx.scene.getObjectByName('ground')), layoutGround: ctx.layout.ground ?? null, mode: ctx.mode, slots: ctx.build.slots.map(s => s.fn?.kind), slotMeshes: ctx.build.slotMeshes.length, slotMeshKinds: [...new Set(ctx.build.slotMeshes.map(m => m.userData.slot?.fn?.kind))], seatMeshes: ctx.build.seatMeshes.length });
     else if (cmd === 'lights') cb({ // 그림자와 불빛 시험: 해 그림자, 땅이 그림자를 받는지, 램프마다 불빛 세기와 작은 빛 구슬이 보이는지
