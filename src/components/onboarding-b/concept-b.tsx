@@ -238,7 +238,7 @@ export function ConceptB({
             <div ref={bookRef} className="ob-book">
               {/* 덮인 뒤의 두께: 책 등(아래), 위·왼쪽·오른쪽 종이 단면, 뒤표지 */}
               <div className="ob-face ob-spine">
-                <span className="ob-pixel">MEMORIES</span>
+                <span className="ob-pixel">MEMOAMO</span>
                 <small className="ob-rounded">vol.01 · Lovesoo &amp; you</small>
               </div>
               <div className="ob-face ob-edge ob-edge-top" />
@@ -276,7 +276,7 @@ export function ConceptB({
                     <Page />
                   </section>
                   <div className="ob-sheet ob-back">
-                    <span className="ob-pixel">Memories</span>
+                    <span className="ob-pixel">MEMOAMO</span>
                   </div>
                   <span className="ob-leaf-shade" />
                 </div>
@@ -322,7 +322,7 @@ export function ConceptB({
                 <div className="ob-cover-front">
                   {/* 표지에 음각으로 새긴 글자 */}
                   <div className="ob-engrave">
-                    <span className="ob-pixel ob-cover-title">MEMORIES</span>
+                    <span className="ob-pixel ob-cover-title">MEMOAMO</span>
                     <span className="ob-rounded ob-cover-sub">made by Lovesoo, filled by you</span>
                     <span className="ob-rounded ob-cover-vol">vol. 01</span>
                   </div>
