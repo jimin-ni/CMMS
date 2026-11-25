@@ -37,6 +37,9 @@ export function setupLoop(ctx) {
     SIT_CAM = { pos: heapCentre.clone().add(new THREE.Vector3(0, 2.0 * heapK, 2.1 * heapK)), target: heapCentre.clone() };
   }
 
+  // 한 장 그리기. 방 효과(fx.js, ?debug=1)가 있으면 그 체인으로, 없으면 장면을 바로 그린다
+  const draw = () => (ctx.draw ? ctx.draw() : renderer.render(scene, camera));
+
   // 프레임 루프
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const clock = new THREE.Clock(), dir = new THREE.Vector3(), want = new THREE.Vector3(), wantQ = new THREE.Quaternion();
@@ -47,7 +50,8 @@ export function setupLoop(ctx) {
     const w = canvas.clientWidth, h = canvas.clientHeight; if (!w || !h) return;
     ctx.layoutMusic();
     renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
-    if (ctx.raf) renderer.render(scene, camera); // setSize 가 캔버스를 지우므로 다시 그려 빈 프레임이 보이지 않게 한다
+    ctx.fxResize?.(w, h);
+    if (ctx.raf) draw(); // setSize 가 캔버스를 지우므로 다시 그려 빈 프레임이 보이지 않게 한다
   }
   on(window, 'resize', resize);
   const sizeWatch = new ResizeObserver(resize); sizeWatch.observe(canvas);
@@ -139,7 +143,7 @@ export function setupLoop(ctx) {
       c.position.lerp(want, a); c.quaternion.slerp(wantQ, a);
     }
     ctx.stepCardView(heldArrived);
-    renderer.render(scene, camera);
+    draw();
     ctx.raf = requestAnimationFrame(frame);
   }
 
@@ -150,7 +154,7 @@ export function setupLoop(ctx) {
     let out = null;
     try {
       if (!ctx.disposed && canvas.width && canvas.height) {
-        renderer.render(scene, camera);
+        draw();
         out = document.createElement('canvas'); out.width = canvas.width; out.height = canvas.height;
         out.getContext('2d').drawImage(canvas, 0, 0);
       }

@@ -79,6 +79,11 @@ export function setupDev(ctx) {
     const { cmd, cb } = e.detail || {};
     if (typeof cb !== 'function') return;
     if (cmd === 'audit') cb(audit(ctx.scene, ctx));
+    else if (cmd === 'fxprobe') { // 방 효과 측정 (fx-probe.js). ?debug=1 로 연 방에서만 (fx.js 가 있어야 한다)
+      if (!ctx.fxApply) { cb({ error: 'fx 없음: ?debug=1 로 여세요' }); return; }
+      const { makeProbe } = await import('./fx-probe.js');
+      try { cb(await makeProbe(ctx)(e.detail.configs ?? [], { time: e.detail.time !== false, hour: e.detail.hour ?? 15 })); } catch (err) { cb({ error: String(err?.stack ?? err) }); }
+    }
     else if (cmd === 'focus') { // detail.at = [x, y, z] 또는 'door', detail.dist: 방 카메라가 그 점으로 다가간다 (온보딩의 책장 줌과 같은 길). at 이 없으면 풀린다
       const at = e.detail.at === 'door' ? ctx.doorSpot?.clone().setY(0.4) : e.detail.at && new THREE.Vector3(...e.detail.at);
       Object.assign(ctx.introView, at ? { focus: 1, focusPoint: at, focusDist: e.detail.dist ?? 2 } : { focus: 0, focusPoint: null });

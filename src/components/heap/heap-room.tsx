@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type RefObject } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { withNext } from "@/lib/next-path";
@@ -28,6 +28,7 @@ import { blockHeapAuthorAction, hidePersonAction, reportHeapPostAction } from "@
 import type { HeapSurface } from "@/lib/moderation/repo";
 import { MODERATION_TEXT } from "@/lib/moderation/policy";
 import { ANIM_TEST, DEBUG_ON, SHADOW_TEST, saveDebugFlags } from "./engine/debug-flags";
+import { FX, FX_GROUPS, resetFx, saveFx } from "./engine/fx-flags";
 import { authClient } from "@/lib/auth-client";
 
 // 디버그 값은 페이지가 뜰 때 정해지고 바뀌지 않는다
@@ -581,6 +582,7 @@ export function HeapRoom({
                     <option value="none">모두 감추기</option>
                   </select>
                 </label>
+                <FxDebug rootRef={rootRef} />
                 {signedIn && (
                   <button type="button" onClick={debugSignOut}>
                     로그아웃
@@ -916,6 +918,108 @@ export function HeapRoom({
       </div>
       <div id="fade" />
       <p id="status">방 꾸미는 중…</p>
+    </div>
+  );
+}
+
+// 디버그 사이드바의 방 효과(셰이더 팩) 줄 (engine/fx-flags.js, engine/fx.js). 묶음마다 켜고 끄기와 값 슬라이더.
+// 슬라이더는 끄는 동안 숫자만 바꾸고, 멈추고 150ms 뒤에 엔진에 보낸다 (그림자 값은 셰이더를 다시 만든다).
+function FxDebug({ rootRef }: { rootRef: RefObject<HTMLDivElement | null> }) {
+  const [fx, setFx] = useState(() => structuredClone(FX));
+  const [open, setOpen] = useState<string | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const send = (delay: number) => {
+    saveFx();
+    setFx(structuredClone(FX));
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => rootRef.current?.dispatchEvent(new CustomEvent("heap:fx")), delay);
+  };
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  const [note, setNote] = useState("");
+  // 화면 복사: 공유 단추와 같은 길(heap:capture)로 지금 구도를 효과까지 그려 PNG 로 클립보드에 넣는다. 화면 위 글자와 단추는 들어가지 않는다.
+  // ClipboardItem 에 Promise 를 주어 클릭 한 번 안에서 쓰기를 시작한다 (Chrome 은 클릭 뒤 비동기로 쓰면 막는다).
+  const copyShot = () => {
+    const got: { canvas: HTMLCanvasElement | null } = { canvas: null };
+    rootRef.current?.dispatchEvent(new CustomEvent("heap:capture", { detail: (c: HTMLCanvasElement | null) => { got.canvas = c; } }));
+    const canvas = got.canvas;
+    if (!canvas) { setNote("그리지 못했어요"); return; }
+    const png = new Promise<Blob>((ok, no) => canvas.toBlob((b) => (b ? ok(b) : no(new Error("toBlob"))), "image/png"));
+    navigator.clipboard
+      .write([new ClipboardItem({ "image/png": png })])
+      .then(() => setNote(`화면을 복사했어요 (${canvas.width}×${canvas.height})`))
+      .catch(() => setNote("클립보드에 넣지 못했어요"));
+  };
+  // 설정 내보내기: 방 효과 값과 다른 디버그 값을 JSON 파일로 내려받는다. 서버로는 보내지 않는다
+  const exportSettings = () => {
+    const data = { savedAt: new Date().toISOString(), room: window.location.pathname, fx: FX, shadow: SHADOW_TEST.mode, anim: ANIM_TEST };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `heap-debug-${data.savedAt.slice(0, 19).replace(/[:T]/g, "-")}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setNote("설정을 내려받았어요");
+  };
+  type Group = Record<string, number | boolean>;
+  const groups = FX as unknown as Record<string, Group>;
+  const view = fx as unknown as Record<string, Group>;
+  return (
+    <div className="debug-fx" role="group" aria-label="방 효과">
+      <p className="debug-fx-title">방 효과</p>
+      {FX_GROUPS.map((g) => (
+        <div key={g.key} className="debug-fx-group">
+          <div className="debug-fx-row">
+            <button
+              type="button"
+              aria-pressed={Boolean(view[g.key].on)}
+              onClick={() => {
+                groups[g.key].on = !groups[g.key].on;
+                send(0);
+              }}
+            >
+              {g.label} {view[g.key].on ? "켬" : "끔"}
+            </button>
+            <button type="button" className="debug-fx-more" aria-expanded={open === g.key} onClick={() => setOpen((o) => (o === g.key ? null : g.key))}>
+              {open === g.key ? "−" : "값"}
+            </button>
+          </div>
+          {open === g.key &&
+            g.params.map((p) => (
+              <label key={p.key} className="debug-fx-slider">
+                <span>
+                  {p.label} <b>{Number(view[g.key][p.key])}</b>
+                </span>
+                <input
+                  type="range"
+                  min={p.min}
+                  max={p.max}
+                  step={p.step}
+                  value={Number(view[g.key][p.key])}
+                  onChange={(e) => {
+                    groups[g.key][p.key] = Number(e.target.value);
+                    send(150);
+                  }}
+                />
+              </label>
+            ))}
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={() => {
+          resetFx();
+          send(0);
+        }}
+      >
+        효과 기본값으로
+      </button>
+      <button type="button" onClick={copyShot}>
+        화면 복사
+      </button>
+      <button type="button" onClick={exportSettings}>
+        설정 내보내기
+      </button>
+      {note && <p className="debug-fx-note" role="status">{note}</p>}
     </div>
   );
 }
