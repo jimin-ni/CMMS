@@ -1,10 +1,11 @@
 // 사람 모양과 걸음 움직임. 내 캐릭터(walk.js)와 함께 있는 다른 사람(presence.js)이 같이 쓴다.
-// 모양은 파일이다: public/heap/models/minimi/minimi.glb (Blockbench 로 열고 고친다). 처음 판은
-// blender/heap/characters/build_minimi_lowpoly.mjs 가 모델 시트(단발, 2026-11-24 승인)의 치수로 만들었다.
-// 방에서 캐릭터는 70~100 px 라 삼각형 900 개 아래로, 보이지 않는 면 없이 만든다 (가구는 60~200 개).
+// 모양은 파일이다: public/heap/models/minimi/minimi.glb. 원본은 blender/heap/characters/minimi-lowpoly.blend
+// (2026-11-25 Yoon 손질: 머리카락 삼각형 줄임, 정수리 가마·바짓단·밑창 뺌. 왼쪽 관자놀이는 오른쪽을 거울로 다시 지음, 신발 바닥 막음).
+// 첫 판을 만든 build_minimi_lowpoly.mjs 는 지난 모양이다.
+// 방에서 캐릭터는 70~100 px 라 삼각형 900 개 아래로, 보이지 않는 면 없이 만든다 (가구는 60~200 개). 지금 728 개, 12 번 그린다.
 // 엔진이 기대는 이름:
 //   노드  leg_L / leg_R (엉덩이 0.175 에서 흔든다. 점은 쓰지 않는다: three.js 가 읽을 때 이름에서 점을 지운다)
-//   재질  skin · hair · hair_whorl · eye · eye_light · blush · shirt · shirt_band · trousers · trouser_cuff · shoe · sole
+//   재질  skin · hair · eye · eye_light · blush · shirt · shirt_band · trousers · shoe
 //   엔진은 재질을 이름으로 자기 재질로 바꾼다. 그래서 피부, 머리카락, 셔츠 색과 백반증이 파일을 고쳐도 그대로 된다.
 import * as THREE from 'three';
 import { tone } from './palette.js';
