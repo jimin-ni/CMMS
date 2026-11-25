@@ -38,7 +38,7 @@
 
 | 묶음 | CSS 변수 | 영문 | 한글 | 쓰임 |
 |---|---|---|---|---|
-| 제목 | `--font-display` | Oswald 500 대문자 (Trade Gothic LT Bold 대체) | 양진체(YANGJIN) | h1~h3, 쪽 제목, 칸 제목, 큰 숫자, 방 이름, "memories" |
+| 제목 | `--font-display` | Oswald 500 대문자 (Trade Gothic LT Bold 대체) | 양진체(YANGJIN) | h1~h3, 쪽 제목, 칸 제목, 큰 숫자, 방 이름, "MEMOAMO" |
 | 본문 | `--font-text` | Nunito | Pretendard Variable | 본문, 단추, 링크, 입력 칸 |
 
 - [사실] 글꼴 파일과 설정은 `src/app/fonts/brand.ts`에 있고, 루트 레이아웃의 `<html>`에 변수를 붙입니다. Oswald와 Nunito는 `next/font/google`, 양진체는 `src/app/fonts/Yangjin.woff2`(원본 otf 1.6MB를 woff2 403KB로 바꿈)입니다.
@@ -47,7 +47,7 @@
 
 | 단계 | 크기 / 굵기 / 줄 높이 | 예 |
 |---|---|---|
-| 큰 제목 | 48px / 500 / 1.0~1.2 | 첫 화면 "Memories"(최대 104px), Ready to Start? |
+| 큰 제목 | 48px / 500 / 1.0~1.2 | 첫 화면 "MEMOAMO"(최대 104px), Ready to Start? |
 | 가구 설명 제목 | 32~48px / 500 / 1.2 | 온보딩 가구 설명 |
 | 페이지 제목 | 32px / 500 / 1.2 | 로그인, 회원가입, 미니홈 |
 | 칸 제목 | 24px / 500 / 1.2 | 안내 팝업 제목, 수첩 칸 제목 |
@@ -76,8 +76,8 @@
 | 화면 | 바꾼 것 | 그대로 둔 것 |
 |---|---|---|
 | 헤더 (`header.tsx`) | 흰 바탕, `ink` 아랫줄, 로고는 제목 글꼴, 가입은 주 단추 | 메뉴 구성 |
-| 첫 화면·온보딩 (`onboarding-c.css`) | "Memories" 제목, 부제, 스크롤 안내, 가구 설명(제목 아래 1px 흰 줄, 제목과 본문 사이 20px), Ready to Start? 단추 | 어두운 바탕, 가구가 떨어지는 연출 |
-| 방 위 글자 | "memories"와 방 이름: 20px 여백, 40px, 줄 높이 48px, 대문자. 정보 줄은 5px 아래 13px 600 | 위치 계산 방식 |
+| 첫 화면·온보딩 (`onboarding-c.css`) | "MEMOAMO" 제목, 부제, 스크롤 안내, 가구 설명(제목 아래 1px 흰 줄, 제목과 본문 사이 20px), Ready to Start? 단추 | 어두운 바탕, 가구가 떨어지는 연출 |
+| 방 위 글자 | "MEMOAMO"와 방 이름: 20px 여백, 40px, 줄 높이 48px, 대문자. 정보 줄은 5px 아래 13px 600 | 위치 계산 방식 |
 | 방 위 종이 판 | 안내 팝업, 메뉴, 로그인 팝업의 글꼴, 입력 칸, 단추, 구분선 | 종이 질감, 테이프 |
 | 방 화면 (`heap-room.css`) | 단추와 칸 4px, 패널 12px, 점선을 `hairline` 실선으로, 강조색(`--clay`)과 글자색(`--ink`)을 `ink`로, 종이색(`--paper`)을 흰색으로, 글꼴 변수 `--ui`·`--hand`를 본문·제목 묶음으로 | 올리브 바탕, 3D 장면, 카드 그림, 휴대폰 모양 |
 | 설정·마이페이지 수첩 (`settings-book.css`) | 쪽 안의 제목, 칸, 단추, 목록, 소리 막대 | 종이, O링, 책장 넘김, 책상 |
