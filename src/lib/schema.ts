@@ -9,6 +9,7 @@ import {
   pgTable,
   primaryKey,
   real,
+  serial,
   smallint,
   text,
   timestamp,
@@ -370,7 +371,9 @@ export const moderationPatterns = pgTable("moderation_patterns", {
 });
 
 export const moderationAllowlist = pgTable("moderation_allowlist", {
-  id: integer("id").primaryKey(),
-  term: text("term").notNull(),
+  // 0011에서 serial로 만들었다. 관리 화면이 행을 넣으므로 기본값이 있는 열로 적는다.
+  id: serial("id").primaryKey(),
+  term: text("term").notNull().unique(),
   note: text("note"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

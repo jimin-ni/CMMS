@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getViewer } from "@/lib/session";
 import { ReviewBoard } from "@/components/moderation/review-board";
@@ -20,7 +21,12 @@ async function Content() {
   if (viewer.role !== "admin") redirect("/");
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-medium text-ink">메시지 검토 (관리자)</h1>
+      <div className="flex items-baseline justify-between gap-4">
+        <h1 className="text-xl font-medium text-ink">메시지 검토 (관리자)</h1>
+        <Link href="/admin/moderation/terms" className="text-xs text-ash underline">
+          판정 사전
+        </Link>
+      </div>
       <ReviewBoard viewer={viewer} />
     </div>
   );
