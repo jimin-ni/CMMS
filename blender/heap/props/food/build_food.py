@@ -1,17 +1,24 @@
-# Builds the first two story props in the Kenney Food Kit convention, then exports each as .glb and .blend.
-#   blender -b --factory-startup -P build_food.py
+# Story props (catalogue category "food", dock group 먹방) in the Kenney Food Kit convention. One run per change:
+#   blender -b --factory-startup -P build_food.py -- [catalogueId ...]      (no ids = all props in PROPS)
+# For each prop it builds the mesh, saves <out>.blend here, exports <out>.glb into public/heap/models/cmms-story/,
+# measures it and writes its catalogue.json entry (w, d, h at the catalogue scale), and prints a triangle report
+# against the prop's budget. Review renders: render_sheet.py (same folder).
 # Convention (read from Food Kit GLBs with uvprobe.py, 2026-11-25):
 #   one material "colormap" with the 512x512 Food Kit atlas, nearest filtering.
 #   each face samples the centre column of a colour's GRADIENT strip (u = pair*64 + 48);
 #   v runs down the strip with the part's height (top of part = top of strip, row_top+13 .. row_top+115),
 #   so every part shades light-to-dark from top to bottom. FLAT strips (u = pair*64 + 16) for single-colour details.
 # Units: metres, real size. Blender -Y is the model's front (glTF +z). Origin at bottom centre.
-import bpy, bmesh, math, os, random
+import bpy, bmesh, math, os, random, sys
 from mathutils import Vector, Matrix
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ATLAS = os.path.join(HERE, 'colormap.png')
-random.seed(7)
+PUBLIC = os.path.normpath(os.path.join(HERE, '..', '..', '..', '..', 'public', 'heap', 'models'))
+OUT_DIR = os.path.join(PUBLIC, 'cmms-story')
+# Kenney draws tabletop props about 1.45x real size so they read from the room camera; the files stay real size.
+# 0.5 cancels the engine's MODEL_SCALE 2.0 (catalogue.json _story)
+CAT_SCALE = 0.5 * 1.45
 
 # colour = (u_px, row_top_px, gradient?)
 C = {
@@ -29,10 +36,17 @@ C = {
     'slate':   (368, 384, True),  # slate             #525565 -> #3e414d
     'body':    (208, 384, False), # flat dark grey    #38383d
     'screen':  (16, 128, False),  # flat blue         #6794d9
+    'glass':   (80, 128, False),  # flat pale blue    #d0e8ff (jar glass above the contents)
+    'lid':     (368, 256, True),  # yellow            #ffcd5e -> #ff9731 (jar lid)
+    'tteok':   (16, 256, False),  # flat salmon       #f1976c (rice cakes coated in sauce)
+    'brass':   (368, 256, True),  # yellow            #ffcd5e -> #ff9731 (brass bingsu bowl, 놋그릇)
+    'beans':   (112, 256, True),  # brown             #ab5e41 -> #845442 (sweet red beans)
+    'injeolmi':(144, 256, False), # flat peach        #f2bf99 (rice-cake cubes in soy powder)
 }
 
 def reset():
     bpy.ops.wm.read_factory_settings(use_empty=True)
+    random.seed(7)  # same mesh every run
 
 def material():
     m = bpy.data.materials.get('colormap')
@@ -52,6 +66,8 @@ def unseen(n):
     if n.z >= 0: return False
     return math.hypot(n.x, n.y) / -n.z <= math.tan(MIN_ELEV)
 
+PART_TRIS = []  # (part name, triangles) for the report
+
 def part(name, build, colour, xf=Matrix(), drop=None):
     """build(bm) fills a bmesh in local space; xf moves it into place.
     colour: key of C, or fn(face_centre_world, normal_world) -> key.
@@ -61,7 +77,7 @@ def part(name, build, colour, xf=Matrix(), drop=None):
     bm.normal_update()
     dead = [f for f in bm.faces if unseen(f.normal) or (drop and drop(f.calc_center_median(), f.normal))]
     bmesh.ops.delete(bm, geom=dead, context='FACES')
-    if os.environ.get('PARTS'): print('   part', name, sum(len(f.verts) - 2 for f in bm.faces))
+    PART_TRIS.append((name, sum(len(f.verts) - 2 for f in bm.faces)))
     me = bpy.data.meshes.new(name); bm.to_mesh(me); bm.free()
     ob = bpy.data.objects.new(name, me); bpy.context.collection.objects.link(ob)
     me.materials.append(material())
@@ -110,7 +126,7 @@ def aim(a, b):
     d = (Vector(b) - Vector(a)); q = d.to_track_quat('Z', 'Y')
     return T(*a) @ q.to_matrix().to_4x4()
 
-def finish(name, out):
+def finish(name, out, tri_parts=None):
     obs = [o for o in bpy.context.scene.objects if o.type == 'MESH']
     bpy.ops.object.select_all(action='DESELECT')
     for o in obs: o.select_set(True)
@@ -119,17 +135,17 @@ def finish(name, out):
     me = ob.data
     tris = sum(len(p.vertices) - 2 for p in me.polygons)
     zs = [v.co.z for v in me.vertices]; xs = [v.co.x for v in me.vertices]; ys = [v.co.y for v in me.vertices]
-    print(f'[{name}] tris {tris}  size w {max(xs)-min(xs):.3f} d {max(ys)-min(ys):.3f} h {max(zs)-min(zs):.3f}  materials {len(me.materials)}')
+    size = (max(xs) - min(xs), max(ys) - min(ys), max(zs) - min(zs))
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(HERE, out + '.blend'))
-    bpy.ops.export_scene.gltf(filepath=os.path.join(HERE, out + '.glb'), export_format='GLB', use_selection=False, export_yup=True)
-    return tris
+    os.makedirs(OUT_DIR, exist_ok=True)
+    bpy.ops.export_scene.gltf(filepath=os.path.join(OUT_DIR, out + '.glb'), export_format='GLB', use_selection=False, export_yup=True)
+    return tris, size, len(me.materials)
 
 # ---------------- yangnyeom chicken box ----------------
 # Viewing distance first: at the default room camera this box is about 30 px wide (140-165 px per metre).
 # What reads at that size: an open paper box (rim + dark inside), a heap of red glazed pieces, two pale bone ends.
 # Everything else is cut: crust bumps, sesame, sauce drips, the lid's print.
 def chicken_box():
-    reset()
     W, D, H = 0.22, 0.16, 0.07       # open box; the pieces heap above the rim
     WALL, FLOOR = 0.004, 0.012
     BAND0, BAND1 = 0.030, 0.046      # printed band on the outside (1.6 cm: a colour face)
@@ -170,12 +186,10 @@ def chicken_box():
     for x, y, z, s, key in ((0.0, -0.030, H + 0.002, 1.0, 'glaze'), (-0.010, 0.035, H - 0.002, 0.9, 'glazeDk'),
                             (0.060, -0.045, H - 0.006, 0.75, 'glazeDk')):
         part('lump', blob(0.042 * s, 0.034 * s, 0.03 * s, 5, 3, jitter=0.12), key, xf=T(x, y, z), drop=hidden)
-    return finish('foodYangnyeomChicken', 'food-yangnyeom-chicken')
 
 # ---------------- phone on mini tripod ----------------
 # About 35-45 px tall at the default camera. Reads as: blue screen, dark phone edge, three legs. Clamp jaws at 2-3 px stay as one block.
 def phone_tripod():
-    reset()
     HUB_Z = 0.075
     part('hub', cyl(0.016, 0.014, 0.024, 5), 'slate', xf=T(0, 0, HUB_Z))
     for k in range(3):                                         # three splayed legs, thickened to 1.8 cm; the top end is buried in the hub
@@ -199,8 +213,118 @@ def phone_tripod():
          xf=tilt)
     # clamp: one bar behind the phone, wider than it, so the jaws show at both sides
     part('clamp', cube(PW + 0.016, 0.018, 0.026), 'slate', xf=tilt @ T(0, PT / 2 + 0.004, PH * 0.42))
-    return finish('propPhoneTripod', 'prop-phone-tripod')
 
-t1 = chicken_box()
-t2 = phone_tripod()
-print('DONE', t1, t2)
+
+# ---------------- shared shapes ----------------
+def vessel(r_bottom, r_top, h, sides, wall, floor_z):
+    """Open vessel: walls, rim, inner walls and a floor at floor_z (sauce, ice, a box floor)."""
+    def b(bm):
+        cyl(r_bottom, r_top, h, sides)(bm)
+        bm.normal_update()
+        top = [f for f in bm.faces if f.normal.z > 0.9]
+        bmesh.ops.inset_region(bm, faces=top, thickness=wall, depth=-(h - floor_z))
+    return b
+
+# ---------------- pickle jar (LAZIEST Korean Meal) ----------------
+# About 25 px tall at the default camera. Reads as: a glass jar, red kimchi with a pale cabbage stripe, a glass band
+# above it, and a lid on a narrow neck. The silhouette (body -> shoulder -> neck -> smaller lid) makes it a jar.
+# v1 had the lid wider than the body: in review it read as a can or a yogurt cup.
+def pickle_jar():
+    R, BODY, NECK_R = 0.06, 0.12, 0.042
+    STRIPE0, STRIPE1, FILL = 0.05, 0.065, 0.095              # cabbage stripe (1.5 cm colour face), contents top
+    def body(bm):
+        cyl(R, R, BODY, 8)(bm)
+        for z in (STRIPE0, STRIPE1, FILL):
+            bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], plane_co=(0, 0, z), plane_no=(0, 0, 1))
+    def body_colour(c, n):
+        if c.z > FILL: return 'glass'
+        return 'bone' if STRIPE0 < c.z < STRIPE1 else 'glaze'
+    top_hidden = lambda c, n: n.z > 0.9                         # covered by the shoulder, the neck or the lid
+    part('body', body, body_colour, drop=top_hidden)
+    part('shoulder', cyl(R, NECK_R, 0.02, 8, start_cap=False), 'glass', xf=T(0, 0, BODY), drop=top_hidden)
+    # no neck part: the lid covers all but 8 mm of it, which is under a pixel at room size
+    part('lid', cyl(NECK_R + 0.004, NECK_R + 0.004, 0.022, 8, start_cap=False), 'lid', xf=T(0, 0, BODY + 0.02))
+
+# ---------------- tteokbokki pan (H-Mart food court) ----------------
+# About 35 px wide. Reads as: a shallow dark pan full of red sauce, a few pale-orange rice-cake sticks, two ear handles.
+def tteokbokki_pan():
+    H, SAUCE = 0.045, 0.03
+    part('pan', vessel(0.10, 0.12, H, 8, 0.005, SAUCE),
+         lambda c, n: 'glaze' if (n.z > 0.9 and c.z < H - 0.001) else 'legs')
+    for side in (-1, 1):                                        # ear handles, thickened to 3 cm wide
+        part('ear', cube(0.035, 0.03, 0.012), 'legs', xf=T(side * 0.13, 0, H - 0.014))
+    under = lambda c, n: c.z < SAUCE + 0.002                    # below the sauce surface
+    for x, y, yaw in ((-0.04, -0.02, 20), (0.02, -0.04, -15), (0.045, 0.02, 70), (-0.02, 0.035, 100), (-0.055, 0.03, 40)):
+        tt = T(x, y, SAUCE + 0.006) @ R('Z', yaw) @ R('Y', 90) @ T(0, 0, -0.028)
+        part('tteok', cyl(0.013, 0.013, 0.056, 5), 'tteok', xf=tt, drop=under)
+
+# ---------------- red-bean bingsu (14 Years VEGAN: red bean shaved ice) ----------------
+# About 25 px tall. Reads as: a brass footed bowl, a white ice mountain above the rim, a dark red-bean cap, two tteok cubes.
+def bingsu_bowl():
+    # v1 peak 0.145 read as a cream puff in review: the ice is a tall mountain, about as high above the rim as the bowl is deep
+    FOOT, RIM, PEAK = 0.015, 0.075, 0.19
+    BEANS = 0.15                                                # beans cover the mound above this height
+    part('foot', cyl(0.035, 0.03, FOOT, 8), 'brass', drop=lambda c, n: n.z > 0.9)
+    part('bowl', cyl(0.035, 0.08, RIM - FOOT, 8), 'brass', xf=T(0, 0, FOOT), drop=lambda c, n: n.z > 0.9)
+    def mound(bm):
+        cyl(0.078, 0.012, PEAK - RIM, 8, start_cap=False)(bm)
+        bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], plane_co=(0, 0, BEANS - RIM), plane_no=(0, 0, 1))
+    part('ice', mound, lambda c, n: 'beans' if c.z > BEANS else 'white', xf=T(0, 0, RIM))
+    for x, y, z, yaw in ((0.03, -0.035, 0.112, 20), (-0.033, -0.025, 0.106, -30)):   # on the slope, in front
+        part('injeolmi', cube(0.022, 0.022, 0.022), 'injeolmi', xf=T(x, y, z) @ R('Z', yaw) @ R('X', 15))
+
+# ---------------- registry ----------------
+# id: catalogue id · out: file name · budget: triangle target (Kenney Food Kit: bowl 84, takeout box 162, stew pot 370)
+PROPS = [
+    dict(id='foodYangnyeomChicken', out='food-yangnyeom-chicken', build=chicken_box, budget=170,
+         label='양념치킨 상자', labelEn='Yangnyeom chicken box',
+         tags=['양념치킨', '치킨', '프라이드치킨', '치킨 상자', '먹방', '첫 경험', 'yangnyeom chicken', 'fried chicken', 'chicken box', 'mukbang', 'first time eating']),
+    dict(id='propPhoneTripod', out='prop-phone-tripod', build=phone_tripod, budget=90,
+         label='삼각대 휴대폰', labelEn='Phone on mini tripod',
+         tags=['삼각대', '미니 삼각대', '휴대폰', '촬영', '먹방', '쇼츠', 'tripod', 'phone', 'filming', 'mukbang', 'shorts']),
+    dict(id='foodPickleJar', out='food-pickle-jar', build=pickle_jar, budget=105,
+         label='김치 유리병', labelEn='Kimchi jar',
+         tags=['김치', '장아찌', '피클', '반찬', '유리병', '먹방', 'kimchi', 'pickles', 'banchan', 'jar', 'laziest korean meal', 'mukbang']),
+    dict(id='foodTteokbokki', out='food-tteokbokki', build=tteokbokki_pan, budget=140,
+         label='떡볶이 팬', labelEn='Tteokbokki pan',
+         tags=['떡볶이', '떡', '분식', '푸드코트', '먹방', 'tteokbokki', 'rice cake', 'food court', 'korean street food', 'mukbang']),
+    dict(id='foodPatbingsu', out='food-patbingsu', build=bingsu_bowl, budget=100,
+         label='팥빙수', labelEn='Red bean bingsu',
+         tags=['팥빙수', '빙수', '팥', '인절미', '디저트', '첫 경험', '먹방', 'bingsu', 'patbingsu', 'shaved ice', 'red bean', 'dessert', 'first time eating', 'mukbang']),
+]
+
+def upsert_catalogue(p, size):
+    """Write or replace this prop's one-line entry in catalogue.json, keeping the file's one-entry-per-line style."""
+    import json
+    path = os.path.join(PUBLIC, 'catalogue.json')
+    k = 1.45  # the file is real size; catalogue sizes are at the catalogue scale (CAT_SCALE x MODEL_SCALE 2.0)
+    entry = {'id': p['id'], 'file': 'cmms-story/' + p['out'] + '.glb', 'label': p['label'], 'labelEn': p['labelEn'],
+             'category': 'food', 'scale': CAT_SCALE, 'w': round(size[0] * k, 2), 'd': round(size[1] * k, 2), 'h': round(size[2] * k, 2),
+             'tags': p['tags']}
+    line = '    { ' + json.dumps(entry, ensure_ascii=False)[1:-1] + ' }'
+    lines = open(path, encoding='utf-8').read().split('\n')
+    key = '"id": "' + p['id'] + '"'
+    at = next((i for i, l in enumerate(lines) if key in l), None)
+    if at is not None:
+        lines[at] = line + (',' if lines[at].rstrip().endswith(',') else '')
+    else:
+        start = lines.index('  "models": [')
+        end = next(i for i, l in enumerate(lines) if i > start and l.strip() == ']')
+        lines[end - 1] = lines[end - 1].rstrip() + ','
+        lines.insert(end, line)
+    text = '\n'.join(lines)
+    json.loads(text)  # fail loudly before writing a broken file
+    open(path, 'w', encoding='utf-8', newline='\n').write(text)
+
+want = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
+report = []
+for p in PROPS:
+    if want and p['id'] not in want: continue
+    reset(); PART_TRIS.clear()
+    p['build']()
+    tris, size, mats = finish(p['id'], p['out'])
+    upsert_catalogue(p, size)
+    flag = 'OK  ' if tris <= p['budget'] else 'OVER'
+    report.append('%s %-22s tris %4d / %4d  draws %d  real %.2f x %.2f x %.2f m' % (flag, p['id'], tris, p['budget'], mats, *size))
+    report.append('       ' + '  '.join('%s %d' % pt for pt in PART_TRIS))
+print('\n'.join(['REPORT'] + report))
