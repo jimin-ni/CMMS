@@ -1,0 +1,50 @@
+# CMMS Render Workflows
+
+Render Workflows로 돌리는 백그라운드·에이전트 작업입니다. Next.js 앱과 의존성을 나누려고 폴더를 따로 둡니다.
+
+## task 목록
+
+| 이름 | 입력 | 하는 일 |
+|---|---|---|
+| `hello` | `name`(선택) | 인사 문자열을 돌려줌. 연결 확인용 |
+| `helloMany` | `names: string[]` | 이름마다 `hello`를 병렬로 실행하고 결과를 모음 |
+
+## Render 서비스 설정 (New > Workflow > My own workflow)
+
+| 칸 | 값 |
+|---|---|
+| Repo / Branch | `jimin-ni/CMMS` / 이 폴더가 들어 있는 브랜치 |
+| Language | Node |
+| Region | Singapore (공유 DB와 같은 리전) |
+| Root Directory | `workflows` |
+| Build Command | `npm install` |
+| Start Command | `npm start` |
+
+배포가 끝나면 대시보드에 `hello`, `helloMany`가 보여야 합니다. 대시보드에서 직접 실행하거나 아래처럼 코드에서 실행합니다.
+
+## 웹 서비스에서 실행하기
+
+1. Render Account Settings > API Keys에서 키를 만들고, 웹 서비스 Environment에 `RENDER_API_KEY`로 넣습니다. 값은 저장소에 쓰지 않습니다.
+2. 루트 앱에 `@renderinc/sdk`를 설치한 뒤 서버 코드(Server Action, Route Handler)에서만 부릅니다.
+
+```ts
+import { Render } from "@renderinc/sdk";
+
+const render = new Render(); // RENDER_API_KEY를 환경 변수에서 읽음
+const run = await render.workflows.startTask("<workflow 슬러그>/helloMany", [["러브쑤", "팬"]]);
+const result = await run.get(); // 끝날 때까지 기다림
+```
+
+슬러그는 대시보드의 task 화면 위쪽에 `{workflow 슬러그}/{task 이름}` 형태로 나옵니다.
+
+## 로컬 확인
+
+Render CLI가 있으면:
+
+```bash
+cd workflows
+npm install
+render workflows dev -- npm start
+# 다른 터미널
+render workflows tasks list --local
+```

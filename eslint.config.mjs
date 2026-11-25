@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // presence 워커는 자기 tsconfig와 테스트로 검사한다 (workers/presence).
     "workers/**",
+    // Render Workflows는 자기 package.json과 tsconfig로 검사한다 (workflows).
+    "workflows/**",
   ]),
 ]);
 
