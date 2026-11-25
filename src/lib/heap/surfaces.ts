@@ -36,6 +36,8 @@ const HAND: Record<string, { h: number; tops: number[] }> = {
   projector: { h: 0.42, tops: [] },
   // 작은 빛: 꾸미기의 구슬 꼭대기까지 (engine/furniture.js 의 GLOW_Y + 반지름)
   glow: { h: 0.3, tops: [] },
+  // 스노우 글로브: 높이 0.36 (engine/fixtures.js 의 GLOBE_SIZE)
+  globe: { h: 0.36, tops: [] },
 };
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
@@ -64,8 +66,8 @@ export function itemHeight(it: Obj): number | null {
 }
 
 export function isSmallItem(it: Obj): boolean {
-  // 받침 위에 얹는 손 가구: 달력, 휴대폰, 영사기, 작은 빛, 방명록 공책(받침대째는 바닥에 선다), 사진 더미 (더미는 크지만 탁자에 얹는 것이다)
-  if (it.type === "calendar" || it.type === "phone" || it.type === "projector" || it.type === "heap" || it.type === "glow") return true;
+  // 받침 위에 얹는 손 가구: 달력, 휴대폰, 영사기, 작은 빛, 스노우 글로브, 방명록 공책(받침대째는 바닥에 선다), 사진 더미 (더미는 크지만 탁자에 얹는 것이다)
+  if (it.type === "calendar" || it.type === "phone" || it.type === "projector" || it.type === "heap" || it.type === "glow" || it.type === "globe") return true;
   if (it.type === "guestbook") return it.style !== "stand";
   const e = entryOf(it);
   if (!e || e.mount || e.category === "rug" || SEAT_CATS.has(e.category)) return false;

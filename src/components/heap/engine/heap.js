@@ -3,7 +3,6 @@ import * as THREE from 'three';
 import { viewsNum, hasThumb } from './format.js';
 import { drawFit, NO_PHOTO, canvasTexture } from './draw.js';
 import { tone } from './palette.js';
-import { LOW_TABLE_GLOBE } from './fixtures.js';
 
 export function setupHeap(ctx) {
   const {
@@ -16,7 +15,7 @@ export function setupHeap(ctx) {
   const pickables = [];
   // 더미가 없는 방(HOST null)도 카드는 만든다 (벽 포스터가 카드의 그림을 쓴다). 카드는 보이지 않고 집을 수 없다.
   const HOST = ctx.HOST ?? { x: 0, z: 0, top: 0, w: 1.2, d: 0.9, box: false, boxW: 1.12, boxD: 0.66, item: null };
-  // 같은 받침 위에 선 다른 물건(휴대폰, 방명록, 좌식 탁자의 머그)은 카드가 비켜 간다
+  // 같은 받침 위에 선 다른 물건(휴대폰, 방명록, 스노우 글로브, 좌식 탁자의 머그)은 카드가 비켜 간다
   const EXCL = [];
   if (ctx.HOST) for (const o of layout.items || []) {
     if (o === HOST.item || Math.abs((o.y || 0) - HOST.top) > 0.03 || Math.abs(o.x - HOST.x) > HOST.w / 2 + 0.3 || Math.abs(o.z - HOST.z) > HOST.d / 2 + 0.3) continue;
@@ -24,7 +23,7 @@ export function setupHeap(ctx) {
   }
   const lowT = ctx.HOST && (layout.items || []).find(o => o.type === 'lowTable' && Math.abs(o.x - HOST.x) < 1.3 && Math.abs(o.z - HOST.z) < 0.9 && Math.abs(HOST.top - 0.56) < 0.03);
   if (lowT) { const a = THREE.MathUtils.degToRad(lowT.rot || 0); EXCL.push({ x: lowT.x + Math.cos(a) * 1.05 + Math.sin(a) * 0.6, z: lowT.z - Math.sin(a) * 1.05 + Math.cos(a) * 0.6, r: 0.18 });
-    const G = LOW_TABLE_GLOBE; EXCL.push({ x: lowT.x + Math.cos(a) * G.x + Math.sin(a) * G.z, z: lowT.z - Math.sin(a) * G.x + Math.cos(a) * G.z, r: G.r }); } // 머그와 스노우 글로브 (fixtures.js)
+  } // 머그 (fixtures.js)
   const GAP = 0.0035, MAX_SLOPE = 0.32;
   // 더미의 모양: 'pile'(기본, 받침 위에 흩어진 더미) 또는 'box'(열린 신발상자 안에 쌓인 더미, heap 가구의 style "box"). 상자 안쪽 크기와 벽 높이는 BOX_IN.
   // 상자는 카드가 탁자에 어지럽게 퍼지지 않게 담는다. 카드를 집는 광선은 카드만 보므로 상자 벽이 막지 않는다.

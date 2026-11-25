@@ -128,7 +128,7 @@ async function run(ctx) {
   setupPlayers(ctx);
   setupPanels(ctx);
   setupTree(ctx); // 쪽지 트리 모드. ctx.goTo(modes.js), ctx.me(walk.js)는 쓸 때 읽으므로 여기서 세워도 된다
-  setupGlobe(ctx); // 스노우 글로브 모드 (좌식 탁자 위 글로브를 누르면)
+  setupGlobe(ctx); // 스노우 글로브 모드 (글로브 소품을 누르면)
   setupLive(ctx);
   setupInput(ctx);
   setupPresence(ctx); // 방 함께 있기 (opts.presence 가 있을 때만). 내 캐릭터(walk.js), 더미 자리(props.js), 오버레이(input.js)를 읽는다
