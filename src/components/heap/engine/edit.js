@@ -52,10 +52,10 @@ const OK = '#7d9a4a', BAD = '#c2452d', PICKED = '#A6613C';
 // 엔진이 직접 만드는 가구의 이름 (알림 문구용). 모델은 카탈로그의 label 을 쓴다.
 const HAND_LABEL = {
   bed: '침대', shelf: '앨범 책장', plant: '화분', snake: '산세베리아', lamp: '조명', books: '책 더미', frame: '벽 액자', calendar: '탁상 달력',
-  heap: '사진 더미', lowTable: '좌식 탁자', phone: '휴대폰', guestbook: '방명록', screen: '스크린', poster: '포스터', window: '창문', projector: '영사기', glow: '작은 빛',
+  heap: '사진 더미', lowTable: '좌식 탁자', phone: '휴대폰', guestbook: '방명록', screen: '스크린', poster: '포스터', window: '창문', projector: '영사기', glow: '작은 빛', globe: '스노우 글로브',
 };
 // 모양 바꾸기(swap)를 하지 않는 손 가구: 하는 일이 그 가구에 묶여 있다
-const NO_SWAP = new Set(['frame', 'calendar', 'heap', 'lowTable', 'phone', 'guestbook', 'screen', 'poster', 'window', 'projector', 'glow']);
+const NO_SWAP = new Set(['frame', 'calendar', 'heap', 'lowTable', 'phone', 'guestbook', 'screen', 'poster', 'window', 'projector', 'glow', 'globe']);
 const OVERLAYS = ['phone', 'pc', 'keepsake', 'calendar', 'grid', 'rooms', 'guestbook'];
 // 방의 틀의 레이아웃 열쇠. 순서가 비교 문자열(snap)의 순서다. 방 v2 에서 창, 스크린, 방명록, 포스터, 사진 탁자는 가구다 (template-move.ts 와 같다)
 const SHELL_KEYS = ['room', 'door'];
@@ -689,6 +689,7 @@ export function setupEdit(ctx) {
     endMove(); ed.sel = null;
     // 사진 더미는 방에 하나까지 (서버: layout.ts)
     if (template?.type === 'heap' && ed.items.some(o => o.type === 'heap')) { notice('사진 더미는 방에 하나까지예요'); return; }
+    if (template?.type === 'globe' && ed.items.some(o => o.type === 'globe')) { notice('스노우 글로브는 방에 하나까지예요'); return; }
     const base = { ...template, x: 0, z: 0, rot: normRot(template.rot || 0) };
     if (isWallHand(base) && base.y == null) base.y = handDefaultY(base);
     // 벽·천장 가구는 모델의 키로 높이를 정한다 (복제는 원래 높이를 지닌다). 모델을 아직 못 읽었으면 임시 높이로 커서에 붙이되

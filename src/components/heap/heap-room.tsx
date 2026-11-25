@@ -42,7 +42,7 @@ import { createPresenceClient, createPresenceHub, type PresenceClient, type Pres
 import { setPrefs, type NameShow } from "@/lib/settings/prefs";
 import { moneygraphyPixel, moneygraphyRounded, pretendard } from "@/app/fonts/onboarding";
 import "./heap-room.css";
-import { MAKER_LINKS } from "@/components/snow-globe/links";
+import { CREDITS } from "@/components/snow-globe/credits";
 
 // 크리에이터 정보(creator.json)는 public/heap/rooms/ 아래의 정적 파일이다. 나머지 방 데이터는 서버가 DB에서 읽어 data로 넘긴다.
 const DATA_BASE = "/heap/rooms/";
@@ -526,20 +526,6 @@ export function HeapRoom({
             <button id="globeexit" className="btn ghost" type="button" hidden>
               글로브에서 물러나기
             </button>
-            {/* 스노우 글로브 모드(engine/globe.js)의 제작자 링크: 3D 를 누르지 않고도 갈 수 있게 */}
-            {mode === "globe" && (
-              <>
-                <Link href={MAKER_LINKS.makers} className="btn ghost">
-                  제작자 소개
-                </Link>
-                <Link href={MAKER_LINKS.jimin} className="btn ghost">
-                  물범 · 지민
-                </Link>
-                <Link href={MAKER_LINKS.gyuno} className="btn ghost">
-                  고양이 · 규노
-                </Link>
-              </>
-            )}
             {canEdit && ready && mode === "room" && !editing && (
               <button id="edit-open" className="btn ghost" type="button" onClick={() => setEditing(true)}>
                 꾸미기
@@ -595,6 +581,37 @@ export function HeapRoom({
         )}
       </div>
       <p id="toast" />
+      {/* 스노우 글로브 모드(engine/globe.js)의 출처 표기 목록 (snow-globe/credits.ts) */}
+      {mode === "globe" && (
+        <section id="globe-credits" className="panel" aria-label="출처 표기">
+          <div className="panel-head">
+            <b>Credits</b>
+          </div>
+          <div className="panel-body">
+            {CREDITS.map((g) => (
+              <div key={g.title}>
+                <h3>{g.title}</h3>
+                <ul>
+                  {g.items.map((c) => (
+                    <li key={c.name}>
+                      {c.url ? (
+                        <a href={c.url} target="_blank" rel="noopener noreferrer">
+                          {c.name}
+                        </a>
+                      ) : (
+                        c.name
+                      )}
+                      {c.by && <span> · {c.by}</span>}
+                      <span className="lic">{c.license}</span>
+                      {c.note && <small>{c.note}</small>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
       {/* 스노우 글로브 모드에서 눈이 내리는 3초 동안 보인다 (engine/globe.js) */}
       <p id="globe-snow" aria-live="polite">
         ❄ 눈이 내리는 중

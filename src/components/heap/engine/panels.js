@@ -131,7 +131,7 @@ export function setupPanels(ctx) {
     if (k === 'tree') { ctx.openTree?.(slot.it, slot.group, slot); return; } // 쪽지 트리: 나중 모듈이 ctx.openTree(item, group, slot) 를 단다
     if (k === 'phone') { openPhone(); return; } // 휴대폰 가구 (fixtures.js)
     if (k === 'guestbook') { ctx.openGuestbook(); return; } // 방명록 가구 (fixtures.js)
-    if (k === 'globe') { ctx.enterGlobe(); return; } // 좌식 탁자 위 스노우 글로브 (fixtures.js, globe.js)
+    if (k === 'globe') { ctx.enterGlobe(); return; } // 스노우 글로브 소품 (fixtures.js, globe.js)
     if (k === 'pc') openPc(slot.fn); else if (k === 'keepsake') openKeepsake(slot.fn);
     else if (k === 'music') openMusic(slot.fn); else if (k === 'latest') watchLatest(); else if (k === 'calendar') openCalendar(slot.fn);
   };
