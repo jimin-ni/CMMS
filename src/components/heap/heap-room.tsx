@@ -935,6 +935,31 @@ function FxDebug({ rootRef }: { rootRef: RefObject<HTMLDivElement | null> }) {
     timer.current = setTimeout(() => rootRef.current?.dispatchEvent(new CustomEvent("heap:fx")), delay);
   };
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+  const [note, setNote] = useState("");
+  // 화면 복사: 공유 단추와 같은 길(heap:capture)로 지금 구도를 효과까지 그려 PNG 로 클립보드에 넣는다. 화면 위 글자와 단추는 들어가지 않는다.
+  // ClipboardItem 에 Promise 를 주어 클릭 한 번 안에서 쓰기를 시작한다 (Chrome 은 클릭 뒤 비동기로 쓰면 막는다).
+  const copyShot = () => {
+    const got: { canvas: HTMLCanvasElement | null } = { canvas: null };
+    rootRef.current?.dispatchEvent(new CustomEvent("heap:capture", { detail: (c: HTMLCanvasElement | null) => { got.canvas = c; } }));
+    const canvas = got.canvas;
+    if (!canvas) { setNote("그리지 못했어요"); return; }
+    const png = new Promise<Blob>((ok, no) => canvas.toBlob((b) => (b ? ok(b) : no(new Error("toBlob"))), "image/png"));
+    navigator.clipboard
+      .write([new ClipboardItem({ "image/png": png })])
+      .then(() => setNote(`화면을 복사했어요 (${canvas.width}×${canvas.height})`))
+      .catch(() => setNote("클립보드에 넣지 못했어요"));
+  };
+  // 설정 내보내기: 방 효과 값과 다른 디버그 값을 JSON 파일로 내려받는다. 서버로는 보내지 않는다
+  const exportSettings = () => {
+    const data = { savedAt: new Date().toISOString(), room: window.location.pathname, fx: FX, shadow: SHADOW_TEST.mode, anim: ANIM_TEST };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `heap-debug-${data.savedAt.slice(0, 19).replace(/[:T]/g, "-")}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setNote("설정을 내려받았어요");
+  };
   type Group = Record<string, number | boolean>;
   const groups = FX as unknown as Record<string, Group>;
   const view = fx as unknown as Record<string, Group>;
@@ -988,6 +1013,13 @@ function FxDebug({ rootRef }: { rootRef: RefObject<HTMLDivElement | null> }) {
       >
         효과 기본값으로
       </button>
+      <button type="button" onClick={copyShot}>
+        화면 복사
+      </button>
+      <button type="button" onClick={exportSettings}>
+        설정 내보내기
+      </button>
+      {note && <p className="debug-fx-note" role="status">{note}</p>}
     </div>
   );
 }

@@ -144,12 +144,20 @@ export function setupFx(ctx) {
   gtao.setSceneClipBox(new THREE.Box3(new THREE.Vector3(-RX - 1, -0.5, -RZ - 1), new THREE.Vector3(RX + 1, WALL_H + 1, RZ + 1)));
   // 잡음 제거 값은 three 예제(webgl_postprocessing_gtao)의 기본값
   gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 4, radiusExponent: 1, rings: 2, samples: 16 });
-  // 투명한 것(빛줄기, 창유리, 반짝임)은 AO 의 깊이에 넣지 않는다. 넣으면 빛줄기 뒤가 그늘진다
-  const baseOverride = gtao.overrideVisibility.bind(gtao);
-  gtao.overrideVisibility = () => {
-    baseOverride();
-    scene.traverse(o => { if (o.isMesh && o.visible && [].concat(o.material).every(m => m?.transparent)) o.visible = false; });
+  // AO 와 피사계 심도는 장면을 덮어쓰는 재질로 한 번 더 그려 깊이를 얻는다. 덮어쓰는 재질은 물체 자신의 재질 설정을 보지 않으므로
+  // 투명한 것(빛줄기, 창유리), 반짝임과 장식 빛(Sprite), 보이지 않는 것(누르기 영역 상자, 바닥 판, colorWrite 를 끈 꾸미기 보조물)이
+  // 깊이에 들어가 둘레에 그늘이 진다 (Yoon 이 본 반짝임 둘레의 어두운 네모). 이런 것은 깊이를 그릴 때 감춘다.
+  const noDepth = m => !m || m.transparent || m.visible === false || m.colorWrite === false || m.depthWrite === false;
+  const hideNoDepth = () => {
+    const hid = [];
+    scene.traverse(o => {
+      if (!o.visible) return;
+      if (o.isSprite || o.isPoints || o.isLine || ((o.isMesh) && [].concat(o.material).every(noDepth))) { o.visible = false; hid.push(o); }
+    });
+    return () => { for (const o of hid) o.visible = true; };
   };
+  const baseOverride = gtao.overrideVisibility.bind(gtao);
+  gtao.overrideVisibility = () => { baseOverride(); hideNoDepth(); }; // GTAO 가 미리 기억해 둔 값으로 되돌린다
   // 해상도 배율: AO 버퍼만 줄인다 (가장 비싼 단계)
   const gtaoSetSize = gtao.setSize.bind(gtao);
   let aoRes = 1, lastW = 1, lastH = 1;
@@ -166,6 +174,8 @@ export function setupFx(ctx) {
   // BokehShader 는 알파를 1 로 덮는다. 배경을 나중에 깔려면 알파가 남아야 한다
   bokeh.materialBokeh.fragmentShader = bokeh.materialBokeh.fragmentShader.replace('gl_FragColor.a = 1.0;', 'gl_FragColor.a = texture2D( tColor, vUv.xy ).a;');
   bokeh.materialBokeh.needsUpdate = true;
+  const bokehRender = bokeh.render.bind(bokeh);
+  bokeh.render = (...a) => { const restore = hideNoDepth(); try { bokehRender(...a); } finally { restore(); } };
   const output = new OutputPass();
   // 장면은 투명한 바탕에 그려져 반투명 가장자리(땅의 흐려지는 끝, 경계 화소)의 색이 알파로 곱해져 있다.
   // 곱해진 색을 톤 매핑하면 바로 그릴 때(표시 공간에서 섞기)와 달라지므로, 톤 매핑 전에 알파로 나눈다

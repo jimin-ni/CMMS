@@ -92,6 +92,7 @@
 .heap-room .debug-fx-slider { display: flex; flex-direction: column; gap: 2px; font: 500 12px var(--ui); color: var(--paper); padding: 2px 6px 4px; }
 .heap-room .debug-fx-slider span { display: flex; justify-content: space-between; }
 .heap-room .debug-fx-slider input { width: 100%; accent-color: var(--clay); }
+.heap-room .debug-fx-note { margin: 0; padding: 0 6px; font: 500 12px var(--ui); color: var(--paper); white-space: normal; }
 .heap-room .debug-select select { font: 600 13px var(--ui); color: var(--ink); background: var(--paper); border: 0; border-radius: 6px; padding: 4px 6px; }
 
 .heap-room #toast { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); margin: 0; font-family: var(--hand); font-size: 26px; line-height: 1.2; color: var(--ink); background: var(--paper); padding: 4px 18px 6px; border: 1px solid var(--clay); border-radius: 4px; pointer-events: none; text-align: center; }
