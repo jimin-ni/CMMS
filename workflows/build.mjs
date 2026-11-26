@@ -1,7 +1,5 @@
 // Workflow 코드를 dist/index.js 한 파일로 묶는다.
-// 이유: 재판정 task는 ../src/lib/moderation/의 앱 코드를 그대로 쓰는데, 그 코드가 import하는 drizzle-orm 등은
-// Render에서 workflows/node_modules에만 설치된다(Root Directory가 workflows). Node는 ../src 위치에서 위로만
-// node_modules를 찾으므로 그대로 실행하면 못 찾는다. 묶을 때 nodePaths로 workflows/node_modules를 보게 한다.
+// ../src 앱 코드가 workflows/node_modules의 패키지를 찾게 하려고 묶는다.
 import { build } from "esbuild";
 import { fileURLToPath } from "node:url";
 
@@ -16,8 +14,7 @@ await build({
   format: "esm",
   sourcemap: true,
   nodePaths: [`${here}node_modules`],
-  // pg-native: pg가 선택적으로 찾는 네이티브 모듈. 설치하지 않으므로 묶지 않는다.
-  // typescript는 컴파일러 API(code-review/rules.ts)용. 크기가 커서 묶지 않고 node_modules에서 읽는다.
+  // 설치하지 않는 선택 모듈(pg-native)과 큰 패키지(typescript)는 묶지 않는다.
   external: ["pg-native", "typescript"],
   // 묶은 CommonJS 패키지(pg 등)가 require를 쓸 수 있게 한다.
   banner: {

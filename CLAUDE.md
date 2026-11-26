@@ -29,6 +29,12 @@ Claude Code가 이 저장소에서 작업할 때 따를 규칙입니다. 답변�
 - AI 스크리닝 판정 모듈(`src/lib/moderation/`의 `screen.ts`, `normalize.ts` 등)과 `persist.ts`는 Render Workflow(`workflows/`)도 import합니다. 이 파일들에 `server-only`, `@/` 별칭, `@/lib/db`를 넣지 마세요 (`docs/dev/moderation.md`).
 - 채팅 규칙 값은 `src/lib/bubble/policy.ts`에서만 바꿉니다. 구독자 200자, 크리에이터 500자, 본인 메시지 삭제 10분, 10초 간격, 10분에 15건입니다.
 
+## 주석 규칙
+- 함수, 메서드, 모듈이 무엇인지 설명하는 짧은 주석 한 문장만 남깁니다. 코드만 보고 알기 어려운 이유가 있으면 한 문장 더 씁니다.
+- 이모지, 여러 줄 줄글 설명, 코드를 다시 읽어 주는 설명은 쓰지 않습니다.
+- 사람 이름, 아이디, 이메일, 누가 시켰거나 고쳤다는 작성 경위, 날짜별 변경 이력은 코드에 쓰지 않습니다. docs와 커밋 메시지에 둡니다.
+- 자세한 기준: `docs/planning/15-agents.md` 6-1-1
+
 ## DB 운영 원칙
 - 팀은 로컬 DB를 쓰지 않습니다. 모두 Render의 공유 PostgreSQL(`cmms-db-01`, Singapore)을 씁니다.
 - 접속 주소는 `.env.local`의 `DATABASE_URL`에만 둡니다. 끝에 `?sslmode=verify-full`을 붙입니다.

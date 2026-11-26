@@ -1,4 +1,4 @@
-// stripEmojiComments 평가 세트 (15 문서 7-2 "평가 먼저"). 규칙을 바꿀 때마다 npm run eval:strip
+// stripEmojiComments 평가 세트. npm run eval
 export interface StripCase {
   name: string;
   file: string;

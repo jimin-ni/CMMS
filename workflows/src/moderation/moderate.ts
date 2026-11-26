@@ -1,5 +1,4 @@
-// 재판정용 OpenAI Moderation 호출. 웹 서비스(src/lib/moderation/openai.ts)와 같은 모델과 요청을 쓰되,
-// 사용자당 상한과 장애 차단기는 두지 않는다. 뒤에서 도는 일이라 시간 제한을 넉넉히 두고, 재시도는 Render가 맡는다.
+// 재판정용 OpenAI Moderation 호출. 재시도는 Render가 맡는다.
 import type { Moderate } from "../../../src/lib/moderation/openai";
 import { MODERATION_POLICY } from "../../../src/lib/moderation/policy";
 import { requireEnv } from "../common/config";

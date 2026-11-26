@@ -25,13 +25,15 @@ Render Workflows로 돌리는 백그라운드·에이전트 작업입니다. Nex
 | `AGENT_DATABASE_URL` | `agentCheck.db`, 이후 에이전트 (Internal URL + `agent_ro`) |
 | `ANTHROPIC_API_KEY` | `agentCheck.llm`, 이후 에이전트 |
 | `RENDER_API_KEY`, `RENDER_OWNER_ID`, `RENDER_WEB_SERVICE_ID` | `agentCheck.logs`, 이후 에이전트 |
+| `CODE_REVIEW_PERSON_NAMES` | 주석 정리. 주석에 있으면 안 되는 이름 (쉼표 구분) |
 
 ## 검사
 
 ```bash
 cd workflows
 npm run check        # tsc --noEmit
-npm run eval:strip   # 이모지 주석 규칙 평가 세트
+npm run eval         # 주석 규칙 평가 세트
+npm run comments -- <파일...> [--write]   # 주석 정리 (Claude 사용, 기본은 미리보기)
 npm run build        # dist/index.js 묶음
 ```
 

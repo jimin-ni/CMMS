@@ -1,4 +1,4 @@
-// 모든 에이전트의 run task가 돌려주는 결과 모양과, 밖으로 내보내기 전 비밀값 가리기 (15 문서 4-2, 5-2).
+// 에이전트 결과 모양과 비밀값 가리기
 
 export interface Finding {
   file?: string;

@@ -1,4 +1,4 @@
-// Render API로 웹 서비스 로그와 배포를 읽는다 (15 문서 5-2). 키는 서버(이 Workflow)에서만 쓴다.
+// Render API로 웹 서비스 로그와 배포를 읽는다.
 import { requireEnv } from "./config";
 import { maskSecrets } from "./report";
 
@@ -11,7 +11,6 @@ async function renderGet<T>(path: string, query: Record<string, string | number 
     headers: { Authorization: `Bearer ${requireEnv("RENDER_API_KEY")}`, Accept: "application/json" },
   });
   if (!res.ok) {
-    // 응답 본문에 요청 정보가 섞일 수 있어 가려서 남긴다.
     throw new Error(`Render API ${path} 실패: ${res.status} ${maskSecrets((await res.text()).slice(0, 300))}`);
   }
   return (await res.json()) as T;
@@ -34,14 +33,14 @@ export interface LogQuery {
   type?: "app" | "request" | "build";
   level?: string;
   text?: string;
-  // ISO 시각. 없으면 Render 기본값(최근 1시간)
+  // ISO 시각. 없으면 최근 1시간
   startTime?: string;
   endTime?: string;
   // 최대 100
   limit?: number;
 }
 
-// 웹 서비스 로그를 읽는다. 메시지는 가린 뒤 돌려준다 (Claude에 보내기 전 단계).
+// 웹 서비스 로그. 비밀값은 가려서 돌려준다.
 export async function getWebLogs(q: LogQuery = {}): Promise<{ lines: LogLine[]; hasMore: boolean }> {
   const body = await renderGet<{ logs?: RawLog[]; hasMore?: boolean }>("/logs", {
     ownerId: requireEnv("RENDER_OWNER_ID"),

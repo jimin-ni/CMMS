@@ -1,11 +1,11 @@
-// 에이전트 공통 연결 확인 task (15 문서 8장 3·4단계). 대시보드 Run Task로 하나씩 실행한다. 입력은 []
+// 에이전트 공통 연결 확인 task. 입력은 []
 import { task } from "@renderinc/sdk/workflows";
 import { z } from "zod";
 import { readQuery } from "../common/db-readonly";
 import { askJson, type LlmUsage } from "../common/llm";
 import { getWebLogs } from "../common/render-api";
 
-// agent_ro로 공개 테이블 수와 큰 테이블 몇 개의 행 수(추정치)를 읽는다. 인증 테이블 거부도 같이 확인한다.
+// 테이블 수, 큰 테이블 행 수, 인증 테이블 차단 확인
 export const checkDb = task(
   { name: "agentCheck.db", timeoutSeconds: 60 },
   async function checkDb(): Promise<{ tables: number; largest: { table: string; rows: number }[]; authBlocked: boolean }> {
@@ -34,7 +34,7 @@ export const checkLogs = task(
   },
 );
 
-// Claude 한 번 호출. 구조화 출력, 토큰 사용량 기록 확인
+// Claude 1회 호출과 사용량 확인
 export const checkLlm = task(
   { name: "agentCheck.llm", timeoutSeconds: 120 },
   async function checkLlm(): Promise<{ answer: { ok: boolean; note: string }; usage: LlmUsage }> {

@@ -1,5 +1,4 @@
-// AI 스크리닝 사후 재판정 task (docs/planning/16-render-workflows.md 6-3).
-// 판정 규칙과 DB 반영은 웹 서비스와 같은 코드(src/lib/moderation/)를 쓴다. 여기서는 연결과 실행만 한다.
+// AI 스크리닝 사후 재판정 task. 판정과 저장은 웹 서비스와 같은 코드를 쓴다.
 import { task } from "@renderinc/sdk/workflows";
 import { and, asc, eq, lt, sql } from "drizzle-orm";
 import { bubbleMessages } from "../../../src/lib/schema";

@@ -1,5 +1,4 @@
-// 공유 DB 연결. DATABASE_URL은 Render Internal URL + moderation_worker 계정 (docs/planning/16-render-workflows.md 5장).
-// task 인스턴스마다 처음 쓸 때 한 번 만든다.
+// 재판정용 공유 DB 연결 (moderation_worker). 처음 쓸 때 한 번 만든다.
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import * as schema from "../../../src/lib/schema";
