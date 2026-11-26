@@ -6,7 +6,7 @@ import { tone } from './palette.js';
 import { ksDay, seoulDay, hasThumb } from './format.js';
 
 export function setupSlots(ctx) {
-  const { opts, C, box, BUILD, reels } = ctx;
+  const { opts, C, bevel, BUILD, reels } = ctx;
 
   // ---------- 슬롯: item.fn (기능 하나, 껍데기 여럿) ----------
   // 레이아웃에서 기능(item.fn, 서버가 검사한다: src/lib/heap/slots.ts)이 달린 가구는 방 모드에서 누를 수 있다.
@@ -65,11 +65,11 @@ export function setupSlots(ctx) {
     const grp = new THREE.Group(), wood = tone(C, 'woodDark');
     const canvas = makeCanvas(W, H);
     const tex = canvasTexture(canvas, 4);
-    const frame = box(pw + 2 * rim, ph + 2 * rim, 0.04, wood, 0, 0, 0.02, { cast: shape !== 'frame', parent: grp });
+    const frame = bevel(pw + 2 * rim, ph + 2 * rim, 0.04, wood, 0, 0, 0.02, { r: 0.014, cast: shape !== 'frame', parent: grp });
     const pic = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6 })); pic.position.z = 0.042; grp.add(pic);
     if (shape === 'frame') grp.position.set(x, y, z);
     else {
-      box(pw + 0.08, 0.02, 0.1, wood, x, y + 0.01, z, { parent: g });
+      bevel(pw + 0.08, 0.02, 0.1, wood, x, y + 0.01, z, { r: 0.006, parent: g });
       grp.position.set(x, y + 0.02 + (ph + 2 * rim) / 2, z - 0.01); grp.rotation.x = -0.12;
     }
     g.add(grp);
@@ -183,9 +183,9 @@ export function setupSlots(ctx) {
     const canvas = makeCanvas(192, 192);
     const tex = canvasTexture(canvas, 4);
     const wood = tone(C, 'woodDark'), grp = new THREE.Group(), W = 0.4, H = 0.4;
-    box(W + 0.06, 0.03, 0.16, wood, 0, 0.015, 0, { parent: grp });
+    bevel(W + 0.06, 0.03, 0.16, wood, 0, 0.015, 0, { r: 0.01, parent: grp });
     const lean = new THREE.Group(); lean.position.set(0, 0.03, -0.03); lean.rotation.x = -0.3; grp.add(lean);
-    const back = box(W + 0.04, H + 0.04, 0.02, wood, 0, H / 2, 0, { parent: lean });
+    const back = bevel(W + 0.04, H + 0.04, 0.02, wood, 0, H / 2, 0, { r: 0.008, parent: lean });
     const page = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 })); page.position.set(0, H / 2, 0.012); page.castShadow = true; lean.add(page);
     page.material.userData.repaint = () => { paintCalendar(canvas, fn); tex.needsUpdate = true; }; // 머리띠와 동그라미는 포인트 색이다
     grp.position.y = it.y || 0; g.add(grp);

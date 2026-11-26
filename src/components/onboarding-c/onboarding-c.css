@@ -27,7 +27,7 @@
 .oc-pixel {
   font-family: var(--font-oc-pixel), var(--font-oc-body), sans-serif;
 }
-/* "memories" 표기. 사이트 제목 글꼴 --font-display(Oswald)를 쓴다 (src/app/fonts/brand.ts) */
+/* "MEMOAMO" 표기. 사이트 제목 글꼴 --font-display(Oswald)를 쓴다 (src/app/fonts/brand.ts) */
 .oc-display {
   font-family: var(--font-display);
   font-weight: 500;
@@ -67,7 +67,7 @@
 .oc-room-host:not(.live) .heap-room .setup-pill { visibility: hidden; }
 /* 꾸미는 동안에는 둘러보기(안내 팝업, 내비게이션 바, 왼쪽 위 서비스 이름)를 걷는다. 꾸미기의 위 막대와 겹치기 때문이다. */
 .oc-stage:has(.heap-room.editing) :is(.oc-guide, .oc-nav, .oc-corner) { display: none; }
-/* 왼쪽 위 방 이름 자리에는 .oc-corner 의 "memories"를 쓴다. 이름 칸은 자리만 남겨 아래 줄이 그대로 있게 한다. */
+/* 왼쪽 위 방 이름 자리에는 .oc-corner 의 "MEMOAMO"를 쓴다. 이름 칸은 자리만 남겨 아래 줄이 그대로 있게 한다. */
 .oc-room-host .heap-room .who .name { visibility: hidden; }
 .oc-corner {
   position: absolute;
@@ -523,7 +523,7 @@
   .oc-nav { width: max-content; max-width: calc(100vw - 32px); }
   .oc-nav .oc-paper-body { flex-wrap: wrap; justify-content: center; gap: 2px; padding: 8px 10px; }
   .oc-nav-btn { padding: 6px 8px 6px 6px; font-size: 13px; }
-  /* 왼쪽 위 "memories"와 방 정보 줄 아래로 내린다 */
+  /* 왼쪽 위 "MEMOAMO"와 방 정보 줄 아래로 내린다 */
   .oc-nav { top: 100px; }
   .oc-corner { font-size: 32px; }
 }

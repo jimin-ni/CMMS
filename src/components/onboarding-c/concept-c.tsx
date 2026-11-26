@@ -232,7 +232,7 @@ export function ConceptC({
 
           {/* 1. 첫 화면 */}
           <div ref={introRef} className="oc-layer oc-intro">
-            <h1 className="oc-display">Memories</h1>
+            <h1 className="oc-display">MEMOAMO</h1>
             <p className="oc-rounded">a room full of the moments you loved</p>
           </div>
 

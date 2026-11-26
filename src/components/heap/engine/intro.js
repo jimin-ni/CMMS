@@ -44,7 +44,7 @@ export function setupIntro(ctx) {
     g.fillStyle = '#2f2c24'; g.fillRect(0, 18, 64, 6); g.fillRect(0, 396, 64, 6);
     g.save(); g.translate(32, 210); g.rotate(Math.PI / 2);
     g.fillStyle = '#fff8ec'; g.font = '600 34px "IBM Plex Sans KR", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText('MEMORIES', 0, 0);
+    g.fillText('MEMOAMO', 0, 0);
     g.restore();
     const spine = new THREE.MeshStandardMaterial({ map: canvasTexture(c), roughness: 0.85 });
     const cloth = new THREE.MeshStandardMaterial({ color: ALBUM_COLOR, roughness: 0.9 });

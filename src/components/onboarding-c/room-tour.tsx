@@ -211,7 +211,7 @@ export function RoomTour({
   return (
     <>
       {/* 왼쪽 위 방 이름(엔진의 #cname) 대신 서비스 이름. 이름 칸은 CSS 가 자리만 남기고 감춘다. */}
-      <span className="oc-corner oc-display">memories</span>
+      <span className="oc-corner oc-display">MEMOAMO</span>
 
       <div
         className={`oc-guide${guideShown ? (spot === "center" ? " open center" : " open") : ""}`}

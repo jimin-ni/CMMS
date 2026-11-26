@@ -44,7 +44,7 @@ export function setupHud(ctx) {
     nearTree: 'E 또는 트리를 눌러 쪽지 보기',
     tree: '장식을 눌러 쪽지 읽기 · 끌어서 트리 돌리기 · Esc로 물러나기',
     treeNote: '‹ › 로 다른 쪽지 · 바깥을 누르거나 Esc로 접기',
-    globe: '끌어서 글로브 돌리기 · 물범은 지민, 고양이는 규노, 글로브는 제작자 소개 · 빈 곳을 누르면 눈 · Esc로 물러나기',
+    globe: '끌어서 글로브 돌리기 · 누르면 눈 · Esc로 물러나기',
     perch: '방향키·WASD 또는 바닥을 눌러 일어나기 · Esc로도 일어나요',
   };
   // 트리 모드 안내에는 쪽지함의 개수가 붙는다 (자리가 없는 쪽지: tree.js 의 ctx.boxedNotes)

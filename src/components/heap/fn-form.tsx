@@ -55,6 +55,7 @@ export const HAND_LABEL: Record<string, string> = {
   window: "창문",
   projector: "영사기",
   glow: "작은 빛",
+  globe: "스노우 글로브",
 };
 export const itemLabel = (it: Item, models: Model[]) =>
   (it.type === "model" ? models.find((m) => m.id === it.model)?.label : HAND_LABEL[it.type]) ?? it.model ?? it.type;
