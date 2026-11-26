@@ -23,3 +23,6 @@ export const helloMany = task(
 
 // AI 스크리닝 사후 재판정 (docs/planning/16-render-workflows.md)
 export { recheck, sweep } from "./moderation/tasks";
+
+// 개발 보조 에이전트 공통 연결 확인 (docs/planning/15-agents.md 8장)
+export { checkDb, checkLogs, checkLlm } from "./agent-check/tasks";

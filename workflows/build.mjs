@@ -16,8 +16,9 @@ await build({
   format: "esm",
   sourcemap: true,
   nodePaths: [`${here}node_modules`],
-  // pg가 선택적으로 찾는 네이티브 모듈. 설치하지 않으므로 묶지 않는다.
-  external: ["pg-native"],
+  // pg-native: pg가 선택적으로 찾는 네이티브 모듈. 설치하지 않으므로 묶지 않는다.
+  // typescript는 컴파일러 API(code-review/rules.ts)용. 크기가 커서 묶지 않고 node_modules에서 읽는다.
+  external: ["pg-native", "typescript"],
   // 묶은 CommonJS 패키지(pg 등)가 require를 쓸 수 있게 한다.
   banner: {
     js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);",

@@ -7,21 +7,21 @@
 
 ## 현재 상태 (새 세션은 여기부터 읽기)
 
-마지막 갱신: 2026-11-26
+마지막 갱신: 2026-11-27
 
 | 항목 | 상태 |
 |---|---|
 | 끝난 단계 | 1 (Workflow 서비스, 슬러그 `memoamo-agent`), 4 (`persist.ts` 분리), 6·8의 코드 작성 (`moderation.recheck`, `moderation.sweep`), 묶음 빌드 확인 (`check.shared` 성공, 지움) |
-| 대기 | 2 마이그레이션 `0014`(파일은 작성, **공유 DB 미적용**), 3 DB 계정 `moderation_worker` → 이슈 #125 팀원 답 대기 |
-| 다음 할 일 | #125 동의 → 2단계 적용 → 3단계 계정 → Workflow Environment에 `DATABASE_URL`, `OPENAI_API_KEY` → 5단계(`saveChatMessage`에 표시 저장) → 6단계 실행 확인. 동의 전에는 5단계 코드를 넣지 않음 (열이 없으면 저장이 실패함) |
+| 대기 | 2 마이그레이션 `0014`(파일은 작성, **공유 DB 미적용**), 3 DB 계정 `moderation_worker` . #125 동의 받음 (2026-11-26), 적용만 남음 |
+| 다음 할 일 | 2단계 적용 → 3단계 계정 → Workflow Environment에 `DATABASE_URL`, `OPENAI_API_KEY` → 5단계(`saveChatMessage`에 표시 저장) → 6단계 실행 확인. 동의 전에는 5단계 코드를 넣지 않음 (열이 없으면 저장이 실패함) |
 | 남은 확인 | 4단계 화면 확인 (로컬 위반 문장 → 숨김, 경고 n/3). `recheck`, `sweep`의 실제 DB 실행 |
 | 주의 | `schema.ts`에 0014 열 정의가 먼저 들어가 있음. 읽기·쓰기 코드가 이 열을 쓰지 않으므로 미적용 DB에서도 앱은 정상 동작 (전체 열 select 없음 확인) |
 | 사용자가 할 일 | Workflow 전용 OpenAI 키, Render API 키 발급 (0장) |
-| 관련 이슈 | #124 `jimins-claude/feature-agents` 삭제 제안 (답 대기), #125 공유 DB·공용 코드 변경 동의 (답 대기) |
+| 관련 이슈 | #124 `jimins-claude/feature-agents` 삭제 제안 (답 대기), #125 공유 DB·공용 코드 변경 동의 (동의 받음) |
 | Render 설정 | Branch `jimins-claude/feature-render-workflows`, Root `workflows`, Build `npm ci`, Start `npm start`, Singapore |
 
 - 단계를 끝낼 때마다 이 표와 맨 아래 "진행 기록"을 같이 고칩니다.
-- 함께 진행 중인 다른 계획: 개발 보조 에이전트, PR 리뷰, impeccable (`docs/planning/15-agents.md`, 아직 착수 전)
+- 함께 진행 중인 다른 계획: 개발 보조 에이전트, PR 리뷰, impeccable (`docs/planning/15-agents.md`). 에이전트 진행 상태는 15 문서 8장
 
 ## 단계 흐름
 
@@ -49,9 +49,9 @@ flowchart LR
 | 항목 | 상태 | 막히는 단계 |
 |---|---|---|
 | Render Workflow 서비스 생성 | 완료 (2026-11-26) | 1 |
-| 팀 합의: 마이그레이션 `0014` 번호 | #125 대기 | 2 |
-| 팀 합의: DB 계정 `moderation_worker` (힙 테이블 일부 수정 권한 포함) | #125 대기 | 3 |
-| 팀 합의: `src/lib/moderation/` 저장 로직 분리 (`persist.ts`) | #125 대기 | 4 |
+| 팀 합의: 마이그레이션 `0014` 번호 | #125 동의 (2026-11-26) | 2 |
+| 팀 합의: DB 계정 `moderation_worker` (힙 테이블 일부 수정 권한 포함) | #125 동의 (2026-11-26) | 3 |
+| 팀 합의: `src/lib/moderation/` 저장 로직 분리 (`persist.ts`) | #125 동의 (2026-11-26) | 4 |
 | Workflow 전용 OpenAI 키 | 본인 발급 필요 | 6 |
 | Render API 키 | 본인 발급 필요 | 7 |
 
@@ -168,3 +168,4 @@ Render 대시보드 설정
 | 2026-11-26 | 6 준비 | 묶음 빌드(`build.mjs`) 추가, 확인용 `check.shared` task 추가 |
 | 2026-11-26 | 6 준비 | Render에서 `check.shared` 성공 (표 이름, 함수, 정규화 결과). 확인 task 삭제 |
 | 2026-11-26 | 2, 6, 8 코드 | `0014` 파일과 `schema.ts` 열 정의 작성(DB 미적용). `persist.ts`에 `needsRecheck`, `recheckChatMessage` 추가와 단위 테스트. Workflow에 `moderation.recheck`, `moderation.sweep` 등록. `npm test` 76개, `tsc`, `eslint`, `build` 통과 |
+| 2026-11-27 | 0 | #125 팀원 동의 확인. 2, 3단계 진행 가능 |

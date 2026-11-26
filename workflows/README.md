@@ -8,6 +8,32 @@ Render Workflows로 돌리는 백그라운드·에이전트 작업입니다. Nex
 |---|---|---|
 | `hello` | `name`(선택) | 인사 문자열을 돌려줌. 연결 확인용 |
 | `helloMany` | `names: string[]` | 이름마다 `hello`를 병렬로 실행하고 결과를 모음 |
+| `moderation.recheck` | `surface`, `messageId` | AI 스크리닝 사후 재판정 1건 (16 문서) |
+| `moderation.sweep` | 없음 | 재판정이 밀린 글을 모아 다시 판정 (16 문서) |
+| `agentCheck.db` | 없음 | `agent_ro`로 테이블 수, 큰 테이블 5개 행 수. 인증 테이블이 막히는지 (`authBlocked: true`) |
+| `agentCheck.logs` | 없음 | 웹 서비스 최근 로그 20줄 (비밀값 가림) |
+| `agentCheck.llm` | 없음 | Claude 1회 호출, 구조화 출력과 토큰 사용량, 비용 |
+
+## Environment (Render Workflow 서비스)
+
+값은 저장소, 채팅, 문서에 적지 않습니다. 자세한 설명은 `docs/planning/15-agents.md` 4-3.
+
+| 이름 | 쓰는 task |
+|---|---|
+| `DATABASE_URL` | `moderation.*` (Internal URL + `moderation_worker`) |
+| `OPENAI_API_KEY` | `moderation.*` |
+| `AGENT_DATABASE_URL` | `agentCheck.db`, 이후 에이전트 (Internal URL + `agent_ro`) |
+| `ANTHROPIC_API_KEY` | `agentCheck.llm`, 이후 에이전트 |
+| `RENDER_API_KEY`, `RENDER_OWNER_ID`, `RENDER_WEB_SERVICE_ID` | `agentCheck.logs`, 이후 에이전트 |
+
+## 검사
+
+```bash
+cd workflows
+npm run check        # tsc --noEmit
+npm run eval:strip   # 이모지 주석 규칙 평가 세트
+npm run build        # dist/index.js 묶음
+```
 
 ## Render 서비스 설정 (New > Workflow > My own workflow)
 

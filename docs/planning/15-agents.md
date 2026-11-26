@@ -176,6 +176,7 @@ workflows/
 | 7. 결과 | 오케스트레이터 | 2번 변경은 브랜치 + PR, 3~5번은 리포트 | 아니오 |
 
 - [결정] 이모지 주석 제거는 **규칙으로** 합니다. 정답이 명확한 일에 LLM을 쓰면 느리고 비싸고 가끔 틀립니다. 문자열 안의 이모지(화면 문구)는 건드리지 않고 주석만 봅니다.
+- [결정] (2026-11-27) 주석에서 **이모지 글자만** 지우고 설명은 남깁니다. 이모지만 있던 주석은 줄째(JSX면 `{/* */}`째) 지웁니다. `→`, `✔`, `©`처럼 기본이 글자 모양인 기호는 남깁니다.
 - [결정] 리팩터링은 처음에는 **제안만** 합니다. 자동 수정은 평가 세트에서 충분히 맞는 것을 본 뒤 D(생성-평가 반복)로 켭니다.
 - [결정] 브랜치 이름 `jimins-claude/agent-code-review-YYYYMMDD`. PR 생성 여부는 입력값 `openPr`(기본 false)로 정합니다. 머지는 사람이 합니다.
 - ①이 PR을 열면 ②가 그 PR을 다시 리뷰합니다. 자동으로 두 번 점검되는 셈입니다.
@@ -376,13 +377,24 @@ Action 설정 (입력 이름은 `action.yml`에서 확인, 값은 [가설])
 | 0 | 공통 | Console 가입, 크레딧, 월 한도, 키 2개 발급 | 키가 Render와 GitHub Secrets에 들어감 |
 | 1 | ① | 기존 TS 뼈대로 Render Workflow 서비스 생성 | 대시보드에서 `hello` 실행 성공 |
 | 2 | ② | `.github/workflows/ocr-review.yml` 작성, 이 브랜치로 테스트 PR | 테스트 PR에 리뷰 댓글이 달림 |
-| 3 | ① | `agent_ro` 계정 생성, `common/db.ts`, `common/render-api.ts` | task에서 테이블 수, 최근 로그 20줄 읽기 성공 |
+| 3 | ① | `agent_ro` 계정 생성, `common/db-readonly.ts`, `common/render-api.ts` | task에서 테이블 수, 최근 로그 20줄 읽기 성공 |
 | 4 | ① | `common/llm.ts` | task에서 Claude 응답 1건과 토큰 사용량 기록 |
 | 5 | ① | 평가 세트 (`code-review/evals/`) | 이모지 주석 예제, 리팩터링 예제와 기대 결과 준비 |
 | 6 | ① | `stripEmoji` 규칙 수정 | 평가 세트 전부 통과 |
 | 7 | ① | 오케스트레이터 + 워커 리뷰 + 검증 | 리포트가 평가 세트의 기대 항목을 찾음 |
 | 8 | ① | `common/github.ts`, 브랜치 + PR | 테스트 PR 1건 생성, ②가 그 PR을 리뷰함 |
 | 9 | 공통 | main 머지, 서비스 Branch를 main으로, CLAUDE.md의 CI 문구 수정 | 운영 1주 후 다음 에이전트 결정 |
+
+진행 상태 (2026-11-27)
+
+| 단계 | 상태 |
+|---|---|
+| 1 | 끝남 (2026-11-26) |
+| 3 | 코드 끝남: `common/db-readonly.ts`, `common/render-api.ts`, 확인 task `agentCheck.db`, `agentCheck.logs`. #125 동의 받음. **`agent_ro` 계정 생성과 Environment 값 입력 남음** |
+| 4 | 코드 끝남: `common/llm.ts`, 확인 task `agentCheck.llm`. **`ANTHROPIC_API_KEY` 입력 후 실행 확인 남음** |
+| 5 | 이모지 주석 평가 세트 16건 (`code-review/evals/strip-emoji.cases.ts`). 리팩터링 예제는 7단계 전에 만듦 |
+| 6 | 끝남: `code-review/rules.ts`의 `stripEmojiComments`, `npm run eval:strip` 16/16 통과. 지금 `src/`, `scripts/`에는 이모지 주석이 없음 (이모지는 화면 문구에만 있음) |
+| 0, 2 | 키 발급 대기 (사용자) |
 
 ## 9. 위험과 대응
 
