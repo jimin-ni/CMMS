@@ -13,7 +13,7 @@
 | 만든 에이전트 | ① 코드 점검 에이전트만 진행 중. ② PR 리뷰(open-code-review), ③ impeccable은 착수 전 |
 | 끝난 것 | 공통 연결 코드(DB 읽기, Render 로그, LLM), 읽기 전용 계정 `agent_ro`, 주석 기준과 규칙 검사, 평가 세트 32건 |
 | Render에서 확인 | `agentCheck.env` 성공, `agentCheck.db` 성공 (테이블 36개, 인증 테이블 차단) |
-| 막힌 것 | `agentCheck.llm`: OpenAI 크레딧 없음(429). **LLM 공급자 결정 대기** (아래 4장, 팀과 논의) |
+| 막힌 것 | `agentCheck.llm`: OpenAI 크레딧 없음(429). **LLM 공급자 결정 대기** (아래 4장, 이슈 #127) |
 | 다음 할 일 | 공급자 결정 → 키 또는 크레딧 준비 → `agentCheck.llm` 성공 → 주석 정리 로컬 미리보기 → 7단계(리팩터링 제안), 8단계(GitHub PR) |
 | 사용자가 할 일 | 공급자 결정, Render Workflow Environment에 `CODE_REVIEW_PERSON_NAMES`, 로그용 `RENDER_API_KEY`, `RENDER_OWNER_ID`, `RENDER_WEB_SERVICE_ID` |
 
