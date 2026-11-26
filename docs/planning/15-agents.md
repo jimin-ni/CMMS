@@ -414,8 +414,8 @@ Action 설정 (입력 이름은 `action.yml`에서 확인, 값은 [가설])
 | 단계 | 상태 |
 |---|---|
 | 1 | 끝남 (2026-11-26) |
-| 3 | 코드 끝남: `common/db-readonly.ts`, `common/render-api.ts`, 확인 task `agentCheck.db`, `agentCheck.logs`. `agent_ro` 계정 생성(2026-11-27): 공개 테이블 읽기 OK, `user`는 `id`, `role`만, `account`/`session`/`verification`과 쓰기는 거부 확인. **Render Environment에 `AGENT_DATABASE_URL`(Internal URL) 입력 남음** |
-| 4 | 코드 끝남: `common/llm.ts`(OpenAI 기본, Claude 선택), 확인 task `agentCheck.llm`. **`OPENAI_API_KEY_CODE_REVIEW` 입력 후 실행 확인 남음** |
+| 3 | 코드 끝남: `common/db-readonly.ts`, `common/render-api.ts`, 확인 task `agentCheck.db`, `agentCheck.logs`. `agent_ro` 계정 생성(2026-11-27): 공개 테이블 읽기 OK, `user`는 `id`, `role`만, `account`/`session`/`verification`과 쓰기는 거부 확인. Render에서 `agentCheck.db` 성공 (2026-11-27, 테이블 36개, `authBlocked: true`). **끝남 (로그 읽기는 Render API 키 입력 후)** |
+| 4 | 코드 끝남: `common/llm.ts`(OpenAI 기본, Claude 선택), 확인 task `agentCheck.llm`. 키 입력 끝남. 첫 실행은 OpenAI 크레딧 없음(429)으로 실패 (2026-11-27). **크레딧 충전 후 다시 실행 남음** |
 | 5 | 규칙 평가 세트 32건 (이모지 16, 검사 10, 코드 비교 6). `npm run eval`. 리팩터링 예제는 7단계 전에 만듦 |
 | 6 | 규칙 부분 끝남 (`rules.ts`, `policy.ts`). LLM 다시 쓰기(`comments.ts`)와 로컬 실행(`npm run comments -- <파일>`)은 코드만 있음. **키 입력 후 실제 실행 확인 남음** |
 | 0, 2 | 키 발급 대기 (사용자) |
