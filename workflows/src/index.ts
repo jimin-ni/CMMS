@@ -21,5 +21,5 @@ export const helloMany = task(
   },
 );
 
-// 6단계 확인용 task (docs/dev/render-workflows.md). 확인 후 지운다.
-export { checkShared } from "./check/shared";
+// AI 스크리닝 사후 재판정 (docs/planning/16-render-workflows.md)
+export { recheck, sweep } from "./moderation/tasks";

@@ -15,6 +15,7 @@ import {
   moderationPatterns,
   moderationTerms,
   sanctions,
+  user,
 } from "../schema";
 import { buildLexicon, type Lexicon } from "./lexicon";
 import { MODERATION_POLICY } from "./policy";
@@ -240,4 +241,110 @@ export async function recordScreenEvent(
     return { kind: "blocked", strikes, autoBlocked };
   }
   return { kind: plan.notice } as SaveNotice;
+}
+
+// ─── 사후 재판정 (Render Workflows, docs/planning/16-render-workflows.md 3~6장) ───
+
+// 동기 판정에서 OpenAI 단계를 하지 못해 사전·regex만 보고 공개한 경우. 이 글만 뒤에서 다시 판정한다.
+export const RECHECK_OPENAI_STATUSES = ["error", "timeout", "skipped_rate", "skipped_breaker"] as const;
+
+export function needsRecheck(openai: ScreenResult["openai"], status: ScreenPlan["status"]): boolean {
+  return status === "published" && (RECHECK_OPENAI_STATUSES as readonly string[]).includes(openai);
+}
+
+// 다시 판정해도 OpenAI 결과를 못 얻으면 이 횟수까지 시도하고 failed로 둔다.
+export const RECHECK_MAX_ATTEMPTS = 5;
+
+export type RecheckOutcome =
+  | { kind: "skipped"; reason: "not_found" | "not_pending" | "not_published" }
+  | { kind: "retry" | "failed"; attempts: number }
+  | { kind: "clean" }
+  // 방 주인·관리자 글: 숨기지 않고 사후 확인 기록만 남긴다 (문서 3-2)
+  | { kind: "flagged_privileged"; reasons: string[] }
+  | { kind: "hidden"; status: ScreenPlan["status"]; reasons: string[]; notice: SaveNotice };
+
+// 버블 메시지 하나를 다시 판정해 반영한다. runScreen은 사전·regex·OpenAI를 모두 거치는 screen() 호출이다.
+// 네트워크 호출(runScreen)은 트랜잭션 밖에서 하고, 반영은 조건부 UPDATE로 해서 두 번 실행돼도 한 번만 반영된다.
+export async function recheckChatMessage(
+  db: ModerationDb,
+  messageId: string,
+  runScreen: (text: string, authorId: string) => Promise<ScreenResult>,
+): Promise<RecheckOutcome> {
+  const [row] = await db
+    .select({
+      id: bubbleMessages.id,
+      senderId: bubbleMessages.senderId,
+      body: bubbleMessages.body,
+      screenStatus: bubbleMessages.screenStatus,
+      deletedAt: bubbleMessages.deletedAt,
+      recheckStatus: bubbleMessages.recheckStatus,
+      recheckAttempts: bubbleMessages.recheckAttempts,
+      roomOwnerId: bubbleRooms.creatorId,
+      senderRole: user.role,
+    })
+    .from(bubbleMessages)
+    .innerJoin(bubbleRooms, eq(bubbleRooms.id, bubbleMessages.roomId))
+    .leftJoin(user, eq(user.id, bubbleMessages.senderId))
+    .where(eq(bubbleMessages.id, messageId));
+  if (!row) return { kind: "skipped", reason: "not_found" };
+  if (row.recheckStatus !== "pending") return { kind: "skipped", reason: "not_pending" };
+
+  const pendingOnly = and(eq(bubbleMessages.id, messageId), eq(bubbleMessages.recheckStatus, "pending"));
+  const finish = (openai: ScreenResult["openai"] | null) =>
+    db
+      .update(bubbleMessages)
+      .set({ recheckStatus: "done", recheckedAt: sql`now()`, ...(openai ? { openaiStatus: openai } : {}) })
+      .where(pendingOnly);
+
+  // 그사이 신고·삭제·차단으로 이미 내려간 글은 다시 볼 필요가 없다.
+  if (row.screenStatus !== "published" || row.deletedAt) {
+    await finish(null);
+    return { kind: "skipped", reason: "not_published" };
+  }
+
+  const result = await runScreen(row.body, row.senderId);
+  if (result.openai !== "called" && result.openai !== "skipped_earlier_hit") {
+    const attempts = row.recheckAttempts + 1;
+    const gaveUp = attempts >= RECHECK_MAX_ATTEMPTS;
+    await db
+      .update(bubbleMessages)
+      .set({ recheckAttempts: attempts, openaiStatus: result.openai, ...(gaveUp ? { recheckStatus: "failed" as const } : {}) })
+      .where(pendingOnly);
+    return { kind: gaveUp ? "failed" : "retry", attempts };
+  }
+
+  if (result.outcome === "publish") {
+    await finish(result.openai);
+    return { kind: "clean" };
+  }
+
+  const privileged = row.senderRole === "admin" || row.senderId === row.roomOwnerId;
+  return db.transaction(async (tx): Promise<RecheckOutcome> => {
+    const plan = await planScreen(tx, row.senderId, result, privileged);
+    const changed = await tx
+      .update(bubbleMessages)
+      .set({
+        recheckStatus: "done",
+        recheckedAt: sql`now()`,
+        openaiStatus: result.openai,
+        ...(plan.status === "published"
+          ? {}
+          : { screenStatus: plan.status, screenedAt: sql`now()`, statusChangedAt: sql`now()` }),
+      })
+      .where(and(pendingOnly, eq(bubbleMessages.screenStatus, "published"), isNull(bubbleMessages.deletedAt)))
+      .returning({ id: bubbleMessages.id });
+    if (!changed.length) return { kind: "skipped", reason: "not_published" };
+
+    const notice = await recordScreenEvent(tx, {
+      userId: row.senderId,
+      roomOwnerId: row.roomOwnerId,
+      surface: "chat",
+      targetId: row.id,
+      result,
+      plan,
+    });
+    return plan.status === "published"
+      ? { kind: "flagged_privileged", reasons: result.reasons }
+      : { kind: "hidden", status: plan.status, reasons: result.reasons, notice };
+  });
 }

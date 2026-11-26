@@ -11,10 +11,11 @@
 
 | 항목 | 상태 |
 |---|---|
-| 끝난 단계 | 1 (Workflow 서비스 배포, 슬러그 `memoamo-agent`), 4 (`persist.ts` 분리, 검사 통과) |
-| 대기 | 2 마이그레이션 `0014`, 3 DB 계정 `moderation_worker` → 이슈 #125 팀원 답 대기 |
-| 다음 할 일 | Render 재배포 후 대시보드에서 `check.shared` 실행 (입력 `[]`) → 표 이름, 함수, 정규화 결과가 나오면 묶음 빌드 확인 끝. 그다음 `recheck` task 코드 작성 |
-| 남은 확인 | 4단계의 화면 확인 (로컬에서 위반 문장 전송 → 숨김, 경고 n/3) |
+| 끝난 단계 | 1 (Workflow 서비스, 슬러그 `memoamo-agent`), 4 (`persist.ts` 분리), 6·8의 코드 작성 (`moderation.recheck`, `moderation.sweep`), 묶음 빌드 확인 (`check.shared` 성공, 지움) |
+| 대기 | 2 마이그레이션 `0014`(파일은 작성, **공유 DB 미적용**), 3 DB 계정 `moderation_worker` → 이슈 #125 팀원 답 대기 |
+| 다음 할 일 | #125 동의 → 2단계 적용 → 3단계 계정 → Workflow Environment에 `DATABASE_URL`, `OPENAI_API_KEY` → 5단계(`saveChatMessage`에 표시 저장) → 6단계 실행 확인. 동의 전에는 5단계 코드를 넣지 않음 (열이 없으면 저장이 실패함) |
+| 남은 확인 | 4단계 화면 확인 (로컬 위반 문장 → 숨김, 경고 n/3). `recheck`, `sweep`의 실제 DB 실행 |
+| 주의 | `schema.ts`에 0014 열 정의가 먼저 들어가 있음. 읽기·쓰기 코드가 이 열을 쓰지 않으므로 미적용 DB에서도 앱은 정상 동작 (전체 열 select 없음 확인) |
 | 사용자가 할 일 | Workflow 전용 OpenAI 키, Render API 키 발급 (0장) |
 | 관련 이슈 | #124 `jimins-claude/feature-agents` 삭제 제안 (답 대기), #125 공유 DB·공용 코드 변경 동의 (답 대기) |
 | Render 설정 | Branch `jimins-claude/feature-render-workflows`, Root `workflows`, Build `npm ci`, Start `npm start`, Singapore |
@@ -63,8 +64,8 @@ Render 대시보드 설정
 ## 2. 마이그레이션 `0014_bubble_recheck.sql`
 
 - [ ] 이슈에서 번호 합의 확인
-- [ ] `db/migrations/0014_bubble_recheck.sql` 작성 (내용은 16 문서 4장)
-- [ ] `src/lib/schema.ts`의 `bubbleMessages`에 `openaiStatus`, `recheckStatus`, `recheckAttempts`, `recheckedAt` 추가
+- [x] `db/migrations/0014_bubble_recheck.sql` 작성 (내용은 16 문서 4장)
+- [x] `src/lib/schema.ts`의 `bubbleMessages`에 `openaiStatus`, `recheckStatus`, `recheckAttempts`, `recheckedAt` 추가
 - [ ] 적용 전 `bubble_migrations`에서 미적용 파일이 `0014`뿐인지 확인
 - [ ] `npm run db:bubble`로 공유 DB 적용
 - [ ] 확인: 기존 버블 화면에서 메시지 보내기, 삭제, 폴링이 그대로 동작
@@ -97,10 +98,10 @@ Render 대시보드 설정
 ## 6. `moderation.recheck` task (시연 최소선)
 
 파일
-- [ ] `workflows/src/common/config.ts`: 필요한 환경 변수가 없으면 바로 실패
-- [ ] `workflows/src/common/db.ts`: Drizzle + pg, `moderation_worker` 연결
-- [ ] `workflows/src/moderation/moderate.ts`: OpenAI Moderation 호출. 사용자 상한 없음, 시간 제한과 재시도만
-- [ ] `workflows/src/moderation/tasks.ts`: `recheck(surface, messageId)` (동작은 16 문서 6-3)
+- [x] `workflows/src/common/config.ts`: 필요한 환경 변수가 없으면 바로 실패
+- [x] `workflows/src/common/db.ts`: Drizzle + pg, `moderation_worker` 연결
+- [x] `workflows/src/moderation/moderate.ts`: OpenAI Moderation 호출. 사용자 상한 없음, 시간 제한과 재시도만
+- [x] `workflows/src/moderation/tasks.ts`: `recheck(surface, messageId)` (동작은 16 문서 6-3)
 - [x] **의존성 해석 문제 대응**: `../src/lib/schema.ts`가 쓰는 `drizzle-orm`을 Render에서 찾을 수 있게 `workflows/build.mjs`(esbuild)로 `dist/index.js` 한 파일로 묶음. `npm ci`의 `postinstall`이 빌드하므로 Render 설정은 그대로. `drizzle-orm` 0.45.4, `pg` 8.23.1 추가. `tsconfig.json`의 `paths`로 타입도 한 벌로 맞춤. 레포 밖 빈 폴더에서 `dist/index.js` 단독 실행 확인. Render에서 `check.shared` 실행 확인은 남음
 - [ ] Render Workflow Environment에 `OPENAI_API_KEY` (Workflow 전용 키)
 
@@ -123,7 +124,7 @@ Render 대시보드 설정
 
 ## 8. `moderation.sweep` + Cron Job
 
-- [ ] `tasks.ts`에 `sweep()` 추가 (16 문서 6-3)
+- [x] `tasks.ts`에 `sweep()` 추가 (16 문서 6-3)
 - [ ] `workflows/src/cron/sweep.ts`: `startTask("<slug>/moderation.sweep", [])`만 하고 끝
 - [ ] Render Cron Job 서비스 생성: 같은 브랜치, Singapore, 일정 `*/10 * * * *`, 명령 `cd workflows && npm ci && npx tsx src/cron/sweep.ts`, Environment에 `RENDER_API_KEY`, `RENDER_WORKFLOW_SLUG`
 - [ ] 확인: 웹 서비스의 `RENDER_API_KEY`를 잠시 빼고 위반 문장 전송 → 10분 안에 내려감
@@ -144,3 +145,5 @@ Render 대시보드 설정
 | 2026-11-26 | 1 | Workflow 서비스 배포, `hello`, `check.normalize` 실행 성공. 슬러그 `memoamo-agent` |
 | 2026-11-26 | 4 | `persist.ts` 분리. `npm test`(73개 통과), `tsc`, `eslint`, `build` 통과 |
 | 2026-11-26 | 6 준비 | 묶음 빌드(`build.mjs`) 추가, 확인용 `check.shared` task 추가 |
+| 2026-11-26 | 6 준비 | Render에서 `check.shared` 성공 (표 이름, 함수, 정규화 결과). 확인 task 삭제 |
+| 2026-11-26 | 2, 6, 8 코드 | `0014` 파일과 `schema.ts` 열 정의 작성(DB 미적용). `persist.ts`에 `needsRecheck`, `recheckChatMessage` 추가와 단위 테스트. Workflow에 `moderation.recheck`, `moderation.sweep` 등록. `npm test` 76개, `tsc`, `eslint`, `build` 통과 |

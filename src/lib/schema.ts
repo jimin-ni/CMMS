@@ -18,6 +18,8 @@ import {
 import { HEAP_CHANNEL_PLATFORMS, HEAP_PIECE_PLATFORMS } from "./heap/platform";
 
 export const SCREEN_STATUSES = ["published", "blocked", "removed", "held"] as const;
+// 사후 재판정 상태 (0014, docs/planning/16-render-workflows.md 4장)
+export const RECHECK_STATUSES = ["none", "pending", "done", "failed"] as const;
 
 // Drizzle에 bytea 기본 타입이 없어서 직접 정의한다. node-postgres는 bytea를 Buffer로 주고받는다.
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
@@ -68,6 +70,11 @@ export const bubbleMessages = pgTable("bubble_messages", {
   // 상태가 바뀐 시각. 폴링 기준점이라 DB now()로만 넣는다.
   statusChangedAt: timestamp("status_changed_at", { withTimezone: true }).notNull().defaultNow(),
   normalizedHash: text("normalized_hash"),
+  // 사후 재판정 (0014). 판정 실패로 공개한 글만 pending. 0014 적용 전에는 이 열을 쓰는 코드를 실행하지 않는다.
+  openaiStatus: text("openai_status"),
+  recheckStatus: text("recheck_status", { enum: RECHECK_STATUSES }).notNull().default("none"),
+  recheckAttempts: integer("recheck_attempts").notNull().default(0),
+  recheckedAt: timestamp("rechecked_at", { withTimezone: true }),
 });
 
 export const creatorProfiles = pgTable("creator_profiles", {
