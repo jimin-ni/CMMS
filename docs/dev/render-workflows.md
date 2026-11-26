@@ -21,7 +21,7 @@
 | Render 설정 | Branch `jimins-claude/feature-render-workflows`, Root `workflows`, Build `npm ci`, Start `npm start`, Singapore |
 
 - 단계를 끝낼 때마다 이 표와 맨 아래 "진행 기록"을 같이 고칩니다.
-- 함께 진행 중인 다른 계획: 개발 보조 에이전트, PR 리뷰, impeccable (`docs/planning/15-agents.md`). 에이전트 진행 상태는 15 문서 8장
+- 함께 진행 중인 다른 계획: 개발 보조 에이전트, PR 리뷰, impeccable (`docs/planning/15-agents.md`). 에이전트 진행 상태는 `docs/dev/agents.md`
 
 ## 단계 흐름
 

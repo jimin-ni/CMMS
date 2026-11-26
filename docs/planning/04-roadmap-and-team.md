@@ -172,4 +172,5 @@
 - 실시간 전달의 배포 환경 확인 (03 문서 2절, #19)
 - 크리에이터 수익 배분 비율
 - 모더레이션 미정 항목 (12-ai-screening 문서)
+- 개발 보조 에이전트의 LLM 공급자: OpenAI 충전, Claude API 충전, 무료 API, Claude Code 구독 중 선택 (docs/dev/agents.md 4장, 팀 논의)
 - 개인정보 처리방침 작성과 가입 동의 화면 (12-ai-screening 문서)

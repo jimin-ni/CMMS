@@ -38,6 +38,7 @@ MEMOAMO(가제 CMMS, Creator Message Management System)의 기획 문서 모음�
 | [moderation.md](../dev/moderation.md) | AI 스크리닝 코드 구조, 흐름도, 바꿀 때 지킬 것 | 12 |
 | [moderation-korean.md](../dev/moderation-korean.md) | 한국어 스크리닝 보강 작업 지시서 (구현 전) | 12 |
 | [render-workflows.md](../dev/render-workflows.md) | Render Workflows 단계별 작업과 **현재 상태** | 16 |
+| [agents.md](../dev/agents.md) | 개발 보조 에이전트 코드 위치, 확인 결과, **현재 상태** | 15 |
 | [onboarding.md](../dev/onboarding.md) | 첫 화면 온보딩 | 08 |
 | [heap-notes.md](../dev/heap-notes.md) | 쪽지 트리 | 09 |
 | [heap-room-v2.md](../dev/heap-room-v2.md) | 방 v2 (고정 소품을 가구로) | 09 |
