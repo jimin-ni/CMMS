@@ -602,7 +602,9 @@ type ScreenResult = {
 | #83 | 2~7번 결정 반영. 남은 것: 관리자 문의 버튼의 연락처 |
 | #81 | 개인정보 처리방침 |
 
-## 21. Render Workflows 연동 (사후 재판정) [논의] (2026-11-26)
+## 21. Render Workflows 연동 (사후 재판정) (2026-11-26)
+
+- [결정] (2026-11-26) A안(글 테이블에 표시 열), 버블부터, 쓰기 계정 `moderation_worker`. 쪽지·방명록은 힙 담당과 합의 뒤 [논의]. **개발 계획은 16 문서**가 기준이고, 이 절은 판정 규칙과의 관계만 적습니다.
 
 목표: Render 트랙 조건(Render Workflows 사용)을 **서비스 기능**으로 채웁니다. 판정 흐름(4장)은 그대로 두고, 동기 판정이 놓친 것을 Workflows가 뒤에서 메웁니다. 담당과 구현 범위는 이 절이 확정되면 04 결정 로그에 적습니다.
 
@@ -635,7 +637,7 @@ Workflow: 글 다시 읽기 → 이미 숨김/삭제면 끝 → screen() 다시 
 
 - [사실] 버블 폴링은 `statusChangedAt` 기준으로 상태가 바뀐 예전 메시지도 다시 가져옵니다 (`src/lib/bubble/repo.ts`). 사후에 숨겨도 열린 화면에 반영됩니다. 쪽지, 방명록의 반영 방식은 확인이 필요합니다 [가설].
 - 실행 요청: 웹 서비스 서버 코드에서 `@renderinc/sdk`의 `startTask`. 같은 글이 두 번 요청되지 않게 `idempotencyKey`를 `표면:글id`로 둡니다. 요청이 실패해도 Cron이 다시 찾습니다.
-- 다시 찾는 기준: [미정] 지금은 판정 실패로 통과한 글에 표시가 없습니다(통과 글은 `moderation_events`에 기록이 없음). 두 가지 중 하나를 고릅니다.
+- 다시 찾는 기준: [결정] A안. `bubble_messages`에 `openai_status`, `recheck_status` 등을 더합니다 (16 문서 4장, 마이그레이션 `0014`). 아래는 고를 때 비교한 내용입니다.
   - A. 새 마이그레이션으로 각 글 테이블에 `openai_status` 열 추가 (공유 DB라 번호 통보, #25)
   - B. 표시 없이 최근 30분 공개 글을 모두 다시 판정 (스키마 변경 없음, 호출 수 증가)
 - 판정 코드는 하나만 둡니다. Workflow는 `src/lib/moderation/`의 순수 모듈(`screen.ts`, `normalize.ts`, `lexicon.ts`, `patterns.ts`, `contact.ts`, `policy.ts`)을 그대로 import합니다. 이 파일들은 DB와 `server-only`를 쓰지 않습니다 [사실]. 15 문서의 "`src/` import 금지" 규칙의 예외로 둡니다.

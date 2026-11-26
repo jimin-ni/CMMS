@@ -17,6 +17,8 @@ CMMS(Creator Message Management System, 가제)의 기획 문서 모음입니다
 | [11-design-palette-v2.md](./11-design-palette-v2.md) | 디자인 시안 v2: Chipotle 팔레트·글꼴·컴포넌트 규칙 반영, v1 클래스 대응표 |
 | [12-ai-screening.md](./12-ai-screening.md) | AI 스크리닝 기준 문서: 판정(사전·regex·OpenAI), 경고·자동 차단·신고·재검토, 검토 화면, 도배 방지, 데이터 모델, 구현 범위 |
 | [14-privacy-policy-draft.md](./14-privacy-policy-draft.md) | 개인정보 처리방침 초안 (모더레이션·제재 반영, 법률 검토 전) |
+| [15-agents.md](./15-agents.md) | 개발 보조 도구: 코드 점검 에이전트(Render Workflows, Claude API), PR 리뷰(open-code-review), 디자인 점검(impeccable) |
+| [16-render-workflows.md](./16-render-workflows.md) | Render Workflows 적용 기준 문서: AI 스크리닝 사후 재판정(버블), DB 쓰기 계정, 개발 순서, 시연 |
 
 ## 표기 규칙
 
