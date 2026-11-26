@@ -1,0 +1,126 @@
+# Render Workflows 개발 계획 (AI 스크리닝 사후 재판정, 버블)
+
+- 설계와 결정의 기준: `docs/planning/16-render-workflows.md`. 이 문서는 **무엇을 어떤 순서로 만들고 어떻게 확인하는지**만 적습니다.
+- 개발: 본인 (Jimin). 팀 합의가 필요한 항목은 GitHub 이슈에서 받습니다 (0장).
+- 브랜치: `jimins-claude/feature-render-workflows`. 모든 단계를 여기서 하고 마지막에 main에 머지합니다.
+- 마감: 2026-12-05. 시연 최소선은 6단계입니다.
+
+## 0. 시작 전 조건
+
+| 항목 | 상태 | 막히는 단계 |
+|---|---|---|
+| Render Workflow 서비스 생성 | 완료 (2026-11-26) | 1 |
+| 팀 합의: 마이그레이션 `0014` 번호 | 이슈 대기 | 2 |
+| 팀 합의: DB 계정 `moderation_worker` (힙 테이블 일부 수정 권한 포함) | 이슈 대기 | 3 |
+| 팀 합의: `src/lib/moderation/` 저장 로직 분리 (`persist.ts`) | 이슈 대기 | 4 |
+| Workflow 전용 OpenAI 키 | 본인 발급 필요 | 6 |
+| Render API 키 | 본인 발급 필요 | 7 |
+
+합의를 기다리는 동안 1단계와 4단계의 코드 작성(공유 DB를 건드리지 않는 부분)을 먼저 합니다.
+
+## 1. Workflow 서비스 연결과 뼈대 확인
+
+Render 대시보드 설정
+
+| 칸 | 값 |
+|---|---|
+| Repository | `jimin-ni/CMMS` (이름 변경 후 `jimin-ni/memoamo`) |
+| Branch | `jimins-claude/feature-render-workflows` |
+| Region | Singapore |
+| Language | Node |
+| Root Directory | `workflows` |
+| Build Command | `npm ci` |
+| Start Command | `npm start` |
+| Auto-Deploy | On (이 브랜치에 푸시하면 다시 배포) |
+
+할 일
+- [ ] 첫 배포 후 대시보드에 `hello`, `helloMany`가 보이는지 확인
+- [ ] 대시보드에서 `hello`를 `["memoamo"]`로 실행 → `Hello, memoamo!`
+- [ ] `workflows/src/check/shared.ts`: `../../../src/lib/moderation/normalize.ts`를 import하는 `check.normalize` task 추가
+- [ ] 배포 후 `check.normalize`를 `["ㅅ ㅂ 테스트"]`로 실행해 정규화 결과가 나오면 Root Directory 밖의 파일을 읽을 수 있음
+- [ ] 안 되면 Root Directory를 비우고 Build `cd workflows && npm ci`, Start `cd workflows && npm start`로 바꿔 다시 확인
+- [ ] 대시보드에 보이는 Workflow 슬러그를 기록 (환경 변수 `RENDER_WORKFLOW_SLUG`에 씀)
+
+검사: `cd workflows && npm run check`
+
+## 2. 마이그레이션 `0014_bubble_recheck.sql`
+
+- [ ] 이슈에서 번호 합의 확인
+- [ ] `db/migrations/0014_bubble_recheck.sql` 작성 (내용은 16 문서 4장)
+- [ ] `src/lib/schema.ts`의 `bubbleMessages`에 `openaiStatus`, `recheckStatus`, `recheckAttempts`, `recheckedAt` 추가
+- [ ] 적용 전 `bubble_migrations`에서 미적용 파일이 `0014`뿐인지 확인
+- [ ] `npm run db:bubble`로 공유 DB 적용
+- [ ] 확인: 기존 버블 화면에서 메시지 보내기, 삭제, 폴링이 그대로 동작
+
+## 3. DB 계정 `moderation_worker`
+
+- [ ] 이슈에서 권한 범위 합의 확인
+- [ ] 비밀번호를 로컬에서 만들고 16 문서 5장 SQL 실행 (SQL과 비밀번호는 커밋하지 않음)
+- [ ] 확인: 이 계정으로 `SELECT email FROM "user"` 거부, `DELETE FROM bubble_messages` 거부, `SELECT id FROM bubble_messages LIMIT 1` 성공
+- [ ] Render Workflow 서비스 Environment에 `DATABASE_URL` (Internal URL + 이 계정)
+
+## 4. 저장 로직 분리 (`persist.ts`)
+
+동작을 바꾸지 않는 리팩터링입니다.
+
+- [ ] `src/lib/moderation/persist.ts` 새로 만들기: `lockUser`, `countStrikes`, `takeDownPosts`, `applyAutoBlock`, `planScreen`, `recordScreenEvent`를 옮김. `@/` 별칭과 `@/lib/db` import 없이 `tx`(또는 실행기)만 받음
+- [ ] 사전 읽기 `loadLists(exec)`를 `server.ts`에서 떼어 `persist.ts`로
+- [ ] `repo.ts`, `server.ts`는 `persist.ts`를 import해서 기존 이름 그대로 export
+- [ ] 다른 파일의 import 경로는 바꾸지 않음
+- [ ] 검사: `npm test`, `npx tsc --noEmit`, `npx eslint src scripts`, `npm run build`
+- [ ] 확인: 로컬에서 위반 문장 전송 → 숨김, 경고 안내 n/3 (기존과 같음)
+
+## 5. 저장할 때 재판정 표시
+
+- [ ] `saveChatMessage`: `openaiStatus = result.openai` 저장
+- [ ] 재판정 대상(`error`, `timeout`, `skipped_rate`, `skipped_breaker`)이고 `plan.status === "published"`면 `recheckStatus = "pending"`
+- [ ] 단위 테스트: `openai` 값별로 `recheckStatus`가 맞게 정해지는지 (`moderation.test.ts`에 추가)
+- [ ] 확인: 로컬 `.env.local`의 `OPENAI_API_KEY`를 일부러 틀린 값으로 두고 보통 문장 전송 → DB에서 `recheck_status = 'pending'`
+
+## 6. `moderation.recheck` task (시연 최소선)
+
+파일
+- [ ] `workflows/src/common/config.ts`: 필요한 환경 변수가 없으면 바로 실패
+- [ ] `workflows/src/common/db.ts`: Drizzle + pg, `moderation_worker` 연결
+- [ ] `workflows/src/moderation/moderate.ts`: OpenAI Moderation 호출. 사용자 상한 없음, 시간 제한과 재시도만
+- [ ] `workflows/src/moderation/tasks.ts`: `recheck(surface, messageId)` (동작은 16 문서 6-3)
+- [ ] `workflows/package.json`: `drizzle-orm`, `pg`를 루트와 같은 버전으로 추가
+- [ ] Render Workflow Environment에 `OPENAI_API_KEY` (Workflow 전용 키)
+
+확인
+- [ ] 5단계에서 만든 `pending` 메시지 id로 대시보드 실행 `["chat", "<id>"]`
+  - 보통 문장: `recheck_status = 'done'`, 화면 변화 없음
+  - 위반 문장: 다른 구독자 화면에서 내려감, `moderation_events`에 `source = 'auto'` 기록, 경고 수 +1
+- [ ] 같은 id로 한 번 더 실행해도 아무것도 바뀌지 않음 (중복 안전)
+- [ ] 이미 삭제한 메시지 id로 실행하면 `done`으로만 바뀜
+
+## 7. 웹 서비스에서 자동 실행
+
+- [ ] 루트에 `@renderinc/sdk` 설치
+- [ ] `src/lib/workflows.ts` (`server-only`): `startRecheck(surface, id)`. `RENDER_API_KEY`나 `RENDER_WORKFLOW_SLUG`가 없으면 아무것도 안 함
+- [ ] `src/lib/bubble/actions.ts`: 저장 결과가 `pending`이면 `after(() => startRecheck("chat", id))`. 오류는 로그만
+- [ ] `.env.example`에 두 키 추가 (값 없이)
+- [ ] Render 웹 서비스 Environment에 두 키 추가
+- [ ] 검사: `npx tsc --noEmit`, `npx eslint src scripts`, `npm run build`
+- [ ] 확인: 배포 환경에서 위반 문장이 판정 실패로 공개된 뒤 몇 초 안에 내려가는지, 걸린 시간 기록
+
+## 8. `moderation.sweep` + Cron Job
+
+- [ ] `tasks.ts`에 `sweep()` 추가 (16 문서 6-3)
+- [ ] `workflows/src/cron/sweep.ts`: `startTask("<slug>/moderation.sweep", [])`만 하고 끝
+- [ ] Render Cron Job 서비스 생성: 같은 브랜치, Singapore, 일정 `*/10 * * * *`, 명령 `cd workflows && npm ci && npx tsx src/cron/sweep.ts`, Environment에 `RENDER_API_KEY`, `RENDER_WORKFLOW_SLUG`
+- [ ] 확인: 웹 서비스의 `RENDER_API_KEY`를 잠시 빼고 위반 문장 전송 → 10분 안에 내려감
+
+## 9. 마무리
+
+- [ ] 시연 녹화 (16 문서 9장 시나리오)
+- [ ] 측정값 기록: 전송→숨김 시간, task 실행 시간, 재시도 수
+- [ ] 문서 갱신: 16 문서 상태, 12 문서 21장, 03 문서 버전 표, 04 결정 로그
+- [ ] 테스트 계정, 테스트 메시지 정리 여부 확인
+- [ ] main 머지 후 Workflow 서비스와 Cron Job의 Branch를 main으로 변경
+
+## 진행 기록
+
+| 날짜 | 단계 | 내용 |
+|---|---|---|
+| 2026-11-26 | 0 | 계획 작성, Workflow 서비스 생성 |
