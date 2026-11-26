@@ -5,6 +5,23 @@
 - 브랜치: `jimins-claude/feature-render-workflows`. 모든 단계를 여기서 하고 마지막에 main에 머지합니다.
 - 마감: 2026-12-05. 시연 최소선은 6단계입니다.
 
+## 현재 상태 (새 세션은 여기부터 읽기)
+
+마지막 갱신: 2026-11-26
+
+| 항목 | 상태 |
+|---|---|
+| 끝난 단계 | 1 (Workflow 서비스 배포, 슬러그 `memoamo-agent`), 4 (`persist.ts` 분리, 검사 통과) |
+| 대기 | 2 마이그레이션 `0014`, 3 DB 계정 `moderation_worker` → 이슈 #125 팀원 답 대기 |
+| 다음 할 일 | 6단계 준비: esbuild로 `workflows`를 한 파일로 묶는 빌드 (6단계 "의존성 해석 문제 대응"). 그다음 `recheck` task 코드 작성 |
+| 남은 확인 | 4단계의 화면 확인 (로컬에서 위반 문장 전송 → 숨김, 경고 n/3) |
+| 사용자가 할 일 | Workflow 전용 OpenAI 키, Render API 키 발급 (0장) |
+| 관련 이슈 | #124 `jimins-claude/feature-agents` 삭제 제안 (답 대기), #125 공유 DB·공용 코드 변경 동의 (답 대기) |
+| Render 설정 | Branch `jimins-claude/feature-render-workflows`, Root `workflows`, Build `npm ci`, Start `npm start`, Singapore |
+
+- 단계를 끝낼 때마다 이 표와 맨 아래 "진행 기록"을 같이 고칩니다.
+- 함께 진행 중인 다른 계획: 개발 보조 에이전트, PR 리뷰, impeccable (`docs/planning/15-agents.md`, 아직 착수 전)
+
 ## 0. 시작 전 조건
 
 | 항목 | 상태 | 막히는 단계 |
