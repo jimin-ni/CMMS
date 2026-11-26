@@ -24,6 +24,7 @@
 
 - ①이 "에이전트 여러 개" 구조(4장)의 첫 번째입니다. 이후 에이전트(로그 점검, DB 리포트 등)도 ①과 같은 Render Workflow 서비스에 추가합니다.
 - ②는 에이전트 개발이 아니라 도구 도입입니다. ①과 결과를 비교하는 기준으로도 씁니다 (7-5).
+- ③ impeccable: Claude Code에 디자인 스킬을 붙여 UI 품질을 점검하고 다듬습니다. API 키가 필요 없습니다 (10장).
 
 ## 2. 브랜치와 배포
 
@@ -136,7 +137,17 @@ workflows/
    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO agent_ro;
    ALTER ROLE agent_ro SET default_transaction_read_only = on;
    ```
-4. [미정] 인증 테이블(`account`, `session`, `verification`)에는 비밀번호 해시와 토큰이 있습니다. 이 테이블은 `REVOKE SELECT`로 빼는 것을 추천합니다.
+4. [결정] (2026-11-26) 인증 정보는 에이전트가 읽지 못하게 막습니다. 3번 바로 뒤에 실행합니다.
+   ```sql
+   -- 비밀번호 해시, 세션 토큰, 인증 코드가 있는 테이블은 전부 막음
+   REVOKE ALL ON "account", "session", "verification" FROM agent_ro;
+   -- user 테이블은 이메일과 이름을 막고, 통계에 필요한 열만 허용
+   REVOKE ALL ON "user" FROM agent_ro;
+   GRANT SELECT (id, role) ON "user" TO agent_ro;
+   ```
+   - 확인: `agent_ro`로 접속해 `SELECT * FROM "session" LIMIT 1;`이 `permission denied`로 실패해야 합니다.
+   - 주의: 3번의 `ALTER DEFAULT PRIVILEGES` 때문에 Better Auth가 나중에 새 인증 테이블(플러그인 추가 등)을 만들면 자동으로 읽힐 수 있습니다. `npm run auth:migrate`로 테이블이 늘면 위 `REVOKE`에 그 테이블을 추가합니다.
+   - 코드에서도 한 번 더 막습니다: `common/db.ts`는 위 네 테이블 이름이 들어간 쿼리를 실행 전에 거부합니다.
 5. [가설] Render 기본 계정에 `CREATEROLE` 권한이 있는지 확인이 필요합니다. 없으면 Render 지원 문서를 따릅니다.
 6. 이후 새 테이블이 생기면 3번의 `ALTER DEFAULT PRIVILEGES` 덕분에 자동으로 읽을 수 있습니다. 단, 테이블을 만든 계정이 3번을 실행한 계정과 같아야 합니다.
 
@@ -210,7 +221,7 @@ export const run = task(
 키 만들고 쓰는 순서
 1. platform.claude.com에 로그인 → Billing에서 크레딧 충전 (처음엔 $5~10)
 2. Settings > Limits에서 월 사용 한도를 낮게 설정 (예: $20)
-3. API Keys > Create Key. ①용 `memoamo-agents`, ②용 `memoamo-ocr`로 **키를 나눕니다**. 사용량을 따로 보고, 하나가 새도 다른 쪽은 안전합니다.
+3. Console에서 Workspace를 둘 만들고(`agents`, `ci-review`) 각각 월 한도를 겁니다. 각 Workspace에서 키를 하나씩 만듭니다. ①용 `memoamo-agents`, ②용 `memoamo-ocr`. 키를 나누는 이유는 6-5.
 4. ① 키는 Render Workflow 서비스 > Environment의 `ANTHROPIC_API_KEY`, ② 키는 GitHub 레포 Settings > Secrets and variables > Actions의 `ANTHROPIC_API_KEY`에 넣습니다. 저장소, 채팅, 문서에 적지 않습니다.
 5. 로컬 테스트용은 `workflows/.env`(커밋 안 함)에만 둡니다.
 6. 코드: `npm install @anthropic-ai/sdk` → `import Anthropic from "@anthropic-ai/sdk"` → `new Anthropic()`이 환경 변수를 자동으로 읽습니다.
@@ -230,6 +241,34 @@ export const run = task(
 - [결정] 보안 관련 코드를 리뷰하면 안전 분류기가 응답을 거절할 수 있습니다(`stop_reason: "refusal"`). `common/llm.ts`에서 이를 확인하고, 서버 측 대체 모델 설정(`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`)을 켭니다.
 - [결정] 같은 시스템 프롬프트를 워커 모두가 쓰므로 프롬프트 캐싱을 켭니다.
 - [가설] ① 1회 비용: 파일 50개(입력 약 15만, 출력과 thinking 약 5~10만 토큰) 기준 Opus 5.5로 $2~3. 첫 실행에서 `usage`를 기록해 확인합니다.
+
+### 6-5. 키를 둘로 나누는 이유 [결정]
+
+| 이유 | ① 키 (Render) | ② 키 (GitHub Secrets) |
+|---|---|---|
+| 노출 범위 | Render 대시보드 접근자만 봄 | 레포에 쓰기 권한이 있는 사람은 누구나 워크플로 파일을 바꿔 Secret을 꺼낼 수 있음 |
+| 키를 만지는 코드 | 우리가 쓴 코드만 | 외부 도구(open-code-review)가 실행 때 내려받는 바이너리가 키를 직접 씀 |
+| 사고가 나면 | ②를 끊어도 ①은 계속 동작 | ①을 끊어도 PR 리뷰는 계속 동작 |
+| 비용 확인 | Workspace별로 사용량이 따로 보임 | PR이 많은 날 ②만 늘어도 바로 보임 |
+| 한도 | ① 한도를 다 써도 ②는 영향 없음 | ②가 폭주해도 ①은 영향 없음 |
+
+- 핵심: ②는 **남이 만든 코드에 키를 주는 것**이고 GitHub Secrets는 Render보다 노출 범위가 넓습니다. 같은 키를 쓰면 ②에서 새는 순간 ①도 같이 멈추고, 어디서 돈이 나갔는지도 구분이 안 됩니다.
+
+### 6-6. 예상 비용 [가설]
+
+- [사실] claude.ai의 Pro, Max 구독은 API 사용량을 포함하지 않습니다. Max로 올려도 ①, ②의 API 비용은 그대로입니다. Max는 Claude Code를 더 많이 쓰는 데만 도움이 됩니다 (11장 impeccable처럼 Claude Code 안에서 쓰는 도구).
+- 계산 기준: 이 레포의 PR은 2026-11-10~25에 90건(하루 약 5~6건). 같은 PR에 커밋을 더 올리면 ②가 다시 돕니다.
+
+| 항목 | 가정 | Opus 5.5 | Sonnet 5.5 |
+|---|---|---|---|
+| ② PR 1건 | 입력 5~15만, 출력 1~2만 토큰 | $0.4~1.0 | $0.2~0.5 |
+| ② 한 달 (PR 170건 + 재리뷰) | 리뷰 약 250회 | $100~250 | $50~125 |
+| ① 1회 | 파일 50개 | $2~3 | $1~1.5 |
+| ① 한 달 | 주 1회 / 매일 | $10 / $60~90 | $5 / $30~45 |
+| **마감(12-05)까지 9일** | PR 약 50건, ① 몇 번 | **$30~60** | **$15~30** |
+
+- 추천: ②는 `incremental: 'true'`로 겹치는 댓글을 줄이고, 첫 PR 몇 건을 보고 비싸면 Sonnet 5.5로 바꿉니다. ①은 주 1회 또는 수동 실행.
+- 첫 주에 Console의 Usage 화면으로 실제 값을 확인하고 이 표를 고칩니다.
 
 참고: 다른 선택지
 - Anthropic **Managed Agents**(beta): Anthropic이 에이전트 루프와 실행 환경을 대신 운영합니다. 이 프로젝트는 Render Workflows가 그 역할을 하므로 쓰지 않습니다.
@@ -324,7 +363,7 @@ Action 설정 (입력 이름은 `action.yml`에서 확인, 값은 [가설])
 | Q3 | 만드는 도구 | [결정] Anthropic TypeScript SDK 직접 |
 | Q4 | LLM 공급자, 모델 | [결정] Claude API, `claude-opus-5-5`. 워커 모델은 평가 후 [미정] |
 | Q5 | 검증(`tsc`, `eslint`)을 에이전트 안에서 | [결정] 에이전트가 직접 실행 (TS를 골라서 가능) |
-| Q6 | DB 읽기 전용 계정 | [결정] 만듦 (5-1). 인증 테이블 제외 여부 [미정] |
+| Q6 | DB 읽기 전용 계정 | [결정] 만듦. 인증 테이블과 `user`의 이메일, 이름은 읽기 금지 (5-1) |
 | Q7 | 브랜치 | [결정] `jimins-claude/feature-render-workflows`에서 개발, 마지막에 main 머지 |
 | Q8 | 언어 | [결정] TypeScript (7-4) |
 | Q9 | open-code-review | [결정] GitHub Actions로 PR 리뷰 도입 (7-5) |
@@ -358,10 +397,49 @@ Action 설정 (입력 이름은 `action.yml`에서 확인, 값은 [가설])
 | 안전 분류기 거절 | ①은 `stop_reason` 확인 + 서버 측 대체 모델 |
 | 레포 이름 변경(CMMS → memoamo) | clone 주소를 `GITHUB_REPO` 환경 변수로 둠 |
 
-## 10. 참고
+## 10. ③ impeccable (디자인 품질, Claude Code 스킬) [미정]
+
+### 10-1. 무엇인가 [사실] (2026-11-26 README 기준)
+
+- pbakaus/impeccable. Apache-2.0, 매우 활발함. Anthropic의 frontend-design 스킬에서 시작한 **디자인 스킬 묶음**입니다.
+- 두 부분으로 되어 있습니다.
+  - **스킬 명령** (`/impeccable critique`, `polish` 등 23개): Claude Code 같은 코딩 에이전트 안에서 실행됩니다. 에이전트의 모델과 구독을 그대로 씁니다. 그래서 따로 API 키가 필요 없습니다.
+  - **감지기** (`npx impeccable detect`): LLM 없이 정해진 규칙 62개로 UI 코드를 검사합니다. API 키가 필요 없고 CI에서도 돌아갑니다.
+- 명령 종류: 점검(`critique`, `audit`), 마무리(`polish`, `harden`, `clarify`, `adapt`, `optimize`, `onboard`), 방향 조정(`bolder`, `quieter`, `distill`, `colorize`, `typeset`, `layout`, `animate`, `delight`, `overdrive`), 준비(`shape`, `init`, `document`, `extract`), 실시간(`live`, `generate`).
+
+### 10-2. "에이전트를 쓴다"고 할 수 있나
+
+- impeccable 자체는 에이전트가 아닙니다. **에이전트(Claude Code)에게 주는 디자인 지식과 도구**입니다.
+- 정확한 표현: "Claude Code 에이전트에 impeccable 디자인 스킬을 붙여 UI 품질을 점검하고 다듬었다."
+- ①과 비교: ①은 우리가 루프와 구조를 만든 에이전트, ③은 이미 있는 에이전트에 기술을 더한 것입니다.
+- ①의 워커로도 쓸 수 있습니다. 감지기는 LLM이 없으므로 `codeReview.designDetect` task에서 `npx impeccable detect --json src/`를 실행하면 API 비용 없이 디자인 지적을 리포트에 더할 수 있습니다.
+
+### 10-3. 활용 계획
+
+| 단계 | 할 일 | 결과 | API 비용 |
+|---|---|---|---|
+| 1 | 내 PC에만 설치: `npx impeccable install --providers=claude --scope=global` → Claude Code 재시작 | 레포 파일이 바뀌지 않음 | 없음 |
+| 2 | 원격 전송 끄기: `npx impeccable telemetry off` | | 없음 |
+| 3 | 기준선 측정: `npx impeccable detect --json src/ > 결과파일` (결과는 커밋 안 함) | 지금 UI의 문제 목록 | 없음 |
+| 4 | `/impeccable init`, `document` 실행. 단, 결과는 기존 `docs/planning/08-design.md`, `11-design-palette-v2.md`와 맞춰서 정리 | 에이전트가 우리 디자인 규칙을 앎 | 없음 (Pro 사용량) |
+| 5 | 내 담당 화면부터 `critique`, `audit` (보고만, 수정 안 함): 버블, 온보딩, 홈 | 화면별 점수와 개선 목록 | 없음 (Pro 사용량) |
+| 6 | 고칠 것을 골라 `polish`, `harden`, `adapt`(모바일) 실행. 화면마다 브랜치 1개, `tsc`/`eslint`/`build` 확인 후 PR | 다듬어진 화면, ②가 그 PR을 리뷰 | 없음 (Pro 사용량) |
+| 7 | 다시 `detect`로 3단계와 비교 | 전후 비교표 (발표 자료) | 없음 |
+| 8 | (선택) ①에 `designDetect` task 추가, 또는 GitHub Actions에서 `detect --sarif` | 자동 디자인 점검 | 없음 |
+
+지킬 것
+- 팀원 담당 화면(힙 미니룸 등)은 건드리지 않습니다. 필요하면 결과만 이슈로 공유합니다.
+- `live` 모드는 쓰지 않습니다. 에이전트가 없을 때 `claude` CLI를 **권한 확인 없이** 실행합니다. 쓰더라도 `IMPECCABLE_LIVE_COPY_AGENT=chat`으로 둡니다.
+- 설치 후 Claude Code에 자동 훅(UI 파일 수정 때 자동 점검)이 생깁니다. 거슬리면 끕니다.
+- `.impeccable/` 작업 폴더는 커밋하지 않습니다 (`.gitignore` 추가는 첫 PR에서).
+- 마감(12-05)까지 시간이 짧으므로 5~7단계를 핵심 화면 2~3개로 제한합니다.
+- [가설] Pro 플랜 사용량 한도 안에서 하루 몇 화면까지 가능한지는 써 보며 확인합니다. 부족하면 Max가 여기에 도움이 됩니다.
+
+## 11. 참고
 
 - Render Workflows: https://render.com/docs/workflows (2026-11-26 확인)
 - Render 내부 네트워크: https://render.com/docs/private-network
 - Render 로그 API: https://api-docs.render.com/reference/list-logs
 - Claude API 문서: https://platform.claude.com/docs
 - open-code-review: https://github.com/alibaba/open-code-review (`action.yml` 2026-11-26 확인)
+- impeccable: https://github.com/pbakaus/impeccable (README 2026-11-26 확인)
