@@ -139,7 +139,7 @@ export function stripEmojiComments(fileName: string, source: string): { text: st
 export type CommentIssue = "emoji" | "long" | "person" | "email" | "attribution" | "date";
 
 export interface CommentGroup {
-  // 파일 안 순번. Claude 답과 맞출 때 쓴다.
+  // 파일 안 순번. LLM 답과 맞출 때 쓴다.
   id: number;
   line: number;
   text: string;

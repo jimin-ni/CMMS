@@ -109,7 +109,10 @@ workflows/
 
 | 이름 | 용도 | 비고 |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | Claude API | 6-4 참고. SDK가 자동으로 읽음 |
+| `AGENT_LLM_PROVIDER` | LLM 공급자 | `openai`(기본) 또는 `anthropic` (7-6 Q4) |
+| `AGENT_LLM_MODEL` | 모델 | 비우면 `gpt-5-mini` (anthropic이면 `claude-opus-5-5`) |
+| `AGENT_OPENAI_API_KEY` | OpenAI API | 에이전트 전용 키. 스크리닝용 `OPENAI_API_KEY`와 따로 만들고 월 한도를 겁니다 |
+| `ANTHROPIC_API_KEY` | Claude API | `AGENT_LLM_PROVIDER=anthropic`일 때만. 6-4 참고 |
 | `AGENT_DATABASE_URL` | 공유 DB 읽기 | **Internal** URL + 읽기 전용 계정 `agent_ro` (5-1). 같은 Workflow 서비스의 `DATABASE_URL`은 재판정용 `moderation_worker`라서 이름을 나눔 |
 | `RENDER_API_KEY` | 로그, 서비스 조회 | Account Settings > API Keys |
 | `RENDER_OWNER_ID` | 로그 조회 필수 값 | 워크스페이스 ID |
@@ -194,8 +197,8 @@ workflows/
    - 줄글: 묶음이 3줄 이상이거나 한 줄이 120자를 넘음
    - 이름: 환경 변수 `CODE_REVIEW_PERSON_NAMES`(쉼표 구분)의 이름이 들어감. 이름 목록은 코드에 두지 않습니다
    - 이메일, 날짜(`2026-11-25` 꼴), 작성 경위(`요청으로`, `지시로`, `손질`, `@author` 등)
-3. 다시 쓰기: 걸린 묶음만 Claude에 보내 `keep`, `rewrite`(최대 2줄), `delete` 중 하나를 받습니다.
-4. 확인: 주석을 뺀 코드 토큰이 고치기 전과 같은지 봅니다. 다르면 그 파일 결과를 버립니다.
+3. 다시 쓰기: 걸린 묶음만 LLM에 보내 `keep`, `rewrite`(최대 2줄), `delete` 중 하나를 받습니다.
+4. 확인: 주석을 뺀 코드 토큰이 고치기 전과 같은지 봅니다. 다르면 그 파일의 **이번 수정안만** 버리고 원래 파일은 그대로 둡니다. 파일을 지우는 일은 없습니다. 버린 파일은 리포트에 남깁니다.
 
 2026-11-27 저장소 전체 검사 결과 (`src`, `scripts`, `workers`, `workflows`): 122개 파일에서 줄글 227, 날짜 13, 이름 3, 작성 경위 2. `workflows/`는 직접 정리해 0건. 나머지는 에이전트가 `jimins-claude/agent-*` 브랜치 PR로 고칩니다. 팀원 코드도 바뀌므로 PR을 올릴 때 알립니다.
 - [결정] 리팩터링은 처음에는 **제안만** 합니다. 자동 수정은 평가 세트에서 충분히 맞는 것을 본 뒤 D(생성-평가 반복)로 켭니다.
@@ -384,7 +387,7 @@ Action 설정 (입력 이름은 `action.yml`에서 확인, 값은 [가설])
 | Q1 | ① 구조 | [결정] A → C(오케스트레이터) → D → 필요 시 B |
 | Q2 | 개발 방식 | [결정] 평가 먼저 + 사람 확인 |
 | Q3 | 만드는 도구 | [결정] Anthropic TypeScript SDK 직접 |
-| Q4 | LLM 공급자, 모델 | [결정] Claude API, `claude-opus-5-5`. 워커 모델은 평가 후 [미정] |
+| Q4 | LLM 공급자, 모델 | [결정] (2026-11-27 변경) 우선 OpenAI(`gpt-5-mini`)로 시작. `common/llm.ts`가 두 공급자를 모두 지원하고 환경 변수로 바꿈. Claude로 돌아갈지는 결과를 보고 [미정]. 이 문서 6-4, 6-5의 Claude 설명은 `anthropic`을 고를 때 기준 |
 | Q5 | 검증(`tsc`, `eslint`)을 에이전트 안에서 | [결정] 에이전트가 직접 실행 (TS를 골라서 가능) |
 | Q6 | DB 읽기 전용 계정 | [결정] 만듦. 인증 테이블과 `user`의 이메일, 이름은 읽기 금지 (5-1) |
 | Q7 | 브랜치 | [결정] `jimins-claude/feature-render-workflows`에서 개발, 마지막에 main 머지 |
@@ -411,10 +414,10 @@ Action 설정 (입력 이름은 `action.yml`에서 확인, 값은 [가설])
 | 단계 | 상태 |
 |---|---|
 | 1 | 끝남 (2026-11-26) |
-| 3 | 코드 끝남: `common/db-readonly.ts`, `common/render-api.ts`, 확인 task `agentCheck.db`, `agentCheck.logs`. #125 동의 받음. **`agent_ro` 계정 생성과 Environment 값 입력 남음** |
-| 4 | 코드 끝남: `common/llm.ts`, 확인 task `agentCheck.llm`. **`ANTHROPIC_API_KEY` 입력 후 실행 확인 남음** |
+| 3 | 코드 끝남: `common/db-readonly.ts`, `common/render-api.ts`, 확인 task `agentCheck.db`, `agentCheck.logs`. `agent_ro` 계정 생성(2026-11-27): 공개 테이블 읽기 OK, `user`는 `id`, `role`만, `account`/`session`/`verification`과 쓰기는 거부 확인. **Render Environment에 `AGENT_DATABASE_URL`(Internal URL) 입력 남음** |
+| 4 | 코드 끝남: `common/llm.ts`(OpenAI 기본, Claude 선택), 확인 task `agentCheck.llm`. **`AGENT_OPENAI_API_KEY` 입력 후 실행 확인 남음** |
 | 5 | 규칙 평가 세트 32건 (이모지 16, 검사 10, 코드 비교 6). `npm run eval`. 리팩터링 예제는 7단계 전에 만듦 |
-| 6 | 규칙 부분 끝남 (`rules.ts`, `policy.ts`). Claude 다시 쓰기(`comments.ts`)와 로컬 실행(`npm run comments -- <파일>`)은 코드만 있음. **키 입력 후 실제 실행 확인 남음** |
+| 6 | 규칙 부분 끝남 (`rules.ts`, `policy.ts`). LLM 다시 쓰기(`comments.ts`)와 로컬 실행(`npm run comments -- <파일>`)은 코드만 있음. **키 입력 후 실제 실행 확인 남음** |
 | 0, 2 | 키 발급 대기 (사용자) |
 
 ## 9. 위험과 대응

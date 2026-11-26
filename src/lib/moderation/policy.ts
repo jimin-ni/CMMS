@@ -56,8 +56,8 @@ export const MODERATION_POLICY = {
   versions: { patterns: "2026-11-20.2", thresholds: "2026-11-20.2" },
 } as const;
 
-// 로그인 화면 "관리자 문의" 버튼의 받는 주소 (문서 9장, #83 6번). 임시 주소라 바뀔 수 있다.
-export const ADMIN_CONTACT_EMAIL = "ww326jimin@gmail.com";
+// 로그인 화면 "관리자 문의" 받는 주소. 값은 환경 변수에 두고, 없으면 버튼을 숨긴다.
+export const ADMIN_CONTACT_EMAIL = process.env.NEXT_PUBLIC_ADMIN_CONTACT_EMAIL ?? "";
 
 // 작성자 안내 문구 (문서 6장, 10장)
 export const MODERATION_TEXT = {

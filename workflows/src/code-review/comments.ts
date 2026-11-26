@@ -1,4 +1,4 @@
-// 파일 하나의 주석을 기준에 맞게 고친다. 이모지는 규칙으로, 줄글과 개인정보는 Claude로 고친다.
+// 파일 하나의 주석을 기준에 맞게 고친다. 이모지는 규칙으로, 줄글과 개인정보는 LLM으로 고친다.
 import ts from "typescript";
 import { z } from "zod";
 import { askJson, type LlmUsage } from "../common/llm";

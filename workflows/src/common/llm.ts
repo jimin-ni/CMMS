@@ -1,20 +1,25 @@
-// Claude 호출을 한곳에 모은다. 모델, effort, 거절 처리, 캐싱, 비용 기록을 여기서만 정한다.
+// LLM 호출을 한곳에 모은다. 공급자, 모델, effort, 거절 처리, 비용 기록을 여기서만 정한다.
+// 공급자는 AGENT_LLM_PROVIDER(openai | anthropic, 기본 openai), 모델은 AGENT_LLM_MODEL로 바꾼다.
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
+import OpenAI from "openai";
+import { zodTextFormat } from "openai/helpers/zod";
 import type { z } from "zod";
 import { requireEnv } from "./config";
 
-export const DEFAULT_MODEL = "claude-opus-5-5";
-export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
+export type Provider = "openai" | "anthropic";
+export type Effort = "low" | "medium" | "high";
 
-// 100만 토큰당 달러: 입력, 출력, 캐시 읽기, 캐시 쓰기
-const PRICES: Record<string, [number, number, number, number]> = {
-  "claude-opus-5-5": [4, 20, 0.2, 5],
-  "claude-opus-5": [5, 25, 0.5, 6.25],
-  "claude-opus-4-8": [5, 25, 0.5, 6.25],
-  "claude-sonnet-5-5": [2, 10, 0.1, 2.5],
-  "claude-sonnet-5": [2, 10, 0.2, 2.5],
-  "claude-haiku-5-5": [0.1, 0.5, 0.01, 0.125],
+const DEFAULT_MODEL: Record<Provider, string> = {
+  openai: "gpt-5-mini",
+  anthropic: "claude-opus-5-5",
+};
+
+// 100만 토큰당 달러: 입력, 출력, 캐시 읽기. 없는 모델은 비용을 null로 둔다.
+const PRICES: Record<string, [number, number, number]> = {
+  "gpt-5-mini": [0.25, 2, 0.025],
+  "claude-opus-5-5": [4, 20, 0.2],
+  "claude-sonnet-5-5": [2, 10, 0.1],
 };
 
 export interface LlmUsage {
@@ -22,59 +27,73 @@ export interface LlmUsage {
   inputTokens: number;
   outputTokens: number;
   cacheReadTokens: number;
-  cacheWriteTokens: number;
   costUsd: number | null;
 }
 
-let client: Anthropic | null = null;
-
-function getClient(): Anthropic {
-  if (!client) {
-    requireEnv("ANTHROPIC_API_KEY");
-    client = new Anthropic();
-  }
-  return client;
-}
-
-function toUsage(model: string, usage: Anthropic.Beta.BetaUsage): LlmUsage {
-  const read = usage.cache_read_input_tokens ?? 0;
-  const write = usage.cache_creation_input_tokens ?? 0;
-  const price = PRICES[model];
-  const costUsd = price
-    ? (usage.input_tokens * price[0] + usage.output_tokens * price[1] + read * price[2] + write * price[3]) / 1_000_000
-    : null;
-  return {
-    model,
-    inputTokens: usage.input_tokens,
-    outputTokens: usage.output_tokens,
-    cacheReadTokens: read,
-    cacheWriteTokens: write,
-    costUsd,
-  };
-}
-
 export class LlmRefusalError extends Error {
-  constructor(public readonly category: string | null) {
-    super(`Claude가 요청을 거절했습니다 (분류: ${category ?? "없음"})`);
+  constructor(public readonly detail: string | null) {
+    super(`LLM이 요청을 거절했습니다 (${detail ?? "이유 없음"})`);
   }
 }
 
 export interface AskJsonOptions<S extends z.ZodType> {
-  // 캐시되는 고정 지시문. 바뀌는 값을 넣지 않는다.
+  // 고정 지시문. 바뀌는 값을 넣지 않아야 캐시된다.
   system: string;
   prompt: string;
   schema: S;
   effort?: Effort;
-  model?: string;
   maxTokens?: number;
 }
 
-// Zod 스키마 모양의 JSON으로 답을 받는다.
-export async function askJson<S extends z.ZodType>(
-  opts: AskJsonOptions<S>,
-): Promise<{ data: z.infer<S>; usage: LlmUsage }> {
-  const response = await getClient().beta.messages.parse({
-    model: opts.model ?? DEFAULT_MODEL,
+function provider(): Provider {
+  const p = process.env.AGENT_LLM_PROVIDER ?? "openai";
+  if (p !== "openai" && p !== "anthropic") throw new Error(`AGENT_LLM_PROVIDER 값이 잘못됐습니다: ${p}`);
+  return p;
+}
+
+// 모델명이 날짜 붙은 이름(gpt-5-mini-2025-08-07)으로 와도 가격표를 찾는다.
+function priceOf(model: string): [number, number, number] | undefined {
+  const key = Object.keys(PRICES).find((k) => model === k || model.startsWith(`${k}-20`));
+  return key ? PRICES[key] : undefined;
+}
+
+function toUsage(model: string, input: number, output: number, cached: number): LlmUsage {
+  const price = priceOf(model);
+  const costUsd = price ? (input * price[0] + output * price[1] + cached * price[2]) / 1_000_000 : null;
+  return { model, inputTokens: input, outputTokens: output, cacheReadTokens: cached, costUsd };
+}
+
+let openai: OpenAI | null = null;
+let anthropic: Anthropic | null = null;
+
+async function askOpenAI<S extends z.ZodType>(opts: AskJsonOptions<S>, model: string) {
+  // 스크리닝용 OPENAI_API_KEY와 한도를 나누려고 키를 따로 둔다.
+  openai ??= new OpenAI({ apiKey: requireEnv("AGENT_OPENAI_API_KEY") });
+  const res = await openai.responses.parse({
+    model,
+    instructions: opts.system,
+    input: opts.prompt,
+    max_output_tokens: opts.maxTokens ?? 16000,
+    reasoning: { effort: opts.effort ?? "high" },
+    text: { format: zodTextFormat(opts.schema, "result") },
+  });
+  // OpenAI input_tokens에는 캐시 읽기가 들어 있어 뺀다.
+  const cached = res.usage?.input_tokens_details?.cached_tokens ?? 0;
+  const usage = toUsage(res.model, (res.usage?.input_tokens ?? 0) - cached, res.usage?.output_tokens ?? 0, cached);
+
+  const refusal = res.output
+    .flatMap((item) => (item.type === "message" ? item.content : []))
+    .find((c) => c.type === "refusal");
+  if (refusal) throw new LlmRefusalError(refusal.refusal);
+  if (res.status === "incomplete") throw new Error(`응답이 끝나지 않았습니다: ${res.incomplete_details?.reason ?? "?"}`);
+  return { parsed: res.output_parsed, usage };
+}
+
+async function askAnthropic<S extends z.ZodType>(opts: AskJsonOptions<S>, model: string) {
+  requireEnv("ANTHROPIC_API_KEY");
+  anthropic ??= new Anthropic();
+  const res = await anthropic.beta.messages.parse({
+    model,
     max_tokens: opts.maxTokens ?? 16000,
     // Opus 5.5 기본 effort는 medium이라 직접 적는다.
     output_config: { effort: opts.effort ?? "high", format: betaZodOutputFormat(opts.schema) },
@@ -84,23 +103,26 @@ export async function askJson<S extends z.ZodType>(
     system: [{ type: "text", text: opts.system, cache_control: { type: "ephemeral" } }],
     messages: [{ role: "user", content: opts.prompt }],
   });
+  const usage = toUsage(res.model, res.usage.input_tokens, res.usage.output_tokens, res.usage.cache_read_input_tokens ?? 0);
 
-  const usage = toUsage(response.model, response.usage);
+  if (res.stop_reason === "refusal") throw new LlmRefusalError(res.stop_details?.category ?? null);
+  if (res.stop_reason === "max_tokens") throw new Error("응답이 max_tokens에서 잘렸습니다");
+  return { parsed: res.parsed_output, usage };
+}
+
+// Zod 스키마 모양의 JSON으로 답을 받는다.
+export async function askJson<S extends z.ZodType>(
+  opts: AskJsonOptions<S>,
+): Promise<{ data: z.infer<S>; usage: LlmUsage }> {
+  const p = provider();
+  const model = process.env.AGENT_LLM_MODEL || DEFAULT_MODEL[p];
+  const { parsed, usage } = p === "openai" ? await askOpenAI(opts, model) : await askAnthropic(opts, model);
   console.log(
     `[llm] ${usage.model} in=${usage.inputTokens} out=${usage.outputTokens} ` +
       `cacheRead=${usage.cacheReadTokens} cost=$${usage.costUsd?.toFixed(4) ?? "?"}`,
   );
-
-  if (response.stop_reason === "refusal") {
-    throw new LlmRefusalError(response.stop_details?.category ?? null);
-  }
-  if (response.stop_reason === "max_tokens") {
-    throw new Error(`출력이 max_tokens(${opts.maxTokens ?? 16000})에서 잘렸습니다`);
-  }
-  if (response.parsed_output == null) {
-    throw new Error("Claude 응답이 스키마와 맞지 않습니다");
-  }
-  return { data: response.parsed_output as z.infer<S>, usage };
+  if (parsed == null) throw new Error("LLM 응답이 스키마와 맞지 않습니다");
+  return { data: parsed as z.infer<S>, usage };
 }
 
 // 여러 호출의 토큰과 비용 합계

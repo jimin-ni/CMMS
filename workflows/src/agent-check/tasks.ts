@@ -34,7 +34,7 @@ export const checkLogs = task(
   },
 );
 
-// Claude 1회 호출과 사용량 확인
+// LLM 1회 호출과 사용량 확인
 export const checkLlm = task(
   { name: "agentCheck.llm", timeoutSeconds: 120 },
   async function checkLlm(): Promise<{ answer: { ok: boolean; note: string }; usage: LlmUsage }> {

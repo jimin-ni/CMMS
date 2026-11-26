@@ -64,13 +64,15 @@ export default function LoginPage() {
             회원가입
           </Link>
         </p>
-        {/* 계정 정지 등으로 로그인할 수 없는 사용자의 이의 제기 경로 (docs/planning/12-ai-screening.md 9장) */}
-        <a
-          href={`mailto:${ADMIN_CONTACT_EMAIL}?subject=${encodeURIComponent("[CMMS] 관리자 문의")}`}
-          className="self-start text-xs text-ash underline"
-        >
-          관리자 문의
-        </a>
+        {/* 로그인할 수 없는 사용자의 이의 제기 경로 */}
+        {ADMIN_CONTACT_EMAIL && (
+          <a
+            href={`mailto:${ADMIN_CONTACT_EMAIL}?subject=${encodeURIComponent("[CMMS] 관리자 문의")}`}
+            className="self-start text-xs text-ash underline"
+          >
+            관리자 문의
+          </a>
+        )}
       </form>
     </main>
   );

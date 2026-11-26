@@ -162,6 +162,7 @@
 | 2026-11-23 | 웹 서비스 배포 | Render 무료 플랜(Free, $0 / month, 0.1 CPU, 512 MB RAM)으로 배포. 환경 변수는 배포용은 Render 대시보드 Environment 탭, 로컬용은 각자의 `.env.local`에 씀. 키 목록 기준은 `.env.example` (03 문서 1-2절) |
 | 2026-11-24 | 방 소리 | 방 배경음악과 설정의 소리 크기를 지움. 걷기 발소리를 넣고 러그 위에서는 먹먹하게 냄. 출처를 모르는 영사기 효과음 3개는 저장소에서 뺌 (10-audio 4장) |
 | 2026-11-26 | Render Workflows 적용 | 서비스 기능으로 AI 스크리닝 사후 재판정(`moderation.recheck`)을 버블부터 붙임. 표시 열 추가(A안, `0014`), DB 쓰기 계정 `moderation_worker` 새로 만듦. 쪽지·방명록은 힙 담당과 합의 뒤. 개발 보조 에이전트는 TypeScript, Claude API(`claude-opus-5-5`), PR 리뷰는 open-code-review(GitHub Actions) (16, 15 문서) |
+| 2026-11-27 | 개발 보조 에이전트 | LLM은 우선 OpenAI(`gpt-5-mini`, 에이전트 전용 키)로 시작하고 환경 변수로 Claude와 바꿀 수 있게 함. 코드 주석 기준을 정함: 짧은 기능 설명만 남기고 이모지, 줄글, 이름, 이메일, 작성 경위, 날짜 이력은 코드에서 뺌 (15 문서 6-1-1, CLAUDE.md). 읽기 전용 DB 계정 `agent_ro` 만듦. 관리자 문의 이메일은 환경 변수 `NEXT_PUBLIC_ADMIN_CONTACT_EMAIL`로 옮김 |
 
 ## 5. 미결 사항
 

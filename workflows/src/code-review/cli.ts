@@ -1,5 +1,5 @@
 // 로컬에서 주석 정리 실행: npm run comments -- <파일...> [--write]
-// --write가 없으면 바뀔 내용만 보여 준다. ANTHROPIC_API_KEY, CODE_REVIEW_PERSON_NAMES는 workflows/.env에서 읽는다.
+// --write가 없으면 바뀔 내용만 보여 준다. 키와 이름 목록은 workflows/.env에서 읽는다.
 import { readFileSync, writeFileSync } from "node:fs";
 import { sumUsage, type LlmUsage } from "../common/llm";
 import { cleanComments } from "./comments";
@@ -26,4 +26,4 @@ for (const file of files) {
   if (write) writeFileSync(file, text);
 }
 const total = sumUsage(usages);
-console.log(`\nClaude ${total.calls}회, $${total.costUsd.toFixed(4)}${write ? "" : " (미리보기, --write로 적용)"}`);
+console.log(`\nLLM ${total.calls}회, $${total.costUsd.toFixed(4)}${write ? "" : " (미리보기, --write로 적용)"}`);
