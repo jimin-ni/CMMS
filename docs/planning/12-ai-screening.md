@@ -601,3 +601,59 @@ type ScreenResult = {
 | #82 | 1·3·5·6번 결정 반영. 남은 것: 미성년자 법적 위험(4번, #81), 탈퇴 위치(마이페이지)와 유예 기간 필요성 |
 | #83 | 2~7번 결정 반영. 남은 것: 관리자 문의 버튼의 연락처 |
 | #81 | 개인정보 처리방침 |
+
+## 21. Render Workflows 연동 (사후 재판정) [논의] (2026-11-26)
+
+목표: Render 트랙 조건(Render Workflows 사용)을 **서비스 기능**으로 채웁니다. 판정 흐름(4장)은 그대로 두고, 동기 판정이 놓친 것을 Workflows가 뒤에서 메웁니다. 담당과 구현 범위는 이 절이 확정되면 04 결정 로그에 적습니다.
+
+### 21-1. 왜 동기 판정을 Workflows로 옮기지 않는가
+
+- [사실] 판정은 Server Action 안에서 동기로 하고, 작성자는 결과를 바로 받습니다 (4장). 위반 글은 다른 팬에게 한 번도 보이지 않는 것이 원칙입니다.
+- Workflow task는 실행마다 인스턴스를 띄우므로 수 초가 걸릴 수 있습니다 [가설]. 전송마다 거치면 채팅이 느려지고, 판정 전 글을 어떻게 보일지 새 규칙이 필요합니다.
+- 그래서 **동기 판정은 웹 서비스에 남기고, 시간이 걸려도 되는 일만 Workflows로 보냅니다.**
+
+### 21-2. Workflows로 보낼 일
+
+| 순서 | task | 하는 일 | 언제 | 메우는 빈틈 |
+|---|---|---|---|---|
+| 1 | `moderation.recheck` | 판정 실패로 통과된 글(OpenAI 오류, 시간 초과, 사용자 상한, 차단기)을 다시 OpenAI에 보냄. 위반이면 숨김 + 판정 기록 + 경고 (6장 규칙 그대로) | 웹 서비스가 실패 직후 실행 요청 + 10분마다 Cron으로 빠진 것 확인 | "판정 실패 = 통과" (6-4)로 위반 글이 공개되는 문제 |
+| 2 | `moderation.rescan` | 사전이나 regex를 바꾼 뒤 최근 N일 공개 글을 새 사전으로 다시 판정. 결과는 바로 숨기지 않고 검토 대기로 올림 | 관리자가 사전을 바꿀 때 (`npm run moderation:terms` 뒤) | 새 욕설이 사전에 들어가기 전에 올라온 글 |
+| 3 | `moderation.eval` | 평가셋(18장)으로 판정 모듈을 돌려 정밀도, 재현율을 기록 | 사전, 기준값, 모델 버전이 바뀔 때 | 지금은 로컬에서만 도는 `npm run moderation:eval` |
+| 4 | `moderation.dailyReport` | 하루 판정 수, 위반 비율, 판정 실패 수, 검토 대기 수를 관리자에게 요약 | 매일 Cron | 검토 화면을 열어야만 알 수 있는 상황 |
+
+- 1번이 가장 가치가 큽니다. 원칙("위반 글은 보이지 않음")의 유일한 구멍을 막습니다.
+- [사실] OpenAI Moderation API는 별도 요금이 없는 엔드포인트라 [가설] 재판정을 늘려도 비용 부담이 작습니다. 확인 후 [사실]로 바꿉니다.
+
+### 21-3. 1번 `moderation.recheck` 설계
+
+```
+작성자 전송 → Server Action 동기 판정 → OpenAI 실패 → 통과로 공개 저장 (지금과 같음)
+                                            └→ Render API로 moderation.recheck 실행 요청 (기다리지 않음)
+Workflow: 글 다시 읽기 → 이미 숨김/삭제면 끝 → screen() 다시 실행 → 위반이면 screen_status 변경 + moderation_events + 경고
+         → 버블 폴링(`?since=`)이 statusChangedAt 변경을 읽어 다른 팬 화면에서도 내려감
+```
+
+- [사실] 버블 폴링은 `statusChangedAt` 기준으로 상태가 바뀐 예전 메시지도 다시 가져옵니다 (`src/lib/bubble/repo.ts`). 사후에 숨겨도 열린 화면에 반영됩니다. 쪽지, 방명록의 반영 방식은 확인이 필요합니다 [가설].
+- 실행 요청: 웹 서비스 서버 코드에서 `@renderinc/sdk`의 `startTask`. 같은 글이 두 번 요청되지 않게 `idempotencyKey`를 `표면:글id`로 둡니다. 요청이 실패해도 Cron이 다시 찾습니다.
+- 다시 찾는 기준: [미정] 지금은 판정 실패로 통과한 글에 표시가 없습니다(통과 글은 `moderation_events`에 기록이 없음). 두 가지 중 하나를 고릅니다.
+  - A. 새 마이그레이션으로 각 글 테이블에 `openai_status` 열 추가 (공유 DB라 번호 통보, #25)
+  - B. 표시 없이 최근 30분 공개 글을 모두 다시 판정 (스키마 변경 없음, 호출 수 증가)
+- 판정 코드는 하나만 둡니다. Workflow는 `src/lib/moderation/`의 순수 모듈(`screen.ts`, `normalize.ts`, `lexicon.ts`, `patterns.ts`, `contact.ts`, `policy.ts`)을 그대로 import합니다. 이 파일들은 DB와 `server-only`를 쓰지 않습니다 [사실]. 15 문서의 "`src/` import 금지" 규칙의 예외로 둡니다.
+- 저장 로직(숨김, 기록, 경고, 자동 차단을 한 트랜잭션)은 `repo.ts`에 있으므로, Workflow가 쓸 수 있게 DB 연결을 주입받는 함수로 빼는 작업이 필요합니다.
+
+### 21-4. 권한과 키
+
+| 항목 | 값 | 이유 |
+|---|---|---|
+| DB 계정 | 새 계정 `moderation_worker`: 글 테이블의 `screen_status`, `status_changed_at` 수정 + `moderation_events`, `sanctions` 추가만 | 15 문서의 읽기 전용 `agent_ro`로는 숨길 수 없음. 전체 권한 계정은 주지 않음 |
+| OpenAI 키 | Workflow 전용 키를 따로 발급 | 웹 서비스 키와 사용량, 차단을 나눔 |
+| Render API 키 | 웹 서비스 Environment에 `RENDER_API_KEY` | `startTask` 호출용. 서버 코드에서만 읽음 |
+
+### 21-5. 진행 순서 (안)
+
+1. 21-3의 A/B와 담당 범위 결정 (버블은 본인, 쪽지·방명록은 힙 담당과 협의)
+2. `repo.ts` 저장 로직을 DB 연결 주입형으로 분리 (동작 변경 없음, 기존 테스트 통과)
+3. `moderation.recheck` task + 10분 Cron, 버블 채팅부터
+4. 웹 서비스에서 판정 실패 시 `startTask` 호출
+5. 평가: OpenAI를 일부러 끈 상태로 위반 글을 보내고, 몇 초 안에 숨겨지는지 측정
+6. 2~4번 task는 마감 이후

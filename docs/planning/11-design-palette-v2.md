@@ -1,6 +1,6 @@
 # 11. 디자인 시안 v2 (Chipotle 팔레트 반영)
 
-- 상태: [사실] 2026-11-18 `jimins-claude/feature-brand-design` 브랜치에 시안으로 적용. main 반영 여부는 [미정]
+- 상태: [사실] 2026-11-18 `jimins-claude/feature-brand-design` 브랜치에 시안으로 적용. [사실] 2026-11-26 기준 지금 적용 중인 팔레트이며 impeccable 디자인 점검의 기준 (15 문서 10장)
 - 기준 자료: Chipotle DESIGN.md (Google Labs DESIGN.md 형식, shadcn.io 배포본). 색, 글꼴, 모서리, 간격, 컴포넌트 규칙만 가져오고 Chipotle 이름, 로고, 사진은 쓰지 않음
 - 관련 문서: 08 (v1, 2026-11-13 화면 기록), 09 (방 구성), 04 (결정 로그)
 

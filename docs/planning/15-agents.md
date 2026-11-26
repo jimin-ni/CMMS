@@ -30,7 +30,7 @@
 
 - [사실] Render Workflow 서비스는 main이 아닌 **어떤 브랜치에도** 연결할 수 있습니다. 서비스를 만들 때 Branch 칸에서 고릅니다.
 - [결정] 개발 중에는 `jimins-claude/feature-render-workflows`에 연결합니다. 끝나면 main에 머지하고 서비스의 Branch를 main으로 바꿉니다.
-- [결정] ① 코드는 `workflows/` 폴더에만 둡니다. 루트의 `tsconfig.json`, `eslint.config.mjs`는 이미 이 폴더를 검사에서 뺍니다. Next.js 앱 코드(`src/`)는 import하지 않습니다.
+- [결정] ① 코드는 `workflows/` 폴더에만 둡니다. 루트의 `tsconfig.json`, `eslint.config.mjs`는 이미 이 폴더를 검사에서 뺍니다. Next.js 앱 코드(`src/`)는 import하지 않습니다. 예외: AI 스크리닝 재판정 task는 `src/lib/moderation/`의 순수 모듈만 import합니다 (12 문서 21-3).
 - [결정] 이 브랜치에 있는 TypeScript 뼈대(`workflows/src/index.ts`의 `hello`, `helloMany`)를 그대로 키워 갑니다.
 - [사실] ②의 GitHub Actions 파일은 **PR의 대상 브랜치(main)에 있어야** 모든 PR에서 동작합니다. 이 브랜치에서 만들고 시험한 뒤 main 머지로 켜집니다.
 - main 따라가기: 이 브랜치는 `workflows/`, `.github/`, 문서만 바꾸므로 충돌이 적습니다. main에 큰 변경이 들어왔을 때와 머지 직전에만 `git merge origin/main`을 합니다.
@@ -422,7 +422,7 @@ Action 설정 (입력 이름은 `action.yml`에서 확인, 값은 [가설])
 | 2 | 원격 전송 끄기: `npx impeccable telemetry off` | | 없음 |
 | 3 | 기준선 측정: `npx impeccable detect --json src/ > 결과파일` (결과는 커밋 안 함) | 지금 UI의 문제 목록 | 없음 |
 | 4 | `/impeccable init`, `document` 실행. 단, 결과는 기존 `docs/planning/08-design.md`, `11-design-palette-v2.md`와 맞춰서 정리 | 에이전트가 우리 디자인 규칙을 앎 | 없음 (Pro 사용량) |
-| 5 | 내 담당 화면부터 `critique`, `audit` (보고만, 수정 안 함): 버블, 온보딩, 홈 | 화면별 점수와 개선 목록 | 없음 (Pro 사용량) |
+| 5 | 홈 화면부터 `critique`, `audit` (보고만, 수정 안 함) [결정] | 홈 화면 점수와 개선 목록 | 없음 (Pro 사용량) |
 | 6 | 고칠 것을 골라 `polish`, `harden`, `adapt`(모바일) 실행. 화면마다 브랜치 1개, `tsc`/`eslint`/`build` 확인 후 PR | 다듬어진 화면, ②가 그 PR을 리뷰 | 없음 (Pro 사용량) |
 | 7 | 다시 `detect`로 3단계와 비교 | 전후 비교표 (발표 자료) | 없음 |
 | 8 | (선택) ①에 `designDetect` task 추가, 또는 GitHub Actions에서 `detect --sarif` | 자동 디자인 점검 | 없음 |
@@ -432,7 +432,7 @@ Action 설정 (입력 이름은 `action.yml`에서 확인, 값은 [가설])
 - `live` 모드는 쓰지 않습니다. 에이전트가 없을 때 `claude` CLI를 **권한 확인 없이** 실행합니다. 쓰더라도 `IMPECCABLE_LIVE_COPY_AGENT=chat`으로 둡니다.
 - 설치 후 Claude Code에 자동 훅(UI 파일 수정 때 자동 점검)이 생깁니다. 거슬리면 끕니다.
 - `.impeccable/` 작업 폴더는 커밋하지 않습니다 (`.gitignore` 추가는 첫 PR에서).
-- 마감(12-05)까지 시간이 짧으므로 5~7단계를 핵심 화면 2~3개로 제한합니다.
+- 마감(12-05)까지 시간이 짧으므로 5~7단계는 홈 화면 하나로 합니다 [결정]. 여유가 생기면 버블, 온보딩 순.
 - [가설] Pro 플랜 사용량 한도 안에서 하루 몇 화면까지 가능한지는 써 보며 확인합니다. 부족하면 Max가 여기에 도움이 됩니다.
 
 ### 10-4. 준비물 [미정]
@@ -440,13 +440,13 @@ Action 설정 (입력 이름은 `action.yml`에서 확인, 값은 [가설])
 | 준비물 | 지금 상태 | 할 일 |
 |---|---|---|
 | Node, Claude Code | 있음 | 없음 |
-| 디자인 기준 1개 | `globals.css`에 v1(`key-*`, `talk-*`)과 v2(`ink`, `ash` 등) 토큰이 같이 있음. 11 문서는 v2의 main 반영을 [미정]으로 적음 | **어느 쪽이 기준인지 먼저 정함.** 안 정하면 impeccable이 엉뚱한 쪽으로 "고침" |
+| 디자인 기준 1개 | [결정] (2026-11-26) v2 Chipotle 팔레트(11 문서)가 지금 적용 중인 기준. v1 토큰(`key-*`, `talk-*`)은 되돌리기용으로만 남음 | `init`, `document` 때 v2를 기준이라고 알려 줌. v1 토큰을 "고칠 대상"으로 보지 않게 함 |
 | `PRODUCT.md` | 없음 | `/impeccable init`이 질문하며 만듦. 01 문서(개요, 대상, 분위기)를 답으로 씀 |
 | `DESIGN.md` | 없음 | `/impeccable document`가 코드에서 뽑아 만듦. 11 문서(원칙, 색, 모서리, 간격)와 맞춰 고침 |
 | 두 파일 위치 | | [가설] impeccable은 레포 루트를 기본으로 봄. 루트에는 짧게 두고 자세한 내용은 08, 11 문서로 링크 |
 | 실행 중인 화면 | | `npm run dev` + `.env.local`. URL 검사에는 Chrome 또는 Edge 필요 |
 | 로그인 화면용 계정 | | 버블은 로그인해야 보임. 공유 DB에 테스트 계정이 쌓이므로 끝나면 정리할지 확인 |
-| 대상 화면 목록 | | 버블, 온보딩, 홈 중 2~3개 |
+| 대상 화면 | [결정] 홈 화면 (`src/app/home/`) | |
 | `.gitignore` | | `.impeccable/` 추가 |
 
 ### 10-5. Render Workflows와 연결하는 단계 [미정]
@@ -464,7 +464,9 @@ Action 설정 (입력 이름은 `action.yml`에서 확인, 값은 [가설])
 - 그래서 L4~L5는 "impeccable 지식 + 우리 오케스트레이터"로 만듭니다. 자동화는 Render가, 디자인 판단 기준은 impeccable이 맡습니다.
 - 추천 순서: 마감 전에는 L1(+ 가능하면 L2)까지. L4 이후는 마감 뒤.
 
-## 11. Jev를 다시 붙인다면 [미정]
+## 11. Jev를 다시 붙인다면 [결정] 지금은 쓰지 않음 (2026-11-26)
+
+- 버블 미리보기는 `aiPreview: false`로 꺼진 상태를 유지하고, 에이전트에도 붙이지 않습니다. 아래는 나중에 다시 검토할 때를 위한 기록입니다.
 
 [사실] Jev(TypeSafe AI System One)는 글을 쓰는 모델이 아니라, 상태(`state`)와 질문(`questions`)을 주면 **보기 중 하나를 고르고 확신도를 돌려주는** API입니다 (`src/lib/bubble/ai-preview.ts`).
 

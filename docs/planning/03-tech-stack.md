@@ -45,7 +45,7 @@
 | 외부 데이터 | YouTube Data API v3 | [결정] | 힙 채널 가져오기 스크립트(`npm run heap:channels`)에서만 사용 |
 | 테스트 | Vitest (단위), Playwright (E2E) | Vitest [결정], Playwright [가설] | Vitest는 `npm test`로 사용 중(모더레이션 등). E2E는 저장소 밖의 Playwright 스크립트로 수동 검증만 함 |
 | 배포 | Render (웹 서비스 + PostgreSQL), GitHub 연동 자동 배포 | [결정] | 기존 팀 결정 사항. 웹 서비스는 Render 무료 플랜으로 배포됨 (1-2절) |
-| 백그라운드 작업 | Render Workflows | [결정] (2026-11-26) | Render 트랙 조건. 첫 사용처는 개발 보조 에이전트 (5절, 15 문서) |
+| 백그라운드 작업 | Render Workflows | [결정] (2026-11-26) | Render 트랙 조건. 개발 보조 에이전트(15 문서), AI 스크리닝 사후 재판정(12 문서 21장) (5절) |
 | 도메인 | .xyz | [결정] | 기존 팀 결정 사항 |
 
 ## 1-1. 사용 버전 (2026-11-26, main 기준)
@@ -158,7 +158,8 @@ Next.js의 기본 서버는 WebSocket 연결을 직접 다루지 않으므로, �
 
 Render 트랙은 Render Workflows를 사용해야 대상이 됩니다.
 
-- [결정] (2026-11-26) 첫 사용처는 개발 보조 에이전트(코드 점검)입니다. 설계와 진행은 15 문서, 브랜치는 `jimins-claude/feature-render-workflows`입니다.
+- [결정] (2026-11-26) 개발 보조 에이전트(코드 점검)에 사용합니다. 설계와 진행은 15 문서, 브랜치는 `jimins-claude/feature-render-workflows`입니다.
+- [논의] (2026-11-26) 서비스 기능으로는 AI 스크리닝의 사후 재판정(`moderation.recheck`)을 먼저 붙입니다. 12 문서 21장.
 - [가설] 이후 서비스 쪽 비동기 작업 후보:
 - 구독 만료 처리
 - 일일 메시지 요약과 우선순위 집계
