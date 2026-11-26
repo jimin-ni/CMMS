@@ -435,7 +435,53 @@ Action 설정 (입력 이름은 `action.yml`에서 확인, 값은 [가설])
 - 마감(12-05)까지 시간이 짧으므로 5~7단계를 핵심 화면 2~3개로 제한합니다.
 - [가설] Pro 플랜 사용량 한도 안에서 하루 몇 화면까지 가능한지는 써 보며 확인합니다. 부족하면 Max가 여기에 도움이 됩니다.
 
-## 11. 참고
+### 10-4. 준비물 [미정]
+
+| 준비물 | 지금 상태 | 할 일 |
+|---|---|---|
+| Node, Claude Code | 있음 | 없음 |
+| 디자인 기준 1개 | `globals.css`에 v1(`key-*`, `talk-*`)과 v2(`ink`, `ash` 등) 토큰이 같이 있음. 11 문서는 v2의 main 반영을 [미정]으로 적음 | **어느 쪽이 기준인지 먼저 정함.** 안 정하면 impeccable이 엉뚱한 쪽으로 "고침" |
+| `PRODUCT.md` | 없음 | `/impeccable init`이 질문하며 만듦. 01 문서(개요, 대상, 분위기)를 답으로 씀 |
+| `DESIGN.md` | 없음 | `/impeccable document`가 코드에서 뽑아 만듦. 11 문서(원칙, 색, 모서리, 간격)와 맞춰 고침 |
+| 두 파일 위치 | | [가설] impeccable은 레포 루트를 기본으로 봄. 루트에는 짧게 두고 자세한 내용은 08, 11 문서로 링크 |
+| 실행 중인 화면 | | `npm run dev` + `.env.local`. URL 검사에는 Chrome 또는 Edge 필요 |
+| 로그인 화면용 계정 | | 버블은 로그인해야 보임. 공유 DB에 테스트 계정이 쌓이므로 끝나면 정리할지 확인 |
+| 대상 화면 목록 | | 버블, 온보딩, 홈 중 2~3개 |
+| `.gitignore` | | `.impeccable/` 추가 |
+
+### 10-5. Render Workflows와 연결하는 단계 [미정]
+
+| 단계 | 무엇 | 방법 | LLM, 비용 |
+|---|---|---|---|
+| L1 | 코드 디자인 점검 | `designReview.detect` task: clone → `npx impeccable detect --json src/` → 결과를 ① 리포트 형식으로 | 없음 |
+| L2 | 배포된 화면 점검 | 같은 task에서 배포 주소의 주요 화면을 URL로 검사. 브라우저가 필요하므로 Workflow를 Docker 런타임(Chromium 포함)으로 [가설] | 없음 |
+| L3 | 배포 직후 자동 실행 | Render 배포 완료 → (Cron 또는 배포 알림) → `designReview.run` 실행. 지난 결과와 비교해 새로 생긴 문제만 이슈로 올림 | 없음 |
+| L4 | 고치기 제안 | 오케스트레이터가 지적을 파일별로 묶고, Claude 워커가 수정안을 만듦. impeccable의 `skill/reference/` 문서(Apache-2.0, 출처 표기)를 워커 시스템 프롬프트로 씀 | Claude API (①과 같은 키) |
+| L5 | 고치고 확인하는 반복 (D) | 수정 → `tsc`/`eslint`/`build` → 다시 `detect` → 지적 수가 줄어야 통과, 아니면 다시 고침 (최대 2회) → 통과분만 PR | Claude API |
+| L6 | 사람 확인 | PR에 전후 `detect` 결과와 스크린샷(L2) 첨부. ②가 코드 리뷰, 사람이 머지 | |
+
+- 주의: impeccable의 스킬 명령(`polish` 등)은 Claude Code 안에서 돌게 만들어진 것입니다. Render에서 그대로 쓰려면 Claude Agent SDK나 `claude -p`를 **API 키로** 돌려야 합니다. 구독(Pro, Max) 로그인을 서버 자동화에 쓰는 것은 하지 않습니다.
+- 그래서 L4~L5는 "impeccable 지식 + 우리 오케스트레이터"로 만듭니다. 자동화는 Render가, 디자인 판단 기준은 impeccable이 맡습니다.
+- 추천 순서: 마감 전에는 L1(+ 가능하면 L2)까지. L4 이후는 마감 뒤.
+
+## 11. Jev를 다시 붙인다면 [미정]
+
+[사실] Jev(TypeSafe AI System One)는 글을 쓰는 모델이 아니라, 상태(`state`)와 질문(`questions`)을 주면 **보기 중 하나를 고르고 확신도를 돌려주는** API입니다 (`src/lib/bubble/ai-preview.ts`).
+
+| 붙일 곳 | 방법 | 쓸모 |
+|---|---|---|
+| A. 버블 미리보기 다시 켜기 | `src/lib/features.ts`의 `aiPreview`를 `true`, Render와 `.env.local`에 `TYPESAFE_API_KEY` | 기획상 보류된 기능 (02 문서) |
+| B. 에이전트의 값싼 분류기 | `common/llm.ts`에 `classify(state, choices)`를 두고 Jev로 보냄. 글쓰기, 코드는 Claude | 아래 |
+
+B에서 Jev에 맡길 만한 일
+- 로그 점검 에이전트: 에러 로그 한 줄을 `인증 / DB / 외부 API / 사용자 입력 / 기타`로 분류
+- 디자인 점검(10-5): `detect` 지적을 `지금 고침 / 나중에 / 무시`로 분류
+- 코드 점검(①): 워커에 보내기 전에 파일을 `리뷰 필요 / 생성 파일 / 설정`으로 분류해 Claude 호출 수를 줄임
+
+- [미정] Jev의 가격, 한도, 한국어 분류 정확도. 쓰기 전에 평가 세트로 Claude Haiku 5.5와 비교합니다.
+- 키는 Render Workflow 서비스의 Environment에만 넣고, 웹 서비스에는 A를 할 때만 넣습니다.
+
+## 12. 참고
 
 - Render Workflows: https://render.com/docs/workflows (2026-11-26 확인)
 - Render 내부 네트워크: https://render.com/docs/private-network
