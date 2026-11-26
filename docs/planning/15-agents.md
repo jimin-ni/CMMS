@@ -1,6 +1,7 @@
-# 15. 개발 보조 에이전트 (Render Workflows, Python, Claude API)
+# 15. 개발 보조 에이전트 (Render Workflows, Claude API)
 
-- 상태: 2026-11-26 갱신. 7-4의 Q1~Q7 중 대부분 [결정]. 남은 것은 [미정]으로 표시
+- 상태: 2026-11-26 갱신. 7-6의 결정 현황 참고. 남은 것은 [미정]으로 표시
+- 제품 전체 스택과 버전은 03 문서가 기준입니다. 이 문서는 에이전트만 다룹니다.
 - 담당: 본인 (Jimin)
 - 브랜치: `jimins-claude/feature-render-workflows`. 개발을 모두 여기서 하고 마지막에 main에 머지 [결정]
 - 표기: [사실] 코드나 공식 문서로 확인한 것, [가설] 확인이 필요한 것, [결정] 정한 것, [미정] 아직 정하지 않은 것
@@ -11,7 +12,7 @@
 |---|---|
 | 무엇 | 개발과 운영을 돕는 에이전트 여러 개를 Render Workflows 위에서 실행 |
 | 첫 에이전트 | 코드 점검 에이전트 (이모지가 든 불필요한 주석 제거, 리팩터링 제안) |
-| 언어 | Python 3.11 이상 [결정] |
+| 언어 | [미정] Python 3.11+ 또는 TypeScript(Node). 비교와 추천은 7-4 |
 | LLM | Claude API, 모델 `claude-opus-5-5` [결정] (6-4) |
 | 구조 | 오케스트레이터-워커 [결정] (7-1) |
 | 실행 환경 | Render Workflow 서비스 1개, Singapore 리전 (공유 DB와 같은 리전) |
@@ -244,10 +245,56 @@ async def run(ctx: TaskContext, target: str = "src", open_pr: bool = False) -> d
 
 ### 7-3. 만드는 도구 [결정]
 
-- **Anthropic Python SDK(`anthropic`) 직접 사용.** Render Workflows가 재시도, 병렬, 실행 기록을 해 주므로 LangGraph 같은 프레임워크는 쓰지 않습니다.
+- **Anthropic SDK 직접 사용** (Python `anthropic` 또는 TypeScript `@anthropic-ai/sdk`, 7-4에서 언어 결정). Render Workflows가 재시도, 병렬, 실행 기록을 해 주므로 LangGraph 같은 프레임워크는 쓰지 않습니다.
 - AI 스크리닝(`src/lib/moderation/`)은 OpenAI를 그대로 씁니다. 에이전트만 Claude를 씁니다.
 
-### 7-4. 결정 현황
+### 7-4. 언어: Python과 TypeScript 비교 [미정]
+
+LLM 호출 자체는 두 언어가 같습니다. 차이는 주변 환경에서 납니다.
+
+| 항목 | Python | TypeScript |
+|---|---|---|
+| Claude SDK | `anthropic`. 공식, 기능 같음 | `@anthropic-ai/sdk`. 공식, 기능 같음 |
+| Render Workflows SDK | `render` (3.11+) | `@renderinc/sdk`. 이 브랜치에 뼈대가 이미 있음 |
+| 구조화 출력 | Pydantic 모델 | Zod 스키마 |
+| AI 생태계 | 가장 넓음. 평가, 데이터 분석, 노트북, 예제와 튜토리얼이 많음 | 충분함. 웹 서비스와 붙이기 쉬움 |
+| 점검 대상 코드(TS) 다루기 | 정규식이나 tree-sitter로 주석을 찾음 | TypeScript 컴파일러 API로 주석과 구조를 정확히 찾음 |
+| 검증(`tsc`, `eslint`) | Node를 따로 설치해야 함 (Docker 런타임) | 같은 런타임에서 바로 실행 (Q5가 쉬워짐) |
+| DB 읽기 | 스키마를 따로 작성 | `src/lib/schema.ts`의 Drizzle 타입을 참고 가능 |
+| 팀 | 레포에 Python 코드가 없음. 팀원이 읽고 고치기 어려움 | 레포 전체가 TS. 같은 린트, 같은 규칙 |
+| 배우기 | 에이전트 입문 자료가 더 많음 | 이미 쓰는 언어라 새로 배울 것이 적음 |
+
+- 추천: **TypeScript**. 점검 대상이 TS 코드이고, 검증 도구가 Node에서 돌고, 팀이 함께 관리하고, 뼈대도 이미 있습니다.
+- Python이 나은 경우: Python과 AI 생태계를 배우는 것이 목표이거나, 이후 에이전트가 데이터 분석(로그 통계, DB 리포트) 위주일 때.
+- 어느 쪽을 골라도 4장 구조, 6장 설계, 7-1~7-3 결정은 그대로입니다. 6-2의 코드 예시는 Python이며, TS를 고르면 같은 모양으로 바꿉니다.
+
+### 7-5. alibaba/open-code-review 활용 검토 [미정]
+
+[사실] 2026-11-26 레포 README 기준
+- 오픈소스(Apache-2.0) AI 코드 리뷰 CLI(`ocr`). 본체는 Go, npm으로 설치(`npm install -g @alibaba-group/open-code-review`). 매우 활발히 개발 중
+- 정해진 파이프라인 + LLM 에이전트 구조. 줄 단위 지적. diff 리뷰(`ocr review --from main`)와 전체 파일 점검(`ocr scan --path src`), JSON 출력(`--format json`)
+- "OpenAI & Anthropic compatible"이라고 적혀 있음. Claude를 어떻게 연결하는지는 설정 문서를 못 읽어 [가설]
+- 라이브러리 API가 없음. 다른 코드에서는 CLI를 실행해서 씀. 자동 수정 기능은 확인되지 않음
+- 자체 벤치마크에서 Claude Code보다 정밀도가 높고 토큰은 약 1/9이라고 주장 (검증 안 됨)
+
+직접 만들기와 비교
+
+| 항목 | 직접 만들기 | open-code-review 사용 |
+|---|---|---|
+| 리뷰 품질 | 평가 세트로 끌어올려야 함 | 처음부터 다듬어진 리뷰를 얻음 |
+| 이모지 주석 제거 | 규칙으로 직접 구현 (어차피 필요) | 해당 기능 없음 |
+| 오케스트레이터 구조 | 직접 설계, 직접 이해 | 내부 구조라 손대기 어려움 |
+| 배우는 것 | 에이전트 설계를 직접 익힘 | 도구 사용법만 익힘 |
+| 해커톤 설명 | "직접 만든 에이전트"로 설명하기 쉬움 | 외부 도구를 묶은 것으로 보일 수 있음 |
+| 운영 | 코드는 우리 것, 의존성 적음 | 설치 때 GitHub Releases에서 바이너리를 받음, Git 2.41+ 필요 |
+
+- 추천: **직접 만들고, open-code-review는 비교용 워커로 붙임.**
+  1. 6장 설계대로 직접 만듭니다 (규칙 수정 + 오케스트레이터 + Claude 워커).
+  2. 8장 6단계 뒤에 `code_review.review_ocr` 워커를 하나 추가해 `ocr scan --format json`을 실행합니다.
+  3. 평가 세트에서 두 워커의 결과를 비교하고, 오케스트레이터가 두 결과를 합칩니다.
+- 이렇게 하면 직접 만든 부분은 남고, 리뷰 품질은 외부 도구로 보강하고, 비교 결과는 발표 자료가 됩니다.
+
+### 7-6. 결정 현황
 
 | 번호 | 질문 | 결과 |
 |---|---|---|
@@ -258,6 +305,8 @@ async def run(ctx: TaskContext, target: str = "src", open_pr: bool = False) -> d
 | Q5 | 검증(`tsc`, `eslint`)을 에이전트 안에서 | [미정] 처음엔 사람이 로컬에서 |
 | Q6 | DB 읽기 전용 계정 | [결정] 만듦 (5-1). 인증 테이블 제외 여부 [미정] |
 | Q7 | 브랜치 | [결정] `jimins-claude/feature-render-workflows`에서 개발, 마지막에 main 머지 |
+| Q8 | 언어 | [미정] 추천 TypeScript (7-4) |
+| Q9 | open-code-review | [미정] 추천: 직접 만들고 비교용 워커로 추가 (7-5) |
 
 ## 8. 진행 순서
 

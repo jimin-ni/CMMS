@@ -1,7 +1,27 @@
 # 03. 기술 설계 초안
 
-- 상태: 일부 확정, 개발 상태 기준 갱신 (2026-11-12)
+- 상태: 일부 확정, 개발 상태 기준 갱신 (2026-11-26)
 - 기준: 확정된 항목은 [결정], 나머지는 [가설] 또는 [미정]
+- 이 문서가 **제품 기술 사양의 기준 문서**입니다. 기능별 문서(06 인증, 07 DB, 12 AI 스크리닝, 15 에이전트, `docs/dev/presence.md`)는 세부 내용만 다루고, 스택과 버전은 여기에만 적습니다.
+
+## 0. 한눈에 보기 (2026-11-26)
+
+```
+브라우저 ── Next.js 16 웹 서비스 (Render, Free) ── PostgreSQL 16 (Render 공유 DB)
+   │            │  ├ TypeSafe AI Jev (버블 AI 반응 미리보기)
+   │            │  ├ OpenAI Moderation (AI 스크리닝)
+   │            │  └ YouTube Data API (힙 채널 가져오기 스크립트)
+   └─ WebSocket ── presence 워커 (Cloudflare Workers + Durable Objects)
+
+Render Workflows (개발 보조 에이전트, 개발 중) ── GitHub, 공유 DB(읽기 전용), Render 로그 API, Claude API
+```
+
+| 구성 요소 | 언어, 런타임 | 배포 위치 | 문서 |
+|---|---|---|---|
+| 웹 앱 (`src/`) | TypeScript, Node.js | Render 웹 서비스 | 이 문서 |
+| DB 스크립트 (`scripts/`, `db/migrations/`) | JavaScript(.mjs), SQL | 각자 PC에서 실행 | 07 |
+| presence 워커 (`workers/presence/`) | TypeScript, Cloudflare Workers | Cloudflare | `docs/dev/presence.md` |
+| 에이전트 (`workflows/`) | [미정] Python 또는 TypeScript | Render Workflows | 15 |
 
 ## 1. 기본 스택
 
@@ -9,16 +29,22 @@
 |---|---|---|---|
 | 프레임워크 | Next.js (App Router, TypeScript) | [결정] | 프론트엔드와 API를 한 저장소에서 관리 |
 | 스타일 | Tailwind CSS 4 | [결정] | 빠른 UI 작업, 모바일 대응이 쉬움. 지금 코드에서 사용 중 |
+| 3D | three.js | [결정] | 방(힙 미니룸) 3D 화면 |
+| 함께 있기 (실시간) | Cloudflare Workers + Durable Objects, WebSocket | [결정] | 방 하나 = Durable Object 하나, 최대 4명. `docs/dev/presence.md` |
 | 인증 | Better Auth (MIT) + admin 플러그인 | [결정] | 사용자 정보를 우리 DB에 두고 추가 서비스 없이 운영. 비교는 06 문서 |
 | ORM | Drizzle | [결정] (#17, 2026-11-11) | 타입 검사로 공유 DB 실수 방지, SQL에 가까움, Prisma보다 가벼움. Better Auth 테이블은 `pg`로 Better Auth가 직접 관리 |
 | DB | PostgreSQL 16 (Render 공유 DB `cmms-db-01`, Singapore) | [결정] | 정형 데이터(사용자, 구독)와 비정형 데이터(메시지 본문, 페르소나 문서)를 한 DB에서 처리. 선택 이유는 07 문서 |
 | 캐시·요청 제한 | Redis (Render Key Value) | [가설] | 요청 제한, 반응 예측 캐시. 지금은 메시지 전송 제한만 DB 조회로 처리 |
-| AI | TypeSafe AI Jev (`jev-latest`), 서버 라우트에서만 호출 | [결정] (2026-11-11) | 반응 목록에서 하나를 고르는 선택형 응답, 짧은 지연. API 키 노출 방지 |
-| 테스트 | Vitest (단위), Playwright (E2E) | [가설] | 핵심 흐름 자동 검증. 지금은 저장소 밖의 Playwright 스크립트로 수동 검증만 함 |
+| AI (서비스) | TypeSafe AI Jev (`jev-latest`), 서버 라우트에서만 호출 | [결정] (2026-11-11) | 버블 AI 반응 미리보기. 반응 목록에서 하나를 고르는 선택형 응답, 짧은 지연. API 키 노출 방지 |
+| AI (스크리닝) | OpenAI Moderation API | [결정] | 커뮤니티 규칙 위반 1차 판정. 키가 없으면 사전·regex로만 판정. 12 문서 |
+| AI (개발 보조) | Claude API (`claude-opus-5-5`) | [결정] (2026-11-26) | 코드 점검 에이전트. 서비스 기능이 아니라 개발 도구. 15 문서 |
+| 외부 데이터 | YouTube Data API v3 | [결정] | 힙 채널 가져오기 스크립트(`npm run heap:channels`)에서만 사용 |
+| 테스트 | Vitest (단위), Playwright (E2E) | Vitest [결정], Playwright [가설] | Vitest는 `npm test`로 사용 중(모더레이션 등). E2E는 저장소 밖의 Playwright 스크립트로 수동 검증만 함 |
 | 배포 | Render (웹 서비스 + PostgreSQL), GitHub 연동 자동 배포 | [결정] | 기존 팀 결정 사항. 웹 서비스는 Render 무료 플랜으로 배포됨 (1-2절) |
+| 백그라운드 작업 | Render Workflows | [결정] (2026-11-26) | Render 트랙 조건. 첫 사용처는 개발 보조 에이전트 (5절, 15 문서) |
 | 도메인 | .xyz | [결정] | 기존 팀 결정 사항 |
 
-## 1-1. 사용 버전 (2026-11-12, main 기준)
+## 1-1. 사용 버전 (2026-11-26, main 기준)
 
 `package.json`과 실제 설치된 버전입니다. 버전을 올리면 이 표도 함께 고칩니다.
 
@@ -35,7 +61,12 @@
 | 언어 | `typescript` | 5.9.3 | |
 | 린트 | `eslint`, `eslint-config-next` | 9.39.5, 16.4.6 | |
 | 타입 | `@types/node`, `@types/react`, `@types/pg` | 20.19.43, 19.3.0, 8.23.1 | |
+| 3D | `three`, `@types/three` | 0.160.0 | 방 3D 화면 |
+| 테스트 | `vitest` | 4.1.12 | `npm test`, `npm run moderation:eval` |
 | AI | TypeSafe AI Jev | `jev-latest` (2026-11-11 응답 기준 `jev-1.14.0`) | 엔드포인트 `https://api.typesafe.ai/v1/systemone`. 모델은 `BUBBLE_PREVIEW_MODEL`로 바꿀 수 있음 |
+| AI | OpenAI Moderation | API | 엔드포인트 `https://api.openai.com/v1/moderations`. 키 `OPENAI_API_KEY` |
+| presence 워커 | `wrangler`, `typescript` (워커 전용) | ^4.166.0, ^7.0.2 (`package.json` 기준) | 루트와 별도 의존성. `workers/presence`에서 설치 |
+| 에이전트 | Render Workflows SDK, Anthropic SDK | 15 문서 | 언어 확정 후 기록 |
 | 검증 도구 | `playwright-core` + Microsoft Edge | 1.48.2 | 프로젝트 의존성이 아님. 3인 브라우저 테스트에만 사용 |
 
 ## 1-2. 배포 환경 (2026-11-23)
@@ -120,10 +151,12 @@ Next.js의 기본 서버는 WebSocket 연결을 직접 다루지 않으므로, �
 - 실시간 이벤트 명명 규칙: `domain:action` (예: `message:send`, `message:delete`, `reaction:preview`)
 - AI 미리보기 요청: 서버 라우트에서 처리하고, 실패 시 빈 결과를 반환합니다.
 
-## 5. Render 트랙 대응 (Render Workflows 사용 필수) [가설]
+## 5. Render 트랙 대응 (Render Workflows 사용 필수)
 
-Render 트랙은 Render Workflows를 사용해야 대상이 됩니다. 다음 비동기 작업에 사용합니다.
+Render 트랙은 Render Workflows를 사용해야 대상이 됩니다.
 
+- [결정] (2026-11-26) 첫 사용처는 개발 보조 에이전트(코드 점검)입니다. 설계와 진행은 15 문서, 브랜치는 `jimins-claude/feature-render-workflows`입니다.
+- [가설] 이후 서비스 쪽 비동기 작업 후보:
 - 구독 만료 처리
 - 일일 메시지 요약과 우선순위 집계
 - 2번 기능을 도입하면 리더보드 정산
