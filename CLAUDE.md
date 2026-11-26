@@ -6,14 +6,17 @@ Claude Code가 이 저장소에서 작업할 때 따를 규칙입니다. 답변�
 - 이름: CMMS (Creator Message Management System, 가제). 크리에이터와 구독자(팬)의 1:1 소통 앱.
 - 목적: Hack the Audience 해커톤 출품작. 마감 2026-12-05.
 - 팀: 2인 이상. 기능 담당은 아래와 같습니다.
-  - 주요 기능 1 (버블 1:1 채팅 + AI 반응 미리보기): 사용자
+  - 주요 기능 1 (버블 1:1 채팅, AI 스크리닝, Render Workflows): 사용자. AI 반응 미리보기는 보류 (`FEATURE_ON`)
   - 주요 기능 2 (미니게임 + 순위 보드): 팀원 A
   - 주요 기능 3 (시참 도구): 팀원 B
-- 기획 문서는 `docs/planning/`에 있습니다. 표기 규칙은 `[사실]`, `[가설]`, `[결정]`, `[미정]`입니다.
+  - 2026-11-26 기준 팀원은 힙 미니룸(크리에이터의 방) 작업 중입니다. 진행 상황은 04 문서 2절.
+- 서비스 화면 이름은 MEMOAMO입니다.
+- 기획 문서는 `docs/planning/`, 개발 문서(코드 구조, 작업 순서)는 `docs/dev/`에 있습니다. 목록은 `docs/planning/README.md`. 표기 규칙은 `[사실]`, `[가설]`, `[결정]`, `[미정]`입니다.
 
 ## 반드시 먼저 볼 것
 - `AGENTS.md`: 이 버전의 Next.js(16.4.6)는 기존 지식과 다른 점이 많습니다. 코드를 쓰기 전에 `node_modules/next/dist/docs/`에서 관련 가이드를 읽으세요.
-- `docs/planning/04-roadmap-and-team.md`: 역할 분담과 결정 사항 로그.
+- `docs/planning/04-roadmap-and-team.md`: 역할 분담, 진행 상황, 결정 사항 로그.
+- 이어서 하는 작업이 있으면 그 개발 문서의 "현재 상태"부터 봅니다 (예: `docs/dev/render-workflows.md`).
 
 ## 기술 규칙
 - 스택: Next.js App Router, TypeScript, Tailwind CSS 4, Better Auth, PostgreSQL(pg).
@@ -22,7 +25,8 @@ Claude Code가 이 저장소에서 작업할 때 따를 규칙입니다. 답변�
 - 역할은 `admin`, `creator`, `public`(구독자) 세 가지입니다. 정의는 `src/lib/access.ts`에 있습니다.
 - Better Auth의 admin 플러그인이 `role` 필드를 `input: false`로 잠가 둡니다. `additionalFields`나 가입 요청으로 `role`을 설정하지 마세요. 과거에 이 때문에 가입이 실패했습니다.
 - 역할 변경은 서버 전용 API로만 합니다. 현재 허용 범위는 본인 계정의 `public` → `creator` 전환뿐입니다. `admin`은 가입 화면이나 API로 설정할 수 없습니다.
-- 실시간 전달 방식(Socket.IO 또는 관리형 서비스)은 아직 정하지 않았습니다. 현재 버블의 5초 새로고침은 임시 방식입니다.
+- 채팅 실시간 전달은 SSE + PostgreSQL `LISTEN/NOTIFY`로 방향을 정했고 아직 적용 전입니다(#19, 03 문서 2절). 현재 버블의 5초 새로고침은 임시 방식입니다. 방 함께 있기는 Cloudflare Workers(`workers/presence`)가 맡습니다.
+- AI 스크리닝 판정 모듈(`src/lib/moderation/`의 `screen.ts`, `normalize.ts` 등)과 `persist.ts`는 Render Workflow(`workflows/`)도 import합니다. 이 파일들에 `server-only`, `@/` 별칭, `@/lib/db`를 넣지 마세요 (`docs/dev/moderation.md`).
 - 채팅 규칙 값은 `src/lib/bubble/policy.ts`에서만 바꿉니다. 구독자 200자, 크리에이터 500자, 본인 메시지 삭제 10분, 10초 간격, 10분에 15건입니다.
 
 ## DB 운영 원칙

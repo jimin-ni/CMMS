@@ -23,6 +23,27 @@
 - 단계를 끝낼 때마다 이 표와 맨 아래 "진행 기록"을 같이 고칩니다.
 - 함께 진행 중인 다른 계획: 개발 보조 에이전트, PR 리뷰, impeccable (`docs/planning/15-agents.md`, 아직 착수 전)
 
+## 단계 흐름
+
+```mermaid
+flowchart LR
+  S1[1 서비스 연결 ✔] --> S4[4 persist.ts 분리 ✔]
+  I[#125 팀 동의] --> S2[2 0014 적용]
+  I --> S3[3 moderation_worker]
+  S2 --> S5[5 저장 때 pending 표시]
+  S4 --> S6c[6 recheck 코드 ✔]
+  S3 --> S6[6 recheck 실행 확인]
+  S5 --> S6
+  S6c --> S6
+  K1[OpenAI 키] --> S6
+  S6 --> S7[7 웹 서비스 startTask]
+  K2[Render API 키] --> S7
+  S7 --> S8[8 sweep + Cron]
+  S8 --> S9[9 시연, 문서, main 머지]
+```
+
+- ✔: 끝남 (코드만 끝난 것 포함). 6단계 실행 확인이 시연 최소선입니다.
+
 ## 0. 시작 전 조건
 
 | 항목 | 상태 | 막히는 단계 |

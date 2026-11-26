@@ -26,6 +26,7 @@ Render 트랙은 Render Workflows를 써야 대상이 됩니다. 이 프로젝�
 | Render 서비스 | Workflow 서비스 1개, 슬러그 `memoamo-agent`, Singapore (공유 DB, 웹 서비스와 같은 리전) [사실: 2026-11-26 생성] |
 | 언어 | TypeScript, `@renderinc/sdk` [결정] |
 | 코드 위치 | `workflows/` (자기 `package.json`, `tsconfig.json`). 진입점 `workflows/src/index.ts` |
+| 빌드 | `npm ci`의 `postinstall`이 `build.mjs`(esbuild)로 `dist/index.js`를 만듦. `../src`의 앱 코드와 그 의존성을 한 파일로 묶기 위함 [사실: 2026-11-26 Render에서 확인]. Start `npm start` = `node dist/index.js` |
 | 연결 브랜치 | 개발 중 `jimins-claude/feature-render-workflows`, 끝나면 main |
 | 정기 실행 | Render Cron Job 서비스 1개가 Workflow task를 실행 요청 [사실: Workflows 자체에는 스케줄 기능이 없음] |
 | 웹 서비스에서 실행 | 서버 코드에서 `@renderinc/sdk`의 `startTask` |
@@ -62,7 +63,7 @@ Cron Job (10분마다) ─ moderation.sweep ────────────
 
 ## 4. 데이터 변경 (마이그레이션 `0014`) [결정: A안]
 
-12 문서 21-3의 A안(글 테이블에 표시 열 추가)으로 합니다.
+A안(글 테이블에 표시 열 추가)으로 합니다. 비교한 B안은 "표시 없이 최근 30분 공개 글을 모두 다시 판정"(스키마 변경 없음, 호출 수 증가)이었고, 정확성과 기록 때문에 A안을 골랐습니다.
 
 - 파일: `db/migrations/0014_bubble_recheck.sql`
 - [사실] 다른 브랜치에 `0012_heap_reel_uploader.sql`이 있고 main에는 `0013`까지 있습니다. 다음 빈 번호는 `0014`입니다. 쓰기 전에 #25에 통보합니다.
@@ -209,20 +210,9 @@ workflows/src/
 
 ## 8. 개발 순서
 
-| 단계 | 할 일 | 끝났다는 기준 |
-|---|---|---|
-| 1 | Workflow 서비스 생성 (기존 `hello` 뼈대), `../src` import 확인용 task | 대시보드에서 `hello`와 `normalize("테스트")` 결과 확인 |
-| 2 | #25에 `0014` 통보, 마이그레이션 작성·공유 DB 적용, `schema.ts` 반영 | `bubble_migrations`에 `0014` 기록, 예전 코드 정상 |
-| 3 | `moderation_worker` 계정 생성 (팀 공지) | 5장 3번 확인 통과 |
-| 4 | `persist.ts` 분리 (동작 변경 없음) | `npm test`, `npx tsc --noEmit`, `npx eslint src scripts`, `npm run build` 통과 |
-| 5 | `saveChatMessage`에 `openai_status`, `recheck_status` 저장 | OpenAI 키를 비우지 않고 일부러 시간 초과를 내면 `pending`으로 저장됨 |
-| 6 | `moderation.recheck` task | 대시보드에서 `["chat", "<id>"]`로 실행하면 위반 글이 숨겨지고 경고 기록 생김 |
-| 7 | 웹 서비스 `after()` + `startTask` | 판정 실패 글이 수 초 안에 자동 재판정됨 |
-| 8 | `moderation.sweep` + Cron Job | `startTask`를 끈 상태에서도 10분 안에 처리됨 |
-| 9 | 시연 준비 | 아래 9장 시나리오 녹화, 12·03·04 문서 갱신 |
+단계별 작업, 확인 방법, 현재 상태는 **`docs/dev/render-workflows.md`** 한 곳에만 적습니다 (이 문서와 중복하지 않음).
 
-- 4~7단계는 앱 코드(`src/`) 변경입니다. 이 브랜치에서 하되 커밋 전 검사(`tsc`, `eslint`, `build`, `test`)를 모두 돌립니다.
-- 테스트 계정과 테스트 메시지는 공유 DB에 쌓입니다. 끝나면 정리할지 확인합니다.
+요약: 1 서비스 연결 → 2 `0014` 적용 → 3 `moderation_worker` → 4 `persist.ts` 분리 → 5 저장 때 표시 → 6 `recheck` 실행 확인(시연 최소선) → 7 웹 서비스 `startTask` → 8 `sweep` + Cron → 9 시연·문서
 
 ## 9. 검증과 시연 시나리오
 

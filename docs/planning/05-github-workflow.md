@@ -1,6 +1,6 @@
 # 05. GitHub 운영 방식
 
-- 상태: 브랜치·커밋 규칙은 사용 중. GitHub Actions는 아직 없음 (2026-11-12). 세부 규칙은 저장소 루트의 `CLAUDE.md`가 기준입니다.
+- 상태: 브랜치·커밋 규칙은 사용 중. GitHub Actions는 아직 없음 (2026-11-26 확인). 첫 워크플로는 PR 리뷰(open-code-review)로 계획 중 (15 문서 7-5). 세부 규칙은 저장소 루트의 `CLAUDE.md`가 기준입니다.
 
 ## 1. 브랜치 규칙
 
@@ -20,8 +20,9 @@
 
 | 워크플로 | 실행 시점 | 내용 | 도입 시점 |
 |---|---|---|---|
-| `ci.yml` | 브랜치 push, PR 생성 | 의존성 설치, 린트, 타입 체크, 테스트, 빌드 | 다음 브랜치 (Next.js 초기 설정 직후) |
-| 배포 | main 병합 | Render 자동 배포 (Render GitHub 연동) | 공통 인프라 단계 |
+| `ocr-review.yml` | PR 생성·커밋 추가 | open-code-review로 줄 단위 AI 리뷰 댓글. 머지를 막지 않음 | [계획] `jimins-claude/feature-render-workflows`, 팀 동의 #125 (15 문서 7-5) |
+| `ci.yml` | 브랜치 push, PR 생성 | 의존성 설치, 린트, 타입 체크, 테스트, 빌드 | [미정] 아직 없음 |
+| 배포 | main 병합 | Render 자동 배포 (Render GitHub 연동). GitHub Actions 아님 | [사실] 사용 중 (웹 서비스) |
 | `dependabot.yml` | 주기적 | 의존성 업데이트 PR 생성 | 선택 |
 
 - CI가 실패하면 머지하지 않습니다.

@@ -30,12 +30,12 @@
 
 - [사실] Render Workflow 서비스는 main이 아닌 **어떤 브랜치에도** 연결할 수 있습니다. 서비스를 만들 때 Branch 칸에서 고릅니다.
 - [결정] 개발 중에는 `jimins-claude/feature-render-workflows`에 연결합니다. 끝나면 main에 머지하고 서비스의 Branch를 main으로 바꿉니다.
-- [결정] ① 코드는 `workflows/` 폴더에만 둡니다. 루트의 `tsconfig.json`, `eslint.config.mjs`는 이미 이 폴더를 검사에서 뺍니다. Next.js 앱 코드(`src/`)는 import하지 않습니다. 예외: AI 스크리닝 재판정 task는 `src/lib/moderation/`의 순수 모듈만 import합니다 (12 문서 21-3).
+- [결정] ① 코드는 `workflows/` 폴더에만 둡니다. 루트의 `tsconfig.json`, `eslint.config.mjs`는 이미 이 폴더를 검사에서 뺍니다. Next.js 앱 코드(`src/`)는 import하지 않습니다. 예외: AI 스크리닝 재판정 task는 `src/lib/moderation/`의 순수 모듈만 import합니다 (16 문서 6-1).
 - [결정] 이 브랜치에 있는 TypeScript 뼈대(`workflows/src/index.ts`의 `hello`, `helloMany`)를 그대로 키워 갑니다.
 - [사실] ②의 GitHub Actions 파일은 **PR의 대상 브랜치(main)에 있어야** 모든 PR에서 동작합니다. 이 브랜치에서 만들고 시험한 뒤 main 머지로 켜집니다.
 - main 따라가기: 이 브랜치는 `workflows/`, `.github/`, 문서만 바꾸므로 충돌이 적습니다. main에 큰 변경이 들어왔을 때와 머지 직전에만 `git merge origin/main`을 합니다.
 - [사실] ①이 점검하는 코드는 배포된 브랜치가 아니라 **실행할 때 GitHub에서 받은 최신 main**입니다.
-- [가설] Workflow 서비스에 Root Directory 칸이 있는지 확인하지 못했습니다. 없으면 Build Command를 `cd workflows && npm ci`, Start Command를 `cd workflows && npm start`로 씁니다.
+- [사실] (2026-11-26) Root Directory `workflows`로 두고 `../src`의 앱 코드를 쓸 수 있음. 앱 코드가 쓰는 패키지 때문에 `workflows/build.mjs`(esbuild)로 한 파일로 묶음. Render 설정과 빌드 방식은 16 문서 2장, `workflows/README.md`가 기준
 
 ## 3. 전체 구조
 
@@ -45,7 +45,7 @@ GitHub ────────────────────────�
 (jimin-ni/memoamo)                         └─ PR에 줄 단위 댓글, 요약 댓글
    │  clone (실행 때마다)
    ▼
-Render Workflow 서비스 "memoamo-agents"  ── Singapore
+Render Workflow 서비스 (슬러그 memoamo-agent, 16 문서와 같은 서비스) ── Singapore
    ├─ codeReview.run            오케스트레이터 (계획 → 분배 → 합치기)
    ├─ codeReview.reviewChunk    워커 (파일 묶음 하나 리뷰, 병렬)
    ├─ codeReview.stripEmoji     규칙 기반 수정 (LLM 없음)
@@ -78,7 +78,8 @@ workflows/
    ├─ index.ts             # 진입점. 모든 에이전트의 task를 import해서 등록
    ├─ common/              # 모든 에이전트가 같이 쓰는 도구
    │  ├─ config.ts         # 환경 변수 읽기. 없으면 바로 실패
-   │  ├─ db.ts             # 읽기 전용 DB 연결
+   │  ├─ db.ts             # [사실] 이미 있음: AI 스크리닝 재판정용 쓰기 계정 연결 (16 문서)
+   │  ├─ db-readonly.ts    # 에이전트용 읽기 전용 연결 (`agent_ro`, 새로 만듦)
    │  ├─ render-api.ts     # 로그, 서비스, 배포 조회
    │  ├─ github.ts         # clone, 브랜치 푸시, PR 생성
    │  ├─ llm.ts            # Claude 호출 한 곳으로 모음 (모델, effort, 재시도, 비용 기록)
@@ -109,7 +110,7 @@ workflows/
 | 이름 | 용도 | 비고 |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | Claude API | 6-4 참고. SDK가 자동으로 읽음 |
-| `DATABASE_URL` | 공유 DB 읽기 | **Internal** URL + 읽기 전용 계정 `agent_ro` (5-1) |
+| `AGENT_DATABASE_URL` | 공유 DB 읽기 | **Internal** URL + 읽기 전용 계정 `agent_ro` (5-1). 같은 Workflow 서비스의 `DATABASE_URL`은 재판정용 `moderation_worker`라서 이름을 나눔 |
 | `RENDER_API_KEY` | 로그, 서비스 조회 | Account Settings > API Keys |
 | `RENDER_OWNER_ID` | 로그 조회 필수 값 | 워크스페이스 ID |
 | `RENDER_WEB_SERVICE_ID` | 로그를 볼 웹 서비스 | `srv-...` |

@@ -69,7 +69,7 @@
 | 테스트 | `vitest` | 4.1.12 | `npm test`, `npm run moderation:eval` |
 | AI | OpenAI Moderation | API | 엔드포인트 `https://api.openai.com/v1/moderations`. 키 `OPENAI_API_KEY` |
 | presence 워커 | `wrangler`, `typescript` (워커 전용) | ^4.166.0, ^7.0.2 (`package.json` 기준) | 루트와 별도 의존성. `workers/presence`에서 설치 |
-| 에이전트 | `@renderinc/sdk`, `@anthropic-ai/sdk`, `tsx` | `workflows/package.json` 기준 | 루트와 별도 의존성. `workflows`에서 설치 |
+| Render Workflows | `@renderinc/sdk` ^1.11, `drizzle-orm` 0.45.4, `pg` 8.23.1, `esbuild` 0.28, `tsx` | `workflows/package.json` 기준 | 루트와 별도 의존성. `npm ci` 뒤 `build.mjs`가 한 파일로 묶음. Claude SDK는 에이전트 착수 때 추가 (15 문서) |
 | 검증 도구 | `playwright-core` + Microsoft Edge | 1.48.2 | 프로젝트 의존성이 아님. 3인 브라우저 테스트에만 사용 |
 
 ## 1-2. 배포 환경 (2026-11-23)

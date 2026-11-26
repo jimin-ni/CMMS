@@ -556,7 +556,15 @@ type ScreenResult = {
 
 ## 19. 구현 범위와 순서
 
-### 19-0. 진행 상황 [사실] 2026-11-20
+### 19-0. 진행 상황
+
+[사실] 2026-11-26 추가
+- 쪽지·방명록 연결 완료 (#107, `0013`, 힙 담당). 신고, 작성자 차단, 개인 숨기기(`heap_blocks`) 포함
+- 가입 닉네임 판정 (#105), 관리자 사전 화면 `/admin/moderation/terms` (#116), 사전 2차 검토 `user_review` 반영 (#102)
+- 저장 로직을 `persist.ts`로 분리해 Render Workflow와 공유, 사후 재판정 task 작성 (21장, 브랜치 `jimins-claude/feature-render-workflows`)
+- 코드 구조와 흐름도는 `docs/dev/moderation.md`
+
+[사실] 2026-11-20
 
 - 브랜치 `jimins-claude/feature-ai-screening`. 19-1의 1~7 완료, 8은 데이터 내려받기와 사람 검토를 기다림.
 - `0011`은 공유 DB에 적용함. 변경 기록은 이슈 #92.
@@ -583,7 +591,7 @@ type ScreenResult = {
 
 ### 19-2. 다음
 
-- 쪽지·방명록 연결 (#82 6번 협의 뒤)
+- ~~쪽지·방명록 연결~~ 완료 (#107, 2026-11-24)
 - 재검토 요청 화면
 - 평가셋 작성과 기준값 1차 조정
 
@@ -626,36 +634,10 @@ type ScreenResult = {
 - 1번이 가장 가치가 큽니다. 원칙("위반 글은 보이지 않음")의 유일한 구멍을 막습니다.
 - [사실] OpenAI Moderation API는 별도 요금이 없는 엔드포인트라 [가설] 재판정을 늘려도 비용 부담이 작습니다. 확인 후 [사실]로 바꿉니다.
 
-### 21-3. 1번 `moderation.recheck` 설계
+### 21-3. 설계와 진행
 
-```
-작성자 전송 → Server Action 동기 판정 → OpenAI 실패 → 통과로 공개 저장 (지금과 같음)
-                                            └→ Render API로 moderation.recheck 실행 요청 (기다리지 않음)
-Workflow: 글 다시 읽기 → 이미 숨김/삭제면 끝 → screen() 다시 실행 → 위반이면 screen_status 변경 + moderation_events + 경고
-         → 버블 폴링(`?since=`)이 statusChangedAt 변경을 읽어 다른 팬 화면에서도 내려감
-```
-
-- [사실] 버블 폴링은 `statusChangedAt` 기준으로 상태가 바뀐 예전 메시지도 다시 가져옵니다 (`src/lib/bubble/repo.ts`). 사후에 숨겨도 열린 화면에 반영됩니다. 쪽지, 방명록의 반영 방식은 확인이 필요합니다 [가설].
-- 실행 요청: 웹 서비스 서버 코드에서 `@renderinc/sdk`의 `startTask`. 같은 글이 두 번 요청되지 않게 `idempotencyKey`를 `표면:글id`로 둡니다. 요청이 실패해도 Cron이 다시 찾습니다.
-- 다시 찾는 기준: [결정] A안. `bubble_messages`에 `openai_status`, `recheck_status` 등을 더합니다 (16 문서 4장, 마이그레이션 `0014`). 아래는 고를 때 비교한 내용입니다.
-  - A. 새 마이그레이션으로 각 글 테이블에 `openai_status` 열 추가 (공유 DB라 번호 통보, #25)
-  - B. 표시 없이 최근 30분 공개 글을 모두 다시 판정 (스키마 변경 없음, 호출 수 증가)
-- 판정 코드는 하나만 둡니다. Workflow는 `src/lib/moderation/`의 순수 모듈(`screen.ts`, `normalize.ts`, `lexicon.ts`, `patterns.ts`, `contact.ts`, `policy.ts`)을 그대로 import합니다. 이 파일들은 DB와 `server-only`를 쓰지 않습니다 [사실]. 15 문서의 "`src/` import 금지" 규칙의 예외로 둡니다.
-- 저장 로직(숨김, 기록, 경고, 자동 차단을 한 트랜잭션)은 `repo.ts`에 있으므로, Workflow가 쓸 수 있게 DB 연결을 주입받는 함수로 빼는 작업이 필요합니다.
-
-### 21-4. 권한과 키
-
-| 항목 | 값 | 이유 |
-|---|---|---|
-| DB 계정 | 새 계정 `moderation_worker`: 글 테이블의 `screen_status`, `status_changed_at` 수정 + `moderation_events`, `sanctions` 추가만 | 15 문서의 읽기 전용 `agent_ro`로는 숨길 수 없음. 전체 권한 계정은 주지 않음 |
-| OpenAI 키 | Workflow 전용 키를 따로 발급 | 웹 서비스 키와 사용량, 차단을 나눔 |
-| Render API 키 | 웹 서비스 Environment에 `RENDER_API_KEY` | `startTask` 호출용. 서버 코드에서만 읽음 |
-
-### 21-5. 진행 순서 (안)
-
-1. 21-3의 A/B와 담당 범위 결정 (버블은 본인, 쪽지·방명록은 힙 담당과 협의)
-2. `repo.ts` 저장 로직을 DB 연결 주입형으로 분리 (동작 변경 없음, 기존 테스트 통과)
-3. `moderation.recheck` task + 10분 Cron, 버블 채팅부터
-4. 웹 서비스에서 판정 실패 시 `startTask` 호출
-5. 평가: OpenAI를 일부러 끈 상태로 위반 글을 보내고, 몇 초 안에 숨겨지는지 측정
-6. 2~4번 task는 마감 이후
+- 설계(데이터 변경 `0014`, 쓰기 계정 `moderation_worker`, task 동작, 시연): **16 문서**
+- 코드 구조와 흐름도: `docs/dev/moderation.md` 3-3절
+- 단계별 작업과 현재 상태: `docs/dev/render-workflows.md`
+- [사실] 버블 폴링은 `statusChangedAt` 기준으로 상태가 바뀐 예전 메시지도 다시 가져옵니다 (`src/lib/bubble/repo.ts`). 사후에 숨겨도 열린 화면에 반영됩니다.
+- 판정 규칙은 이 문서(4~7장)를 그대로 따릅니다. 재판정이라고 규칙을 따로 두지 않습니다.
