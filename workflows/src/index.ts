@@ -19,4 +19,4 @@ export const helloMany = task(
 );
 
 export { recheck, sweep } from "./moderation/tasks";
-export { checkDb, checkLogs, checkLlm } from "./agent-check/tasks";
+export { checkEnv, checkDb, checkLogs, checkLlm } from "./agent-check/tasks";

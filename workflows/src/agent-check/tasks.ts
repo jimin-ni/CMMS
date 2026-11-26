@@ -5,6 +5,27 @@ import { readQuery } from "../common/db-readonly";
 import { askJson, type LlmUsage } from "../common/llm";
 import { getWebLogs } from "../common/render-api";
 
+const EXPECTED_ENV = [
+  "AGENT_DATABASE_URL",
+  "OPENAI_API_KEY_CODE_REVIEW",
+  "AGENT_LLM_PROVIDER",
+  "AGENT_LLM_MODEL",
+  "CODE_REVIEW_PERSON_NAMES",
+  "RENDER_API_KEY",
+  "RENDER_OWNER_ID",
+  "RENDER_WEB_SERVICE_ID",
+  "DATABASE_URL",
+  "OPENAI_API_KEY",
+];
+
+// 환경 변수가 task 안에서 보이는지 확인한다. 값은 돌려주지 않는다.
+export const checkEnv = task({ name: "agentCheck.env", timeoutSeconds: 30 }, function checkEnv() {
+  const set = Object.fromEntries(EXPECTED_ENV.map((k) => [k, Boolean(process.env[k])]));
+  // 이름에 공백이나 대소문자 오타가 있는지 보려고 비슷한 이름만 모은다.
+  const similar = Object.keys(process.env).filter((k) => /AGENT|OPENAI|CODE_REVIEW|DATABASE/i.test(k));
+  return { set, similar, renderService: process.env.RENDER_SERVICE_NAME ?? null, commit: process.env.RENDER_GIT_COMMIT?.slice(0, 7) ?? null };
+});
+
 // 테이블 수, 큰 테이블 행 수, 인증 테이블 차단 확인
 export const checkDb = task(
   { name: "agentCheck.db", timeoutSeconds: 60 },
