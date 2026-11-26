@@ -34,12 +34,12 @@ Render 대시보드 설정
 | Auto-Deploy | On (이 브랜치에 푸시하면 다시 배포) |
 
 할 일
-- [ ] 첫 배포 후 대시보드에 `hello`, `helloMany`가 보이는지 확인
-- [ ] 대시보드에서 `hello`를 `["memoamo"]`로 실행 → `Hello, memoamo!`
-- [ ] `workflows/src/check/shared.ts`: `../../../src/lib/moderation/normalize.ts`를 import하는 `check.normalize` task 추가
-- [ ] 배포 후 `check.normalize`를 `["ㅅ ㅂ 테스트"]`로 실행해 정규화 결과가 나오면 Root Directory 밖의 파일을 읽을 수 있음
-- [ ] 안 되면 Root Directory를 비우고 Build `cd workflows && npm ci`, Start `cd workflows && npm start`로 바꿔 다시 확인
-- [ ] 대시보드에 보이는 Workflow 슬러그를 기록 (환경 변수 `RENDER_WORKFLOW_SLUG`에 씀)
+- [x] 첫 배포 후 대시보드에 `hello`, `helloMany`가 보이는지 확인
+- [x] 대시보드에서 `hello`를 `["memoamo"]`로 실행 → `Hello, memoamo!`
+- [x] `workflows/src/check/shared.ts`: `../../../src/lib/moderation/normalize.ts`를 import하는 `check.normalize` task 추가
+- [x] 배포 후 `check.normalize`를 `["ㅅ ㅂ 테스트"]`로 실행해 정규화 결과가 나오면 Root Directory 밖의 파일을 읽을 수 있음
+- [x] (필요 없었음) Root Directory `workflows` 그대로 `../src`의 파일을 읽을 수 있음. `check.normalize` 성공 (2026-11-26). 확인 task는 지움
+- [x] Workflow 슬러그: `memoamo-agent` (task 식별자 예: `memoamo-agent/hello`). 환경 변수 `RENDER_WORKFLOW_SLUG`에 씀
 
 검사: `cd workflows && npm run check`
 
@@ -63,12 +63,12 @@ Render 대시보드 설정
 
 동작을 바꾸지 않는 리팩터링입니다.
 
-- [ ] `src/lib/moderation/persist.ts` 새로 만들기: `lockUser`, `countStrikes`, `takeDownPosts`, `applyAutoBlock`, `planScreen`, `recordScreenEvent`를 옮김. `@/` 별칭과 `@/lib/db` import 없이 `tx`(또는 실행기)만 받음
-- [ ] 사전 읽기 `loadLists(exec)`를 `server.ts`에서 떼어 `persist.ts`로
-- [ ] `repo.ts`, `server.ts`는 `persist.ts`를 import해서 기존 이름 그대로 export
-- [ ] 다른 파일의 import 경로는 바꾸지 않음
-- [ ] 검사: `npm test`, `npx tsc --noEmit`, `npx eslint src scripts`, `npm run build`
-- [ ] 확인: 로컬에서 위반 문장 전송 → 숨김, 경고 안내 n/3 (기존과 같음)
+- [x] `src/lib/moderation/persist.ts` 새로 만들기: `lockUser`, `countStrikes`, `takeDownPosts`, `applyAutoBlock`, `planScreen`, `recordScreenEvent`를 옮김. `@/` 별칭과 `@/lib/db` import 없이 `tx`(또는 실행기)만 받음
+- [x] 사전 읽기 `loadScreenLists(exec)`를 `server.ts`에서 떼어 `persist.ts`로
+- [x] `repo.ts`, `server.ts`는 `persist.ts`를 import해서 기존 이름 그대로 export
+- [x] 다른 파일의 import 경로는 바꾸지 않음
+- [x] 검사: `npm test`, `npx tsc --noEmit`, `npx eslint src scripts`, `npm run build`
+- [ ] 확인: 로컬에서 위반 문장 전송 → 숨김, 경고 안내 n/3 (기존과 같음). 코드상 동작은 같음 (함수 본문을 그대로 옮김), 화면 확인은 남음
 
 ## 5. 저장할 때 재판정 표시
 
@@ -84,7 +84,7 @@ Render 대시보드 설정
 - [ ] `workflows/src/common/db.ts`: Drizzle + pg, `moderation_worker` 연결
 - [ ] `workflows/src/moderation/moderate.ts`: OpenAI Moderation 호출. 사용자 상한 없음, 시간 제한과 재시도만
 - [ ] `workflows/src/moderation/tasks.ts`: `recheck(surface, messageId)` (동작은 16 문서 6-3)
-- [ ] `workflows/package.json`: `drizzle-orm`, `pg`를 루트와 같은 버전으로 추가
+- [ ] **의존성 해석 문제 대응** [가설→확인 필요]: `../src/lib/schema.ts`는 `drizzle-orm`을 import하는데, Node는 이 파일 위치에서 위로 `node_modules`를 찾으므로 `workflows/node_modules`를 보지 못함. Root Directory가 `workflows`면 루트 `node_modules`가 설치되지 않아 실패할 수 있음. `normalize.ts`는 외부 패키지가 없어 통과한 것. 해결안: 빌드 때 esbuild로 `src/index.ts`를 한 파일로 묶고(`nodePaths: ["node_modules"]`) Start를 `node dist/index.js`로 바꿈. `drizzle-orm`, `pg`는 루트와 같은 버전으로 `workflows/package.json`에 추가
 - [ ] Render Workflow Environment에 `OPENAI_API_KEY` (Workflow 전용 키)
 
 확인
@@ -124,3 +124,5 @@ Render 대시보드 설정
 | 날짜 | 단계 | 내용 |
 |---|---|---|
 | 2026-11-26 | 0 | 계획 작성, Workflow 서비스 생성 |
+| 2026-11-26 | 1 | Workflow 서비스 배포, `hello`, `check.normalize` 실행 성공. 슬러그 `memoamo-agent` |
+| 2026-11-26 | 4 | `persist.ts` 분리. `npm test`(73개 통과), `tsc`, `eslint`, `build` 통과 |

@@ -23,7 +23,7 @@ Render 트랙은 Render Workflows를 써야 대상이 됩니다. 이 프로젝�
 
 | 항목 | 값 |
 |---|---|
-| Render 서비스 | Workflow 서비스 1개, 이름 `memoamo-workflows`, Singapore (공유 DB, 웹 서비스와 같은 리전) |
+| Render 서비스 | Workflow 서비스 1개, 슬러그 `memoamo-agent`, Singapore (공유 DB, 웹 서비스와 같은 리전) [사실: 2026-11-26 생성] |
 | 언어 | TypeScript, `@renderinc/sdk` [결정] |
 | 코드 위치 | `workflows/` (자기 `package.json`, `tsconfig.json`). 진입점 `workflows/src/index.ts` |
 | 연결 브랜치 | 개발 중 `jimins-claude/feature-render-workflows`, 끝나면 main |
