@@ -111,7 +111,7 @@ workflows/
 |---|---|---|
 | `AGENT_LLM_PROVIDER` | LLM 공급자 | `openai`(기본) 또는 `anthropic` (7-6 Q4) |
 | `AGENT_LLM_MODEL` | 모델 | 비우면 `gpt-5-mini` (anthropic이면 `claude-opus-5-5`) |
-| `AGENT_OPENAI_API_KEY` | OpenAI API | 에이전트 전용 키. 스크리닝용 `OPENAI_API_KEY`와 따로 만들고 월 한도를 겁니다 |
+| `OPENAI_API_KEY_CODE_REVIEW` | OpenAI API | 에이전트 전용 키. 스크리닝용 `OPENAI_API_KEY`와 따로 만들고 월 한도를 겁니다 |
 | `ANTHROPIC_API_KEY` | Claude API | `AGENT_LLM_PROVIDER=anthropic`일 때만. 6-4 참고 |
 | `AGENT_DATABASE_URL` | 공유 DB 읽기 | **Internal** URL + 읽기 전용 계정 `agent_ro` (5-1). 같은 Workflow 서비스의 `DATABASE_URL`은 재판정용 `moderation_worker`라서 이름을 나눔 |
 | `RENDER_API_KEY` | 로그, 서비스 조회 | Account Settings > API Keys |
@@ -415,7 +415,7 @@ Action 설정 (입력 이름은 `action.yml`에서 확인, 값은 [가설])
 |---|---|
 | 1 | 끝남 (2026-11-26) |
 | 3 | 코드 끝남: `common/db-readonly.ts`, `common/render-api.ts`, 확인 task `agentCheck.db`, `agentCheck.logs`. `agent_ro` 계정 생성(2026-11-27): 공개 테이블 읽기 OK, `user`는 `id`, `role`만, `account`/`session`/`verification`과 쓰기는 거부 확인. **Render Environment에 `AGENT_DATABASE_URL`(Internal URL) 입력 남음** |
-| 4 | 코드 끝남: `common/llm.ts`(OpenAI 기본, Claude 선택), 확인 task `agentCheck.llm`. **`AGENT_OPENAI_API_KEY` 입력 후 실행 확인 남음** |
+| 4 | 코드 끝남: `common/llm.ts`(OpenAI 기본, Claude 선택), 확인 task `agentCheck.llm`. **`OPENAI_API_KEY_CODE_REVIEW` 입력 후 실행 확인 남음** |
 | 5 | 규칙 평가 세트 32건 (이모지 16, 검사 10, 코드 비교 6). `npm run eval`. 리팩터링 예제는 7단계 전에 만듦 |
 | 6 | 규칙 부분 끝남 (`rules.ts`, `policy.ts`). LLM 다시 쓰기(`comments.ts`)와 로컬 실행(`npm run comments -- <파일>`)은 코드만 있음. **키 입력 후 실제 실행 확인 남음** |
 | 0, 2 | 키 발급 대기 (사용자) |

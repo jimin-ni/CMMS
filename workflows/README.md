@@ -23,7 +23,7 @@ Render Workflows로 돌리는 백그라운드·에이전트 작업입니다. Nex
 | `DATABASE_URL` | `moderation.*` (Internal URL + `moderation_worker`) |
 | `OPENAI_API_KEY` | `moderation.*` |
 | `AGENT_DATABASE_URL` | `agentCheck.db`, 이후 에이전트 (Internal URL + `agent_ro`) |
-| `AGENT_OPENAI_API_KEY` | `agentCheck.llm`, 주석 정리. 스크리닝 키와 다른 에이전트 전용 키 |
+| `OPENAI_API_KEY_CODE_REVIEW` | `agentCheck.llm`, 주석 정리. 스크리닝 키와 다른 에이전트 전용 키 |
 | `AGENT_LLM_PROVIDER`, `AGENT_LLM_MODEL` | 선택. 기본 `openai`, `gpt-5-mini` |
 | `ANTHROPIC_API_KEY` | `AGENT_LLM_PROVIDER=anthropic`일 때만 |
 | `RENDER_API_KEY`, `RENDER_OWNER_ID`, `RENDER_WEB_SERVICE_ID` | `agentCheck.logs`, 이후 에이전트 |

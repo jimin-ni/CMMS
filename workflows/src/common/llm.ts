@@ -68,7 +68,7 @@ let anthropic: Anthropic | null = null;
 
 async function askOpenAI<S extends z.ZodType>(opts: AskJsonOptions<S>, model: string) {
   // 스크리닝용 OPENAI_API_KEY와 한도를 나누려고 키를 따로 둔다.
-  openai ??= new OpenAI({ apiKey: requireEnv("AGENT_OPENAI_API_KEY") });
+  openai ??= new OpenAI({ apiKey: requireEnv("OPENAI_API_KEY_CODE_REVIEW") });
   const res = await openai.responses.parse({
     model,
     instructions: opts.system,
