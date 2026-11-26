@@ -20,3 +20,6 @@ export const helloMany = task(
     return Promise.all(names.map((name) => ctx.run(hello, name)));
   },
 );
+
+// 6단계 확인용 task (docs/dev/render-workflows.md). 확인 후 지운다.
+export { checkShared } from "./check/shared";

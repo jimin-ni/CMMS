@@ -1,17 +1,24 @@
 {
-  "name": "cmms-workflows",
+  "name": "memoamo-workflows",
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "tsx src/index.ts",
+    "postinstall": "node build.mjs",
+    "build": "node build.mjs",
+    "start": "node --enable-source-maps dist/index.js",
+    "dev": "tsx src/index.ts",
     "check": "tsc --noEmit -p ."
   },
   "dependencies": {
     "@renderinc/sdk": "^1.11.0",
+    "drizzle-orm": "^0.45.4",
+    "esbuild": "^0.28.2",
+    "pg": "^8.23.1",
     "tsx": "^4.20.6"
   },
   "devDependencies": {
     "@types/node": "^20",
+    "@types/pg": "^8.23.1",
     "typescript": "^5"
   }
 }

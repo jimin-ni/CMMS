@@ -6,7 +6,15 @@
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["node"]
+    "types": ["node"],
+    // ../src의 앱 코드도 workflows/node_modules의 패키지를 쓰게 한다 (build.mjs의 nodePaths와 같은 뜻).
+    // 안 하면 루트와 이 폴더의 drizzle-orm 타입이 두 벌로 잡혀 서로 맞지 않는다.
+    "baseUrl": ".",
+    "paths": {
+      "drizzle-orm": ["./node_modules/drizzle-orm"],
+      "drizzle-orm/*": ["./node_modules/drizzle-orm/*"],
+      "pg": ["./node_modules/@types/pg"]
+    }
   },
   "include": ["src/**/*.ts"]
 }

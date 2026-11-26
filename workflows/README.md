@@ -1,4 +1,4 @@
-# CMMS Render Workflows
+# memoamo Render Workflows
 
 Render Workflows로 돌리는 백그라운드·에이전트 작업입니다. Next.js 앱과 의존성을 나누려고 폴더를 따로 둡니다.
 
@@ -17,8 +17,9 @@ Render Workflows로 돌리는 백그라운드·에이전트 작업입니다. Nex
 | Language | Node |
 | Region | Singapore (공유 DB와 같은 리전) |
 | Root Directory | `workflows` |
-| Build Command | `npm install` |
-| Start Command | `npm start` |
+| Build Command | `npm ci` (설치 뒤 `postinstall`이 `build.mjs`로 `dist/index.js`를 만듦) |
+| Start Command | `npm start` (`node dist/index.js`) |
+- 묶음 빌드를 하는 이유: 재판정 task가 `../src/lib/moderation/`의 앱 코드를 쓰는데, Render는 이 폴더의 `node_modules`만 설치합니다. `build.mjs`가 앱 코드와 의존성을 한 파일로 묶습니다.
 
 배포가 끝나면 대시보드에 `hello`, `helloMany`가 보여야 합니다. 대시보드에서 직접 실행하거나 아래처럼 코드에서 실행합니다.
 
@@ -44,7 +45,7 @@ Render CLI가 있으면:
 ```bash
 cd workflows
 npm install
-render workflows dev -- npm start
+render workflows dev -- npm run dev
 # 다른 터미널
 render workflows tasks list --local
 ```

@@ -13,7 +13,7 @@
 |---|---|
 | 끝난 단계 | 1 (Workflow 서비스 배포, 슬러그 `memoamo-agent`), 4 (`persist.ts` 분리, 검사 통과) |
 | 대기 | 2 마이그레이션 `0014`, 3 DB 계정 `moderation_worker` → 이슈 #125 팀원 답 대기 |
-| 다음 할 일 | 6단계 준비: esbuild로 `workflows`를 한 파일로 묶는 빌드 (6단계 "의존성 해석 문제 대응"). 그다음 `recheck` task 코드 작성 |
+| 다음 할 일 | Render 재배포 후 대시보드에서 `check.shared` 실행 (입력 `[]`) → 표 이름, 함수, 정규화 결과가 나오면 묶음 빌드 확인 끝. 그다음 `recheck` task 코드 작성 |
 | 남은 확인 | 4단계의 화면 확인 (로컬에서 위반 문장 전송 → 숨김, 경고 n/3) |
 | 사용자가 할 일 | Workflow 전용 OpenAI 키, Render API 키 발급 (0장) |
 | 관련 이슈 | #124 `jimins-claude/feature-agents` 삭제 제안 (답 대기), #125 공유 DB·공용 코드 변경 동의 (답 대기) |
@@ -101,7 +101,7 @@ Render 대시보드 설정
 - [ ] `workflows/src/common/db.ts`: Drizzle + pg, `moderation_worker` 연결
 - [ ] `workflows/src/moderation/moderate.ts`: OpenAI Moderation 호출. 사용자 상한 없음, 시간 제한과 재시도만
 - [ ] `workflows/src/moderation/tasks.ts`: `recheck(surface, messageId)` (동작은 16 문서 6-3)
-- [ ] **의존성 해석 문제 대응** [가설→확인 필요]: `../src/lib/schema.ts`는 `drizzle-orm`을 import하는데, Node는 이 파일 위치에서 위로 `node_modules`를 찾으므로 `workflows/node_modules`를 보지 못함. Root Directory가 `workflows`면 루트 `node_modules`가 설치되지 않아 실패할 수 있음. `normalize.ts`는 외부 패키지가 없어 통과한 것. 해결안: 빌드 때 esbuild로 `src/index.ts`를 한 파일로 묶고(`nodePaths: ["node_modules"]`) Start를 `node dist/index.js`로 바꿈. `drizzle-orm`, `pg`는 루트와 같은 버전으로 `workflows/package.json`에 추가
+- [x] **의존성 해석 문제 대응**: `../src/lib/schema.ts`가 쓰는 `drizzle-orm`을 Render에서 찾을 수 있게 `workflows/build.mjs`(esbuild)로 `dist/index.js` 한 파일로 묶음. `npm ci`의 `postinstall`이 빌드하므로 Render 설정은 그대로. `drizzle-orm` 0.45.4, `pg` 8.23.1 추가. `tsconfig.json`의 `paths`로 타입도 한 벌로 맞춤. 레포 밖 빈 폴더에서 `dist/index.js` 단독 실행 확인. Render에서 `check.shared` 실행 확인은 남음
 - [ ] Render Workflow Environment에 `OPENAI_API_KEY` (Workflow 전용 키)
 
 확인
@@ -143,3 +143,4 @@ Render 대시보드 설정
 | 2026-11-26 | 0 | 계획 작성, Workflow 서비스 생성 |
 | 2026-11-26 | 1 | Workflow 서비스 배포, `hello`, `check.normalize` 실행 성공. 슬러그 `memoamo-agent` |
 | 2026-11-26 | 4 | `persist.ts` 분리. `npm test`(73개 통과), `tsc`, `eslint`, `build` 통과 |
+| 2026-11-26 | 6 준비 | 묶음 빌드(`build.mjs`) 추가, 확인용 `check.shared` task 추가 |
