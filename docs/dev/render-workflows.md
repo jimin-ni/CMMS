@@ -10,9 +10,9 @@
 | 항목 | 상태 | 막히는 단계 |
 |---|---|---|
 | Render Workflow 서비스 생성 | 완료 (2026-11-26) | 1 |
-| 팀 합의: 마이그레이션 `0014` 번호 | 이슈 대기 | 2 |
-| 팀 합의: DB 계정 `moderation_worker` (힙 테이블 일부 수정 권한 포함) | 이슈 대기 | 3 |
-| 팀 합의: `src/lib/moderation/` 저장 로직 분리 (`persist.ts`) | 이슈 대기 | 4 |
+| 팀 합의: 마이그레이션 `0014` 번호 | #125 대기 | 2 |
+| 팀 합의: DB 계정 `moderation_worker` (힙 테이블 일부 수정 권한 포함) | #125 대기 | 3 |
+| 팀 합의: `src/lib/moderation/` 저장 로직 분리 (`persist.ts`) | #125 대기 | 4 |
 | Workflow 전용 OpenAI 키 | 본인 발급 필요 | 6 |
 | Render API 키 | 본인 발급 필요 | 7 |
 
