@@ -10,9 +10,9 @@ export function nicknameLength(name: string): number {
 export type NicknameStatus = "ok" | "empty" | "too_long" | "rejected";
 
 export const NICKNAME_TEXT = {
-  ok: "사용할 수 있는 닉네임이에요.",
-  empty: "닉네임을 입력해 주세요.",
-  too_long: `닉네임은 ${NICKNAME_MAX}자를 넘지 않게 입력해 주세요.`,
-  rejected: "커뮤니티 가이드라인을 지키는 닉네임을 사용해 주세요.",
+  ok: "Nickname available.",
+  empty: "Enter a nickname.",
+  too_long: `Use ${NICKNAME_MAX} characters or fewer.`,
+  rejected: "This nickname breaks our community rules.",
   rulesNotice: "Nicknames that violate our community rules may be restricted.",
 } as const satisfies Record<NicknameStatus | "rulesNotice", string>;

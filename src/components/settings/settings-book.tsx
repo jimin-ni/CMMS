@@ -9,14 +9,12 @@ import {
   usePrefs,
   type Language,
   type RoomTime,
-  type Theme,
 } from "@/lib/settings/prefs";
 
 export function SettingsBook() {
   return (
-    <Book heading="SETTINGS" closeLabel="설정 닫기">
+    <Book heading="SETTINGS" closeLabel="Close settings">
       <LanguagePage />
-      <ThemePage />
       <RoomTimePage />
     </Book>
   );
@@ -54,9 +52,9 @@ function Choice<T extends string>({
   );
 }
 
-const LANGUAGE_LABELS: [Language, string, string][] = [
-  ["ko", "한국어", "Korean"],
-  ["en", "English", "영어"],
+const LANGUAGE_LABELS: [Language, string][] = [
+  ["ko", "Korean"],
+  ["en", "English"],
 ];
 
 function LanguagePage() {
@@ -64,14 +62,11 @@ function LanguagePage() {
   return (
     <Page no={1} tag="language" title="setting">
       <fieldset className="sb-field">
-        <legend className="ob-rounded sb-legend">
-          언어 <small>Language</small>
-        </legend>
+        <legend className="ob-rounded sb-legend">Language</legend>
         <div className="sb-row">
-          {LANGUAGE_LABELS.map(([v, label, sub]) => (
+          {LANGUAGE_LABELS.map(([v, label]) => (
             <Choice key={v} name="language" value={v} checked={language === v} onPick={(language) => setPrefs({ language })} className="sb-chip">
               <b className="ob-rounded">{label}</b>
-              <small>{sub}</small>
             </Choice>
           ))}
         </div>
@@ -81,66 +76,36 @@ function LanguagePage() {
   );
 }
 
-const THEME_LABELS: [Theme, string, string][] = [
-  ["light", "라이트", "Light"],
-  ["dark", "다크", "Dark"],
-];
-
-function ThemePage() {
-  const { theme } = usePrefs();
-  return (
-    <Page no={2} tag="theme" title="theme">
-      <fieldset className="sb-field">
-        <legend className="ob-rounded sb-legend">
-          테마 <small>Theme</small>
-        </legend>
-        <div className="sb-row">
-          {THEME_LABELS.map(([v, label, sub]) => (
-            <Choice key={v} name="theme" value={v} checked={theme === v} onPick={(theme) => setPrefs({ theme })} className="sb-card">
-              <span className={`sb-swatch sb-swatch-${v}`} aria-hidden="true" />
-              <b className="ob-rounded">{label}</b>
-              <small>{sub}</small>
-            </Choice>
-          ))}
-        </div>
-      </fieldset>
-    </Page>
-  );
-}
-
 // 시간대 칸의 하늘색: 엔진(heap/engine/time.js)의 같은 시간대 배경색(bd)
-const ROOM_TIME_LABELS: [Exclude<RoomTime, "auto">, string, string, string][] = [
-  ["morning", "아침", "Morning", "linear-gradient(180deg, #b4cfde, #eee4cb)"],
-  ["noon", "점심", "Noon", "linear-gradient(180deg, #a6cbe2, #e6f0f1)"],
-  ["dusk", "저녁", "Evening", "linear-gradient(180deg, #4b416c, #d68a62)"],
-  ["night", "밤", "Night", "linear-gradient(180deg, #121833, #2a3157)"],
+const ROOM_TIME_LABELS: [Exclude<RoomTime, "auto">, string, string][] = [
+  ["morning", "Morning", "linear-gradient(180deg, #b4cfde, #eee4cb)"],
+  ["noon", "Noon", "linear-gradient(180deg, #a6cbe2, #e6f0f1)"],
+  ["dusk", "Evening", "linear-gradient(180deg, #4b416c, #d68a62)"],
+  ["night", "Night", "linear-gradient(180deg, #121833, #2a3157)"],
 ];
 
 function RoomTimePage() {
   const { roomTime } = usePrefs();
   const pick = (roomTime: RoomTime) => setPrefs({ roomTime });
   return (
-    <Page no={3} tag="room time" title="room time">
+    <Page no={2} tag="room time" title="room time">
       <fieldset className="sb-field">
-        <legend className="ob-rounded sb-legend">
-          방 시간대 <small>Room time</small>
-        </legend>
+        <legend className="ob-rounded sb-legend">Room time</legend>
         <Choice name="room-time" value="auto" checked={roomTime === "auto"} onPick={pick} className="sb-chip sb-wide">
-          <b className="ob-rounded">실시간</b>
-          <small>Realtime · 한국 시간을 따라 바뀌어요</small>
+          <b className="ob-rounded">Live</b>
+          <small>Follows Korea time</small>
         </Choice>
         <p className="ob-hand sb-or">or</p>
         <div className="sb-grid">
-          {ROOM_TIME_LABELS.map(([v, label, sub, sky]) => (
+          {ROOM_TIME_LABELS.map(([v, label, sky]) => (
             <Choice key={v} name="room-time" value={v} checked={roomTime === v} onPick={pick} className="sb-card sb-polaroid">
               <span className="sb-sky" style={{ background: sky }} aria-hidden="true" />
               <b className="ob-rounded">{label}</b>
-              <small>{sub}</small>
             </Choice>
           ))}
         </div>
       </fieldset>
-      {roomTime === null && <p className="ob-hand sb-note">아직 고르지 않았어요: 방 주인이 정한 시간대로 보여요</p>}
+      {roomTime === null && <p className="ob-hand sb-note">Not set: shows the owner&apos;s time</p>}
     </Page>
   );
 }

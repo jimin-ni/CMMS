@@ -49,7 +49,7 @@ export default function SignupPage() {
       setChecking(false);
       const data = (await res?.json().catch(() => null)) as { status?: NicknameStatus } | null;
       if (!data?.status) {
-        setErrorMessage("닉네임을 확인하지 못했어요. 잠시 뒤에 다시 시도해 주세요.");
+        setErrorMessage("Couldn't check the nickname. Try again later.");
         return false;
       }
       status = data.status;
@@ -67,7 +67,7 @@ export default function SignupPage() {
     // await 뒤에는 event.currentTarget이 비므로 먼저 읽어 둔다.
     const form = new FormData(event.currentTarget);
     if (is14OrOlder === null) {
-      setErrorMessage("만 14세 이상인지 예 또는 아니오를 선택해 주세요.");
+      setErrorMessage("Choose Yes or No for the age question.");
       return;
     }
     // 두 칸이 다르면 입력칸 아래 안내가 이미 보이고 있다.
@@ -89,7 +89,7 @@ export default function SignupPage() {
 
     if (result.error) {
       setPending(false);
-      setErrorMessage(result.error.message ?? "회원가입에 실패했습니다.");
+      setErrorMessage(result.error.message ?? "Sign up failed.");
       return;
     }
 
@@ -115,9 +115,9 @@ export default function SignupPage() {
     return (
       <main className="mx-auto w-full max-w-md px-6 py-12">
         <div role="alertdialog" aria-labelledby="under-age-title" className="flex flex-col gap-4 rounded-sm border border-hairline bg-white p-8">
-          <h1 id="under-age-title" className="text-xl font-medium text-ink">가입이 끝났어요</h1>
+          <h1 id="under-age-title" className="text-xl font-medium text-ink">You’re signed up</h1>
           <p className="text-sm text-ink">
-            만 14세 미만은 일부 서비스를 이용할 수 없어요. 채팅, 쪽지, 방명록은 쓸 수 없고, 방 구경과 읽기는 할 수 있어요.
+            Under 14? You can visit rooms and read, but not chat, write notes, or sign guestbooks.
           </p>
           <button
             type="button"
@@ -127,7 +127,7 @@ export default function SignupPage() {
             }}
             className="inline-flex h-[35px] items-center justify-center rounded-sm border border-black bg-ink px-3 text-sm font-bold uppercase text-white hover:bg-ink-soft"
           >
-            확인
+            OK
           </button>
         </div>
       </main>
@@ -137,10 +137,10 @@ export default function SignupPage() {
   return (
     <main className="mx-auto w-full max-w-md px-6 py-12">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4 rounded-sm border border-hairline bg-white p-8">
-        <h1 className="text-[32px] leading-[1.2] font-medium text-ink">회원가입</h1>
+        <h1 className="text-[32px] leading-[1.2] font-medium text-ink">Sign up</h1>
 
         <fieldset className="flex flex-col gap-2 text-sm">
-          <legend className="mb-1">만 14세 이상인가요?</legend>
+          <legend className="mb-1">Are you 14 or older?</legend>
           <div className="flex gap-2">
             {[true, false].map((value) => (
               <button
@@ -152,16 +152,16 @@ export default function SignupPage() {
                   is14OrOlder === value ? "border-ink bg-ink text-white" : "border-ash text-ink"
                 }`}
               >
-                {value ? "예" : "아니오"}
+                {value ? "Yes" : "No"}
               </button>
             ))}
           </div>
-          <p className="text-xs text-ash">한 번 답하면 바꿀 수 없어요.</p>
+          <p className="text-xs text-ash">You can’t change this later.</p>
         </fieldset>
 
         <div className="flex flex-col gap-1 text-sm">
           <label htmlFor="signup-name" className="flex justify-between">
-            닉네임
+            Nickname
             <span className={nicknameLength(nickname) > NICKNAME_MAX ? "text-red-700" : "text-ash"}>
               {nicknameLength(nickname)}/{NICKNAME_MAX}
             </span>
@@ -182,7 +182,7 @@ export default function SignupPage() {
               disabled={checking || nicknameOk}
               className="shrink-0 rounded-sm border border-ink px-3 py-2 text-ink disabled:opacity-60"
             >
-              {checking ? "확인 중..." : "확인"}
+              {checking ? "Checking..." : "Check"}
             </button>
           </div>
           <p id="signup-name-rules" className="text-xs text-red-700">{NICKNAME_TEXT.rulesNotice}</p>
@@ -191,49 +191,49 @@ export default function SignupPage() {
           </p>
         </div>
         <label className="flex flex-col gap-1 text-sm">
-          이메일
+          Email
           <input name="email" type="email" required className="rounded-sm border border-ash px-3 py-2" />
         </label>
         <PasswordField
-          label="비밀번호 (8자 이상)"
+          label="Password (8+ characters)"
           value={password}
           onChange={setPassword}
           visible={showPassword}
           onToggle={() => setShowPassword((v) => !v)}
         />
         <PasswordField
-          label="비밀번호 확인"
+          label="Confirm password"
           value={passwordConfirm}
           onChange={setPasswordConfirm}
           visible={showPassword}
           onToggle={() => setShowPassword((v) => !v)}
           invalid={passwordMismatch}
         />
-        {passwordMismatch && <p className="text-xs text-red-700">비밀번호가 서로 달라요.</p>}
+        {passwordMismatch && <p className="text-xs text-red-700">Passwords don’t match.</p>}
         {errorMessage && <p className="text-sm text-red-700">{errorMessage}</p>}
         {/* 문서는 새 탭으로 연다: 쓰던 가입 양식이 지워지지 않게 */}
         <p className="text-xs text-ash">
-          가입하기를 누르면{" "}
+          By signing up, you agree to the{" "}
           <Link href="/terms" target="_blank" rel="noopener" className="text-ink underline">
-            서비스 이용약관
-          </Link>
-          과{" "}
+            Terms
+          </Link>{" "}
+          and{" "}
           <Link href="/privacy" target="_blank" rel="noopener" className="text-ink underline">
-            개인정보 처리방침
+            Privacy Policy
           </Link>
-          에 동의한 것으로 봅니다.
+          .
         </p>
         <button
           type="submit"
           disabled={pending}
           className="inline-flex h-[35px] items-center justify-center rounded-sm border border-black bg-ink px-3 text-sm font-bold uppercase text-white hover:bg-ink-soft disabled:opacity-60"
         >
-          {pending ? "처리 중..." : "가입하기"}
+          {pending ? "Signing up..." : "Sign up"}
         </button>
         <p className="text-sm text-ash">
-          이미 계정이 있나요?{" "}
+          Have an account?{" "}
           <Link href={withNext("/login", next)} className="font-medium text-ink underline">
-            로그인
+            Sign in
           </Link>
         </p>
       </form>
@@ -246,7 +246,7 @@ export default function SignupPage() {
             aria-describedby="nickname-notice-body"
             className="flex w-full max-w-sm flex-col gap-4 rounded-sm border border-hairline bg-white p-6"
           >
-            <h2 id="nickname-notice-title" className="text-lg font-medium text-ink">닉네임을 사용할 수 없어요</h2>
+            <h2 id="nickname-notice-title" className="text-lg font-medium text-ink">Can’t use this nickname</h2>
             <p id="nickname-notice-body" className="text-sm text-ink">{nicknameNotice}</p>
             <button
               type="button"
@@ -254,7 +254,7 @@ export default function SignupPage() {
               onClick={() => setNicknameNotice(null)}
               className="inline-flex h-[35px] items-center justify-center rounded-sm border border-black bg-ink px-3 text-sm font-bold uppercase text-white hover:bg-ink-soft"
             >
-              확인
+              OK
             </button>
           </div>
         </div>
@@ -288,7 +288,7 @@ function PasswordField(props: {
         <button
           type="button"
           onClick={props.onToggle}
-          aria-label={props.visible ? "비밀번호 숨기기" : "비밀번호 보기"}
+          aria-label={props.visible ? "Hide password" : "Show password"}
           aria-pressed={props.visible}
           className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-ash hover:text-ink"
         >

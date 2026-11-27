@@ -30,7 +30,7 @@ export default function LoginPage() {
 
     setPending(false);
     if (result.error) {
-      setErrorMessage(result.error.message ?? "로그인에 실패했습니다.");
+      setErrorMessage(result.error.message ?? "Sign in failed.");
       return;
     }
     trackEvent({ event: "login", method: "email", user_role: toUserRole(result.data.user.role) });
@@ -41,13 +41,13 @@ export default function LoginPage() {
   return (
     <main className="mx-auto w-full max-w-md px-6 py-12">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4 rounded-sm border border-hairline bg-white p-8">
-        <h1 className="text-[32px] leading-[1.2] font-medium text-ink">로그인</h1>
+        <h1 className="text-[32px] leading-[1.2] font-medium text-ink">Sign in</h1>
         <label className="flex flex-col gap-1 text-sm">
-          이메일
+          Email
           <input name="email" type="email" required className="rounded-sm border border-ash px-3 py-2" />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          비밀번호
+          Password
           <input name="password" type="password" required className="rounded-sm border border-ash px-3 py-2" />
         </label>
         {errorMessage && <p className="text-sm text-red-700">{errorMessage}</p>}
@@ -56,20 +56,20 @@ export default function LoginPage() {
           disabled={pending}
           className="inline-flex h-[35px] items-center justify-center rounded-sm border border-black bg-ink px-3 text-sm font-bold uppercase text-white hover:bg-ink-soft disabled:opacity-60"
         >
-          {pending ? "확인 중..." : "로그인"}
+          {pending ? "Signing in..." : "Sign in"}
         </button>
         <p className="text-sm text-ash">
-          계정이 없나요?{" "}
+          No account?{" "}
           <Link href={withNext("/signup", next)} className="font-medium text-ink underline">
-            회원가입
+            Sign up
           </Link>
         </p>
         {/* 계정 정지 등으로 로그인할 수 없는 사용자의 이의 제기 경로 (docs/planning/12-ai-screening.md 9장) */}
         <a
-          href={`mailto:${ADMIN_CONTACT_EMAIL}?subject=${encodeURIComponent("[CMMS] 관리자 문의")}`}
+          href={`mailto:${ADMIN_CONTACT_EMAIL}?subject=${encodeURIComponent("[Memoamo] Contact admin")}`}
           className="self-start text-xs text-ash underline"
         >
-          관리자 문의
+          Contact admin
         </a>
       </form>
     </main>
