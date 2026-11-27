@@ -101,7 +101,8 @@ export function setupInput(ctx) {
     rayFrom(ev);
     if (ctx.mode === 'globe') return ctx.globeClick(ray); // 글로브 모드 (globe.js): 카메라가 자리로 가는 중에도 받는다 (글로브가 카메라를 따라온다)
     if (ctx.camGoal) return;
-    if (ctx.mode === 'sort') { const h = ctx.shelf && ray.intersectObjects(ctx.shelf.albums.flatMap(a => [a.mesh, a.label]), false)[0]; if (h) albumAction(h.object.userData.album); return; }
+    // 책장 보기: 앨범을 누르면 열고, 앨범이 아닌 곳을 누르면 나간다
+    if (ctx.mode === 'sort') { const h = ctx.shelf && ray.intersectObjects(ctx.shelf.albums.flatMap(a => [a.mesh, a.label]), false)[0]; if (h) albumAction(h.object.userData.album); else exitSort(); return; }
     if (ctx.mode === 'sit') {
       const hits = ray.intersectObjects([...pickables, ...ctx.build.slotMeshes], false);
       if (ctx.held && hits[0]?.object.userData.card === ctx.held) return ctx.flipAt(heldFx(ctx.held)); // 3D 로 남는 카드 (팬 작품, 눈앞에 오는 중)
@@ -122,6 +123,18 @@ export function setupInput(ctx) {
     else if (shelfParts.includes(hit.object)) walkRoute(ctx.shelfSpot.clone(), 'sort', shelfParts);
     else if (hit.object === floor) walkRoute(p.clone().setY(0), null);
     else if (SEAT) walkRoute(SEAT.clone(), 'sit', ctx.heapBoxParts || []); // 사진 더미(카드, 상자): 더미를 보는 자리로 걸어가 본다
+  });
+
+  // 앉은 자리: 카드와 더미 곁 물건에서 떨어진 빈 곳을 두 번 누르면 일어선다 (Escape, 일어나기와 같다).
+  // 탁자 밖(바닥, 벽)을 눌러도 빈 곳이다. 카드를 든 동안은 한 번 누르기가 내려놓기라 여기에 오지 않는다
+  const topPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  on(canvas, 'dblclick', ev => {
+    if (ctx.mode !== 'sit' || ctx.held || ctx.dragging || ctx.camGoal) return;
+    rayFrom(ev);
+    if (ray.intersectObjects([...pickables, ...ctx.build.slotMeshes, ...(ctx.heapBoxParts || [])], false).length) return;
+    topPlane.constant = -(HOST?.top ?? 0);
+    if (ray.ray.intersectPlane(topPlane, _hit) && ctx.nearHeapThing?.(_hit.x, _hit.z)) return;
+    stand();
   });
 
   Object.assign(ctx, { anyOverlay, keys });

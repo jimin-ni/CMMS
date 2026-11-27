@@ -158,7 +158,7 @@ export function setupPanels(ctx) {
     $('rooms').hidden = true; $('fade').classList.add('on');
     setTimeout(() => { if (!ctx.disposed) opts.onNavigate(id); }, 380);
   }
-  bindOverlay(ctx, 'rooms', 'rooms-close');
+  bindOverlay(ctx, 'rooms', 'rooms-close', { backdrop: true }); // 창 바깥을 누르면 닫힌다 (PC 와 같다)
 
   Object.assign(ctx, { showPhonePic, openRooms, openPhone, openSlot });
 }

@@ -80,7 +80,7 @@ export function setupShelf(ctx) {
     if (!items.length) list.appendChild(el('p', 'note', '아직 비어 있어요.'));
     $('grid').hidden = false;
   }
-  bindOverlay(ctx, 'grid', 'grid-close');
+  bindOverlay(ctx, 'grid', 'grid-close', { backdrop: true }); // 창 바깥을 누르면 닫힌다 (PC 와 같다)
 
   Object.assign(ctx, { linkShelf, updateAlbums, enterSort, exitSort, albumAction });
 }

@@ -210,6 +210,20 @@ export function setupHeap(ctx) {
   }
   function toTop(c) { cards.splice(cards.indexOf(c), 1); cards.push(c); c.userData.layer = null; } // 옮긴 카드는 켜를 떠나 맨 위에 눕는다
   ctx.heapHasBox = () => !!BOX;
+  // 받침 위 (x, z) 가 카드, 상자, 같은 받침의 물건(EXCL)에서 r 안에 있다. 앉은 자리에서 빈 곳을 두 번 눌러 일어서기를 가린다 (input.js)
+  ctx.nearHeapThing = (x, z, r = 0.1) => {
+    if (BOX && Math.abs(x - BOX.x) <= BOX.w / 2 + BOX.wall + r && Math.abs(z - BOX.z) <= BOX.d / 2 + BOX.wall + r) return true;
+    for (const e of EXCL) if (Math.hypot(x - e.x, z - e.z) < e.r - 0.08 + r) return true; // EXCL 의 r 에는 카드 여유 0.08 이 들어 있다
+    const n = Math.ceil(r / G.cell), i0 = Math.floor((x - G.x0) / G.cell), j0 = Math.floor((z - G.z0) / G.cell);
+    for (let i = i0 - n; i <= i0 + n; i++) for (let j = j0 - n; j <= j0 + n; j++) {
+      if (i < 0 || j < 0 || i >= G.nx || j >= G.nz) continue;
+      const k = i * G.nz + j;
+      if (G.h[k] > G.base[k] + 1e-4 && Math.hypot(G.x0 + (i + 0.5) * G.cell - x, G.z0 + (j + 0.5) * G.cell - z) <= r + G.cell) return true;
+    }
+    return false;
+  };
+  // 카드가 덮은 받침 넓이 (m², 격자 칸으로 셈한다). 개발 훅 pileStats 가 읽는다
+  ctx.heapCover = () => { let n = 0; for (let k = 0; k < G.h.length; k++) if (G.h[k] > G.base[k] + 1e-4) n++; return n * G.cell * G.cell; };
   // 움직임: 'drop' 은 펄럭이며 호를 그려 내려와 조금 튕기고, 'settle' 은 중력으로 떨어진다
   function startAnim(c, kind) {
     c.userData.anim = { kind, t: 0, dur: kind === 'drop' ? 0.6 : 0.28, from: c.position.clone(), fromQ: c.quaternion.clone(), axis: new THREE.Vector3(rand() - 0.5, 0, rand() - 0.5).normalize(), arc: kind === 'drop' ? 0.08 : 0 };
