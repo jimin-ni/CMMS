@@ -210,6 +210,19 @@ export function setupHeap(ctx) {
   }
   function toTop(c) { cards.splice(cards.indexOf(c), 1); cards.push(c); c.userData.layer = null; } // 옮긴 카드는 켜를 떠나 맨 위에 눕는다
   ctx.heapHasBox = () => !!BOX;
+  // 카드를 (x, z, yaw) 에 평평하게 놓으면 밑에서 가장 높은 곳 (카드 전체, 상자 벽 포함). 끄는 카드가 이 위로 떠서 벽을 넘는다 (loop.js)
+  // 벽은 격자 칸(2cm)보다 얇아(1.8cm) 칸에 다 잡히지 않는다: 카드 상자(돌린 반폭 ex, ez)가 벽 띠에 걸치면 벽 꼭대기를 직접 넣는다
+  ctx.hoverTop = (x, z, yaw, d) => {
+    footprint(x, z, yaw, d);
+    let top = lift(0, 0);
+    if (BOX) {
+      const c = Math.abs(Math.cos(yaw)), s = Math.abs(Math.sin(yaw)), ex = (c * d.w + s * d.h) / 2, ez = (s * d.w + c * d.h) / 2;
+      const ax = Math.abs(x - BOX.x), az = Math.abs(z - BOX.z);
+      const overOuter = ax - ex < BOX.w / 2 + BOX.wall && az - ez < BOX.d / 2 + BOX.wall, inInner = ax + ex <= BOX.w / 2 && az + ez <= BOX.d / 2;
+      if (overOuter && !inInner) top = Math.max(top, HOST.top + BOX.h);
+    }
+    return top;
+  };
   // 받침 위 (x, z) 가 카드, 상자, 같은 받침의 물건(EXCL)에서 r 안에 있다. 앉은 자리에서 빈 곳을 두 번 눌러 일어서기를 가린다 (input.js)
   ctx.nearHeapThing = (x, z, r = 0.1) => {
     if (BOX && Math.abs(x - BOX.x) <= BOX.w / 2 + BOX.wall + r && Math.abs(z - BOX.z) <= BOX.d / 2 + BOX.wall + r) return true;

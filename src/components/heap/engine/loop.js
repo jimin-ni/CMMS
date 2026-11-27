@@ -6,7 +6,7 @@ export function setupLoop(ctx) {
   const {
     Yv, camera, WALL_H, RX, RZ, HOST, canvas, renderer, scene, on,
     onDispose, stepCharacter, controls, me, legL, legR, $,
-    tickClock, stepMotes, cards, inPile, supportAt, restPose, stepAnim,
+    tickClock, stepMotes, cards, restPose, stepAnim,
   } = ctx;
 
   // 카메라 구도: 방(room), 사진 더미 보기(sit)
@@ -134,10 +134,14 @@ export function setupLoop(ctx) {
         wantQ.multiply(turnQ.setFromAxisAngle(Yv, c.userData.turnNow));
         heldArrived = c.position.distanceTo(want) < d.h * 0.03 && c.quaternion.angleTo(wantQ) < 0.03 && Math.abs(goal - c.userData.turnNow) < 0.03;
       } else if (c === ctx.dragging) {
-        const p = c.userData.place, below = cards.filter(o => o !== c && inPile(o));
-        want.set(p.x, supportAt(p.x, p.z, below) + 0.05, p.z);
+        // 끄는 카드는 밑에서 가장 높은 곳(카드 전체, 상자 벽 포함) 위로 뜬다. 가려는 자리와 지금 자리 둘 다 본다:
+        // 상자에서 꺼내면 벽 위로 올라 넘어간 뒤 탁자로 내려온다. 높이는 옆으로 가는 것보다 빨리 따라가 모서리를 깎지 않는다
+        const p = c.userData.place;
+        const top = Math.max(ctx.hoverTop(p.x, p.z, p.yaw, d), ctx.hoverTop(c.position.x, c.position.z, p.yaw, d));
+        want.set(p.x, top + 0.05, p.z);
         wantQ.copy(restPose(c, []).quat);
-        c.position.lerp(want, Math.min(1, a * 2.2)); c.quaternion.slerp(wantQ, a);
+        const ya = Math.min(1, a * 6), y = c.position.y + (want.y - c.position.y) * ya;
+        c.position.lerp(want, Math.min(1, a * 2.2)); c.position.y = Math.max(y, top + 0.01); c.quaternion.slerp(wantQ, a);
         continue;
       } else {
         if (c.userData.anim) { stepAnim(c, animDt); continue; }

@@ -141,6 +141,12 @@ export function setupDev(ctx) {
       if (c) { c.visible = !!e.detail.on; host.style.visibility = e.detail.on ? 'hidden' : ''; if (pl) pl.style.visibility = e.detail.on ? 'hidden' : ''; }
       cb(!!c);
     }
+    else if (cmd === 'dragged') { // 끄는 카드의 지금 자리와 크기, 상자 (벽 뚫기 시험)
+      // detail.i: 놓은 뒤에도 그 카드를 따라간다 (떨어지는 동안의 벽 뚫기)
+      const c = ctx.dragging ?? (e.detail.i != null ? ctx.cards[e.detail.i] : null), H = ctx.HOST;
+      cb(c ? { i: ctx.cards.indexOf(c), dragging: c === ctx.dragging, x: c.position.x, y: c.position.y, z: c.position.z, yaw: c.userData.place.yaw, w: c.userData.d.w, h: c.userData.d.h,
+        box: H?.box ? { x: H.x, z: H.z, w: H.boxW, d: H.boxD, wall: 0.018, top: H.top + 0.22 } : null } : null);
+    }
     else if (cmd === 'sort') { ctx.enterSort(); cb({ mode: ctx.mode }); } // 책장 보기로 (나가기 시험)
     else if (cmd === 'me') cb({ x: ctx.me.position.x, y: ctx.me.position.y, z: ctx.me.position.z, ry: ctx.me.rotation.y, legL: ctx.legL.rotation.x, mode: ctx.mode, perch: !!ctx.perch, walking: !!ctx.walkTo }); // 내 캐릭터 자리와 자세 (걷기 시험)
     else if (cmd === 'state') cb({ ground: (g => g ? { visible: g.visible, y: g.position.y, img: g.material.map?.image?.width } : null)(ctx.scene.getObjectByName('ground')), layoutGround: ctx.layout.ground ?? null, mode: ctx.mode, slots: ctx.build.slots.map(s => s.fn?.kind), slotMeshes: ctx.build.slotMeshes.length, slotMeshKinds: [...new Set(ctx.build.slotMeshes.map(m => m.userData.slot?.fn?.kind))], seatMeshes: ctx.build.seatMeshes.length });
