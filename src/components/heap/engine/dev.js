@@ -126,6 +126,8 @@ export function setupDev(ctx) {
       const slopes = cs.map(c => THREE.MathUtils.radToDeg(Math.acos(Math.min(1, Math.abs(up.set(0, 0, 1).applyQuaternion(c.userData.home.quat).y)))));
       cb({ cards: cs.length, box: !!ctx.HOST?.box, peakCm: +((Math.max(...cs.map(c => c.userData.home.pos.y)) - top) * 100).toFixed(1),
         meanSlopeDeg: +(slopes.reduce((s, v) => s + v, 0) / (slopes.length || 1)).toFixed(1), maxSlopeDeg: +Math.max(0, ...slopes).toFixed(1), settleMs: ms,
+        coverM2: +(ctx.heapCover?.() ?? 0).toFixed(3),
+        tops: cs.map(c => ({ dx: +(c.userData.home.pos.x - (ctx.HOST?.x ?? 0)).toFixed(2), dz: +(c.userData.home.pos.z - (ctx.HOST?.z ?? 0)).toFixed(2), yCm: +((c.userData.home.pos.y - top) * 100).toFixed(1), i: ctx.cards.indexOf(c) })).sort((a, b) => b.yCm - a.yCm).slice(0, 5), hostM2: ctx.HOST ? +(ctx.HOST.w * ctx.HOST.d).toFixed(2) : null,
         // 상자 밖(탁자 위)의 카드: 받침 위 가운데 높이(cm)와 상자 가운데에서의 거리
         outside: ctx.HOST?.box ? cs.filter(c => Math.abs(c.userData.place.x - ctx.HOST.x) > ctx.HOST.boxW / 2 || Math.abs(c.userData.place.z - ctx.HOST.z) > ctx.HOST.boxD / 2)
           .map(c => ({ dx: +(c.userData.place.x - ctx.HOST.x).toFixed(3), dz: +(c.userData.place.z - ctx.HOST.z).toFixed(3), yCm: +((c.userData.home.pos.y - top) * 100).toFixed(2) })) : undefined });

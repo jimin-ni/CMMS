@@ -35,7 +35,9 @@ export function setupHeap(ctx) {
     } // 머그 (fixtures.js)
     BOX = HOST.box ? { x: HOST.x, z: HOST.z, ...BOX_IN, w: HOST.boxW, d: HOST.boxD, floor: HOST.top + BOX_IN.base } : null;
     BASE = BOX ? BOX.floor : HOST.top;
-    PM = Math.min(0.18, HOST.w * 0.15, HOST.d * 0.15); SX = Math.min(0.42, HOST.w * 0.16); SZ = Math.min(0.28, HOST.d * 0.155);
+    // 퍼짐은 카드 수에 따라 줄어든다: 300장이면 그대로, 적을수록 √(n/300) 배 (0.4 배 아래로는 줄이지 않는다). 적은 더미는 가운데에 모인다
+    const spread = THREE.MathUtils.clamp(Math.sqrt(((reels?.length ?? 0) + (fanReels?.length ?? 0)) / 300), 0.4, 1);
+    PM = Math.min(0.18, HOST.w * 0.15, HOST.d * 0.15); SX = Math.min(0.42, HOST.w * 0.16) * spread; SZ = Math.min(0.28, HOST.d * 0.155) * spread;
     // 흩어진 더미의 높이 격자: 받침 넓이에 카드 반 장만큼 여유를 둔다
     G.x0 = HOST.x - HOST.w / 2 - 0.2; G.z0 = HOST.z - HOST.d / 2 - 0.2;
     G.nx = Math.ceil((HOST.w + 0.4) / G.cell); G.nz = Math.ceil((HOST.d + 0.4) / G.cell);
