@@ -63,7 +63,7 @@ export function stepOfItems(items: unknown): number[] {
 
 // 스크롤 진행도(0~1) 시간표
 export const TIMELINE = {
-  introOut: [0.025, 0.065] as const, // "Memories"와 스크롤 안내가 사라지는 구간
+  introOut: [0.025, 0.065] as const, // "MEMOAMO"와 스크롤 안내가 사라지는 구간
   reveal: [0.05, 0.16] as const, // 어둠이 걷히고 창문 빛과 빈 방이 보이는 구간
   stepsStart: 0.17,
   stepSpan: 0.11, // 한 단계: 글 → 가구 → 글이 사라짐. 마지막 단계가 dark 전에 끝나야 한다 (0.17 + 6 × 0.11 = 0.83)

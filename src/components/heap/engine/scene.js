@@ -1,6 +1,7 @@
 // 렌더러, 카메라, 기본 조명, 방 크기와 벽 좌표.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { disposeScene } from './util.js';
 import { tone } from './palette.js';
 import { makeCanvas, canvasTexture } from './draw.js';
@@ -35,6 +36,14 @@ export function setupScene(ctx) {
   const WALL_H = THREE.MathUtils.clamp(Number(layout.room?.h) || 2.5, 2.5, 4), Yv = new THREE.Vector3(0, 1, 0), Xv = new THREE.Vector3(1, 0, 0);
   function box(w, h, d, mat, x, y, z, { cast = true, receive = true, parent = scene } = {}) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    m.position.set(x, y, z); m.castShadow = cast; m.receiveShadow = receive; parent.add(m); return m;
+  }
+  // 모서리를 비스듬히 깎은 상자. 손으로 짓는 가구가 Kenney 모델처럼 보이게 쓴다 (모서리 한 단, 면마다 평평한 그늘).
+  // r: 깎는 폭. 가장 얇은 변의 0.4 를 넘지 않는다
+  function bevel(w, h, d, mat, x, y, z, { r = 0.015, cast = true, receive = true, parent = scene } = {}) {
+    const k = Math.min(r, Math.min(w, h, d) * 0.4);
+    const geo = new RoundedBoxGeometry(w, h, d, 1, k).toNonIndexed(); geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, mat);
     m.position.set(x, y, z); m.castShadow = cast; m.receiveShadow = receive; parent.add(m); return m;
   }
   // 벽: "back" 은 z = -RZ 에서 x 를 따라 달린다 (+z 를 본다). "left" 는 x = -RX 에서 z 를 따라 달린다 (+x 를 본다)
@@ -82,5 +91,5 @@ export function setupScene(ctx) {
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(2 * RX, 2 * RZ), new THREE.MeshBasicMaterial({ visible: false }));
   floor.rotation.x = -Math.PI / 2; scene.add(floor);
 
-  Object.assign(ctx, { WALLS, box, WALL_H, onWall, RX, RZ, scene, renderer, hemi, fill, Yv, Xv, camera, controls, canvas, floor });
+  Object.assign(ctx, { WALLS, box, bevel, WALL_H, onWall, RX, RZ, scene, renderer, hemi, fill, Yv, Xv, camera, controls, canvas, floor });
 }

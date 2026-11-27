@@ -1,17 +1,10 @@
-# memories
+# Memoamo
 A Creator's Room Filled Together with Fans
 
 ## 기능 명세서 간략
 
 | Feature ID | Feature Name | Feature Description |
 |---|---|---|
-| F-01 | Login | Creator, Admin, Public |
-| F-02 | Chat | Creator-public messaging |
-| F-03 | Guestbook | Daily room visit log |
-| F-04 | Room Decor | Customize room furniture, colors, & themes |
-| F-05 | Polaroid | Reels, shorts, & video clips with fan elements |
-| F-06 | Xmas Tree | Leave messages on the creator's tree |
-| F-07 | Payment | Process room creation & subscription payments |
 
 
 ## 브렌치

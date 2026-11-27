@@ -18,7 +18,8 @@ export function setupShell(ctx) {
   const WIN = WINS[0] ?? null;
   // 깊이 층: 벽 안쪽 면 0, 걸레받이 앞면 TRIM_D, 문틀 앞면 FRAME_D. 두 면이 한 평면에 겹치면 깜빡이므로(z-fighting) 층마다 다르다.
   // 벽 두께는 WALL_T 이고 벽은 방 밖(off -WALL_T..0)에 선다. 뚫린 곳(창, 문)의 벽 두께는 문틀이나 문턱, 창 상자로 덮는다.
-  const WALL_T = 0.2, TRIM_D = 0.06, FRAME_D = 0.08, DOOR_FRAME = 0.06;
+  // 걸레받이(아래 벽)는 얇은 칠 한 겹이다. 가구는 벽 안쪽 면에 등을 붙이므로 0.06 이던 때는 소파와 장의 등이 그 속에 묻혔다
+  const WALL_T = 0.2, TRIM_D = 0.012, FRAME_D = 0.08, DOOR_FRAME = 0.06;
   // 문: 구멍은 at ± 0.5. 걸레받이는 문틀 바깥 끝(± 0.5 + DOOR_FRAME)에서 멈춘다 (tu0, tu1)
   const DOOR = layout.door && { ...layout.door, u0: layout.door.at - 0.5, u1: layout.door.at + 0.5, tu0: layout.door.at - 0.5 - DOOR_FRAME, tu1: layout.door.at + 0.5 + DOOR_FRAME, y0: 0, y1: 2.15 };
   const wallMat = tone(C, 'wall'), trimMat = tone(C, 'trim');
@@ -123,8 +124,11 @@ export function setupShell(ctx) {
     const shaftFloor = ctx.shaftCorners.map(p => p.clone().addScaledVector(ctx.sunDir, p.y / -ctx.sunDir.y));
     const v = [...ctx.shaftCorners, ...shaftFloor].flatMap(p => [p.x, p.y, p.z]);
     const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
+    // 빛줄기는 창에서 가장 밝고 바닥 쪽 끝에서 사라진다 (더하기 섞기라 검정은 아무것도 더하지 않는다).
+    // 끝까지 같은 밝기이던 때는 빛줄기 안의 가구 위에 상자 모서리가 그대로 그려졌다
+    sg.setAttribute('color', new THREE.Float32BufferAttribute([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 3));
     sg.setIndex([0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3, 0, 4, 3, 4, 7]);
-    ctx.shaftGeo = sg; ctx.shaftMat = new THREE.MeshBasicMaterial({ color: '#ffc98a', transparent: true, opacity: 0.07, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+    ctx.shaftGeo = sg; ctx.shaftMat = new THREE.MeshBasicMaterial({ color: '#ffc98a', vertexColors: true, transparent: true, opacity: 0.07, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
     scene.add(new THREE.Mesh(sg, ctx.shaftMat));
     ctx.moteGeo = new THREE.BufferGeometry(); ctx.moteGeo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(90 * 3), 3));
     for (let i = 0; i < 90; i++) moteSeeds.push([rand(), rand(), rand(), rand() * 6.28]);
@@ -156,7 +160,9 @@ export function setupShell(ctx) {
     // 문짝은 문턱에서 머리 밑까지 막는다. 문턱은 벽 두께를 가로질러 바닥 높이(윗면 y 0)에 깔린다: 문 밑으로 벽 너머가 보이지 않는다
     const panel = box(0.96, headY0, 0.06, tone(C, 'accent'), 0, headY0 / 2, -WALL_T / 2, { parent: g });
     // 문턱은 구멍 폭(1.0) 전체를 덮는다. 0.96 이던 때는 양옆에 0.02 틈이 남아 땅이 없는 방에서 문 밑으로 배경이 보였다
-    box(1.0, 0.1, WALL_T, tone(C, 'woodDark'), 0, -0.05, -WALL_T / 2, { parent: g, cast: false });
+    // 문턱은 문 앞 바닥 널과 같은 색이다 (scene.js 의 널은 x 방향으로 1 씩 놓인 floor:i). 왼쪽 벽의 문은 첫 널 앞에 있다
+    const plank = DOOR.wall === 'left' ? 0 : Math.min(Math.max(Math.floor(DOOR.at + RX), 0), Math.ceil(2 * RX) - 1);
+    box(1.0, 0.1, WALL_T, tone(C, `floor:${plank}`), 0, -0.05, -WALL_T / 2, { parent: g, cast: false });
     const knob = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), flat('#d8b27a', { metalness: 0.4, roughness: 0.4 })); knob.position.set(0.34, 1.0, -0.04); g.add(knob);
     const sign = makeCanvas(256, 96);
     const st = canvasTexture(sign);
