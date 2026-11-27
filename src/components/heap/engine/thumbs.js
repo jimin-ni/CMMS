@@ -1,4 +1,5 @@
 // 썸네일 불러오기: 세 단계로 나눠 천천히 선명해진다.
+import * as THREE from 'three';
 import { thumbUrl } from './util.js';
 import { hasThumb } from './format.js';
 import { cropToShape } from './draw.js';
@@ -67,12 +68,20 @@ export function setupThumbs(ctx) {
   function requestPile(tier) { for (let i = cards.length - 1; i >= 0; i--) request(cards[i], tier); } // cards runs bottom → top, so this asks top first
 
   // 집어 든 카드의 앞면을 화면에 뜰 크기로 다시 그린다: 날아오는 동안에도 선명하다. 큰 그림은 받는 대로 이 크기로 그린다 (landed).
-  // 내려놓으면 더미 크기(LOW)로 돌린다. 팬 작품은 자기 그림이라 그대로 둔다. 카드는 눈앞에서 화면 높이의 2/3 쯤이다 (loop.js 의 dist)
+  // 내려놓으면 더미 크기(LOW)로 돌린다. 팬 작품은 자기 그림이라 그대로 둔다.
+  // 배율: 눈앞에 다 왔을 때 카드가 화면에 차지하는 실제 px 높이(loop.js 의 dist 와 같은 셈) 의 1.25 배. 든 동안은 밉맵을 끈다: 밉맵은 글자를 흐린다
   function sharpen(card, on) {
-    const u = card.userData;
+    const u = card.userData, t = u.front;
     if (u.reel.kind === 'fan' || !!u.sharp === on) return;
-    u.sharp = on ? Math.min(3, Math.max(1, ctx.renderer.domElement.height / 1.5 / ctx.frontSpec(u.reel).H)) : 0;
-    drawCard(u.reel, u.img, u.front.image, u.sharp || undefined); u.front.needsUpdate = true;
+    if (on) {
+      const cam = ctx.camera, tn = Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2), d = u.d;
+      const dist = Math.max(d.h / (1.5 * tn), d.w / (1.7 * tn * cam.aspect));
+      const px = ctx.renderer.domElement.height * d.h / (2 * dist * tn); // 눈앞의 카드 높이 (그리기 버퍼 px)
+      u.sharp = Math.min(4, Math.max(1, px / ctx.frontSpec(u.reel).H * 1.25));
+    } else u.sharp = 0;
+    drawCard(u.reel, u.img, t.image, u.sharp || undefined);
+    t.generateMipmaps = !on; t.minFilter = on ? THREE.LinearFilter : THREE.LinearMipmapLinearFilter;
+    t.dispose(); t.needsUpdate = true; // 크기와 밉맵이 바뀌었다: GPU 쪽 텍스처를 새로 만든다
   }
 
   Object.assign(ctx, { loadThumb, cancelThumbs, requestPile, FAR, request, NEAR, CLOSE, pumpThumbs: pump, sharpen });
