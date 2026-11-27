@@ -13,6 +13,13 @@ import { DockAvatar } from "./dock-parts";
 import { useMessageSync, type SyncMeta } from "./use-message-sync";
 
 const READ_KEY = "memoamo.chat.read.";
+// 지난 메시지가 위에 더 있을 때 목록 위쪽 끝: 잘린 메시지가 흐려지며 사라진다
+const FADE_TOP = "linear-gradient(to bottom, transparent 0, #000 48px)";
+
+// column-reverse 목록은 맨 아래가 scrollTop 0 이고 위로 갈수록 음수가 된다.
+function hasMoreAbove(el: HTMLElement): boolean {
+  return el.scrollHeight - el.clientHeight - Math.abs(el.scrollTop) > 1;
+}
 
 function readMark(roomId: string): string {
   try {
@@ -86,6 +93,9 @@ export function DockChat({
     onUnread(expanded ? 0 : unread);
   }, [expanded, unread, onUnread]);
 
+  // 위로 더 굴릴 지난 메시지가 있는지 (메시지 목록의 위쪽 끝을 흐리게 할지)
+  const [moreAbove, setMoreAbove] = useState(false);
+
   // 누른 메시지: 크리에이터는 팬 글에 신고와 인용 답장, 누구나 지울 수 있는 자기 글에 삭제
   const [selected, setSelected] = useState<string | null>(null);
   const [reply, setReply] = useState<{ id: string; senderName: string; body: string } | null>(null);
@@ -98,8 +108,16 @@ export function DockChat({
 
   return (
     <>
-      {/* column-reverse라서 새 메시지가 오면 스크롤이 맨 아래에 머문다. */}
-      <div className="mx-2.5 flex min-h-0 flex-1 flex-col-reverse overflow-y-auto bg-white px-2.5 pt-[14.5px] pb-4">
+      {/* column-reverse라서 새 메시지가 오면 스크롤이 맨 아래에 머문다.
+          스크롤바는 숨기고, 위에 지난 메시지가 더 있으면 위쪽 끝을 흐리게 잘라 굴려 보게 한다. */}
+      <div
+        onScroll={(e) => setMoreAbove(hasMoreAbove(e.currentTarget))}
+        ref={(el) => {
+          if (el) setMoreAbove(hasMoreAbove(el));
+        }}
+        className="mx-2.5 flex min-h-0 flex-1 flex-col-reverse overflow-y-auto bg-white px-2.5 pt-[14.5px] pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        style={moreAbove ? { maskImage: FADE_TOP, WebkitMaskImage: FADE_TOP } : undefined}
+      >
         <ul className="flex flex-col">
           {messages.length === 0 && (
             <li className="py-6 text-center font-[family-name:var(--font-text)] text-[12px] text-[#9b8c85]">

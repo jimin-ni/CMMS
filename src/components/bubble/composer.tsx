@@ -149,6 +149,7 @@ export function Composer({
           <input type="hidden" name={target.name} value={target.value} />
           {reply && <input type="hidden" name="replyTo" value={reply.id} />}
           <div className="flex items-center gap-[7px]">
+            {/* 넘치는 글은 잘린 채로 두고 스크롤바 없이 굴려 본다 */}
             <textarea
               name="body"
               value={draft}
@@ -157,7 +158,7 @@ export function Composer({
               rows={1}
               placeholder="Text Here"
               aria-label="메시지 입력"
-              className="h-[38px] w-[248px] resize-none border-[0.5px] border-[#9b8c85] bg-white px-2.5 py-[10px] font-[family-name:var(--font-oc-body)] text-[13.5px] leading-[17px] text-key-brown outline-none placeholder:text-[12px] placeholder:text-[#9b8c85]"
+              className="h-[38px] w-[248px] resize-none overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border-[0.5px] border-[#9b8c85] bg-white px-2.5 py-[10px] font-[family-name:var(--font-oc-body)] text-[13.5px] leading-[17px] text-key-brown outline-none placeholder:text-[12px] placeholder:text-[#9b8c85]"
             />
             <button
               type="submit"
