@@ -6,12 +6,91 @@ import { useState, useSyncExternalStore } from "react";
 import { authClient } from "@/lib/auth-client";
 import { trackEvent } from "@/lib/analytics";
 import { nextFromLocation, withNext } from "@/lib/next-path";
-import { NICKNAME_MAX, NICKNAME_TEXT, nicknameLength, type NicknameStatus } from "@/lib/nickname";
+import { NICKNAME_MAX, NICKNAME_STATUSES, NICKNAME_TEXT, nicknameLength, type NicknameStatus } from "@/lib/nickname";
+import { useLanguage } from "@/lib/settings/prefs";
 
 const noSubscribe = () => () => {};
 
+// 화면 글 (설정의 언어). 영어는 영어화(2026-11-27) 때의 글 그대로다
+const TEXT = {
+  ko: {
+    checkFailed: "닉네임을 확인하지 못했어요. 잠시 뒤에 다시 시도해 주세요.",
+    chooseAge: "만 14세 이상인지 예 또는 아니오를 선택해 주세요.",
+    failed: "회원가입에 실패했습니다.",
+    doneTitle: "가입이 끝났어요",
+    underAge: "만 14세 미만은 일부 서비스를 이용할 수 없어요. 채팅, 쪽지, 방명록은 쓸 수 없고, 방 구경과 읽기는 할 수 있어요.",
+    ok: "확인",
+    title: "회원가입",
+    ageQuestion: "만 14세 이상인가요?",
+    yes: "예",
+    no: "아니오",
+    ageLocked: "한 번 답하면 바꿀 수 없어요.",
+    nickname: "닉네임",
+    checking: "확인 중...",
+    check: "확인",
+    email: "이메일",
+    password: "비밀번호 (8자 이상)",
+    confirm: "비밀번호 확인",
+    mismatch: "비밀번호가 서로 달라요.",
+    agreeBefore: "가입하기를 누르면 ",
+    terms: "서비스 이용약관",
+    and: "과 ",
+    privacy: "개인정보 처리방침",
+    agreeAfter: "에 동의한 것으로 봅니다.",
+    pending: "처리 중...",
+    submit: "가입하기",
+    haveAccount: "이미 계정이 있나요?",
+    signIn: "로그인",
+    nicknameNoticeTitle: "닉네임을 사용할 수 없어요",
+    hidePassword: "비밀번호 숨기기",
+    showPassword: "비밀번호 보기",
+  },
+  en: {
+    checkFailed: "Couldn't check the nickname. Try again later.",
+    chooseAge: "Choose Yes or No for the age question.",
+    failed: "Sign up failed.",
+    doneTitle: "You’re signed up",
+    underAge: "Under 14? You can visit rooms and read, but not chat, write notes, or sign guestbooks.",
+    ok: "OK",
+    title: "Sign up",
+    ageQuestion: "Are you 14 or older?",
+    yes: "Yes",
+    no: "No",
+    ageLocked: "You can’t change this later.",
+    nickname: "Nickname",
+    checking: "Checking...",
+    check: "Check",
+    email: "Email",
+    password: "Password (8+ characters)",
+    confirm: "Confirm password",
+    mismatch: "Passwords don’t match.",
+    agreeBefore: "By signing up, you agree to the ",
+    terms: "Terms",
+    and: " and ",
+    privacy: "Privacy Policy",
+    agreeAfter: ".",
+    pending: "Signing up...",
+    submit: "Sign up",
+    haveAccount: "Have an account?",
+    signIn: "Sign in",
+    nicknameNoticeTitle: "Can’t use this nickname",
+    hidePassword: "Hide password",
+    showPassword: "Show password",
+  },
+};
+type SignupText = (typeof TEXT)["en"];
+
+// 서버가 닉네임을 거절한 오류(code NICKNAME_*)면 그 상태. 아니면 null
+function nicknameStatusOf(code: string | undefined): NicknameStatus | null {
+  const status = code?.startsWith("NICKNAME_") ? code.slice("NICKNAME_".length).toLowerCase() : null;
+  return NICKNAME_STATUSES.find((s) => s === status) ?? null;
+}
+
 export default function SignupPage() {
   const router = useRouter();
+  const language = useLanguage();
+  const t = TEXT[language];
+  const nickText = NICKNAME_TEXT[language];
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   // 다른 화면에서 가입하러 왔으면(?next=) 가입 뒤 그리로 돌아간다
@@ -49,7 +128,7 @@ export default function SignupPage() {
       setChecking(false);
       const data = (await res?.json().catch(() => null)) as { status?: NicknameStatus } | null;
       if (!data?.status) {
-        setErrorMessage("Couldn't check the nickname. Try again later.");
+        setErrorMessage(t.checkFailed);
         return false;
       }
       status = data.status;
@@ -58,7 +137,7 @@ export default function SignupPage() {
       setCheckedNickname(name);
       return true;
     }
-    setNicknameNotice(NICKNAME_TEXT[status]);
+    setNicknameNotice(nickText[status]);
     return false;
   }
 
@@ -67,7 +146,7 @@ export default function SignupPage() {
     // await 뒤에는 event.currentTarget이 비므로 먼저 읽어 둔다.
     const form = new FormData(event.currentTarget);
     if (is14OrOlder === null) {
-      setErrorMessage("Choose Yes or No for the age question.");
+      setErrorMessage(t.chooseAge);
       return;
     }
     // 두 칸이 다르면 입력칸 아래 안내가 이미 보이고 있다.
@@ -89,7 +168,8 @@ export default function SignupPage() {
 
     if (result.error) {
       setPending(false);
-      setErrorMessage(result.error.message ?? "Sign up failed.");
+      const nickStatus = nicknameStatusOf(result.error.code);
+      setErrorMessage(nickStatus ? nickText[nickStatus] : (result.error.message ?? t.failed));
       return;
     }
 
@@ -115,10 +195,8 @@ export default function SignupPage() {
     return (
       <main className="mx-auto w-full max-w-md px-6 py-12">
         <div role="alertdialog" aria-labelledby="under-age-title" className="flex flex-col gap-4 rounded-sm border border-hairline bg-white p-8">
-          <h1 id="under-age-title" className="text-xl font-medium text-ink">You’re signed up</h1>
-          <p className="text-sm text-ink">
-            Under 14? You can visit rooms and read, but not chat, write notes, or sign guestbooks.
-          </p>
+          <h1 id="under-age-title" className="text-xl font-medium text-ink">{t.doneTitle}</h1>
+          <p className="text-sm text-ink">{t.underAge}</p>
           <button
             type="button"
             onClick={() => {
@@ -127,7 +205,7 @@ export default function SignupPage() {
             }}
             className="inline-flex h-[35px] items-center justify-center rounded-sm border border-black bg-ink px-3 text-sm font-bold uppercase text-white hover:bg-ink-soft"
           >
-            OK
+            {t.ok}
           </button>
         </div>
       </main>
@@ -137,10 +215,10 @@ export default function SignupPage() {
   return (
     <main className="mx-auto w-full max-w-md px-6 py-12">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4 rounded-sm border border-hairline bg-white p-8">
-        <h1 className="text-[32px] leading-[1.2] font-medium text-ink">Sign up</h1>
+        <h1 className="text-[32px] leading-[1.2] font-medium text-ink">{t.title}</h1>
 
         <fieldset className="flex flex-col gap-2 text-sm">
-          <legend className="mb-1">Are you 14 or older?</legend>
+          <legend className="mb-1">{t.ageQuestion}</legend>
           <div className="flex gap-2">
             {[true, false].map((value) => (
               <button
@@ -152,16 +230,16 @@ export default function SignupPage() {
                   is14OrOlder === value ? "border-ink bg-ink text-white" : "border-ash text-ink"
                 }`}
               >
-                {value ? "Yes" : "No"}
+                {value ? t.yes : t.no}
               </button>
             ))}
           </div>
-          <p className="text-xs text-ash">You can’t change this later.</p>
+          <p className="text-xs text-ash">{t.ageLocked}</p>
         </fieldset>
 
         <div className="flex flex-col gap-1 text-sm">
           <label htmlFor="signup-name" className="flex justify-between">
-            Nickname
+            {t.nickname}
             <span className={nicknameLength(nickname) > NICKNAME_MAX ? "text-red-700" : "text-ash"}>
               {nicknameLength(nickname)}/{NICKNAME_MAX}
             </span>
@@ -182,58 +260,60 @@ export default function SignupPage() {
               disabled={checking || nicknameOk}
               className="shrink-0 rounded-sm border border-ink px-3 py-2 text-ink disabled:opacity-60"
             >
-              {checking ? "Checking..." : "Check"}
+              {checking ? t.checking : t.check}
             </button>
           </div>
-          <p id="signup-name-rules" className="text-xs text-red-700">{NICKNAME_TEXT.rulesNotice}</p>
+          <p id="signup-name-rules" className="text-xs text-red-700">{nickText.rulesNotice}</p>
           <p id="signup-name-status" aria-live="polite" className="text-xs text-green-700">
-            {nicknameOk ? NICKNAME_TEXT.ok : ""}
+            {nicknameOk ? nickText.ok : ""}
           </p>
         </div>
         <label className="flex flex-col gap-1 text-sm">
-          Email
+          {t.email}
           <input name="email" type="email" required className="rounded-sm border border-ash px-3 py-2" />
         </label>
         <PasswordField
-          label="Password (8+ characters)"
+          label={t.password}
           value={password}
           onChange={setPassword}
           visible={showPassword}
           onToggle={() => setShowPassword((v) => !v)}
+          t={t}
         />
         <PasswordField
-          label="Confirm password"
+          label={t.confirm}
           value={passwordConfirm}
           onChange={setPasswordConfirm}
           visible={showPassword}
           onToggle={() => setShowPassword((v) => !v)}
           invalid={passwordMismatch}
+          t={t}
         />
-        {passwordMismatch && <p className="text-xs text-red-700">Passwords don’t match.</p>}
+        {passwordMismatch && <p className="text-xs text-red-700">{t.mismatch}</p>}
         {errorMessage && <p className="text-sm text-red-700">{errorMessage}</p>}
         {/* 문서는 새 탭으로 연다: 쓰던 가입 양식이 지워지지 않게 */}
         <p className="text-xs text-ash">
-          By signing up, you agree to the{" "}
+          {t.agreeBefore}
           <Link href="/terms" target="_blank" rel="noopener" className="text-ink underline">
-            Terms
-          </Link>{" "}
-          and{" "}
-          <Link href="/privacy" target="_blank" rel="noopener" className="text-ink underline">
-            Privacy Policy
+            {t.terms}
           </Link>
-          .
+          {t.and}
+          <Link href="/privacy" target="_blank" rel="noopener" className="text-ink underline">
+            {t.privacy}
+          </Link>
+          {t.agreeAfter}
         </p>
         <button
           type="submit"
           disabled={pending}
           className="inline-flex h-[35px] items-center justify-center rounded-sm border border-black bg-ink px-3 text-sm font-bold uppercase text-white hover:bg-ink-soft disabled:opacity-60"
         >
-          {pending ? "Signing up..." : "Sign up"}
+          {pending ? t.pending : t.submit}
         </button>
         <p className="text-sm text-ash">
-          Have an account?{" "}
+          {t.haveAccount}{" "}
           <Link href={withNext("/login", next)} className="font-medium text-ink underline">
-            Sign in
+            {t.signIn}
           </Link>
         </p>
       </form>
@@ -246,7 +326,7 @@ export default function SignupPage() {
             aria-describedby="nickname-notice-body"
             className="flex w-full max-w-sm flex-col gap-4 rounded-sm border border-hairline bg-white p-6"
           >
-            <h2 id="nickname-notice-title" className="text-lg font-medium text-ink">Can’t use this nickname</h2>
+            <h2 id="nickname-notice-title" className="text-lg font-medium text-ink">{t.nicknameNoticeTitle}</h2>
             <p id="nickname-notice-body" className="text-sm text-ink">{nicknameNotice}</p>
             <button
               type="button"
@@ -254,7 +334,7 @@ export default function SignupPage() {
               onClick={() => setNicknameNotice(null)}
               className="inline-flex h-[35px] items-center justify-center rounded-sm border border-black bg-ink px-3 text-sm font-bold uppercase text-white hover:bg-ink-soft"
             >
-              OK
+              {t.ok}
             </button>
           </div>
         </div>
@@ -270,6 +350,7 @@ function PasswordField(props: {
   visible: boolean;
   onToggle: () => void;
   invalid?: boolean;
+  t: SignupText;
 }) {
   return (
     <label className="flex flex-col gap-1 text-sm">
@@ -288,7 +369,7 @@ function PasswordField(props: {
         <button
           type="button"
           onClick={props.onToggle}
-          aria-label={props.visible ? "Hide password" : "Show password"}
+          aria-label={props.visible ? props.t.hidePassword : props.t.showPassword}
           aria-pressed={props.visible}
           className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-ash hover:text-ink"
         >

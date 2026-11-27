@@ -14,6 +14,7 @@ import { Children, useCallback, useEffect, useRef, useState, useSyncExternalStor
 import { useRouter } from "next/navigation";
 import { PaperFilters } from "../onboarding-c/paper";
 import { PixelIcon } from "../onboarding-c/icons";
+import { useLanguage } from "@/lib/settings/prefs";
 
 const HOME_HREF = "/home";
 // 한 걸음의 스크롤 거리 (화면 높이에 곱한다). settings-book.css 의 --step 과 맞춘다
@@ -37,6 +38,11 @@ function subscribeNarrow(onChange: () => void) {
 const getNarrow = () => window.matchMedia(NARROW_QUERY).matches;
 const getNarrowServer = () => false;
 
+const TEXT = {
+  ko: { hint: "스크롤해서 넘기기", pages: "쪽 넘기기", prev: "앞 쪽", next: "다음 쪽" },
+  en: { hint: "scroll to turn", pages: "Pages", prev: "Previous page", next: "Next page" },
+};
+
 // heading: 위 막대의 제목. closeLabel: 닫기 단추의 읽어 주는 이름. children: BookPage 들 (쪽 순서대로)
 export function Book({ heading, closeLabel, children }: { heading: string; closeLabel: string; children: ReactNode }) {
   const router = useRouter();
@@ -45,6 +51,7 @@ export function Book({ heading, closeLabel, children }: { heading: string; close
   const hintRef = useRef<HTMLDivElement>(null);
   const leafRefs = useRef<(HTMLDivElement | null)[]>([]);
   const narrow = useSyncExternalStore(subscribeNarrow, getNarrow, getNarrowServer);
+  const t = TEXT[useLanguage()];
 
   // 조건부로 빠진 쪽(null, false)은 세지 않는다
   const pages = Children.toArray(children);
@@ -196,7 +203,7 @@ export function Book({ heading, closeLabel, children }: { heading: string; close
             <h1 className="ob-pixel">{heading}</h1>
             <div ref={hintRef} className="sb-hint" aria-hidden="true">
               <PixelIcon name="mouse" size={20} />
-              <span>scroll to turn</span>
+              <span>{t.hint}</span>
             </div>
             <button type="button" className="sb-close" onClick={() => router.push(HOME_HREF)} aria-label={closeLabel}>
               <span aria-hidden="true">×</span>
@@ -230,14 +237,14 @@ export function Book({ heading, closeLabel, children }: { heading: string; close
             </div>
           </div>
 
-          <nav className="nb-pager" aria-label="Pages">
-            <button type="button" onClick={() => goTo(at - 1)} disabled={at <= 0} aria-label="Previous page">
+          <nav className="nb-pager" aria-label={t.pages}>
+            <button type="button" onClick={() => goTo(at - 1)} disabled={at <= 0} aria-label={t.prev}>
               ‹
             </button>
             <span className="ob-pixel" aria-live="polite">
               p.{pageLabel} / {String(pageCount).padStart(2, "0")}
             </span>
-            <button type="button" onClick={() => goTo(at + 1)} disabled={at >= steps} aria-label="Next page">
+            <button type="button" onClick={() => goTo(at + 1)} disabled={at >= steps} aria-label={t.next}>
               ›
             </button>
           </nav>

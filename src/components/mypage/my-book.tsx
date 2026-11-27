@@ -1,18 +1,23 @@
+"use client";
+
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Book, BookPage } from "@/components/settings/book";
 import { SignOutButton } from "@/components/sign-out-button";
 import type { HeapChannelPlatform } from "@/lib/heap/platform";
+import { useLanguage, type Language } from "@/lib/settings/prefs";
 import { BlockList, type MyBlock } from "./block-list";
 
 // 마이페이지 (/mypage): 설정과 같은 책상 위에 펼친 O링 수첩 (틀은 settings/book.tsx).
 // 모든 계정: 계정 정보와 로그아웃, 결제 정보. 크리에이터와 관리자: 쪽지, 대화방, 채널, 내 방.
 // 지금은 화면 구성만 잡는다. 상세 기능은 기존 화면(/creator, 방의 꾸미기)으로 보내거나 "준비 중"으로 둔다.
+// 글은 설정의 언어를 따른다 (TEXT). 세션 값은 서버(page.tsx)가 읽어 넘긴다.
 
 export type MyAccount = {
   name: string;
   email: string;
-  roleLabel: string;
+  // 역할 값 (admin, creator, public). 이름은 고른 언어로 여기서 붙인다
+  role: string | null;
   joinedAt: Date;
   // 관리자면 계정 정보 장에 관리자 페이지 버튼을 보인다. 접근 권한은 관리자 페이지가 서버에서 다시 확인한다.
   isAdmin: boolean;
@@ -41,7 +46,118 @@ const CREATOR_HREF = "/creator";
 // 관리자 페이지. 지금은 AI 스크리닝 검토 화면 하나다 (docs/planning/12-ai-screening.md 11장).
 const ADMIN_HREF = "/admin/moderation";
 
-const dateFormat = new Intl.DateTimeFormat("ko-KR", { dateStyle: "long", timeZone: "Asia/Seoul" });
+const LOCALES: Record<Language, string> = { ko: "ko-KR", en: "en-US" };
+
+// 화면 글. 쪽 표시(tag)와 쪽 제목(title)은 쪽마다 [tag, title] 이다
+const TEXT = {
+  ko: {
+    heading: "마이페이지",
+    close: "마이페이지 닫기",
+    roles: { admin: "관리자", creator: "크리에이터", public: "구독자" } as Record<string, string>,
+    account: ["계정", "내 계정"],
+    accountHead: "계정 정보",
+    name: "이름",
+    email: "이메일",
+    role: "계정 종류",
+    joined: "가입일",
+    admin: "관리자 페이지",
+    payment: ["결제", "결제"],
+    cardHead: "등록된 카드",
+    noCard: "등록된 카드가 없어요",
+    historyHead: "결제 내역",
+    noHistory: "결제 내역이 없어요",
+    paymentSoon: "결제는 준비 중이에요",
+    blocked: ["차단", "차단"],
+    blockedHead: "차단한 사람",
+    noRoom: "아직 내 방이 없어요.",
+    makeRoom: "방 만들기",
+    letters: ["쪽지", "쪽지"],
+    lettersHead: "받은 쪽지와 답장",
+    received: "받은 쪽지",
+    replied: "답장",
+    inboxHead: "받은 쪽지",
+    unreadBefore: "안 읽은 쪽지 ",
+    unreadAfter: "장",
+    openInbox: "쪽지함 열기",
+    chat: ["대화방", "대화방"],
+    chatHead: "대화방",
+    isOpen: "열려 있어요",
+    isClosed: "닫혀 있어요",
+    goChat: "대화방 가기",
+    closeChat: "닫기",
+    openChat: "열기",
+    usersHead: "사용자 관리",
+    limited: "제한한 사용자",
+    blockedUsers: "차단한 사용자",
+    people: (n: number) => `${n}명`,
+    usersSoon: "제한과 차단은 준비 중이에요",
+    channels: ["채널", "채널"],
+    channelsHead: "채널과 영상 가져오기",
+    noChannel: "연결한 채널이 없어요",
+    importInRoom: "내 방에서 가져오기",
+    channelsNote: "채널과 영상은 방 꾸미기의 채널 탭에서 가져와요",
+    room: ["내 방", "내 방"],
+    visitsHead: "방문 수",
+    today: "오늘",
+    total: "전체",
+    decorateHead: "방 꾸미기",
+    decorate: "방 꾸미러 가기",
+  },
+  en: {
+    heading: "MY PAGE",
+    close: "Close my page",
+    roles: { admin: "Admin", creator: "Creator", public: "Subscriber" } as Record<string, string>,
+    account: ["account", "my account"],
+    accountHead: "Account",
+    name: "Name",
+    email: "Email",
+    role: "Account type",
+    joined: "Joined",
+    admin: "Admin page",
+    payment: ["payment", "payment"],
+    cardHead: "Card",
+    noCard: "No card added",
+    historyHead: "History",
+    noHistory: "No payments yet",
+    paymentSoon: "Payments coming soon",
+    blocked: ["blocked", "blocked"],
+    blockedHead: "Blocked",
+    noRoom: "You don't have a room yet.",
+    makeRoom: "Make a room",
+    letters: ["letters", "letters"],
+    lettersHead: "Letters",
+    received: "Received",
+    replied: "Replied",
+    inboxHead: "Inbox",
+    unreadBefore: "Unread letters: ",
+    unreadAfter: "",
+    openInbox: "Open inbox",
+    chat: ["chat", "chat room"],
+    chatHead: "Chat",
+    isOpen: "Open",
+    isClosed: "Closed",
+    goChat: "Go to chat",
+    closeChat: "Close",
+    openChat: "Open",
+    usersHead: "Users",
+    limited: "Limited users",
+    blockedUsers: "Blocked users",
+    people: (n: number) => String(n),
+    usersSoon: "Limits and blocks coming soon",
+    channels: ["channels", "channels"],
+    channelsHead: "Channels",
+    noChannel: "No channels linked",
+    importInRoom: "Import in my room",
+    channelsNote: "Import channels and videos from the Channel tab in room decorating",
+    room: ["my room", "my room"],
+    visitsHead: "Visits",
+    today: "Today",
+    total: "Total",
+    decorateHead: "Decorate",
+    decorate: "Decorate my room",
+  },
+};
+type MyText = (typeof TEXT)["en"];
 
 export function MyBook({
   account,
@@ -52,32 +168,39 @@ export function MyBook({
   creator: MyCreatorData | null;
   blocks: MyBlock[];
 }) {
+  const language = useLanguage();
+  const t = TEXT[language];
   const pages = [
-    <AccountPage key="account" no={1} account={account} />,
-    <PaymentPage key="payment" no={2} />,
-    <BlocksPage key="blocks" no={3} blocks={blocks} />,
+    <AccountPage key="account" no={1} account={account} t={t} language={language} />,
+    <PaymentPage key="payment" no={2} t={t} />,
+    <BlocksPage key="blocks" no={3} blocks={blocks} t={t} />,
   ];
   if (creator) {
     pages.push(
-      <NotesPage key="notes" no={4} creator={creator} />,
-      <ChatPage key="chat" no={5} creator={creator} />,
-      <ChannelsPage key="channels" no={6} creator={creator} />,
-      <RoomPage key="room" no={7} creator={creator} />,
+      <NotesPage key="notes" no={4} creator={creator} t={t} language={language} />,
+      <ChatPage key="chat" no={5} creator={creator} t={t} />,
+      <ChannelsPage key="channels" no={6} creator={creator} t={t} />,
+      <RoomPage key="room" no={7} creator={creator} t={t} language={language} />,
     );
   }
   return (
-    <Book heading="MY PAGE" closeLabel="마이페이지 닫기">
+    <Book heading={t.heading} closeLabel={t.close}>
       {pages}
     </Book>
   );
 }
 
 // 칸 제목 (설정의 legend 와 같은 모양)
-function Head({ ko, en }: { ko: string; en: string }) {
+function Head({ children }: { children: ReactNode }) {
+  return <h3 className="ob-rounded sb-legend">{children}</h3>;
+}
+
+// 수첩의 한 쪽. at: [tag, title]
+function Page({ id, no, at, children }: { id: string; no: number; at: string[]; children: ReactNode }) {
   return (
-    <h3 className="ob-rounded sb-legend">
-      {ko} <small>{en}</small>
-    </h3>
+    <BookPage id={id} no={no} tag={at[0]} title={at[1]}>
+      {children}
+    </BookPage>
   );
 }
 
@@ -92,12 +215,11 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 }
 
 // 큰 숫자 칸 (방문 수, 쪽지 수)
-function Stat({ label, sub, value }: { label: string; sub: string; value: number }) {
+function Stat({ label, value, language }: { label: string; value: number; language: Language }) {
   return (
     <div className="mp-stat">
-      <span className="ob-pixel mp-stat-value">{value.toLocaleString("ko-KR")}</span>
+      <span className="ob-pixel mp-stat-value">{value.toLocaleString(LOCALES[language])}</span>
       <b className="ob-rounded">{label}</b>
-      <small>{sub}</small>
     </div>
   );
 }
@@ -107,128 +229,132 @@ function Soon({ children }: { children: ReactNode }) {
   return <p className="ob-hand mp-soon">{children}</p>;
 }
 
-function AccountPage({ no, account }: { no: number; account: MyAccount }) {
+function AccountPage({ no, account, t, language }: { no: number; account: MyAccount; t: MyText; language: Language }) {
+  const role = account.role ?? "public";
+  const joined = new Intl.DateTimeFormat(LOCALES[language], { dateStyle: "long", timeZone: "Asia/Seoul" });
   return (
-    <BookPage id="account" no={no} tag="account" title="my account">
-      <Head ko="계정 정보" en="Account" />
+    <Page id="account" no={no} at={t.account}>
+      <Head>{t.accountHead}</Head>
       <dl className="mp-list">
-        <Row label="이름">{account.name}</Row>
-        <Row label="이메일">{account.email}</Row>
-        <Row label="계정 종류">{account.roleLabel}</Row>
-        <Row label="가입일">{dateFormat.format(account.joinedAt)}</Row>
+        <Row label={t.name}>{account.name}</Row>
+        <Row label={t.email}>{account.email}</Row>
+        <Row label={t.role}>{t.roles[role] ?? role}</Row>
+        <Row label={t.joined}>{joined.format(account.joinedAt)}</Row>
       </dl>
       <div className="mp-actions">
         {account.isAdmin && (
           <Link href={ADMIN_HREF} className="mp-btn">
-            관리자 페이지
+            {t.admin}
           </Link>
         )}
         <SignOutButton className="mp-btn" />
       </div>
-    </BookPage>
+    </Page>
   );
 }
 
 // 결제는 Lemon Squeezy 를 검토 중이다 (아직 정하지 않음). 연결 전까지 빈 자리만 보인다.
-function PaymentPage({ no }: { no: number }) {
+function PaymentPage({ no, t }: { no: number; t: MyText }) {
   return (
-    <BookPage id="payment" no={no} tag="payment" title="payment">
-      <Head ko="등록된 카드" en="Card" />
+    <Page id="payment" no={no} at={t.payment}>
+      <Head>{t.cardHead}</Head>
       <div className="mp-card mp-empty">
         <span className="mp-card-chip" aria-hidden="true" />
-        <span>등록된 카드가 없어요</span>
+        <span>{t.noCard}</span>
       </div>
-      <Head ko="결제 내역" en="History" />
-      <div className="mp-box mp-empty">결제 내역이 없어요</div>
-      <Soon>결제는 준비 중이에요</Soon>
-    </BookPage>
+      <Head>{t.historyHead}</Head>
+      <div className="mp-box mp-empty">{t.noHistory}</div>
+      <Soon>{t.paymentSoon}</Soon>
+    </Page>
   );
 }
 
 // 개인 차단 (0013): 방에서 "차단"으로 가린 사람. 풀면 다시 보인다. 쓰기를 막는 크리에이터 차단은 검토 화면에서 푼다.
-function BlocksPage({ no, blocks }: { no: number; blocks: MyBlock[] }) {
+function BlocksPage({ no, blocks, t }: { no: number; blocks: MyBlock[]; t: MyText }) {
   return (
-    <BookPage id="blocks" no={no} tag="blocked" title="blocked">
-      <Head ko="차단한 사람" en="Blocked" />
+    <Page id="blocks" no={no} at={t.blocked}>
+      <Head>{t.blockedHead}</Head>
       <BlockList blocks={blocks} />
-    </BookPage>
+    </Page>
   );
 }
 
 // 방이 없을 때 방 만들기로 보내는 칸 (내 방이 필요한 장에서 함께 쓴다)
-function NoRoom() {
+function NoRoom({ t }: { t: MyText }) {
   return (
     <div className="mp-box mp-empty">
-      아직 내 방이 없어요.{" "}
+      {t.noRoom}{" "}
       <Link href={MY_ROOM_HREF} className="mp-link">
-        방 만들기
+        {t.makeRoom}
       </Link>
     </div>
   );
 }
 
-function NotesPage({ no, creator }: { no: number; creator: MyCreatorData }) {
+function NotesPage({ no, creator, t, language }: { no: number; creator: MyCreatorData; t: MyText; language: Language }) {
   const { room, notes } = creator;
   return (
-    <BookPage id="notes" no={no} tag="letters" title="letters">
-      <Head ko="받은 쪽지와 답장" en="Letters" />
+    <Page id="notes" no={no} at={t.letters}>
+      <Head>{t.lettersHead}</Head>
       <div className="mp-stats">
-        <Stat label="받은 쪽지" sub="Received" value={notes.received} />
-        <Stat label="답장" sub="Replied" value={notes.replied} />
+        <Stat label={t.received} value={notes.received} language={language} />
+        <Stat label={t.replied} value={notes.replied} language={language} />
       </div>
-      <Head ko="받은 쪽지" en="Inbox" />
+      <Head>{t.inboxHead}</Head>
       {room ? (
         <div className="mp-box">
           <p className="mp-line">
-            안 읽은 쪽지 <b className="ob-pixel mp-accent">{notes.unread}</b>장
+            {t.unreadBefore}
+            <b className="ob-pixel mp-accent">{notes.unread}</b>
+            {t.unreadAfter}
           </p>
           <Link href={`/room/${room.slug}`} className="mp-btn">
-            쪽지함 열기
+            {t.openInbox}
           </Link>
         </div>
       ) : (
-        <NoRoom />
+        <NoRoom t={t} />
       )}
-    </BookPage>
+    </Page>
   );
 }
 
-function ChatPage({ no, creator }: { no: number; creator: MyCreatorData }) {
+function ChatPage({ no, creator, t }: { no: number; creator: MyCreatorData; t: MyText }) {
   const open = creator.chat.openRoomId !== null;
   return (
-    <BookPage id="chat" no={no} tag="chat" title="chat room">
-      <Head ko="대화방" en="Chat" />
+    <Page id="chat" no={no} at={t.chat}>
+      <Head>{t.chatHead}</Head>
       <div className="mp-box">
         <p className="mp-line">
           <span className={`mp-dot${open ? " on" : ""}`} aria-hidden="true" />
-          {open ? "열려 있어요" : "닫혀 있어요"}
+          {open ? t.isOpen : t.isClosed}
         </p>
         <div className="mp-actions">
           {open && (
             <Link href={`/bubble/${creator.chat.openRoomId}`} className="mp-btn">
-              대화방 가기
+              {t.goChat}
             </Link>
           )}
           <Link href={CREATOR_HREF} className="mp-btn">
-            {open ? "닫기" : "열기"}
+            {open ? t.closeChat : t.openChat}
           </Link>
         </div>
       </div>
-      <Head ko="사용자 관리" en="Users" />
+      <Head>{t.usersHead}</Head>
       <dl className="mp-list">
-        <Row label="제한한 사용자">0명</Row>
-        <Row label="차단한 사용자">0명</Row>
+        <Row label={t.limited}>{t.people(0)}</Row>
+        <Row label={t.blockedUsers}>{t.people(0)}</Row>
       </dl>
-      <Soon>제한과 차단은 준비 중이에요</Soon>
-    </BookPage>
+      <Soon>{t.usersSoon}</Soon>
+    </Page>
   );
 }
 
-function ChannelsPage({ no, creator }: { no: number; creator: MyCreatorData }) {
+function ChannelsPage({ no, creator, t }: { no: number; creator: MyCreatorData; t: MyText }) {
   const { room, channels } = creator;
   return (
-    <BookPage id="channels" no={no} tag="channels" title="channels">
-      <Head ko="채널과 영상 가져오기" en="Channels" />
+    <Page id="channels" no={no} at={t.channels}>
+      <Head>{t.channelsHead}</Head>
       {channels.length > 0 ? (
         <ul className="mp-channels">
           {channels.map((channel) => (
@@ -241,7 +367,7 @@ function ChannelsPage({ no, creator }: { no: number; creator: MyCreatorData }) {
           ))}
         </ul>
       ) : (
-        <div className="mp-box mp-empty">연결한 채널이 없어요</div>
+        <div className="mp-box mp-empty">{t.noChannel}</div>
       )}
       <p className="mp-platforms">
         {Object.values(PLATFORM_LABELS).map((label) => (
@@ -253,39 +379,39 @@ function ChannelsPage({ no, creator }: { no: number; creator: MyCreatorData }) {
       {room ? (
         <div className="mp-actions">
           <Link href={`/room/${room.slug}`} className="mp-btn">
-            내 방에서 가져오기
+            {t.importInRoom}
           </Link>
         </div>
       ) : (
-        <NoRoom />
+        <NoRoom t={t} />
       )}
-      <p className="ob-hand sb-note">채널과 영상은 방 꾸미기의 채널 탭에서 가져와요</p>
-    </BookPage>
+      <p className="ob-hand sb-note">{t.channelsNote}</p>
+    </Page>
   );
 }
 
-function RoomPage({ no, creator }: { no: number; creator: MyCreatorData }) {
+function RoomPage({ no, creator, t, language }: { no: number; creator: MyCreatorData; t: MyText; language: Language }) {
   const { room, visits } = creator;
   return (
-    <BookPage id="room" no={no} tag="my room" title="my room">
-      <Head ko="방문 수" en="Visits" />
+    <Page id="room" no={no} at={t.room}>
+      <Head>{t.visitsHead}</Head>
       <div className="mp-stats">
-        <Stat label="오늘" sub="Today" value={visits.today} />
-        <Stat label="전체" sub="Total" value={visits.total} />
+        <Stat label={t.today} value={visits.today} language={language} />
+        <Stat label={t.total} value={visits.total} language={language} />
       </div>
-      <Head ko="방 꾸미기" en="Decorate" />
+      <Head>{t.decorateHead}</Head>
       {room ? (
         <div className="mp-box">
           <p className="mp-line">
             <b className="ob-rounded">{room.name}</b> <small className="mp-sub">/room/{room.slug}</small>
           </p>
           <Link href={`/room/${room.slug}`} className="mp-btn">
-            방 꾸미러 가기
+            {t.decorate}
           </Link>
         </div>
       ) : (
-        <NoRoom />
+        <NoRoom t={t} />
       )}
-    </BookPage>
+    </Page>
   );
 }

@@ -3,7 +3,8 @@
 // 보는 사람의 설정 (설정 화면 /settings). 이 브라우저에만 남는다 (localStorage). 계정에 저장하지 않는다.
 // - roomTime: 방의 빛. 엔진(heap/engine/time.js)의 시간 이름을 그대로 쓴다. auto 는 한국 시간의 지금 시각(실시간)이다.
 //   heap-room.tsx 가 꾸미기 밖에서 heap:viewtime 으로 엔진에 넘긴다. 아직 고르지 않았으면(null) 방 주인이 정한 시간대 그대로다.
-// - language: 고르면 저장만 한다. 아직 화면에 반영하는 곳이 없다 (다국어가 아직 없다).
+// - language: 화면 글의 언어 (ko 한국어, en 영어). useLanguage() 로 읽는다. 지금 반영하는 곳: 설정, 마이페이지, 수첩 틀(book.tsx),
+//   로그인, 회원가입. 화면마다 { ko, en } 글 묶음을 두고 고른다. localStorage 값이라 서버 렌더는 기본값(ko)으로 그리고, 영어를 고른 사람은 뜬 뒤 바뀐다.
 // - 테마(라이트/다크)는 지웠다 (2026-11-27). 예전에 저장된 theme 값은 읽을 때 버린다.
 // - 소리 크기 설정(volume)과 방 배경음악은 지웠다. 예전에 저장된 volume 값은 읽을 때 버린다.
 // - presence: 방 함께 있기 (heap-room.tsx, docs/dev/presence.md). show 는 이름 공개 규칙(입장 티켓에 서명된다),
@@ -87,6 +88,10 @@ function subscribe(onChange: () => void) {
 
 export function usePrefs(): Prefs {
   return useSyncExternalStore(subscribe, read, () => DEFAULT_PREFS);
+}
+
+export function useLanguage(): Language {
+  return usePrefs().language;
 }
 
 export function setPrefs(patch: Partial<Prefs>) {
