@@ -151,9 +151,6 @@
 /* 방의 빛: 3D 카드가 받은 빛의 곡선을 HTML 카드의 두 면과 카드에 맞춘 플레이어에 건다 (card-view.js 의 sampleLight 가 --cv-light 를 정한다).
    필터는 3D 를 평평하게 만들므로 뒤집히는 .cv-card 가 아니라 면마다 건다 */
 .heap-room #cardview .cv-face { filter: var(--cv-light, none); }
-/* 플레이어의 iframe 은 다른 출처라 SVG 필터가 닿지 않는다: 같은 곡선을 중간 밝기에서 맞춘 곱하기 덮개를 씌운다. 누르기는 아래로 지나간다 */
-.heap-room #player.fit #player-frame { position: relative; }
-.heap-room #player .cv-light-mul { position: absolute; inset: 0; background: var(--cv-light-mul, #fff); mix-blend-mode: multiply; pointer-events: none; }
 .heap-room #player-shade { position: absolute; inset: 0; cursor: pointer; }
 .heap-room #player-shade[hidden] { display: none; }
 /* the player's title bar reaches up to the HUD's meta line, so that line steps aside while the player is open */

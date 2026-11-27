@@ -173,9 +173,7 @@ export function setupCardView(ctx) {
     light = sampleLight(sampleFor);
     for (const ch of ['R', 'G', 'B']) { funcs[ch].setAttribute('amplitude', light[ch].a.toFixed(4)); funcs[ch].setAttribute('exponent', light[ch].e.toFixed(4)); }
     ctx.root.style.setProperty('--cv-light', `url(#${fid})`);
-    // 플레이어(다른 출처의 iframe)에는 SVG 필터가 닿지 않는다. 곱하기 덮개로 곡선을 중간 밝기(0.5)에서 맞춘다 (players.js 의 cv-light-mul)
-    const mul = ['R', 'G', 'B'].map(ch => Math.round(255 * Math.min(1, light[ch].a * 0.5 ** (light[ch].e - 1))));
-    ctx.root.style.setProperty('--cv-light-mul', `rgb(${mul.join(', ')})`);
+    // 플레이어에는 걸지 않는다: 유튜브 임베드 규정이 플레이어 앞의 덮개와 플레이어를 바꾸는 것을 막는다 (Required Minimum Functionality)
   }
 
   // loop.js 가 매 프레임 부른다. arrived: 집어 든 카드가 눈앞 자리에 다 왔다.
