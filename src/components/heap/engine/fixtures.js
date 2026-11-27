@@ -41,10 +41,12 @@ export function setupFixtures(ctx) {
   // 글로브 모드는 방에 하나만 다룬다: 방에 글로브가 여럿이면 처음 지은 것을 쓰고, 나머지는 꾸밈만이다 (꾸미기는 하나까지만 놓게 한다)
   const GLOBE_SIZE = 0.36;
   BUILD.globe = (g, it, build) => {
-    const unit = GLOBE_SIZE / GLOBE_HEIGHT, globe = buildSnowGlobe({ unit });
+    // 점광원은 방의 몫에서 빌린다 (furniture.js 의 POOL): 글로브가 생기고 없어져도 점광원 수가 같아 셰이더를 다시 짓지 않는다.
+    // 둘째 글로브부터는 꾸밈이라 빛을 쓰지 않으므로 스스로 만든 점광원을 떼어 낸다 (점광원 수가 늘지 않게)
+    const unit = GLOBE_SIZE / GLOBE_HEIGHT, globe = buildSnowGlobe({ unit, lamp: build.globe ? null : ctx.lendLight(build) });
     globe.root.scale.setScalar(unit);
     g.add(globe.root);
-    if (build.globe) return { hw: 0.17, hd: 0.17 };
+    if (build.globe) { globe.root.children.find(o => o.isPointLight)?.removeFromParent(); return { hw: 0.17, hd: 0.17 }; }
     build.globe = { ...globe, unit, anchor: g }; // anchor: 글로브가 붙는 소품 묶음 (globe.js 가 띄웠다가 돌려 붙인다)
     tap(build, it, 'globe', globe.hitMeshes);
     return { hw: 0.17, hd: 0.17 };

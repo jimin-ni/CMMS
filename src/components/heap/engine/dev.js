@@ -104,6 +104,50 @@ export function setupDev(ctx) {
       const v = new THREE.Vector3(...e.detail.at).project(ctx.camera), r = ctx.canvas.getBoundingClientRect();
       cb({ x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height });
     } else if (cmd === 'walk') { ctx.walkRoute(new THREE.Vector3(e.detail.at[0], 0, e.detail.at[1]), null); cb({ walking: !!ctx.walkTo, camGoal: !!ctx.camGoal }); } // 바닥 클릭과 같은 길로 걷기 (detail.at = [x, z])
+    else if (cmd === 'sit') { ctx.sit(); cb({ mode: ctx.mode, goal: ctx.camGoal ? ctx.camGoal.target.toArray().map(v => +v.toFixed(2)) : null }); } // 더미 앞에 앉기 (방 모드에서). 카메라가 갈 곳을 돌려준다
+    else if (cmd === 'programs') cb((ctx.renderer.info.programs ?? []).map(p => `${p.name} ${p.cacheKey}`)); // 지어진 셰이더 프로그램 (옮긴 뒤 새로 지어지는 것 찾기)
+    else if (cmd === 'pointLights') { // 장면의 점광원: 부모 사슬과 자리. 셰이더는 그 수가 바뀔 때마다 모두 다시 지어진다
+      const out = [];
+      ctx.scene.traverse(o => { if (!o.isPointLight) return; const chain = []; for (let p = o.parent; p && p !== ctx.scene; p = p.parent) chain.push(p.name || p.type + (p.userData.itemIndex != null ? '#' + p.userData.itemIndex : '')); const w = o.getWorldPosition(new THREE.Vector3()); out.push({ visible: o.visible, chain: chain.join('<'), at: w.toArray().map(v => +v.toFixed(2)) }); });
+      cb(out);
+    }
+    else if (cmd === 'heapInfo') { // 사진 더미 옮기기 시험: 더미 자리, 보는 자리, 카드 수와 보이는 카드, 카드 가운데의 평균 (더미 자리 근처여야 한다)
+      const cs = ctx.cards ?? [], vis = cs.filter(c => c.visible), m = new THREE.Vector3();
+      vis.forEach(c => m.add(c.position)); if (vis.length) m.divideScalar(vis.length);
+      cb({ host: ctx.HOST && { x: ctx.HOST.x, z: ctx.HOST.z, top: ctx.HOST.top, w: ctx.HOST.w, d: ctx.HOST.d }, seat: ctx.SEAT?.toArray(), sitCam: ctx.SIT_CAM?.target.toArray() ?? null,
+        cards: cs.length, visible: vis.length, pickables: ctx.pickables?.length ?? 0, mean: m.toArray().map(v => +v.toFixed(2)) });
+    }
+    else if (cmd === 'pileStats') { // 더미 모양 시험: 받침 위 가장 높은 카드, 카드 기울기, settle 한 번의 시간 (detail.settle 이면 settle(true) 를 재며 돌린다)
+      const cs = (ctx.cards ?? []).filter(c => ctx.inPile(c)), top = ctx.HOST?.top ?? 0, up = new THREE.Vector3();
+      let ms = null;
+      // detail.from (0~1): 그 차례부터 위의 카드를 다시 셈하게 한다 (0 이면 모두, 0.5 면 가운데 카드를 집은 것과 같다)
+      if (e.detail.from != null) cs.slice(Math.floor(e.detail.from * cs.length)).forEach(c => { c.userData.rest = null; });
+      if (e.detail.settle) { const t0 = performance.now(); ctx.settle(true); ms = +(performance.now() - t0).toFixed(1); }
+      const slopes = cs.map(c => THREE.MathUtils.radToDeg(Math.acos(Math.min(1, Math.abs(up.set(0, 0, 1).applyQuaternion(c.userData.home.quat).y)))));
+      cb({ cards: cs.length, box: !!ctx.HOST?.box, peakCm: +((Math.max(...cs.map(c => c.userData.home.pos.y)) - top) * 100).toFixed(1),
+        meanSlopeDeg: +(slopes.reduce((s, v) => s + v, 0) / (slopes.length || 1)).toFixed(1), maxSlopeDeg: +Math.max(0, ...slopes).toFixed(1), settleMs: ms,
+        coverM2: +(ctx.heapCover?.() ?? 0).toFixed(3),
+        tops: cs.map(c => ({ dx: +(c.userData.home.pos.x - (ctx.HOST?.x ?? 0)).toFixed(2), dz: +(c.userData.home.pos.z - (ctx.HOST?.z ?? 0)).toFixed(2), yCm: +((c.userData.home.pos.y - top) * 100).toFixed(1), i: ctx.cards.indexOf(c) })).sort((a, b) => b.yCm - a.yCm).slice(0, 5), hostM2: ctx.HOST ? +(ctx.HOST.w * ctx.HOST.d).toFixed(2) : null,
+        // 상자 밖(탁자 위)의 카드: 받침 위 가운데 높이(cm)와 상자 가운데에서의 거리
+        outside: ctx.HOST?.box ? cs.filter(c => Math.abs(c.userData.place.x - ctx.HOST.x) > ctx.HOST.boxW / 2 || Math.abs(c.userData.place.z - ctx.HOST.z) > ctx.HOST.boxD / 2)
+          .map(c => ({ dx: +(c.userData.place.x - ctx.HOST.x).toFixed(3), dz: +(c.userData.place.z - ctx.HOST.z).toFixed(3), yCm: +((c.userData.home.pos.y - top) * 100).toFixed(2) })) : undefined });
+    }
+    else if (cmd === 'heldInfo') { // 집어 든 카드: 받은 그림의 단계(0 far, 1 near, 2 close), 앞면 텍스처 폭, 선명하게 그린 배율
+      const c = ctx.held, u = c?.userData;
+      cb(u ? { tier: u.tier, frontW: u.front.image.width, sharp: u.sharp, imgW: u.img?.width ?? null } : null);
+    }
+    else if (cmd === 'peek3d') { // 방의 빛 시험: detail.on 이면 HTML 카드를 숨기고 같은 자리의 3D 카드를 보인다. 끄면 되돌린다
+      const c = ctx.held, host = ctx.$('cardview'), pl = ctx.player;
+      if (c) { c.visible = !!e.detail.on; host.style.visibility = e.detail.on ? 'hidden' : ''; if (pl) pl.style.visibility = e.detail.on ? 'hidden' : ''; }
+      cb(!!c);
+    }
+    else if (cmd === 'dragged') { // 끄는 카드의 지금 자리와 크기, 상자 (벽 뚫기 시험)
+      // detail.i: 놓은 뒤에도 그 카드를 따라간다 (떨어지는 동안의 벽 뚫기)
+      const c = ctx.dragging ?? (e.detail.i != null ? ctx.cards[e.detail.i] : null), H = ctx.HOST;
+      cb(c ? { i: ctx.cards.indexOf(c), dragging: c === ctx.dragging, x: c.position.x, y: c.position.y, z: c.position.z, yaw: c.userData.place.yaw, w: c.userData.d.w, h: c.userData.d.h,
+        box: H?.box ? { x: H.x, z: H.z, w: H.boxW, d: H.boxD, wall: 0.018, top: H.top + 0.22 } : null } : null);
+    }
+    else if (cmd === 'sort') { ctx.enterSort(); cb({ mode: ctx.mode }); } // 책장 보기로 (나가기 시험)
     else if (cmd === 'me') cb({ x: ctx.me.position.x, y: ctx.me.position.y, z: ctx.me.position.z, ry: ctx.me.rotation.y, legL: ctx.legL.rotation.x, mode: ctx.mode, perch: !!ctx.perch, walking: !!ctx.walkTo }); // 내 캐릭터 자리와 자세 (걷기 시험)
     else if (cmd === 'state') cb({ ground: (g => g ? { visible: g.visible, y: g.position.y, img: g.material.map?.image?.width } : null)(ctx.scene.getObjectByName('ground')), layoutGround: ctx.layout.ground ?? null, mode: ctx.mode, slots: ctx.build.slots.map(s => s.fn?.kind), slotMeshes: ctx.build.slotMeshes.length, slotMeshKinds: [...new Set(ctx.build.slotMeshes.map(m => m.userData.slot?.fn?.kind))], seatMeshes: ctx.build.seatMeshes.length });
     else if (cmd === 'lights') cb({ // 그림자와 불빛 시험: 해 그림자, 땅이 그림자를 받는지, 램프마다 불빛 세기와 작은 빛 구슬이 보이는지

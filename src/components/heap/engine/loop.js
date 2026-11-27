@@ -6,7 +6,7 @@ export function setupLoop(ctx) {
   const {
     Yv, camera, WALL_H, RX, RZ, HOST, canvas, renderer, scene, on,
     onDispose, stepCharacter, controls, me, legL, legR, $,
-    tickClock, stepMotes, cards, inPile, supportAt, restPose, stepAnim,
+    tickClock, stepMotes, cards, restPose, stepAnim,
   } = ctx;
 
   // 카메라 구도: 방(room), 사진 더미 보기(sit)
@@ -29,13 +29,17 @@ export function setupLoop(ctx) {
   // 더미 보기: 더미(HOST)의 윗면 높이를 보고, 퍼진 넓이에 맞춰 다가간다. 원래 탁자(2.6 x 1.8)는 전과 같은 (0, 2.0, 2.1) 이고,
   // 상자나 작은 탁자는 더 가까이 (최소 0.55 배). 바닥에 둔 더미는 서서 내려다보는 높이다
   // 더미가 없는 방은 SIT_CAM 이 null 이다 (modes.js 의 sit 이 막는다)
-  let SIT_CAM = null;
-  if (HOST) {
-    const heapCentre = new THREE.Vector3(HOST.x, HOST.top, HOST.z);
-    const spanW = HOST.box ? HOST.boxW + 0.6 : HOST.w, spanD = HOST.box ? HOST.boxD + 0.45 : HOST.d; // 상자는 벽까지 담기게 조금 넉넉히
+  // 꾸미기가 더미를 옮기면 heap.js 의 rehostHeap 이 rehostSitCam 으로 같은 객체를 고친다 (modes.js 가 마운트 때 받아 둔다)
+  const SIT_CAM = HOST ? { pos: new THREE.Vector3(), target: new THREE.Vector3() } : null;
+  function rehostSitCam() {
+    if (!SIT_CAM) return;
+    // 상자는 둘레의 탁자까지 담는다: 상자에서 꺼낸 카드를 탁자에 놓는다 (heap.js 의 clampPlace)
+    const spanW = HOST.box ? Math.min(HOST.w, HOST.boxW + 0.9) : HOST.w, spanD = HOST.box ? Math.min(HOST.d, HOST.boxD + 0.6) : HOST.d;
     const heapK = THREE.MathUtils.clamp(Math.max(spanW / 2.6, spanD / 1.8), 0.55, 1);
-    SIT_CAM = { pos: heapCentre.clone().add(new THREE.Vector3(0, 2.0 * heapK, 2.1 * heapK)), target: heapCentre.clone() };
+    SIT_CAM.target.set(HOST.x, HOST.top, HOST.z + (HOST.box ? 0.2 : 0)); // 상자: 앞쪽 탁자가 화면 아래에 잘리지 않게 조금 앞을 본다
+    SIT_CAM.pos.copy(SIT_CAM.target).add(new THREE.Vector3(0, 2.0 * heapK, 2.1 * heapK));
   }
+  rehostSitCam();
 
   // 한 장 그리기. 방 효과(fx.js, ?debug=1)가 있으면 그 체인으로, 없으면 장면을 바로 그린다
   const draw = () => (ctx.draw ? ctx.draw() : renderer.render(scene, camera));
@@ -130,10 +134,14 @@ export function setupLoop(ctx) {
         wantQ.multiply(turnQ.setFromAxisAngle(Yv, c.userData.turnNow));
         heldArrived = c.position.distanceTo(want) < d.h * 0.03 && c.quaternion.angleTo(wantQ) < 0.03 && Math.abs(goal - c.userData.turnNow) < 0.03;
       } else if (c === ctx.dragging) {
-        const p = c.userData.place, below = cards.filter(o => o !== c && inPile(o));
-        want.set(p.x, supportAt(p.x, p.z, below) + 0.05, p.z);
+        // 끄는 카드는 밑에서 가장 높은 곳(카드 전체, 상자 벽 포함) 위로 뜬다. 가려는 자리와 지금 자리 둘 다 본다:
+        // 상자에서 꺼내면 벽 위로 올라 넘어간 뒤 탁자로 내려온다. 높이는 옆으로 가는 것보다 빨리 따라가 모서리를 깎지 않는다
+        const p = c.userData.place;
+        const top = Math.max(ctx.hoverTop(p.x, p.z, p.yaw, d), ctx.hoverTop(c.position.x, c.position.z, p.yaw, d));
+        want.set(p.x, top + 0.05, p.z);
         wantQ.copy(restPose(c, []).quat);
-        c.position.lerp(want, Math.min(1, a * 2.2)); c.quaternion.slerp(wantQ, a);
+        const ya = Math.min(1, a * 6), y = c.position.y + (want.y - c.position.y) * ya;
+        c.position.lerp(want, Math.min(1, a * 2.2)); c.position.y = Math.max(y, top + 0.01); c.quaternion.slerp(wantQ, a);
         continue;
       } else {
         if (c.userData.anim) { stepAnim(c, animDt); continue; }
@@ -144,6 +152,7 @@ export function setupLoop(ctx) {
     }
     ctx.stepCardView(heldArrived);
     draw();
+    ctx.cardViewAfterDraw?.(); // 그린 바로 뒤라 버퍼를 읽을 수 있다 (card-view.js 의 방의 빛)
     ctx.raf = requestAnimationFrame(frame);
   }
 
@@ -162,5 +171,5 @@ export function setupLoop(ctx) {
     e.detail(out);
   });
 
-  Object.assign(ctx, { SIT_CAM, resize, ROOM_CAM, frame });
+  Object.assign(ctx, { SIT_CAM, rehostSitCam, resize, ROOM_CAM, frame });
 }

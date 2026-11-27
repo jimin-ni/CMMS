@@ -62,6 +62,8 @@ const SHELL_KEYS = ['room', 'door'];
 // 마운트 때 정해지는 가구: 사진 더미(더미 자리, 카드)와 창(벽 구멍, 햇빛). 이것들이 바뀌면 방을 다시 마운트한다 (rebuild)
 const MOUNT_TYPES = new Set(['heap', 'window']);
 const mountKeyOf = items => JSON.stringify((items || []).filter(it => MOUNT_TYPES.has(it?.type)).map(it => [it.type, it.x, it.z, it.y ?? 0, it.rot ?? 0, it.style ?? '', it.w ?? 0, it.h ?? 0]));
+// mountKeyOf 에서 더미의 자리만 뺀 것. 이것이 같고 mountKeyOf 만 다르면 더미가 옮겨졌을 뿐이다: 다시 마운트하지 않고 그 자리에서 옮긴다 (heap.js 의 rehostHeap)
+const mountShapeOf = items => JSON.stringify((items || []).filter(it => MOUNT_TYPES.has(it?.type)).map(it => (it.type === 'heap' ? ['heap', it.style ?? ''] : [it.type, it.x, it.z, it.y ?? 0, it.rot ?? 0, it.style ?? '', it.w ?? 0, it.h ?? 0])));
 const shellOf = l => Object.fromEntries(SHELL_KEYS.filter(k => l && l[k] !== undefined).map(k => [k, structuredClone(l[k])]));
 
 const r2 = v => Math.round(v * 100) / 100;
@@ -92,6 +94,7 @@ export function setupEdit(ctx) {
     shell: {}, name: '', preview: false,
     // mountKey: 이 마운트에서 지은 사진 더미와 창 (mountKeyOf). 지금 목록과 다르면 다시 마운트한다
     mountKey: mountKeyOf(ctx.layout.items),
+    mountShape: mountShapeOf(ctx.layout.items),
   };
   // 이 마운트의 번호. 칠한 색(look)은 ctx.look 이다: 가구 목록의 그림은 그 색으로 그려진다 (dock-thumbs.js)
   const MOUNT = Math.floor(Math.random() * 1e9);
@@ -170,22 +173,23 @@ export function setupEdit(ctx) {
   // 위에 선 것(kidsOf)은 저장하지 않고 끌기를 시작할 때마다 다시 찾는다: 가운데가 받침의 바닥 크기 안에 있고 밑면이 받침의 윗면에서 SURFACE_REST(0.08) 안인 가구.
   const SURF = opts.surfaces;
   const isHost = it => !!it && !!SURF.surfaceTops(it);
-  const isSmall = it => SURF.isSmallItem(it);
   const inRect = (x, z, h, e = ext(h)) => Math.abs(x - h.x) <= e.hx && Math.abs(z - h.z) <= e.hz;
   const hostBox = new THREE.Box3(), hitP = new THREE.Vector3();
   // 커서(rayFrom 을 마친 ray) 아래의 받침 윗면 { j, y, x, z }. 없으면 null. skip 의 번호는 받침으로 보지 않는다 (들고 있는 것과 그 위의 것).
   // 받침마다: 커서가 상자를 지나지 않으면 건너뛴다. 지나면 높은 윗면부터, 커서가 그 높이의 평면을 받침의 바닥 크기 안에서 지나는 첫 면을 고른다
   // (위에서 보면 꼭대기, 책장의 칸을 가리키면 그 칸). 어느 면도 안에서 지나지 않으면(책상 앞판을 가리킨다) 커서가 상자에 들어간 높이 아래의 가장 높은 면
   // (없으면 가장 낮은 면)에, 들어간 자리를 바닥 크기 안으로 당겨 둔다. 여러 받침이 걸리면 카메라에 가장 가까운 것.
-  function surfaceUnder(skip) {
+  // kid: 들고 있는 것. 얹을 수 없는 받침(canRestOn)은 건너뛰고, 안쪽 칸은 kid 가 그 칸에 들어갈 때만 고른다(fitsOnTop): 들어가지 않으면 그 위의 면으로 간다.
+  function surfaceUnder(skip, kid) {
     const o = ray.ray.origin, d = ray.ray.direction;
     let best = null;
     ed.items.forEach((h, j) => {
-      const tops = !skip.has(j) && SURF.surfaceTops(h);
-      if (!tops) return;
-      const e = ext(h), y0 = h.y || 0, top = y0 + (SURF.itemHeight(h) ?? Math.max(...tops));
+      const all = !skip.has(j) && SURF.canRestOn(kid, h) && SURF.surfaceTops(h);
+      if (!all) return;
+      const e = ext(h), y0 = h.y || 0, top = y0 + (SURF.itemHeight(h) ?? Math.max(...all));
       hostBox.min.set(h.x - e.hx, y0, h.z - e.hz); hostBox.max.set(h.x + e.hx, top, h.z + e.hz);
       if (!ray.ray.intersectBox(hostBox, hitP)) return;
+      const tops = all.filter((_, n) => SURF.fitsOnTop(kid, h, n));
       let pick = null;
       if (d.y < -1e-6) for (let n = tops.length - 1; n >= 0; n--) {
         const y = r2(y0 + tops[n]), t = (y - o.y) / d.y, x = o.x + d.x * t, z = o.z + d.z * t;
@@ -208,8 +212,8 @@ export function setupEdit(ctx) {
     while (todo.length) {
       const k = todo.shift(), h = ed.items[k];
       ed.items.forEach((o, j) => {
-        // 작은 가구만 딸려 간다 (하부장 높이에 놓인 스피커처럼 큰 것은 제자리에 남는다, codex)
-        if (j === i || parent.has(j) || !(o.y > 0) || isFrameLike(o) || mountOf(o) || !isSmall(o)) return;
+        // 그 받침에 얹을 수 있는 것만 딸려 간다 (canRestOn: 작은 가구, 또는 받침보다 넓지 않은 모델. 침대·앉는 가구는 제자리에 남는다)
+        if (j === i || parent.has(j) || !(o.y > 0) || isFrameLike(o) || mountOf(o) || !SURF.canRestOn(o, h)) return;
         if (SURF.restingTop(o, h) == null) return;
         list.push(j); parent.set(j, k);
         if (isHost(o)) todo.push(j);
@@ -447,7 +451,7 @@ export function setupEdit(ctx) {
     }
     if (look.backdrop !== undefined && palKey(colourBackdrop(look.backdrop)) !== palKey(ed.backdrop)) { ed.backdrop = colourBackdrop(look.backdrop); ctx.setBackdrop(ed.backdrop); }
     // 방의 틀이나 마운트 때 정해지는 가구(더미, 창)가 바뀌었으면 다시 마운트한다 (again 이 false 면 꾸미기 밖으로: 나가며 버리기)
-    if (shellChanged || (ed.on && mountKeyOf(ed.items) !== ed.mountKey)) { remount(again); return; }
+    if (shellChanged || (ed.on && mountKeyOf(ed.items) !== ed.mountKey && !(again && heapMovedOnly()))) { remount(again); return; }
     if (palChanged || hovering) { hovering = false; ctx.recolour(pal); }
     rebuild();
   }
@@ -541,13 +545,18 @@ export function setupEdit(ctx) {
   function rebuild() {
     clearTimeout(ed.fnTimer); ed.fnTimer = 0;
     // 사진 더미나 창을 넣고, 빼고, 옮기고, 모양을 바꿨으면 다시 마운트한다 (더미 자리와 벽 구멍은 마운트 때 정해진다). 들고 있는 동안은 기다린다
-    if (ed.on && !ed.move && mountKeyOf(ed.items) !== ed.mountKey) { remount(true); return; }
+    const heapMoved = ed.on && !ed.move && mountKeyOf(ed.items) !== ed.mountKey;
+    if (heapMoved && !heapMovedOnly()) { remount(true); return; }
     const list = ed.move?.isNew ? [...ed.items, ed.move.cand ?? ed.move.base] : ed.items;
     ctx.applyItems(list);
+    // 더미만 옮겨졌다: 가구를 지은 뒤(보는 자리가 새 가구의 막힘을 본다) 카드를 새 자리에 다시 쌓는다. 안 되면 다시 마운트한다
+    if (heapMoved) { if (!ctx.rehostHeap(ed.items)) { remount(true); return; } ed.mountKey = ctx.mountKeyNow = mountKeyOf(ed.items); }
+    if (!ed.move) ctx.hideHeap(false); // 들고 있던 더미를 내려놓았거나 제자리로 돌렸다
     if (ed.move) ed.move.builtY = list[ed.move.i]?.y || 0; // 들고 있는 그룹이 지어진 높이 (끄는 동안 오르내린 만큼만 그룹을 옮긴다: showMove)
     if (ed.move) showMove();
   }
   function flushFn() { if (ed.fnTimer) rebuild(); }
+  const heapMovedOnly = () => !!ctx.HOST && mountShapeOf(ed.items) === ed.mountShape;
 
   // ---------- 커서 아래 ----------
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), hitV = new THREE.Vector3();
@@ -631,7 +640,7 @@ export function setupEdit(ctx) {
     }
     // 작은 가구는 커서 아래의 받침 윗면을 먼저 본다 (surfaceUnder). 있으면 그 면 위의 점을 따르고, 없으면 바닥을 따른다.
     // 큰 가구는 전처럼 자기 높이의 평면에서 커서를 따른다 (저장된 높이가 있으면 그대로 둔다).
-    const small = isSmall(it), on = small ? surfaceUnder(new Set([m.i, ...m.kids])) : null;
+    const small = SURF.canStack(it), on = small ? surfaceUnder(new Set([m.i, ...m.kids]), it) : null;
     let x, z;
     if (on) { x = on.x + m.grab.x; z = on.z + m.grab.z; }
     else {
@@ -726,6 +735,7 @@ export function setupEdit(ctx) {
       if (ray.ray.intersectPlane(floorPlane, hitV)) grab = { x: base.x - hitV.x, z: base.z - hitV.z };
     }
     ed.move = { i, isNew: false, base, rot: normRot(base.rot || 0), kids, kidsBase: kids.map(j => ({ ...ed.items[j] })), grab, cand: base, why: null };
+    if (base.type === 'heap' || kids.some(j => ed.items[j].type === 'heap')) ctx.hideHeap(true); // 더미를 드는 동안 카드와 상자는 감춘다 (놓으면 새 자리에 다시 쌓인다)
     grid.visible = true; ed.press = null;
     try { canvas.setPointerCapture?.(ev.pointerId); } catch { /* 이미 떨어진 포인터: 붙잡지 않아도 root 에서 계속 받는다 */ }
     update(ev);
@@ -879,7 +889,7 @@ export function setupEdit(ctx) {
     }
     const { list: kids, parent } = kind ? { list: [], parent: new Map() } : kidsTree(i);
     if (!kind) { // 바닥 가구 (위에 얹는 것 포함)
-      const y = isSmall(it) && !isSmall(next) ? 0 : it.y || 0;
+      const y = SURF.canStack(it) && !SURF.canStack(next) ? 0 : it.y || 0;
       if (y > 0) next.y = y; else delete next.y;
     }
     if (!(next.type === 'lamp' || entryOf(next)?.category === 'lamp')) delete next.lit;
@@ -976,7 +986,7 @@ export function setupEdit(ctx) {
     ed.hist = resume?.hist ?? []; ed.seq = resume?.seq ?? ed.seq; // 알림과 내려놓기의 번호는 마운트를 건너 이어진다 (room-editor.tsx 가 번호로 새것을 가린다)
     ed.future = resume?.future ?? []; ed.tag = null; ed.notice = null; ed.move = null; ed.press = null;
     // 방의 틀은 지금 지은 방(ctx.layout)의 것이다. 이름은 다시 마운트했으면 그 전 마운트의 것, 아니면 저장된 이름이다.
-    ed.mountKey = mountKeyOf(ctx.layout.items); // 이 마운트의 더미와 창 (rebuild 가 비교한다)
+    ed.mountKey = ctx.mountKeyNow ?? mountKeyOf(ctx.layout.items); // 지금 지어진 더미와 창 (rebuild 가 비교한다). 더미를 그 자리에서 옮겼으면 그 뒤의 것
     ed.shell = shellOf(ctx.layout); ed.name = typeof resume?.name === 'string' ? resume.name : ctx.savedName; ctx.showName(ed.name);
     ed.preview = ctx.editPreview = false;
     ctx.glowMarksOn = true; ctx.syncGlowMarks(); // 작은 빛(furniture.js)은 꾸미기에서만 구슬이 보인다

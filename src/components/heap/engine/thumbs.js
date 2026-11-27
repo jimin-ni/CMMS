@@ -1,4 +1,5 @@
 // 썸네일 불러오기: 세 단계로 나눠 천천히 선명해진다.
+import * as THREE from 'three';
 import { thumbUrl } from './util.js';
 import { hasThumb } from './format.js';
 import { cropToShape } from './draw.js';
@@ -21,7 +22,7 @@ export function setupThumbs(ctx) {
     const u = card.userData;
     if (u.tier >= tier) return;
     u.tier = tier; u.img = cropToShape(im, u.reel);
-    drawCard(u.reel, u.img, u.front.image); u.front.needsUpdate = true;
+    drawCard(u.reel, u.img, u.front.image, u.sharp || undefined); u.front.needsUpdate = true;
     if (u.poster) paintPoster(card);
     if (card === ctx.phonePic?.card) ctx.showPhonePic();
   }
@@ -48,8 +49,9 @@ export function setupThumbs(ctx) {
       try { if (im) landed(card, tier, im); } finally { loading--; pump(); }
     });
   }
+  // 카드를 집어 든 동안 더미의 줄은 멈춘다: 집은 카드의 큰 그림이 연결을 혼자 쓴다. 내려놓으면 modes.js 가 다시 부른다
   function pump() {
-    while (loading < MAX_LOADS && loadQueue.length) {
+    while (!ctx.held && loading < MAX_LOADS && loadQueue.length) {
       const { card, tier } = loadQueue.shift();
       if (card.userData.tier >= tier) continue; // 더 선명한 그림이 이미 카드에 있다
       loading++; load(card, tier, thumbFiles(card.userData.reel, tier));
@@ -65,5 +67,22 @@ export function setupThumbs(ctx) {
   }
   function requestPile(tier) { for (let i = cards.length - 1; i >= 0; i--) request(cards[i], tier); } // cards runs bottom → top, so this asks top first
 
-  Object.assign(ctx, { loadThumb, cancelThumbs, requestPile, FAR, request, NEAR, CLOSE });
+  // 집어 든 카드의 앞면을 화면에 뜰 크기로 다시 그린다: 날아오는 동안에도 선명하다. 큰 그림은 받는 대로 이 크기로 그린다 (landed).
+  // 내려놓으면 더미 크기(LOW)로 돌린다. 팬 작품은 자기 그림이라 그대로 둔다.
+  // 배율: 눈앞에 다 왔을 때 카드가 화면에 차지하는 실제 px 높이(loop.js 의 dist 와 같은 셈) 의 1.25 배. 든 동안은 밉맵을 끈다: 밉맵은 글자를 흐린다
+  function sharpen(card, on) {
+    const u = card.userData, t = u.front;
+    if (u.reel.kind === 'fan' || !!u.sharp === on) return;
+    if (on) {
+      const cam = ctx.camera, tn = Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2), d = u.d;
+      const dist = Math.max(d.h / (1.5 * tn), d.w / (1.7 * tn * cam.aspect));
+      const px = ctx.renderer.domElement.height * d.h / (2 * dist * tn); // 눈앞의 카드 높이 (그리기 버퍼 px)
+      u.sharp = Math.min(4, Math.max(1, px / ctx.frontSpec(u.reel).H * 1.25));
+    } else u.sharp = 0;
+    drawCard(u.reel, u.img, t.image, u.sharp || undefined);
+    t.generateMipmaps = !on; t.minFilter = on ? THREE.LinearFilter : THREE.LinearMipmapLinearFilter;
+    t.dispose(); t.needsUpdate = true; // 크기와 밉맵이 바뀌었다: GPU 쪽 텍스처를 새로 만든다
+  }
+
+  Object.assign(ctx, { loadThumb, cancelThumbs, requestPile, FAR, request, NEAR, CLOSE, pumpThumbs: pump, sharpen });
 }

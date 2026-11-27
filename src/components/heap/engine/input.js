@@ -47,7 +47,9 @@ export function setupInput(ctx) {
   on(window, 'blur', () => keys.clear());
 
   // 탁자 위에서 카드 끌기(앉은 모드). 궤도 컨트롤이 비켜서도록 capture 단계에 건다.
-  const deskPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -((HOST?.top ?? 0) + (HOST?.box ? 0.15 : 0.12))), _hit = new THREE.Vector3();
+  // 높이는 누를 때마다 HOST 에서 읽는다: 꾸미기가 더미를 옮기면 HOST 가 바뀐다 (heap.js 의 rehostHeap)
+  const deskPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), _hit = new THREE.Vector3();
+  const deskY = () => { deskPlane.constant = -((HOST?.top ?? 0) + (HOST?.box ? 0.15 : 0.12)); return deskPlane; };
   let down = null, dragOff = new THREE.Vector2();
   canvas.addEventListener('pointerdown', ev => {
     down = { x: ev.clientX, y: ev.clientY, card: null };
@@ -56,7 +58,7 @@ export function setupInput(ctx) {
     const hit = ray.intersectObjects(pickables, false)[0];
     if (hit) {
       down.card = hit.object.userData.card; controls.enabled = false;
-      if (ray.ray.intersectPlane(deskPlane, _hit)) dragOff.set(down.card.userData.place.x - _hit.x, down.card.userData.place.z - _hit.z); // 눌린 자리에서 잡은 오프셋
+      if (ray.ray.intersectPlane(deskY(), _hit)) dragOff.set(down.card.userData.place.x - _hit.x, down.card.userData.place.z - _hit.z); // 눌린 자리에서 잡은 오프셋
     }
   }, { capture: true });
   canvas.addEventListener('pointermove', ev => {
@@ -99,7 +101,8 @@ export function setupInput(ctx) {
     rayFrom(ev);
     if (ctx.mode === 'globe') return ctx.globeClick(ray); // 글로브 모드 (globe.js): 카메라가 자리로 가는 중에도 받는다 (글로브가 카메라를 따라온다)
     if (ctx.camGoal) return;
-    if (ctx.mode === 'sort') { const h = ctx.shelf && ray.intersectObjects(ctx.shelf.albums.flatMap(a => [a.mesh, a.label]), false)[0]; if (h) albumAction(h.object.userData.album); return; }
+    // 책장 보기: 앨범을 누르면 열고, 앨범이 아닌 곳을 누르면 나간다
+    if (ctx.mode === 'sort') { const h = ctx.shelf && ray.intersectObjects(ctx.shelf.albums.flatMap(a => [a.mesh, a.label]), false)[0]; if (h) albumAction(h.object.userData.album); else exitSort(); return; }
     if (ctx.mode === 'sit') {
       const hits = ray.intersectObjects([...pickables, ...ctx.build.slotMeshes], false);
       if (ctx.held && hits[0]?.object.userData.card === ctx.held) return ctx.flipAt(heldFx(ctx.held)); // 3D 로 남는 카드 (팬 작품, 눈앞에 오는 중)
@@ -120,6 +123,18 @@ export function setupInput(ctx) {
     else if (shelfParts.includes(hit.object)) walkRoute(ctx.shelfSpot.clone(), 'sort', shelfParts);
     else if (hit.object === floor) walkRoute(p.clone().setY(0), null);
     else if (SEAT) walkRoute(SEAT.clone(), 'sit', ctx.heapBoxParts || []); // 사진 더미(카드, 상자): 더미를 보는 자리로 걸어가 본다
+  });
+
+  // 앉은 자리: 카드와 더미 곁 물건에서 떨어진 빈 곳을 두 번 누르면 일어선다 (Escape, 일어나기와 같다).
+  // 탁자 밖(바닥, 벽)을 눌러도 빈 곳이다. 카드를 든 동안은 한 번 누르기가 내려놓기라 여기에 오지 않는다
+  const topPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  on(canvas, 'dblclick', ev => {
+    if (ctx.mode !== 'sit' || ctx.held || ctx.dragging || ctx.camGoal) return;
+    rayFrom(ev);
+    if (ray.intersectObjects([...pickables, ...ctx.build.slotMeshes, ...(ctx.heapBoxParts || [])], false).length) return;
+    topPlane.constant = -(HOST?.top ?? 0);
+    if (ray.ray.intersectPlane(topPlane, _hit) && ctx.nearHeapThing?.(_hit.x, _hit.z)) return;
+    stand();
   });
 
   Object.assign(ctx, { anyOverlay, keys });

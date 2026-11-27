@@ -197,7 +197,7 @@ export function setupLive(ctx) {
       if (!ctx.disposed) $('gb-msg').textContent = '지금은 남기지 못했어요. 잠시 뒤에 다시 시도해 주세요.';
     } finally { gbBusy = false; if (!ctx.disposed) $('gb-submit').disabled = false; }
   });
-  bindOverlay(ctx, 'guestbook', 'gb-close');
+  bindOverlay(ctx, 'guestbook', 'gb-close', { backdrop: true }); // 창 바깥을 누르면 닫힌다 (PC 와 같다)
 
   // polling: what others changed (guestbook rows, visit counts, 다녀감, landed pieces) every opts.pollMs while the tab is visible.
   // 첫 기준점은 스냅샷의 serverTime 이고, 답마다 다음 기준점이 온다. 겹치는 줄은 id 로 합친다.

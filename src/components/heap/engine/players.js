@@ -50,21 +50,42 @@ export function setupPlayers(ctx) {
     if (opts.isOwner || !opts.roomUuid || typeof navigator === 'undefined' || typeof navigator.sendBeacon !== 'function') return;
     try { navigator.sendBeacon(`/api/heap/rooms/${encodeURIComponent(opts.roomUuid)}/opens`, JSON.stringify({ kind, target })); } catch {}
   }
-  function openPlayer(reel) {
+  // 집은 카드에 맞춘 플레이어: 틀을 카드의 사진 자리에 꼭 겹친다. 유튜브의 16:9 · 9:16 은 사진 자리(card-art.js 의 DIMS)와 비율이 같다.
+  // r: 방 px 의 사진 자리 { x, y, w, h } 와 카드의 위 가장자리 cardTop, 오른쪽 가장자리 cardRight. 닫기 단추는 카드 위 오른쪽에 둔다.
+  // card-view.js 가 매 프레임 불러 카드를 따라간다. 맞춘 플레이어가 아니면 아무것도 하지 않는다.
+  let fitted = false;
+  const bar = player.querySelector('.player-bar');
+  function fitPlayer(r) {
+    if (!fitted) return;
+    player.style.left = r.x + 'px'; player.style.top = r.y + 'px';
+    frameBox.style.width = r.w + 'px'; frameBox.style.height = r.h + 'px';
+    bar.style.top = (r.cardTop - r.y - 8) + 'px'; bar.style.right = (r.x + r.w - r.cardRight) + 'px';
+  }
+  function unfit() {
+    fitted = false; player.classList.remove('fit');
+    player.style.left = player.style.top = bar.style.top = bar.style.right = '';
+  }
+  // fit: 집은 카드의 사진 자리 (fitPlayer 의 r). 없거나 유튜브가 아니거나 200 px 이 안 되면 예전처럼 방 가운데에 연다
+  function openPlayer(reel, fit) {
     if (reel.kind !== 'fan' && reel.id) countOpen('reel', `${platformOf(reel)}:${reel.id}`);
     closeMusic(); // 영사기가 넘겨받는다: 플레이어는 한 번에 하나만 재생한다
     $('player-title').textContent = reel.title || '';
     frameBox.innerHTML = '';
     note.hidden = !ctx.embedBlocked;
+    unfit();
     if (!ctx.embedBlocked) {
       const platform = platformOf(reel);
       const spec = (EMBED[platform] || EMBED.youtube)(reel);
-      const avail = Math.max(220, root.clientHeight - 230);
-      // 틀은 ratio(가로/세로)를 지키며 방에 맞게 줄어든다. 가로가 먼저 걸리면 세로를 따라 줄인다.
-      let w = Math.min(root.clientWidth - 32, spec.max, avail * spec.ratio);
-      let h = w / spec.ratio;
-      w = Math.max(200, Math.round(w)); h = Math.max(200, Math.round(h));
-      frameBox.style.width = w + 'px'; frameBox.style.height = h + 'px';
+      if (fit && platform === 'youtube' && Math.min(fit.w, fit.h) >= 200) {
+        fitted = true; player.classList.add('fit'); fitPlayer(fit);
+      } else {
+        const avail = Math.max(220, root.clientHeight - 230);
+        // 틀은 ratio(가로/세로)를 지키며 방에 맞게 줄어든다. 가로가 먼저 걸리면 세로를 따라 줄인다.
+        let w = Math.min(root.clientWidth - 32, spec.max, avail * spec.ratio);
+        let h = w / spec.ratio;
+        w = Math.max(200, Math.round(w)); h = Math.max(200, Math.round(h));
+        frameBox.style.width = w + 'px'; frameBox.style.height = h + 'px';
+      }
       frameBox.appendChild(makeFrame(spec.src, reel.title || PLAYER_TITLE[platform] || '영상', spec.allow));
     } else { frameBox.style.width = frameBox.style.height = '0px'; }
     // 임베드를 못 넣는 곳에서는 바깥을 덮지 않는다: 안내 글이 가리키는 원본 보기 단추를 눌러야 한다
@@ -72,7 +93,7 @@ export function setupPlayers(ctx) {
     player.hidden = false;
   }
   const PLAYER_TITLE = { youtube: 'YouTube 영상', instagram: 'Instagram 게시물', tiktok: 'TikTok 영상', x: 'X 게시물' };
-  function closePlayer() { frameBox.innerHTML = ''; player.hidden = true; shade.hidden = true; }
+  function closePlayer() { frameBox.innerHTML = ''; player.hidden = true; shade.hidden = true; unfit(); }
   on($('player-close'), 'click', closePlayer);
   on(shade, 'click', closePlayer);
 
@@ -123,9 +144,9 @@ export function setupPlayers(ctx) {
   on(document, 'securitypolicyviolation', e => {
     if (!EMBED_HOST.test(e.blockedURI || '')) return;
     ctx.embedBlocked = true;
-    if (!player.hidden) { frameBox.innerHTML = ''; frameBox.style.width = frameBox.style.height = '0px'; note.hidden = false; shade.hidden = true; }
+    if (!player.hidden) { unfit(); frameBox.innerHTML = ''; frameBox.style.width = frameBox.style.height = '0px'; note.hidden = false; shade.hidden = true; }
     if (!dock.hidden) { dockFrame.replaceChildren(); layoutMusic(); }
   });
 
-  Object.assign(ctx, { countOpen, closeMusic, openPlayer, closePlayer, openMusic, player, layoutMusic });
+  Object.assign(ctx, { countOpen, closeMusic, openPlayer, closePlayer, fitPlayer, playerFitted: () => fitted && !player.hidden, openMusic, player, layoutMusic });
 }
