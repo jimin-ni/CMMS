@@ -202,13 +202,6 @@
 .heap-room .cal-row span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .heap-room .cal-row small { color: rgba(47, 44, 36, 0.62); flex: none; }
 
-.heap-room .grid-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
-.heap-room .gitem { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 12px; }
-.heap-room .gitem img { width: 100%; aspect-ratio: 9 / 16; object-fit: cover; border-radius: 4px; background: #ddd; }
-.heap-room .gitem.wide img { aspect-ratio: 16 / 9; }
-.heap-room .gitem .gthumb { display: block; cursor: pointer; }
-.heap-room .gitem span { overflow-wrap: anywhere; }
-.heap-room .gitem a { color: var(--clay); font-weight: 600; text-decoration: none; }
 .heap-room .tag { align-self: flex-start; font-size: 11px; padding: 1px 7px; border-radius: 4px; background: rgba(86, 83, 68, 0.12); }
 .heap-room .tag.mine { background: rgba(166, 97, 60, 0.18); }
 .heap-room .stat { display: flex; justify-content: space-between; font-size: 15px; font-variant-numeric: tabular-nums; }

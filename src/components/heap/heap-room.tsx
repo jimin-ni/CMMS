@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { withNext } from "@/lib/next-path";
@@ -36,6 +37,7 @@ const noSubscribe = () => () => {};
 // 방 안의 로그인 팝업으로 로그인한 뒤 다시 열 화면 (heap:signin 의 detail 에서 heap:go 의 detail 로). 쪽지는 writeOnLoad 로 연다.
 const GO_AFTER_SIGNIN: Record<string, string> = { chat: "phone", guestbook: "guestbook" };
 import { RoomEditor } from "./room-editor";
+import { AlbumBook, type Album } from "./album-book";
 import { SetupChecklist, setupFlags, type ChecklistAction } from "./setup-checklist";
 import { ShareButton } from "./share-button";
 import { createPresenceClient, createPresenceHub, type PresenceClient, type PresenceHub } from "./presence-client";
@@ -178,6 +180,9 @@ export function HeapRoom({
   // 엔진이 알려 주는 값: 방이 화면에 떴는지(heap:ready), 지금 모드(heap:mode).
   const [ready, setReady] = useState(false);
   const [mode, setMode] = useState("room");
+  // 책장에서 고른 앨범 (heap:album). 있으면 앨범 수첩을 띄운다
+  const [album, setAlbum] = useState<Album | null>(null);
+  const closeAlbum = useCallback(() => setAlbum(null), []);
   const [editing, setEditing] = useState(false);
   // 임시 디버그 사이드바 (engine/debug-flags.js). ?debug=1 일 때만. 서버 렌더와 맞추려고 마운트 뒤에 켠다.
   const debugOn = useSyncExternalStore(noSubscribe, () => DEBUG_ON, () => false);
@@ -362,9 +367,11 @@ export function HeapRoom({
       }
     };
     const onMode = (e: Event) => setMode((e as CustomEvent<string>).detail);
+    const onAlbum = (e: Event) => setAlbum((e as CustomEvent<Album>).detail);
     const onRemount = (e: Event) => setResume((e as CustomEvent<EditResume>).detail);
     root.addEventListener("heap:ready", onReady);
     root.addEventListener("heap:mode", onMode);
+    root.addEventListener("heap:album", onAlbum);
     root.addEventListener("heap:remount", onRemount);
     // 다시 마운트할 때는 편집 중인 가구, 시간, 팔레트를 저장된 레이아웃 위에 얹어 띄운다. palette가 null이면 기본 색이다.
     const r = resume;
@@ -468,7 +475,9 @@ export function HeapRoom({
       cancelled = true;
       root.removeEventListener("heap:ready", onReady);
       root.removeEventListener("heap:mode", onMode);
+      root.removeEventListener("heap:album", onAlbum);
       root.removeEventListener("heap:remount", onRemount);
+      setAlbum(null);
       dispose?.();
     };
   }, [roomId, viewerName, signedIn, canEdit, router, resume, signInHere, presenceOn, presenceHub]);
@@ -853,20 +862,16 @@ export function HeapRoom({
         </div>
       </div>
 
-      <div id="grid" className="overlay" hidden>
-        <div className="panel">
-          <div className="panel-head">
-            <b id="grid-title" />
-            <button id="grid-close" className="btn ghost" type="button">
-              닫기
-            </button>
-          </div>
-          <div className="panel-body">
-            <p className="note">제목이나 채널로 분류가 확실한 사진만 앨범에 들어가요.</p>
-            <div className="grid-list" id="grid-list" />
-          </div>
-        </div>
-      </div>
+      {/* 앨범 수첩 (album-book.tsx). 엔진이 heap:album 을 보내면 연다. 수첩은 이 방의 CSS 를 피해 body 에 띄우고,
+          #grid 는 수첩이 열려 있다는 표시로만 남긴다: 엔진과 둘러보기가 다른 창처럼 여긴다 (Esc 가 먼저 닫고, 방 키가 쉰다) */}
+      <div id="grid" hidden={!album} />
+      {album &&
+        createPortal(
+          <div className={CARD_FONTS}>
+            <AlbumBook album={album} onClose={closeAlbum} />
+          </div>,
+          document.body,
+        )}
 
       <div id="guestbook" className="overlay" hidden>
         <div className="panel">

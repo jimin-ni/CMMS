@@ -1,0 +1,58 @@
+/* 앨범 수첩 (album-book.tsx). 쪽의 틀과 글꼴은 settings-book.css 를 쓴다.
+   영상 칸이 있는 쪽은 세로 flex 로 두어 2 x 2 격자가 제목 아래 남은 높이를 채운다 */
+.sb-page:has(> .ab-grid) {
+  display: flex;
+  flex-direction: column;
+}
+.ab-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 4cqw;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ab-grid > li { min-width: 0; min-height: 0; }
+/* 폴라로이드 한 장: 흰 테, 그림, 제목 두 줄 */
+.ab-video {
+  display: flex;
+  flex-direction: column;
+  gap: 1.6cqw;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 1.8cqw 1.8cqw 2.2cqw;
+  background: #fff;
+  border: 1px solid var(--color-hairline, rgba(0, 0, 0, 0.12));
+  border-radius: 2px;
+  box-shadow: 1px 1px 2px rgba(40, 28, 12, 0.18);
+  color: inherit;
+  text-decoration: none;
+}
+.ab-video:hover { box-shadow: 2px 3px 6px rgba(40, 28, 12, 0.28); }
+.ab-video:focus-visible { outline: 2px solid var(--color-ink); outline-offset: 2px; }
+/* 쇼츠(세로)와 가로 영상 모두 칸에 맞춰 자른다 */
+.ab-thumb {
+  flex: 1;
+  min-height: 0;
+  background: #ddd;
+  overflow: hidden;
+}
+.ab-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.ab-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: max(11px, 2.6cqw);
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}

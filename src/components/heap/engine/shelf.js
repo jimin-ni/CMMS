@@ -1,7 +1,6 @@
 // 앨범 책장: 앨범 표지, 앨범 보기, 책장 앞 위치.
 import * as THREE from 'three';
 import { thumbUrl } from './util.js';
-import { el, link, bindOverlay } from './dom.js';
 import { srcUrl, hasThumb, reelKey } from './format.js';
 
 export function setupShelf(ctx) {
@@ -59,28 +58,17 @@ export function setupShelf(ctx) {
   function exitSort() { ctx.mode = 'room'; ctx.camGoal = null; setHint('room'); syncUI(); }
   on($('sortexit'), 'click', exitSort);
   const albumAction = key => { if (ctx.mode === 'sort') openAlbum(key); };
+  // 앨범 보기는 React 가 O링 수첩으로 그린다 (album-book.tsx). 엔진은 앨범 이름과 영상 목록만 heap:album 으로 보낸다.
+  // 수첩이 열려 있는 동안 heap-room.tsx 가 #grid 를 드러내 둔다: 다른 창처럼 Esc 가 먼저 닫고, 방 키가 쉰다
   function openAlbum(key) {
-    const list = $('grid-list'); list.innerHTML = '';
-    const items = reels.filter(r => filed.get(reelKey(r))?.album === key);
-    $('grid-title').textContent = `${albumName(key)} · ${items.length}장`;
-    for (const r of items) {
-      const it = el('div', 'gitem' + (r.wide ? ' wide' : ''));
-      // 가까운 단계 썸네일. 격자의 object-fit: cover 가 유튜브의 여백 있는 틀을 그림만 남게 자른다
+    const items = reels.filter(r => filed.get(reelKey(r))?.album === key).map(r => ({
+      title: r.title,
+      href: srcUrl(r),
       // 썸네일이 없는 플랫폼(붙여 넣은 게시물)은 그림 없이 제목만 보여 준다
-      // 썸네일도 원본으로 가는 링크다. 키보드와 낭독기는 아래 '원본' 링크 하나만 만난다
-      const href = srcUrl(r);
-      if (hasThumb(r)) {
-        const im = el('img'); im.crossOrigin = 'anonymous'; im.src = thumbUrl(r, 'hqdefault'); im.alt = ''; im.loading = 'lazy';
-        const a = link('', href); a.className = 'gthumb'; a.tabIndex = -1; a.setAttribute('aria-hidden', 'true'); a.appendChild(im);
-        it.appendChild(a);
-      }
-      it.appendChild(el('span', null, r.title)); it.appendChild(link('원본 ↗', href));
-      list.appendChild(it);
-    }
-    if (!items.length) list.appendChild(el('p', 'note', '아직 비어 있어요.'));
-    $('grid').hidden = false;
+      thumb: hasThumb(r) ? thumbUrl(r, 'hqdefault') : null,
+    }));
+    ctx.root.dispatchEvent(new CustomEvent('heap:album', { detail: { name: albumName(key), items } }));
   }
-  bindOverlay(ctx, 'grid', 'grid-close', { backdrop: true }); // 창 바깥을 누르면 닫힌다 (PC 와 같다)
 
   Object.assign(ctx, { linkShelf, updateAlbums, enterSort, exitSort, albumAction });
 }

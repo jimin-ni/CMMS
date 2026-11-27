@@ -6,7 +6,7 @@
 // - 좁은 화면(700px 이하)은 한 쪽씩 본다: 장을 넘기며 왼쪽 쪽으로 옮겨 가고, 다음 걸음에 오른쪽 쪽으로 옮겨 간다.
 // - 마우스 휠 한 번, ‹ › 단추, ← → 키로 한 걸음씩 넘긴다. 터치로 스크롤(한 걸음 = 화면 높이의 STEP 배)하면 멈춘 뒤 가까운 걸음에 맞춘다.
 // - 지금 보이지 않는 쪽은 inert 라서 Tab 이 들어가지 않는다.
-// - 수첩 바깥(책상)을 누르거나 Esc, 닫기 단추를 누르면 홈(/home)으로 간다.
+// - 수첩 바깥(책상)을 누르거나 Esc, 닫기 단추를 누르면 닫는다: onClose 가 있으면 그것을 부르고, 없으면 홈(/home)으로 간다.
 import "../onboarding-c/onboarding-c.css";
 import "../onboarding-b/onboarding-b.css";
 import "./settings-book.css";
@@ -38,8 +38,20 @@ const getNarrow = () => window.matchMedia(NARROW_QUERY).matches;
 const getNarrowServer = () => false;
 
 // heading: 위 막대의 제목. closeLabel: 닫기 단추의 읽어 주는 이름. children: BookPage 들 (쪽 순서대로)
-export function Book({ heading, closeLabel, children }: { heading: string; closeLabel: string; children: ReactNode }) {
+// onClose: 닫을 때 부른다 (방 안의 앨범처럼 화면 위에 띄운 수첩). 없으면 홈으로 간다
+export function Book({
+  heading,
+  closeLabel,
+  onClose,
+  children,
+}: {
+  heading: string;
+  closeLabel: string;
+  onClose?: () => void;
+  children: ReactNode;
+}) {
   const router = useRouter();
+  const close = useCallback(() => (onClose ? onClose() : router.push(HOME_HREF)), [onClose, router]);
   const rootRef = useRef<HTMLDivElement>(null);
   const bookRef = useRef<HTMLDivElement>(null);
   const hintRef = useRef<HTMLDivElement>(null);
@@ -152,7 +164,7 @@ export function Book({ heading, closeLabel, children }: { heading: string; close
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        router.push(HOME_HREF);
+        close();
         return;
       }
       // 고르기 칸과 막대는 화살표를 스스로 쓴다
@@ -163,11 +175,11 @@ export function Book({ heading, closeLabel, children }: { heading: string; close
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [router, goTo]);
+  }, [close, goTo]);
 
   const onStageClick = (event: React.MouseEvent) => {
     if ((event.target as HTMLElement).closest(".nb-book, .sb-top, .nb-pager")) return;
-    router.push(HOME_HREF);
+    close();
   };
 
   // 지금 보이는 쪽 (0부터). 넓은 화면의 걸음 k: 왼쪽 2k-1, 오른쪽 2k. 좁은 화면의 걸음 j: j
@@ -198,7 +210,7 @@ export function Book({ heading, closeLabel, children }: { heading: string; close
               <PixelIcon name="mouse" size={20} />
               <span>scroll to turn</span>
             </div>
-            <button type="button" className="sb-close" onClick={() => router.push(HOME_HREF)} aria-label={closeLabel}>
+            <button type="button" className="sb-close" onClick={close} aria-label={closeLabel}>
               <span aria-hidden="true">×</span>
             </button>
           </header>
