@@ -144,6 +144,10 @@
 
 .heap-room #player { position: absolute; left: 50%; top: calc(50% - 40px); transform: translate(-50%, -50%); display: flex; flex-direction: column; gap: 8px; }
 .heap-room #player[hidden] { display: none; }
+/* 집은 카드에 맞춘 플레이어 (players.js 의 fitPlayer): 엔진이 left/top 과 틀 크기를 사진 자리로 정한다. 제목은 카드에 이미 있어 숨기고, 닫기 단추는 카드 위 오른쪽에 둔다 */
+.heap-room #player.fit { transform: none; display: block; }
+.heap-room #player.fit .player-bar { position: absolute; transform: translateY(-100%); }
+.heap-room #player.fit #player-title { display: none; }
 .heap-room #player-shade { position: absolute; inset: 0; cursor: pointer; }
 .heap-room #player-shade[hidden] { display: none; }
 /* the player's title bar reaches up to the HUD's meta line, so that line steps aside while the player is open */

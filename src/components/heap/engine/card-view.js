@@ -13,7 +13,8 @@ const HI = 2; // HTML 카드 안의 캔버스(뒷면, 붙여 넣은 게시물의
 export function setupCardView(ctx) {
   const { $, on, camera, canvas, CARD_FONT: F, cardIcon: ICON, INK, BACK_SVG, frontSpec, backLink, drawLinkFace, drawBack } = ctx;
   const host = $('cardview');
-  let shown = null, inner = null, size = null; // 지금 띄운 카드 · 뒤집히는 상자 · 시안 px 크기 { W, H }
+  let shown = null, inner = null, size = null; // 지금 띄운 카드 · 뒤집히는 상자 · 시안 px 크기 { W, H, photo }
+  let at = null; // 마지막 프레임에 놓은 자리 { x, y, k } (방 px, 배율)
 
   const el = (tag, cls, style) => { const e = document.createElement(tag); if (cls) e.className = cls; if (style) Object.assign(e.style, style); return e; };
   const px = v => `${v}px`;
@@ -60,7 +61,7 @@ export function setupCardView(ctx) {
 
   function build(card) {
     const reel = card.userData.reel, sp = frontSpec(reel), { W, H } = sp;
-    size = { W, H };
+    size = { W, H, photo: sp.photo };
     host.innerHTML = '';
     inner = el('div', 'cv-card', { width: px(W), height: px(H) });
 
@@ -86,8 +87,9 @@ export function setupCardView(ctx) {
     host.setAttribute('aria-label', reel.title || '사진');
   }
   function hide() {
+    if (ctx.playerFitted?.()) ctx.closePlayer(); // 카드에 맞춘 플레이어는 카드와 함께 내려간다
     if (shown) shown.visible = true;
-    shown = inner = size = null;
+    shown = inner = size = at = null;
     host.hidden = true; host.innerHTML = '';
   }
   ctx.onDispose(hide);
@@ -108,8 +110,15 @@ export function setupCardView(ctx) {
     const fx = fxOf(ev);
     if (fx < 0.2 || fx > 0.8) return;
     const reel = ctx.held.userData.reel;
-    if (reel && reel.kind !== 'fan') ctx.openPlayer(reel);
+    if (reel && reel.kind !== 'fan') ctx.openPlayer(reel, photoRect());
   });
+
+  // 사진 자리의 방 px 상자와 카드의 위·오른쪽 가장자리 (players.js 의 fitPlayer 가 받는 모양)
+  function photoRect() {
+    if (!at) return null;
+    const { x, y, k } = at, ph = size.photo;
+    return { x: x + ph.x * k, y: y + ph.y * k, w: ph.w * k, h: ph.h * k, cardTop: y, cardRight: x + size.W * k };
+  }
 
   // loop.js 가 매 프레임 부른다. arrived: 집어 든 카드가 눈앞 자리에 다 왔다.
   const _c = new THREE.Vector3(), _t = new THREE.Vector3();
@@ -128,6 +137,7 @@ export function setupCardView(ctx) {
     const k = Math.abs(_t.y - _c.y) * ch / size.H;
     const x = (_c.x + 1) / 2 * cw - size.W * k / 2, y = (1 - _c.y) / 2 * ch - size.H * k / 2;
     host.style.transform = `translate(${x}px, ${y}px) scale(${k})`;
+    at = { x, y, k }; ctx.fitPlayer?.(photoRect()); // 카드에 맞춘 플레이어가 열려 있으면 카드를 따라간다
     inner.style.transform = `rotateY(${(ctx.heldTurn || 0) * 180}deg)`; // 돈 만큼 쌓인 각도: 누른 쪽으로 돈다
   }
 
