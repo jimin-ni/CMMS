@@ -3,6 +3,7 @@
 import { BUBBLE_POLICY, maxCharsFor, validateBody } from "./policy";
 import {
   canJoinRoom,
+  canQuoteMessage,
   canSendInRoom,
   closeRoom,
   createRoom,
@@ -79,6 +80,12 @@ export async function sendMessageAction(
   const check = validateBody(String(formData.get("body") ?? ""), maxCharsFor(viewer.role));
   if (!check.ok) return check;
 
+  // 인용 답장: 이 방에서 보내는 사람이 볼 수 있는 공개 글만 가리킬 수 있다.
+  const replyToId = String(formData.get("replyTo") ?? "") || null;
+  if (replyToId && !(await canQuoteMessage(room, viewer, replyToId))) {
+    return { ok: false, error: "답장할 메시지를 찾을 수 없어요." };
+  }
+
   // 방 주인과 관리자는 판정 후 바로 게시하고, 판정용 도배 방지와 쓰기 차단을 받지 않는다 (문서 3-2).
   const privileged = viewer.role === "admin" || viewer.id === room.creator_id;
   if (!privileged) {
@@ -119,6 +126,7 @@ export async function sendMessageAction(
     roomOwnerId: room.creator_id,
     senderId: viewer.id,
     body: check.body,
+    replyToId,
     result,
     privileged,
   });

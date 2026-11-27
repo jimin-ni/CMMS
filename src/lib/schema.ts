@@ -68,6 +68,8 @@ export const bubbleMessages = pgTable("bubble_messages", {
   // 상태가 바뀐 시각. 폴링 기준점이라 DB now()로만 넣는다.
   statusChangedAt: timestamp("status_changed_at", { withTimezone: true }).notNull().defaultNow(),
   normalizedHash: text("normalized_hash"),
+  // 인용 답장 (0015). 가리키는 메시지가 없으면 null.
+  replyToId: uuid("reply_to_id"),
 });
 
 export const creatorProfiles = pgTable("creator_profiles", {

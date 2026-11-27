@@ -307,6 +307,8 @@ export async function saveChatMessage(args: {
   roomOwnerId: string;
   senderId: string;
   body: string;
+  // 인용 답장이 가리키는 메시지. 보내기 전에 canQuoteMessage로 확인한 것만 넘긴다.
+  replyToId?: string | null;
   result: ScreenResult;
   privileged: boolean;
 }): Promise<SaveNotice> {
@@ -319,6 +321,7 @@ export async function saveChatMessage(args: {
         roomId: args.roomId,
         senderId: args.senderId,
         body: args.body,
+        replyToId: args.replyToId ?? null,
         screenStatus: plan.status,
         screenedAt: sql`now()`,
         normalizedHash: result.normalizedHash,

@@ -9,6 +9,7 @@ import { MODE_SPOT, NAV_AFTER, PANEL_IDS, PANEL_SPOT, SPOTS, spotsFor, type Spot
 import { Paper } from "./paper";
 import { PixelIcon, type PixelIconName } from "./icons";
 import { LoginPopup } from "./login-popup";
+import { CHAT_DOCK_OPEN, ChatDock } from "@/components/bubble/chat-dock";
 
 const LOGIN_REASON = "Sign in to leave your mark in this room.";
 // 로그인 전에 방 안에서 로그인이 필요한 것을 누를 때 (HeapRoom 이 보내는 heap:signin 의 detail)
@@ -26,13 +27,12 @@ const MYPAGE_HREF = "/mypage";
 // 가운데 안내 팝업이 아래로 내려가기까지
 const GUIDE_CENTER_MS = 3000;
 
-// 내비게이션 바의 버튼: 홈, 폴라로이드, 챗, 레터, (로그인), 설정.
+// 내비게이션 바의 버튼: 홈, 폴라로이드, 레터, (로그인), 설정. 챗은 오른쪽 아래 채팅 창(ChatDock)으로 옮겼다.
 // go: 방 안에서 옮겨 갈 곳 (엔진의 heap:go, engine/nav.js). 레터는 쪽지 트리로 들어간다 (트리가 없는 방은 방명록).
-type Go = "room" | "polaroid" | "phone" | "tree";
+type Go = "room" | "polaroid" | "tree";
 const NAV_ITEMS: { id: string; icon: PixelIconName; label: string; go: Go }[] = [
   { id: "home", icon: "home", label: "Home", go: "room" },
   { id: "polaroid", icon: "image", label: "Polaroid", go: "polaroid" },
-  { id: "chat", icon: "chat", label: "Chat", go: "phone" },
   { id: "letter", icon: "mail", label: "Letter", go: "tree" },
 ];
 const NAV_ICON = 28;
@@ -44,6 +44,7 @@ type GuideSpot = "center" | "bottom" | "hidden";
 // live: 방 안을 둘러보는 단계인지. 그 전에는 아무것도 세지 않고 보이지 않는다.
 // skipped: Esc 로 온보딩을 건너뛰었는지. 모두 둘러본 것으로 세어 내비게이션 바를 연다.
 // homeHref: 있으면 홈 버튼이 방 안의 처음 자리 대신 이 주소로 간다 (문으로 옮겨 간 다른 방, visit-room.tsx).
+// chatRoom: 오른쪽 아래 채팅 창이 대화를 여는 방(미니룸 slug). 내비게이션 바가 열릴 때 함께 뜬다. 없으면 채팅 창도 없다.
 export function RoomTour({
   hostRef,
   live,
@@ -52,6 +53,7 @@ export function RoomTour({
   viewerName,
   signedIn,
   homeHref,
+  chatRoom,
 }: {
   hostRef: RefObject<HTMLDivElement | null>;
   live: boolean;
@@ -60,6 +62,7 @@ export function RoomTour({
   viewerName: string | null;
   signedIn: boolean;
   homeHref?: string;
+  chatRoom?: string;
 }) {
   const router = useRouter();
   const liveRef = useRef(live);
@@ -169,9 +172,11 @@ export function RoomTour({
   const loginAction = login?.action ?? null;
   const onSignedIn = useCallback(() => {
     setLogin(null);
-    if (loginAction) hostRef.current?.querySelector(".heap-room")?.dispatchEvent(new CustomEvent("heap:signedin", { detail: loginAction }));
+    // 채팅 창에서 뜬 팝업이면 로그인 뒤 채팅 창을 다시 펼친다. 그 밖의 일은 방이 그 화면을 다시 연다.
+    if (loginAction === "chat" && chatRoom) window.dispatchEvent(new Event(CHAT_DOCK_OPEN));
+    else if (loginAction) hostRef.current?.querySelector(".heap-room")?.dispatchEvent(new CustomEvent("heap:signedin", { detail: loginAction }));
     router.refresh();
-  }, [router, hostRef, loginAction]);
+  }, [router, hostRef, loginAction, chatRoom]);
   // 팝업에서 회원가입으로 가면 가입 뒤 이 방으로 돌아온다 (내비게이션 바의 로그인이면 돌아오지 않는다)
   const signupNext = useMemo(() => {
     if (!loginAction || typeof window === "undefined") return null;
@@ -282,6 +287,14 @@ export function RoomTour({
           </button>
         </Paper>
       </nav>
+
+      {chatRoom && navOpen && (
+        <ChatDock
+          room={chatRoom}
+          signedIn={signedIn}
+          onAskSignIn={() => setLogin({ reason: SIGNIN_REASONS.chat, action: "chat" })}
+        />
+      )}
 
       {login && <LoginPopup reason={login.reason} onClose={closeLogin} onSignedIn={onSignedIn} signupNext={signupNext} />}
     </>

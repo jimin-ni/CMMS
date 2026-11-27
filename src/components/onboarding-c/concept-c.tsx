@@ -225,6 +225,7 @@ export function ConceptC({
               canEdit={canEdit}
               owner={owner}
               signInHere
+              chatDock
             />
           </div>
           <div ref={vignetteRef} className="oc-layer oc-vignette" />
@@ -277,6 +278,7 @@ export function ConceptC({
             layoutItems={data.layout.items}
             viewerName={viewerName}
             signedIn={signedIn}
+            chatRoom={ONBOARDING_ROOM_ID}
           />
         </div>
       </div>

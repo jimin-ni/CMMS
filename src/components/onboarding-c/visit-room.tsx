@@ -41,6 +41,7 @@ export function VisitRoom({
             owner={owner}
             signInHere
             presence
+            chatDock
           />
         </div>
         <RoomTour
@@ -51,6 +52,7 @@ export function VisitRoom({
           viewerName={viewerName}
           signedIn={signedIn}
           homeHref={HOME_HREF}
+          chatRoom={roomId}
         />
       </div>
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback } from "react";
 import { useRouter } from "next/navigation";
 import type { MessageRow } from "@/lib/bubble/repo";
 import { Composer, type SendAction } from "./composer";
@@ -8,9 +8,7 @@ import { DeleteMessageButton, type DeleteAction } from "./room-controls";
 import { Avatar } from "@/components/avatar";
 import { ModeratorTools, RemovedText, WriteBlockedPanel } from "@/components/moderation/chat-moderation";
 import type { WriteBlock } from "@/lib/moderation/repo";
-
-// 새 메시지를 가져오는 간격. (실시간 방식은 PoC 후 결정, 지금은 폴링)
-const POLL_MS = 5000;
+import { useMessageSync, type SyncMeta } from "./use-message-sync";
 
 // 버블 대화방과 크리에이터 톡이 함께 쓰는 대화 화면. 읽기 주소와 쓰기 동작만 다르다.
 type Props = {
@@ -41,50 +39,23 @@ export function RoomChat(props: Props) {
   const { pollUrl, viewerId, isOpen, memberCount, moderation } = props;
   const writeBlockKey = JSON.stringify(moderation?.writeBlock ?? null);
   const router = useRouter();
-  const [messages, setMessages] = useState(props.initialMessages);
-  const cursor = useRef(props.initialCursor);
-  const inFlight = useRef(false);
-
-  // since 뒤로 바뀐 메시지를 받아 id 기준으로 합친다. 삭제된 메시지도 같은 id로 덮어쓴다.
-  const sync = useCallback(async () => {
-    if (inFlight.current) return;
-    inFlight.current = true;
-    try {
-      const res = await fetch(
-        `${pollUrl}?since=${encodeURIComponent(cursor.current)}`,
-        { cache: "no-store" },
-      );
-      if (!res.ok) return;
-      const data = (await res.json()) as {
-        messages: MessageRow[];
-        cursor: string;
-        status: "open" | "closed";
-        memberCount: number | null;
-        writeBlock?: WriteBlock | null;
-      };
-      cursor.current = data.cursor;
-      if (data.messages.length > 0) {
-        setMessages((prev) => {
-          const byId = new Map(prev.map((m) => [m.id, m]));
-          for (const m of data.messages) byId.set(m.id, m);
-          return [...byId.values()].sort((a, b) => a.created_at.localeCompare(b.created_at));
-        });
-      }
-      // 방이 닫히거나 참여 인원이 바뀌면 머리글과 입력창을 서버에서 다시 그린다.
-      // 쓰기 차단 상태가 바뀌어도 입력창을 다시 그린다.
+  // 방이 닫히거나 참여 인원이 바뀌면 머리글과 입력창을 서버에서 다시 그린다.
+  // 쓰기 차단 상태가 바뀌어도 입력창을 다시 그린다.
+  const onMeta = useCallback(
+    (data: SyncMeta) => {
       const blockChanged =
         data.writeBlock !== undefined && JSON.stringify(data.writeBlock) !== writeBlockKey;
       if (data.status === "closed" || data.memberCount !== memberCount || blockChanged) router.refresh();
-    } finally {
-      inFlight.current = false;
-    }
-  }, [pollUrl, router, memberCount, writeBlockKey]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const id = setInterval(sync, POLL_MS);
-    return () => clearInterval(id);
-  }, [isOpen, sync]);
+    },
+    [router, memberCount, writeBlockKey],
+  );
+  const { messages, sync } = useMessageSync({
+    pollUrl,
+    initialMessages: props.initialMessages,
+    initialCursor: props.initialCursor,
+    enabled: isOpen,
+    onMeta,
+  });
 
   return (
     <>
