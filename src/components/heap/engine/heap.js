@@ -36,7 +36,19 @@ export function setupHeap(ctx) {
     BOX = HOST.box ? { x: HOST.x, z: HOST.z, ...BOX_IN, w: HOST.boxW, d: HOST.boxD, floor: HOST.top + BOX_IN.base } : null;
     BASE = BOX ? BOX.floor : HOST.top;
     PM = Math.min(0.18, HOST.w * 0.15, HOST.d * 0.15); SX = Math.min(0.42, HOST.w * 0.16); SZ = Math.min(0.28, HOST.d * 0.155);
+    // 흩어진 더미의 높이 격자: 받침 넓이에 카드 반 장만큼 여유를 둔다
+    G.x0 = HOST.x - HOST.w / 2 - 0.2; G.z0 = HOST.z - HOST.d / 2 - 0.2;
+    G.nx = Math.ceil((HOST.w + 0.4) / G.cell); G.nz = Math.ceil((HOST.d + 0.4) / G.cell);
+    G.h = new Float32Array(G.nx * G.nz);
+    lastSeq = []; // 격자가 새로 생겼다: 다음 settle 은 모두 다시 셈한다
   }
+  // 흩어진 더미(pile)는 높이 격자 위에 쌓는다. 칸마다 그 자리에서 가장 높은 카드 윗면의 높이를 둔다.
+  // 카드는 자기 밑의 칸들 위에서 가운데가 가장 낮아지는 기울기로 놓인다 (받침점에 얹혀 쉬는 판).
+  // 그 기울기가 SLIDE 보다 가파르면 비탈 아래로 1cm 씩 미끄러진다. 미끄러진 자리는 카드의 place 에 남는다.
+  // 상자(box)는 아직 예전 방식이다 (restPose).
+  const G = { cell: 0.02, x0: 0, z0: 0, nx: 0, nz: 0, h: null };
+  const SLIDE = Math.tan(THREE.MathUtils.degToRad(12));
+  let lastSeq = []; // 지난 settle 에서 더미에 있던 카드의 차례 (settle 이 아래쪽을 다시 셈하지 않으려고 본다)
   fit(layout.items || []);
   const _inv = new THREE.Quaternion(), _v = new THREE.Vector3(), _n = new THREE.Vector3();
   // 놓여 있는 카드의 (x, z) 위 면 높이. (x, z) 가 카드 밖이면 -Infinity
@@ -49,6 +61,7 @@ export function setupHeap(ctx) {
     return Math.abs(_v.x) <= d.w / 2 && Math.abs(_v.y) <= d.h / 2 ? y : -Infinity;
   }
   function supportAt(x, z, below) {
+    if (!BOX && G.h) return gridAt(x, z); // 흩어진 더미: 마지막 settle 이 채운 격자 (끄는 카드는 빠져 있다)
     let h = BASE;
     for (const c of below) h = Math.max(h, surfaceAt(c, x, z) + GAP);
     return h;
@@ -74,6 +87,58 @@ export function setupHeap(ctx) {
       .multiply(new THREE.Quaternion().setFromAxisAngle(Xv, faceUp ? -Math.PI / 2 : Math.PI / 2));
     return { pos: new THREE.Vector3(x, c + 0.0015, z), quat };
   }
+  // 카드 밑의 칸: 칸 번호와 카드 가운데에서 칸 가운데까지 (dx, dz)
+  const FK = [], FX = [], FZ = [];
+  function footprint(x, z, yaw, d) {
+    FK.length = FX.length = FZ.length = 0;
+    const cs = Math.cos(yaw), sn = Math.sin(yaw), hw = d.w / 2, hh = d.h / 2;
+    const ex = Math.abs(cs) * hw + Math.abs(sn) * hh, ez = Math.abs(sn) * hw + Math.abs(cs) * hh;
+    const i0 = Math.max(0, Math.floor((x - ex - G.x0) / G.cell)), i1 = Math.min(G.nx - 1, Math.floor((x + ex - G.x0) / G.cell));
+    const j0 = Math.max(0, Math.floor((z - ez - G.z0) / G.cell)), j1 = Math.min(G.nz - 1, Math.floor((z + ez - G.z0) / G.cell));
+    for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
+      const dx = G.x0 + (i + 0.5) * G.cell - x, dz = G.z0 + (j + 0.5) * G.cell - z;
+      // 카드 자리 축으로 (restPose 의 yaw 와 같은 돌림)
+      if (Math.abs(dx * cs - dz * sn) <= hw && Math.abs(dx * sn + dz * cs) <= hh) { FK.push(i * G.nz + j); FX.push(dx); FZ.push(dz); }
+    }
+    if (!FK.length) { FK.push(-1); FX.push(0); FZ.push(0); } // 격자 밖: 받침 높이
+  }
+  function lift(a, b) { // 기울기 (a, b) 로 놓았을 때 아무 칸도 뚫지 않는 가운데 높이
+    let m = BASE;
+    for (let k = 0; k < FK.length; k++) { const h = FK[k] < 0 ? BASE : G.h[FK[k]], v = h - a * FX[k] - b * FZ[k]; if (v > m) m = v; }
+    return m;
+  }
+  function restPile(card) {
+    const p = card.userData.place, d = card.userData.d;
+    let a = 0, b = 0, c = 0;
+    for (let it = 0; ; it++) {
+      footprint(p.x, p.z, p.yaw, d);
+      // 가운데가 가장 낮은 기울기: 7 x 7 후보를 네 번 좁혀 가며 찾는다
+      a = 0; b = 0; c = lift(0, 0);
+      for (let r = 0, step = MAX_SLOPE / 3; r < 4; r++, step /= 3) {
+        const ca = a, cb = b;
+        for (let u = -3; u <= 3; u++) for (let v = -3; v <= 3; v++) {
+          const aa = ca + u * step, bb = cb + v * step;
+          if ((u || v) && Math.hypot(aa, bb) <= MAX_SLOPE) { const cc = lift(aa, bb); if (cc < c - 1e-6) { a = aa; b = bb; c = cc; } }
+        }
+      }
+      const s = Math.hypot(a, b);
+      if (s <= SLIDE || it >= 40) break;
+      const ox = p.x, oz = p.z;
+      p.x -= a / s * 0.01; p.z -= b / s * 0.01; clampPlace(p, d);
+      if (Math.hypot(p.x - ox, p.z - oz) < 0.002) break; // 가장자리나 다른 물건에 막혔다
+    }
+    const fk = [], hv = [];
+    for (let k = 0; k < FK.length; k++) if (FK[k] >= 0) { G.h[FK[k]] = c + a * FX[k] + b * FZ[k] + GAP; fk.push(FK[k]); hv.push(G.h[FK[k]]); }
+    card.userData.rest = { x: p.x, z: p.z, yaw: p.yaw, faceUp: p.faceUp, fk: Int32Array.from(fk), hv: Float32Array.from(hv) };
+    const quat = _q1.setFromUnitVectors(Yv, _v.set(-a, 1, -b).normalize()).clone()
+      .multiply(_q2.setFromAxisAngle(Yv, p.yaw))
+      .multiply(new THREE.Quaternion().setFromAxisAngle(Xv, p.faceUp ? -Math.PI / 2 : Math.PI / 2));
+    return { pos: new THREE.Vector3(p.x, c + 0.0015, p.z), quat };
+  }
+  function gridAt(x, z) {
+    const i = Math.floor((x - G.x0) / G.cell), j = Math.floor((z - G.z0) / G.cell);
+    return i < 0 || j < 0 || i >= G.nx || j >= G.nz ? BASE : Math.max(BASE, G.h[i * G.nz + j]);
+  }
   function clampPlace(p, d = DIMS.tall) {
     if (BOX) { // 돌린 카드의 반폭이 벽 안에 들도록 가운데를 가둔다. 상자보다 크면 가운데에 둔다
       const c = Math.abs(Math.cos(p.yaw ?? 0)), s = Math.abs(Math.sin(p.yaw ?? 0));
@@ -92,17 +157,28 @@ export function setupHeap(ctx) {
   }
   const inPile = c => c !== ctx.held && c !== ctx.loaded && c !== ctx.dragging;
   // recompute every resting pose bottom → top; cards whose support changed fall into place
+  // 흩어진 더미는 지난번과 같은 차례, 같은 자리인 아래쪽 카드를 다시 셈하지 않고 남긴 칸 높이만 다시 쓴다 (맨 위 카드를 집거나 놓을 때 거의 공짜)
   function settle(instant = false) {
-    const placed = [];
+    const placed = [], seq = [];
+    let replay = !BOX;
+    if (!BOX) G.h.fill(BASE);
     for (const c of cards) {
       if (!inPile(c)) continue;
-      const prev = c.userData.home;
-      c.userData.home = restPose(c, placed);
+      const prev = c.userData.home, R = c.userData.rest, p = c.userData.place;
+      seq.push(c);
+      if (replay && lastSeq[seq.length - 1] === c && R && R.x === p.x && R.z === p.z && R.yaw === p.yaw && R.faceUp === p.faceUp && prev) {
+        for (let k = 0; k < R.fk.length; k++) G.h[R.fk[k]] = R.hv[k];
+        if (instant) { c.position.copy(prev.pos); c.quaternion.copy(prev.quat); c.userData.anim = null; }
+        continue;
+      }
+      replay = false;
+      c.userData.home = BOX ? restPose(c, placed) : restPile(c);
       placed.push(c);
       if (instant || !prev) { c.position.copy(c.userData.home.pos); c.quaternion.copy(c.userData.home.quat); c.userData.anim = null; continue; }
       const moved = prev.pos.distanceTo(c.userData.home.pos) > 0.002 || prev.quat.angleTo(c.userData.home.quat) > 0.01;
       if (moved && !c.userData.anim) startAnim(c, 'settle');
     }
+    lastSeq = seq;
   }
   function toTop(c) { cards.splice(cards.indexOf(c), 1); cards.push(c); }
   // 움직임: 'drop' 은 펄럭이며 호를 그려 내려와 조금 튕기고, 'settle' 은 중력으로 떨어진다

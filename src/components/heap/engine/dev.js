@@ -117,6 +117,16 @@ export function setupDev(ctx) {
       cb({ host: ctx.HOST && { x: ctx.HOST.x, z: ctx.HOST.z, top: ctx.HOST.top, w: ctx.HOST.w, d: ctx.HOST.d }, seat: ctx.SEAT?.toArray(), sitCam: ctx.SIT_CAM?.target.toArray() ?? null,
         cards: cs.length, visible: vis.length, pickables: ctx.pickables?.length ?? 0, mean: m.toArray().map(v => +v.toFixed(2)) });
     }
+    else if (cmd === 'pileStats') { // 더미 모양 시험: 받침 위 가장 높은 카드, 카드 기울기, settle 한 번의 시간 (detail.settle 이면 settle(true) 를 재며 돌린다)
+      const cs = (ctx.cards ?? []).filter(c => ctx.inPile(c)), top = ctx.HOST?.top ?? 0, up = new THREE.Vector3();
+      let ms = null;
+      // detail.from (0~1): 그 차례부터 위의 카드를 다시 셈하게 한다 (0 이면 모두, 0.5 면 가운데 카드를 집은 것과 같다)
+      if (e.detail.from != null) cs.slice(Math.floor(e.detail.from * cs.length)).forEach(c => { c.userData.rest = null; });
+      if (e.detail.settle) { const t0 = performance.now(); ctx.settle(true); ms = +(performance.now() - t0).toFixed(1); }
+      const slopes = cs.map(c => THREE.MathUtils.radToDeg(Math.acos(Math.min(1, Math.abs(up.set(0, 0, 1).applyQuaternion(c.userData.home.quat).y)))));
+      cb({ cards: cs.length, box: !!ctx.HOST?.box, peakCm: +((Math.max(...cs.map(c => c.userData.home.pos.y)) - top) * 100).toFixed(1),
+        meanSlopeDeg: +(slopes.reduce((s, v) => s + v, 0) / (slopes.length || 1)).toFixed(1), maxSlopeDeg: +Math.max(0, ...slopes).toFixed(1), settleMs: ms });
+    }
     else if (cmd === 'me') cb({ x: ctx.me.position.x, y: ctx.me.position.y, z: ctx.me.position.z, ry: ctx.me.rotation.y, legL: ctx.legL.rotation.x, mode: ctx.mode, perch: !!ctx.perch, walking: !!ctx.walkTo }); // 내 캐릭터 자리와 자세 (걷기 시험)
     else if (cmd === 'state') cb({ ground: (g => g ? { visible: g.visible, y: g.position.y, img: g.material.map?.image?.width } : null)(ctx.scene.getObjectByName('ground')), layoutGround: ctx.layout.ground ?? null, mode: ctx.mode, slots: ctx.build.slots.map(s => s.fn?.kind), slotMeshes: ctx.build.slotMeshes.length, slotMeshKinds: [...new Set(ctx.build.slotMeshes.map(m => m.userData.slot?.fn?.kind))], seatMeshes: ctx.build.seatMeshes.length });
     else if (cmd === 'lights') cb({ // 그림자와 불빛 시험: 해 그림자, 땅이 그림자를 받는지, 램프마다 불빛 세기와 작은 빛 구슬이 보이는지
