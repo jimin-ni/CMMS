@@ -89,7 +89,7 @@ export function setupCardView(ctx) {
   function hide() {
     if (ctx.playerFitted?.()) ctx.closePlayer(); // 카드에 맞춘 플레이어는 카드와 함께 내려간다
     if (shown) shown.visible = true;
-    shown = inner = size = at = null;
+    shown = inner = size = at = sampleFor = light = null;
     host.hidden = true; host.innerHTML = '';
   }
   ctx.onDispose(hide);
@@ -120,6 +120,64 @@ export function setupCardView(ctx) {
     return { x: x + ph.x * k, y: y + ph.y * k, w: ph.w * k, h: ph.h * k, cardTop: y, cardRight: x + size.W * k };
   }
 
+  // 방의 빛: 3D 카드는 방 조명과 노출(톤 매핑)을 받아 어둡고 따뜻한데 HTML 카드는 그림 색 그대로다. 바뀌는 순간 두 배쯤 밝아진다.
+  // 카드가 눈앞에 다 오면 한 프레임 더 3D 카드를 그리고, 그린 바로 뒤(afterDraw, loop.js) 3D 카드의 화면 색을 여러 점에서 읽는다.
+  // 같은 점의 앞면 텍스처 색(HTML 카드가 보이는 색)과 짝지어 채널마다 out = a · in^e 를 맞춘다 (로그 공간의 최소제곱).
+  // 톤 매핑이 어두운 쪽을 더 누르므로 곱하기 하나로는 사진이 밝게 남는다. 이 곡선을 SVG 필터(feComponentTransfer gamma)로
+  // HTML 카드의 두 면과 카드에 맞춘 플레이어에 건다 (heap-room.css 의 --cv-light).
+  let sampleFor = null, light = null;
+  const _p = new THREE.Vector3(), _px = new Uint8Array(4);
+  const NS = 'http://www.w3.org/2000/svg', fid = 'cv-light-' + Math.random().toString(36).slice(2, 8);
+  const svg = document.createElementNS(NS, 'svg'), funcs = {};
+  svg.setAttribute('width', '0'); svg.setAttribute('height', '0'); svg.setAttribute('aria-hidden', 'true');
+  Object.assign(svg.style, { position: 'absolute', width: 0, height: 0 });
+  const filt = document.createElementNS(NS, 'filter'); filt.id = fid; filt.setAttribute('color-interpolation-filters', 'sRGB');
+  const ct = document.createElementNS(NS, 'feComponentTransfer');
+  for (const ch of ['R', 'G', 'B']) { const f = document.createElementNS(NS, 'feFunc' + ch); f.setAttribute('type', 'gamma'); f.setAttribute('offset', '0'); ct.appendChild(f); funcs[ch] = f; }
+  filt.appendChild(ct); svg.appendChild(filt); ctx.root.appendChild(svg);
+  ctx.onDispose(() => svg.remove());
+
+  function sampleLight(c) {
+    const u = c.userData, sp = frontSpec(u.reel), { W, H, photo: ph } = sp, d = u.d;
+    const gl = ctx.renderer.getContext(), bw = gl.drawingBufferWidth, bh = gl.drawingBufferHeight;
+    const tex = u.front.image, tk = tex.width / W, tg = tex.getContext('2d');
+    // 점 (시안 px): 테두리 종이 넷, 사진 안쪽 4 x 4
+    const spots = [[W / 2, ph.y / 2], [ph.x / 2, ph.y + ph.h / 2], [W - ph.x / 2, ph.y + ph.h / 2], [W - ph.x / 2, H - ph.x / 2]];
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) spots.push([ph.x + ph.w * (0.15 + 0.7 * i / 3), ph.y + ph.h * (0.15 + 0.7 * j / 3)]);
+    const pairs = [];
+    for (const [sx, sy] of spots) {
+      _p.set((sx / W - 0.5) * d.w, (0.5 - sy / H) * d.h, 0.002);
+      c.localToWorld(_p).project(camera);
+      const x = Math.round((_p.x + 1) / 2 * bw), y = Math.round((_p.y + 1) / 2 * bh);
+      if (x < 0 || y < 0 || x >= bw || y >= bh) continue;
+      gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, _px);
+      const t = tg.getImageData(Math.min(tex.width - 1, Math.round(sx * tk)), Math.min(tex.height - 1, Math.round(sy * tk)), 1, 1).data;
+      pairs.push([[t[0], t[1], t[2]], [_px[0], _px[1], _px[2]]]);
+    }
+    // 채널마다 ln out = ln a + e ln in. 곡선은 종이 점(앞 넷의 가운데 값)을 꼭 지나게 묶고, e 만 사진 점으로 맞춘다:
+    // 사진 점이 많아 종이 쪽이 어긋나면 흰 종이에 색이 낀다. 아주 어두운 점(8 아래)은 잡음이라 뺀다. 맞출 점이 모자라면 곱하기만 (e = 1)
+    const L = v => Math.log(Math.max(1, v) / 255);
+    const fit = i => {
+      const paper = pairs.slice(0, Math.min(4, pairs.length)).map(([t, r]) => [L(t[i]), L(r[i])]).sort((p, q) => p[1] - q[1]);
+      if (!paper.length) return { a: 1, e: 1 };
+      const [px, py] = paper[paper.length >> 1];
+      let sxx = 0, sxy = 0;
+      for (const [t, r] of pairs.slice(4)) if (t[i] >= 8 && r[i] >= 2) { const dx = L(t[i]) - px, dy = L(r[i]) - py; sxx += dx * dx; sxy += dx * dy; }
+      const e = sxx > 0.05 ? Math.min(2.5, Math.max(0.8, sxy / sxx)) : 1;
+      return { a: Math.min(1.5, Math.exp(py - e * px)), e };
+    };
+    return { R: fit(0), G: fit(1), B: fit(2) };
+  }
+  function afterDraw() {
+    if (!sampleFor || light || ctx.held !== sampleFor) return;
+    light = sampleLight(sampleFor);
+    for (const ch of ['R', 'G', 'B']) { funcs[ch].setAttribute('amplitude', light[ch].a.toFixed(4)); funcs[ch].setAttribute('exponent', light[ch].e.toFixed(4)); }
+    ctx.root.style.setProperty('--cv-light', `url(#${fid})`);
+    // 플레이어(다른 출처의 iframe)에는 SVG 필터가 닿지 않는다. 곱하기 덮개로 곡선을 중간 밝기(0.5)에서 맞춘다 (players.js 의 cv-light-mul)
+    const mul = ['R', 'G', 'B'].map(ch => Math.round(255 * Math.min(1, light[ch].a * 0.5 ** (light[ch].e - 1))));
+    ctx.root.style.setProperty('--cv-light-mul', `rgb(${mul.join(', ')})`);
+  }
+
   // loop.js 가 매 프레임 부른다. arrived: 집어 든 카드가 눈앞 자리에 다 왔다.
   const _c = new THREE.Vector3(), _t = new THREE.Vector3();
   function step(arrived) {
@@ -128,6 +186,8 @@ export function setupCardView(ctx) {
     if (!c || c.userData.reel.kind === 'fan') return;
     if (!shown) {
       if (!arrived) return;
+      if (sampleFor !== c) { sampleFor = c; light = null; return; } // 이 프레임은 3D 카드를 그리고 afterDraw 가 색을 읽는다
+      if (!light) return;
       build(c); shown = c; c.visible = false; host.hidden = false;
     }
     // 3D 카드의 가운데와 위 가장자리를 화면에 비춰 자리와 배율을 정한다. 카드는 카메라를 똑바로 보고 있다.
@@ -141,5 +201,5 @@ export function setupCardView(ctx) {
     inner.style.transform = `rotateY(${(ctx.heldTurn || 0) * 180}deg)`; // 돈 만큼 쌓인 각도: 누른 쪽으로 돈다
   }
 
-  Object.assign(ctx, { stepCardView: step });
+  Object.assign(ctx, { stepCardView: step, cardViewAfterDraw: afterDraw });
 }

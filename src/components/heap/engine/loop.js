@@ -147,6 +147,7 @@ export function setupLoop(ctx) {
     }
     ctx.stepCardView(heldArrived);
     draw();
+    ctx.cardViewAfterDraw?.(); // 그린 바로 뒤라 버퍼를 읽을 수 있다 (card-view.js 의 방의 빛)
     ctx.raf = requestAnimationFrame(frame);
   }
 

@@ -87,6 +87,7 @@ export function setupPlayers(ctx) {
         frameBox.style.width = w + 'px'; frameBox.style.height = h + 'px';
       }
       frameBox.appendChild(makeFrame(spec.src, reel.title || PLAYER_TITLE[platform] || '영상', spec.allow));
+      if (fitted) frameBox.appendChild(Object.assign(document.createElement('div'), { className: 'cv-light-mul' })); // 카드와 같은 방의 빛 (card-view.js)
     } else { frameBox.style.width = frameBox.style.height = '0px'; }
     // 임베드를 못 넣는 곳에서는 바깥을 덮지 않는다: 안내 글이 가리키는 원본 보기 단추를 눌러야 한다
     shade.hidden = ctx.embedBlocked;
