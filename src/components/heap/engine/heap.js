@@ -61,7 +61,7 @@ export function setupHeap(ctx) {
     return Math.abs(_v.x) <= d.w / 2 && Math.abs(_v.y) <= d.h / 2 ? y : -Infinity;
   }
   function supportAt(x, z, below) {
-    if (!BOX && G.h) return gridAt(x, z); // 흩어진 더미: 마지막 settle 이 채운 격자 (끄는 카드는 빠져 있다)
+    if (G.h) return gridAt(x, z); // 마지막 settle 이 채운 격자 (끄는 카드는 빠져 있다). below 는 격자가 없을 때만 본다
     let h = BASE;
     for (const c of below) h = Math.max(h, surfaceAt(c, x, z) + GAP);
     return h;
@@ -72,7 +72,7 @@ export function setupHeap(ctx) {
     if (BOX) clampPlace(card.userData.place, card.userData.d); // 다른 파일의 clampPlace 는 카드 크기를 모른다: 넓은 카드도 벽 안에
     const { x, z, yaw, faceUp } = card.userData.place, d = card.userData.d;
     const cs = Math.cos(yaw), sn = Math.sin(yaw);
-    const pts = SAMPLES.map(([a, b]) => { const lx = a * d.w, lz = b * d.h; const dx = lx * cs + lz * sn, dz = -lx * sn + lz * cs; return { dx, dz, h: supportAt(x + dx, z + dz, below) }; });
+    const pts = SAMPLES.map(([a, b]) => { const lx = a * d.w, lz = b * d.h; const dx = lx * cs + lz * sn, dz = -lx * sn + lz * cs; return { dx, dz, h: below.length ? supportAt(x + dx, z + dz, below) : BASE }; }); // 빈 below: 끄는 카드의 평평한 자세 (loop.js)
     // 받침의 최소제곱 기울기를 구한 뒤, 아무것도 뚫고 나오지 않을 때까지 면을 들어 올린다
     const mean = pts.reduce((s, p) => s + p.h, 0) / pts.length;
     let sxx = 0, szz = 0, sxz = 0, sxh = 0, szh = 0;
@@ -110,7 +110,11 @@ export function setupHeap(ctx) {
   function restPile(card) {
     const p = card.userData.place, d = card.userData.d;
     let a = 0, b = 0, c = 0;
-    for (let it = 0; ; it++) {
+    if (BOX) { // 상자: 카드는 평평하게 눕는다. 처음 쌓은 카드는 자기 켜의 높이에, 옮긴 카드는 밑에서 가장 높은 칸 위에
+      clampPlace(p, d); footprint(p.x, p.z, p.yaw, d);
+      const L = card.userData.layer;
+      c = L ? BOX.floor + L.n * GAP + L.k : lift(0, 0);
+    } else for (let it = 0; ; it++) {
       footprint(p.x, p.z, p.yaw, d);
       // 가운데가 가장 낮은 기울기: 7 x 7 후보를 네 번 좁혀 가며 찾는다
       a = 0; b = 0; c = lift(0, 0);
@@ -159,9 +163,9 @@ export function setupHeap(ctx) {
   // recompute every resting pose bottom → top; cards whose support changed fall into place
   // 흩어진 더미는 지난번과 같은 차례, 같은 자리인 아래쪽 카드를 다시 셈하지 않고 남긴 칸 높이만 다시 쓴다 (맨 위 카드를 집거나 놓을 때 거의 공짜)
   function settle(instant = false) {
-    const placed = [], seq = [];
-    let replay = !BOX;
-    if (!BOX) G.h.fill(BASE);
+    const seq = [];
+    let replay = true;
+    G.h.fill(BASE);
     for (const c of cards) {
       if (!inPile(c)) continue;
       const prev = c.userData.home, R = c.userData.rest, p = c.userData.place;
@@ -172,15 +176,14 @@ export function setupHeap(ctx) {
         continue;
       }
       replay = false;
-      c.userData.home = BOX ? restPose(c, placed) : restPile(c);
-      placed.push(c);
+      c.userData.home = restPile(c);
       if (instant || !prev) { c.position.copy(c.userData.home.pos); c.quaternion.copy(c.userData.home.quat); c.userData.anim = null; continue; }
       const moved = prev.pos.distanceTo(c.userData.home.pos) > 0.002 || prev.quat.angleTo(c.userData.home.quat) > 0.01;
       if (moved && !c.userData.anim) startAnim(c, 'settle');
     }
     lastSeq = seq;
   }
-  function toTop(c) { cards.splice(cards.indexOf(c), 1); cards.push(c); }
+  function toTop(c) { cards.splice(cards.indexOf(c), 1); cards.push(c); c.userData.layer = null; } // 옮긴 카드는 켜를 떠나 맨 위에 눕는다
   // 움직임: 'drop' 은 펄럭이며 호를 그려 내려와 조금 튕기고, 'settle' 은 중력으로 떨어진다
   function startAnim(c, kind) {
     c.userData.anim = { kind, t: 0, dur: kind === 'drop' ? 0.6 : 0.28, from: c.position.clone(), fromQ: c.quaternion.clone(), axis: new THREE.Vector3(rand() - 0.5, 0, rand() - 0.5).normalize(), arc: kind === 'drop' ? 0.08 : 0 };
@@ -239,10 +242,25 @@ export function setupHeap(ctx) {
     scene.add(g); boxGroup = g;
     ctx.heapBoxParts = g.children; // 상자를 누르면 더미 앞으로 걸어가 선다 (input.js)
   }
+  // 상자 안의 켜: 처음 쌓을 때 카드를 차례대로 켜에 나눠 담는다. 켜마다 상자 바닥을 COLS x ROWS 자리로 나누고
+  // 카드마다 다른 자리에 조금 흩뜨려 놓는다 (자리 차례는 켜마다 어긋난다). 켜 높이는 GAP 씩, 한 켜 안의 카드는 GAP 의 0.8 안에서 차례로 조금씩 높다.
+  // 카드는 상자 긴 쪽을 따라 눕고 가끔 가로로 돈다. 옮긴 카드는 켜를 떠난다 (toTop).
+  function layBox() {
+    const COLS = Math.max(1, Math.round(BOX.w / 0.22)), ROWS = Math.max(1, Math.round(BOX.d / 0.22)), N = COLS * ROWS;
+    const PER = Math.max(1, Math.round(N * 0.9)), STRIDE = [7, 5, 3, 1].find(s => N % s !== 0 || s === 1);
+    cards.forEach((c, i) => {
+      const n = Math.floor(i / PER), k = i % PER, slot = (k * STRIDE + n * 3) % N, p = c.userData.place;
+      p.x = BOX.x - BOX.w / 2 + ((slot % COLS) + 0.5) / COLS * BOX.w + gauss() * 0.05;
+      p.z = BOX.z - BOX.d / 2 + (Math.floor(slot / COLS) + 0.5) / ROWS * BOX.d + gauss() * 0.04;
+      p.yaw = (rand() < 0.5 ? 0 : Math.PI) + (rand() < 0.15 ? Math.PI / 2 : 0) + gauss() * 0.1;
+      c.userData.layer = { n, k: k / PER * GAP * 0.8 };
+    });
+  }
   function buildHeap() {
     if (BOX) buildBox();
     const made = reels.map(reel => makeCard(reel));
     for (const p of fanReels) { const c = makeCard(p); c.userData.place.faceUp = true; }
+    if (BOX) layBox();
     settle(true);
     ctx.requestPile(ctx.FAR);
     paintPosters(made);
