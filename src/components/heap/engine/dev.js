@@ -125,7 +125,10 @@ export function setupDev(ctx) {
       if (e.detail.settle) { const t0 = performance.now(); ctx.settle(true); ms = +(performance.now() - t0).toFixed(1); }
       const slopes = cs.map(c => THREE.MathUtils.radToDeg(Math.acos(Math.min(1, Math.abs(up.set(0, 0, 1).applyQuaternion(c.userData.home.quat).y)))));
       cb({ cards: cs.length, box: !!ctx.HOST?.box, peakCm: +((Math.max(...cs.map(c => c.userData.home.pos.y)) - top) * 100).toFixed(1),
-        meanSlopeDeg: +(slopes.reduce((s, v) => s + v, 0) / (slopes.length || 1)).toFixed(1), maxSlopeDeg: +Math.max(0, ...slopes).toFixed(1), settleMs: ms });
+        meanSlopeDeg: +(slopes.reduce((s, v) => s + v, 0) / (slopes.length || 1)).toFixed(1), maxSlopeDeg: +Math.max(0, ...slopes).toFixed(1), settleMs: ms,
+        // 상자 밖(탁자 위)의 카드: 받침 위 가운데 높이(cm)와 상자 가운데에서의 거리
+        outside: ctx.HOST?.box ? cs.filter(c => Math.abs(c.userData.place.x - ctx.HOST.x) > ctx.HOST.boxW / 2 || Math.abs(c.userData.place.z - ctx.HOST.z) > ctx.HOST.boxD / 2)
+          .map(c => ({ dx: +(c.userData.place.x - ctx.HOST.x).toFixed(3), dz: +(c.userData.place.z - ctx.HOST.z).toFixed(3), yCm: +((c.userData.home.pos.y - top) * 100).toFixed(2) })) : undefined });
     }
     else if (cmd === 'heldInfo') { // 집어 든 카드: 받은 그림의 단계(0 far, 1 near, 2 close), 앞면 텍스처 폭, 선명하게 그린 배율
       const c = ctx.held, u = c?.userData;

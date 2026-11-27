@@ -33,9 +33,10 @@ export function setupLoop(ctx) {
   const SIT_CAM = HOST ? { pos: new THREE.Vector3(), target: new THREE.Vector3() } : null;
   function rehostSitCam() {
     if (!SIT_CAM) return;
-    const spanW = HOST.box ? HOST.boxW + 0.6 : HOST.w, spanD = HOST.box ? HOST.boxD + 0.45 : HOST.d; // 상자는 벽까지 담기게 조금 넉넉히
+    // 상자는 둘레의 탁자까지 담는다: 상자에서 꺼낸 카드를 탁자에 놓는다 (heap.js 의 clampPlace)
+    const spanW = HOST.box ? Math.min(HOST.w, HOST.boxW + 0.9) : HOST.w, spanD = HOST.box ? Math.min(HOST.d, HOST.boxD + 0.6) : HOST.d;
     const heapK = THREE.MathUtils.clamp(Math.max(spanW / 2.6, spanD / 1.8), 0.55, 1);
-    SIT_CAM.target.set(HOST.x, HOST.top, HOST.z);
+    SIT_CAM.target.set(HOST.x, HOST.top, HOST.z + (HOST.box ? 0.2 : 0)); // 상자: 앞쪽 탁자가 화면 아래에 잘리지 않게 조금 앞을 본다
     SIT_CAM.pos.copy(SIT_CAM.target).add(new THREE.Vector3(0, 2.0 * heapK, 2.1 * heapK));
   }
   rehostSitCam();

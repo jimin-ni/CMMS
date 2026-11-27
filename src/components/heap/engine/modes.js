@@ -39,9 +39,13 @@ export function setupModes(ctx) {
     }
   }
   function pickUp(c) { ctx.held = c; ctx.heldFlipped = false; ctx.heldTurn = 0; c.userData.turnNow = 0; ctx.hovered = null; controls.enabled = false; settle(); setHint('held'); syncUI(); ctx.sharpen(c, true); request(c, CLOSE, true); glowCard(c, ctx.readGlow); }
-  function dropOnTop(c) { // 더미 가운데 쪽으로 살짝, 그리고 제자리로 떨어진다
+  function dropOnTop(c) {
     const p = c.userData.place;
-    c.userData.place = clampPlace({ x: HOST.x + (p.x - HOST.x) * 0.5 + gauss() * 0.15, z: HOST.z + (p.z - HOST.z) * 0.5 + gauss() * 0.1, yaw: p.yaw + gauss() * 0.6, faceUp: true });
+    // 상자가 있는 더미: 집었던 자리에 거의 그대로 돌아간다 (상자 안이면 상자 안, 탁자 위면 탁자 위)
+    // 흩어진 더미: 더미 가운데 쪽으로 살짝 옮겨 떨어진다
+    c.userData.place = ctx.heapHasBox()
+      ? clampPlace({ x: p.x + gauss() * 0.02, z: p.z + gauss() * 0.02, yaw: p.yaw + gauss() * 0.12, faceUp: true }, c.userData.d)
+      : clampPlace({ x: HOST.x + (p.x - HOST.x) * 0.5 + gauss() * 0.15, z: HOST.z + (p.z - HOST.z) * 0.5 + gauss() * 0.1, yaw: p.yaw + gauss() * 0.6, faceUp: true });
     toTop(c);
   }
   function putBack() {

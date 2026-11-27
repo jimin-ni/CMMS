@@ -40,13 +40,20 @@ export function setupHeap(ctx) {
     G.x0 = HOST.x - HOST.w / 2 - 0.2; G.z0 = HOST.z - HOST.d / 2 - 0.2;
     G.nx = Math.ceil((HOST.w + 0.4) / G.cell); G.nz = Math.ceil((HOST.d + 0.4) / G.cell);
     G.h = new Float32Array(G.nx * G.nz);
+    // 바닥 높이: 받침 윗면. 상자가 있으면 안쪽은 상자 바닥, 벽 자리는 벽 위
+    G.base = new Float32Array(G.nx * G.nz).fill(HOST.top);
+    if (BOX) for (let i = 0; i < G.nx; i++) for (let j = 0; j < G.nz; j++) {
+      const ax = Math.abs(G.x0 + (i + 0.5) * G.cell - BOX.x), az = Math.abs(G.z0 + (j + 0.5) * G.cell - BOX.z);
+      if (ax <= BOX.w / 2 && az <= BOX.d / 2) G.base[i * G.nz + j] = BOX.floor;
+      else if (ax <= BOX.w / 2 + BOX.wall && az <= BOX.d / 2 + BOX.wall) G.base[i * G.nz + j] = HOST.top + BOX.h;
+    }
     lastSeq = []; // 격자가 새로 생겼다: 다음 settle 은 모두 다시 셈한다
   }
-  // 흩어진 더미(pile)는 높이 격자 위에 쌓는다. 칸마다 그 자리에서 가장 높은 카드 윗면의 높이를 둔다.
-  // 카드는 자기 밑의 칸들 위에서 가운데가 가장 낮아지는 기울기로 놓인다 (받침점에 얹혀 쉬는 판).
+  // 더미는 높이 격자 위에 쌓는다. 칸마다 그 자리에서 가장 높은 카드 윗면(카드가 없으면 바닥 G.base)의 높이를 둔다.
+  // 흩어진 카드는 자기 밑의 칸들 위에서 가운데가 가장 낮아지는 기울기로 놓인다 (받침점에 얹혀 쉬는 판).
   // 그 기울기가 SLIDE 보다 가파르면 비탈 아래로 1cm 씩 미끄러진다. 미끄러진 자리는 카드의 place 에 남는다.
-  // 상자(box)는 아직 예전 방식이다 (restPose).
-  const G = { cell: 0.02, x0: 0, z0: 0, nx: 0, nz: 0, h: null };
+  // 상자 안의 카드는 평평하게 눕는다. 상자 밖(탁자 위)으로 꺼낸 카드는 흩어진 카드와 같다.
+  const G = { cell: 0.02, x0: 0, z0: 0, nx: 0, nz: 0, h: null, base: null };
   const SLIDE = Math.tan(THREE.MathUtils.degToRad(12));
   let lastSeq = []; // 지난 settle 에서 더미에 있던 카드의 차례 (settle 이 아래쪽을 다시 셈하지 않으려고 본다)
   fit(layout.items || []);
@@ -103,15 +110,16 @@ export function setupHeap(ctx) {
     if (!FK.length) { FK.push(-1); FX.push(0); FZ.push(0); } // 격자 밖: 받침 높이
   }
   function lift(a, b) { // 기울기 (a, b) 로 놓았을 때 아무 칸도 뚫지 않는 가운데 높이
-    let m = BASE;
-    for (let k = 0; k < FK.length; k++) { const h = FK[k] < 0 ? BASE : G.h[FK[k]], v = h - a * FX[k] - b * FZ[k]; if (v > m) m = v; }
+    let m = -Infinity;
+    for (let k = 0; k < FK.length; k++) { const h = FK[k] < 0 ? HOST.top : G.h[FK[k]], v = h - a * FX[k] - b * FZ[k]; if (v > m) m = v; }
     return m;
   }
   function restPile(card) {
     const p = card.userData.place, d = card.userData.d;
     let a = 0, b = 0, c = 0;
-    if (BOX) { // 상자: 카드는 평평하게 눕는다. 처음 쌓은 카드는 자기 켜의 높이에, 옮긴 카드는 밑에서 가장 높은 칸 위에
-      clampPlace(p, d); footprint(p.x, p.z, p.yaw, d);
+    if (BOX) clampPlace(p, d);
+    if (inBox(p)) { // 상자 안: 카드는 평평하게 눕는다. 처음 쌓은 카드는 자기 켜의 높이에, 옮긴 카드는 밑에서 가장 높은 칸 위에
+      footprint(p.x, p.z, p.yaw, d);
       const L = card.userData.layer;
       c = L ? BOX.floor + L.n * GAP + L.k : lift(0, 0);
     } else for (let it = 0; ; it++) {
@@ -141,21 +149,36 @@ export function setupHeap(ctx) {
   }
   function gridAt(x, z) {
     const i = Math.floor((x - G.x0) / G.cell), j = Math.floor((z - G.z0) / G.cell);
-    return i < 0 || j < 0 || i >= G.nx || j >= G.nz ? BASE : Math.max(BASE, G.h[i * G.nz + j]);
+    return i < 0 || j < 0 || i >= G.nx || j >= G.nz ? HOST.top : G.h[i * G.nz + j];
   }
+  // 카드 가운데가 상자 안쪽에 있다 (상자가 없으면 false)
+  const inBox = p => !!BOX && Math.abs(p.x - BOX.x) <= BOX.w / 2 && Math.abs(p.z - BOX.z) <= BOX.d / 2;
+  // 카드를 놓일 수 있는 곳으로 당긴다. 가운데가 상자 안이면 돌린 카드의 반폭이 벽 안에 들게 (상자보다 크면 가운데에).
+  // 그 밖이면 받침 가장자리에서 PM 안쪽, 같은 받침의 다른 물건(EXCL)을 비켜서, 상자 벽에 걸치지 않게 벽 바깥으로 민다:
+  // 벽에 걸쳐 놓은 카드는 가운데가 있는 쪽으로 떨어진다
   function clampPlace(p, d = DIMS.tall) {
-    if (BOX) { // 돌린 카드의 반폭이 벽 안에 들도록 가운데를 가둔다. 상자보다 크면 가운데에 둔다
-      const c = Math.abs(Math.cos(p.yaw ?? 0)), s = Math.abs(Math.sin(p.yaw ?? 0));
-      const hx = Math.max(0, BOX.w / 2 - (c * d.w + s * d.h) / 2 - 0.004), hz = Math.max(0, BOX.d / 2 - (s * d.w + c * d.h) / 2 - 0.004);
+    const c = Math.abs(Math.cos(p.yaw ?? 0)), s = Math.abs(Math.sin(p.yaw ?? 0)), ex = (c * d.w + s * d.h) / 2, ez = (s * d.w + c * d.h) / 2;
+    if (inBox(p)) {
+      const hx = Math.max(0, BOX.w / 2 - ex - 0.004), hz = Math.max(0, BOX.d / 2 - ez - 0.004);
       p.x = THREE.MathUtils.clamp(p.x, BOX.x - hx, BOX.x + hx);
       p.z = THREE.MathUtils.clamp(p.z, BOX.z - hz, BOX.z + hz);
       return p;
     }
-    p.x = THREE.MathUtils.clamp(p.x, HOST.x - HOST.w / 2 + PM, HOST.x + HOST.w / 2 - PM);
-    p.z = THREE.MathUtils.clamp(p.z, HOST.z - HOST.d / 2 + PM, HOST.z + HOST.d / 2 - PM);
+    const onHost = () => {
+      p.x = THREE.MathUtils.clamp(p.x, HOST.x - HOST.w / 2 + PM, HOST.x + HOST.w / 2 - PM);
+      p.z = THREE.MathUtils.clamp(p.z, HOST.z - HOST.d / 2 + PM, HOST.z + HOST.d / 2 - PM);
+    };
+    onHost();
     for (const e of EXCL) {
       const dx = p.x - e.x, dz = p.z - e.z, dd = Math.hypot(dx, dz);
       if (dd < e.r) { p.x = e.x + (dd ? dx / dd : 1) * e.r; p.z = e.z + (dd ? dz / dd : 0) * e.r; }
+    }
+    if (BOX) {
+      const ox = BOX.w / 2 + BOX.wall + ex + 0.004, oz = BOX.d / 2 + BOX.wall + ez + 0.004, dx = p.x - BOX.x, dz = p.z - BOX.z;
+      if (Math.abs(dx) < ox && Math.abs(dz) < oz) { // 벽에 걸친다: 덜 밀어도 되는 쪽으로 벽 바깥에
+        if (ox - Math.abs(dx) < oz - Math.abs(dz)) p.x = BOX.x + Math.sign(dx || 1) * ox; else p.z = BOX.z + Math.sign(dz || 1) * oz;
+        onHost();
+      }
     }
     return p;
   }
@@ -165,7 +188,7 @@ export function setupHeap(ctx) {
   function settle(instant = false) {
     const seq = [];
     let replay = true;
-    G.h.fill(BASE);
+    G.h.set(G.base);
     for (const c of cards) {
       if (!inPile(c)) continue;
       const prev = c.userData.home, R = c.userData.rest, p = c.userData.place;
@@ -184,6 +207,7 @@ export function setupHeap(ctx) {
     lastSeq = seq;
   }
   function toTop(c) { cards.splice(cards.indexOf(c), 1); cards.push(c); c.userData.layer = null; } // 옮긴 카드는 켜를 떠나 맨 위에 눕는다
+  ctx.heapHasBox = () => !!BOX;
   // 움직임: 'drop' 은 펄럭이며 호를 그려 내려와 조금 튕기고, 'settle' 은 중력으로 떨어진다
   function startAnim(c, kind) {
     c.userData.anim = { kind, t: 0, dur: kind === 'drop' ? 0.6 : 0.28, from: c.position.clone(), fromQ: c.quaternion.clone(), axis: new THREE.Vector3(rand() - 0.5, 0, rand() - 0.5).normalize(), arc: kind === 'drop' ? 0.08 : 0 };
@@ -253,6 +277,8 @@ export function setupHeap(ctx) {
       p.x = BOX.x - BOX.w / 2 + ((slot % COLS) + 0.5) / COLS * BOX.w + gauss() * 0.05;
       p.z = BOX.z - BOX.d / 2 + (Math.floor(slot / COLS) + 0.5) / ROWS * BOX.d + gauss() * 0.04;
       p.yaw = (rand() < 0.5 ? 0 : Math.PI) + (rand() < 0.15 ? Math.PI / 2 : 0) + gauss() * 0.1;
+      // 흩뜨린 가운데가 상자 밖으로 나가면 clampPlace 가 탁자로 내보낸다: 안쪽에 묶는다
+      p.x = THREE.MathUtils.clamp(p.x, BOX.x - BOX.w * 0.45, BOX.x + BOX.w * 0.45); p.z = THREE.MathUtils.clamp(p.z, BOX.z - BOX.d * 0.45, BOX.z + BOX.d * 0.45);
       c.userData.layer = { n, k: k / PER * GAP * 0.8 };
     });
   }
