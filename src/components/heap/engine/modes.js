@@ -38,7 +38,7 @@ export function setupModes(ctx) {
       mat.emissive.set(v ? '#ffffff' : '#000000'); mat.emissiveMap = v ? mat.map : null; mat.emissiveIntensity = v; mat.needsUpdate = true;
     }
   }
-  function pickUp(c) { ctx.held = c; ctx.heldFlipped = false; ctx.heldTurn = 0; c.userData.turnNow = 0; ctx.hovered = null; controls.enabled = false; settle(); setHint('held'); syncUI(); request(c, CLOSE, true); glowCard(c, ctx.readGlow); }
+  function pickUp(c) { ctx.held = c; ctx.heldFlipped = false; ctx.heldTurn = 0; c.userData.turnNow = 0; ctx.hovered = null; controls.enabled = false; settle(); setHint('held'); syncUI(); ctx.sharpen(c, true); request(c, CLOSE, true); glowCard(c, ctx.readGlow); }
   function dropOnTop(c) { // 더미 가운데 쪽으로 살짝, 그리고 제자리로 떨어진다
     const p = c.userData.place;
     c.userData.place = clampPlace({ x: HOST.x + (p.x - HOST.x) * 0.5 + gauss() * 0.15, z: HOST.z + (p.z - HOST.z) * 0.5 + gauss() * 0.1, yaw: p.yaw + gauss() * 0.6, faceUp: true });
@@ -46,6 +46,7 @@ export function setupModes(ctx) {
   }
   function putBack() {
     const c = ctx.held; ctx.held = null; ctx.heldFlipped = false; ctx.heldTurn = 0; glowCard(c, 0);
+    ctx.sharpen(c, false); ctx.pumpThumbs(); // 더미 크기로 돌리고, 멈춰 둔 썸네일 줄을 다시 돌린다 (thumbs.js)
     dropOnTop(c); settle(); startAnim(c, 'drop');
     if (!ctx.camGoal && ctx.mode === 'sit') controls.enabled = true;
     setHint('sit'); syncUI();

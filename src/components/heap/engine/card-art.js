@@ -122,11 +122,12 @@ export function setupCardArt(ctx) {
   const backLink = (W, H) => ({ x: W - 87, cy: H - 72, size: ICON.link.w });
 
   // 앞면 텍스처. 카드 자신의 캔버스를 넘기면 그 자리에서 다시 그린다. 시드가 같아 틀과 글씨는 그대로이고 사진만 바뀐다.
-  function drawCard(reel, img, c = document.createElement('canvas')) {
+  // k: 시안 px 의 몇 배로 그릴지. 더미에서는 LOW, 집어 든 카드는 화면 크기만큼 (thumbs.js 의 sharpen)
+  function drawCard(reel, img, c = document.createElement('canvas'), k = LOW) {
     const r = mulberry32(reel.seed), sp = frontSpec(reel), { W, H } = sp, { x: x0, y: y0, w, h } = sp.photo;
-    c.width = Math.round(W * LOW); c.height = Math.round(H * LOW);
+    c.width = Math.round(W * k); c.height = Math.round(H * k);
     const g = c.getContext('2d');
-    g.setTransform(LOW, 0, 0, LOW, 0, 0);
+    g.setTransform(k, 0, 0, k, 0, 0);
     ground(g, W, H, r, reel.age);
     const link = !hasThumb(reel); // 붙여 넣은 게시물 카드: 썸네일이 없어 플랫폼 표시로 그린다
     g.save(); g.beginPath(); g.rect(x0, y0, w, h); g.clip();

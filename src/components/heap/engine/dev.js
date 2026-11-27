@@ -127,6 +127,10 @@ export function setupDev(ctx) {
       cb({ cards: cs.length, box: !!ctx.HOST?.box, peakCm: +((Math.max(...cs.map(c => c.userData.home.pos.y)) - top) * 100).toFixed(1),
         meanSlopeDeg: +(slopes.reduce((s, v) => s + v, 0) / (slopes.length || 1)).toFixed(1), maxSlopeDeg: +Math.max(0, ...slopes).toFixed(1), settleMs: ms });
     }
+    else if (cmd === 'heldInfo') { // 집어 든 카드: 받은 그림의 단계(0 far, 1 near, 2 close), 앞면 텍스처 폭, 선명하게 그린 배율
+      const c = ctx.held, u = c?.userData;
+      cb(u ? { tier: u.tier, frontW: u.front.image.width, sharp: u.sharp, imgW: u.img?.width ?? null } : null);
+    }
     else if (cmd === 'me') cb({ x: ctx.me.position.x, y: ctx.me.position.y, z: ctx.me.position.z, ry: ctx.me.rotation.y, legL: ctx.legL.rotation.x, mode: ctx.mode, perch: !!ctx.perch, walking: !!ctx.walkTo }); // 내 캐릭터 자리와 자세 (걷기 시험)
     else if (cmd === 'state') cb({ ground: (g => g ? { visible: g.visible, y: g.position.y, img: g.material.map?.image?.width } : null)(ctx.scene.getObjectByName('ground')), layoutGround: ctx.layout.ground ?? null, mode: ctx.mode, slots: ctx.build.slots.map(s => s.fn?.kind), slotMeshes: ctx.build.slotMeshes.length, slotMeshKinds: [...new Set(ctx.build.slotMeshes.map(m => m.userData.slot?.fn?.kind))], seatMeshes: ctx.build.seatMeshes.length });
     else if (cmd === 'lights') cb({ // 그림자와 불빛 시험: 해 그림자, 땅이 그림자를 받는지, 램프마다 불빛 세기와 작은 빛 구슬이 보이는지

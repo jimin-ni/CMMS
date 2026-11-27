@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { hasThumb, srcUrl, PLATFORM_NAME, platformOf } from './format.js';
 import { thumbUrl } from './util.js';
-import { makeCanvas } from './draw.js';
+import { makeCanvas, drawFit } from './draw.js';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const HI = 2; // HTML 카드 안의 캔버스(뒷면, 붙여 넣은 게시물의 사진 자리)를 시안 px 의 몇 배로 그릴지
@@ -31,22 +31,31 @@ export function setupCardView(ctx) {
 
   // 사진 자리: 유튜브는 가장 큰 썸네일부터 받아 본다 (없는 썸네일은 120px 자리 표시 그림이 와서 그다음 것으로 넘어간다).
   // crossOrigin 은 thumbs.js 의 요청과 같게 둬서 이미 받은 그림을 다시 받지 않는다.
-  function photoEl(reel, ph) {
+  // have: 3D 카드가 이미 가진 그림 (thumbs.js 의 img). 큰 그림이 오기 전까지 그 자리에 깔아 둔다: 사진 자리가 비지 않는다
+  function photoEl(reel, ph, have) {
     const box = { left: px(ph.x), top: px(ph.y), width: px(ph.w), height: px(ph.h) };
     if (!hasThumb(reel)) {
       const c = makeCanvas(Math.round(ph.w * HI), Math.round(ph.h * HI)), g = c.getContext('2d');
       g.scale(HI, HI); drawLinkFace(g, reel, 0, 0, ph.w, ph.h);
       Object.assign(c.style, box); return c;
     }
+    const out = document.createDocumentFragment();
+    if (have) {
+      const c = makeCanvas(Math.round(ph.w * HI), Math.round(ph.h * HI));
+      drawFit(c.getContext('2d'), have, 0, 0, c.width, c.height, true);
+      Object.assign(c.style, box); out.appendChild(c);
+    }
     const img = el('img', 'cv-photo', box);
+    out.appendChild(img);
     img.alt = ''; img.crossOrigin = 'anonymous'; img.decoding = 'async';
     const files = reel.wide ? ['hq720', 'hqdefault'] : ['oardefault', 'hqdefault'];
     let i = 0;
     const next = () => { if (++i < files.length) img.src = thumbUrl(reel, files[i]); };
-    img.onload = () => { if (img.naturalWidth <= 120) next(); };
+    img.style.visibility = 'hidden'; // 쓸 수 있는 그림이 올 때까지 숨긴다 (밑에 깐 그림이나 자리 표시 그림이 보인다)
+    img.onload = () => { if (img.naturalWidth <= 120) next(); else img.style.visibility = ''; };
     img.onerror = next;
     img.src = thumbUrl(reel, files[0]);
-    return img;
+    return out;
   }
 
   function build(card) {
@@ -56,7 +65,7 @@ export function setupCardView(ctx) {
     inner = el('div', 'cv-card', { width: px(W), height: px(H) });
 
     const front = el('div', 'cv-face', { background: sp.paper });
-    front.appendChild(photoEl(reel, sp.photo));
+    front.appendChild(photoEl(reel, sp.photo, card.userData.img));
     if (sp.tint) front.appendChild(el('div', null, { left: px(sp.photo.x), top: px(sp.photo.y), width: px(sp.photo.w), height: px(sp.photo.h), background: `rgba(214, 170, 120, ${sp.tint})` }));
     front.appendChild(textEl(sp.title.text, sp.title.x, sp.title.cy, `${sp.title.size}px ${F.pixel}`));
     for (const row of sp.rows) { front.appendChild(iconEl(row.k, row.ix, row.cy)); front.appendChild(textEl(row.text, row.tx, row.cy + 0.5, `500 13px ${F.body}`)); }

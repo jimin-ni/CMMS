@@ -21,7 +21,7 @@ export function setupThumbs(ctx) {
     const u = card.userData;
     if (u.tier >= tier) return;
     u.tier = tier; u.img = cropToShape(im, u.reel);
-    drawCard(u.reel, u.img, u.front.image); u.front.needsUpdate = true;
+    drawCard(u.reel, u.img, u.front.image, u.sharp || undefined); u.front.needsUpdate = true;
     if (u.poster) paintPoster(card);
     if (card === ctx.phonePic?.card) ctx.showPhonePic();
   }
@@ -48,8 +48,9 @@ export function setupThumbs(ctx) {
       try { if (im) landed(card, tier, im); } finally { loading--; pump(); }
     });
   }
+  // 카드를 집어 든 동안 더미의 줄은 멈춘다: 집은 카드의 큰 그림이 연결을 혼자 쓴다. 내려놓으면 modes.js 가 다시 부른다
   function pump() {
-    while (loading < MAX_LOADS && loadQueue.length) {
+    while (!ctx.held && loading < MAX_LOADS && loadQueue.length) {
       const { card, tier } = loadQueue.shift();
       if (card.userData.tier >= tier) continue; // 더 선명한 그림이 이미 카드에 있다
       loading++; load(card, tier, thumbFiles(card.userData.reel, tier));
@@ -65,5 +66,14 @@ export function setupThumbs(ctx) {
   }
   function requestPile(tier) { for (let i = cards.length - 1; i >= 0; i--) request(cards[i], tier); } // cards runs bottom → top, so this asks top first
 
-  Object.assign(ctx, { loadThumb, cancelThumbs, requestPile, FAR, request, NEAR, CLOSE });
+  // 집어 든 카드의 앞면을 화면에 뜰 크기로 다시 그린다: 날아오는 동안에도 선명하다. 큰 그림은 받는 대로 이 크기로 그린다 (landed).
+  // 내려놓으면 더미 크기(LOW)로 돌린다. 팬 작품은 자기 그림이라 그대로 둔다. 카드는 눈앞에서 화면 높이의 2/3 쯤이다 (loop.js 의 dist)
+  function sharpen(card, on) {
+    const u = card.userData;
+    if (u.reel.kind === 'fan' || !!u.sharp === on) return;
+    u.sharp = on ? Math.min(3, Math.max(1, ctx.renderer.domElement.height / 1.5 / ctx.frontSpec(u.reel).H)) : 0;
+    drawCard(u.reel, u.img, u.front.image, u.sharp || undefined); u.front.needsUpdate = true;
+  }
+
+  Object.assign(ctx, { loadThumb, cancelThumbs, requestPile, FAR, request, NEAR, CLOSE, pumpThumbs: pump, sharpen });
 }
