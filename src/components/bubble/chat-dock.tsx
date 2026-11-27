@@ -14,6 +14,8 @@ export { CHAT_DOCK_OPEN } from "./dock-parts";
 
 // 배너 높이. 접으면 이만큼만 화면에 남는다.
 const BANNER_PX = 29;
+// 창 전체 배율 (Figma 크기의 1.25배, 2026-11-27 요청)
+const ZOOM = 1.25;
 
 export function ChatDock({ room, signedIn, onAskSignIn }: { room: string; signedIn: boolean; onAskSignIn: () => void }) {
   const [data, setData] = useState<DockData | null>(null);
@@ -78,8 +80,15 @@ export function ChatDock({ room, signedIn, onAskSignIn }: { room: string; signed
   return (
     <div
       ref={rootRef}
-      className="oc-chat fixed right-5 bottom-0 z-40 flex h-[calc(100dvh-144px)] w-[302px] max-w-[calc(100vw-40px)] flex-col transition-transform duration-300 ease-out"
-      style={{ transform: expanded ? "translateY(0)" : `translateY(calc(100% - ${BANNER_PX}px))` }}
+      // Figma 수치(302px 등)를 그대로 쓰고 창 전체를 ZOOM 배로 키운다. 화면 기준 길이(오른쪽 여백 20px, 위 여백 144px)는 ZOOM 으로 나눠 그대로 둔다.
+      className="oc-chat fixed bottom-0 z-40 flex w-[302px] flex-col transition-transform duration-300 ease-out"
+      style={{
+        zoom: ZOOM,
+        right: 20 / ZOOM,
+        height: `calc((100dvh - 144px) / ${ZOOM})`,
+        maxWidth: `calc((100vw - 40px) / ${ZOOM})`,
+        transform: expanded ? "translateY(0)" : `translateY(calc(100% - ${BANNER_PX}px))`,
+      }}
     >
       <button
         type="button"

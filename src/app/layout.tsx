@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Script from "next/script";
 import "./globals.css";
-import { Header } from "@/components/header";
 import { nunito, oswald, yangjin } from "@/app/fonts/brand";
 import { pretendard } from "@/app/fonts/onboarding";
 
@@ -32,7 +31,6 @@ gtag('js', new Date());`}
         </Script>
       </head>
       <body className="flex min-h-full flex-col">
-        <Header />
         {children}
       </body>
     </html>
