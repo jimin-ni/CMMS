@@ -502,7 +502,18 @@ export async function blockHeapAuthor(
 ): Promise<{ ok: boolean; error?: string }> {
   const post = await heapPostWithOwner(surface, id);
   if (!post) return { ok: false, error: "글을 찾을 수 없어요." };
-  return blockUser(post.authorId, viewer);
+  return blockUser(post.authorId, viewer, { surface, excerpt: "body" in post ? post.body : post.text });
+}
+
+// 대화방 메시지에서 보낸 사람 차단. 화면은 메시지 id만 보낸다. 그 메시지의 앞부분을 차단 목록에 남긴다.
+export async function blockChatAuthor(messageId: string, viewer: Viewer): Promise<{ ok: boolean; error?: string }> {
+  if (!UUID.test(messageId)) return { ok: false, error: "메시지를 찾을 수 없어요." };
+  const [msg] = await db
+    .select({ senderId: bubbleMessages.senderId, body: bubbleMessages.body })
+    .from(bubbleMessages)
+    .where(eq(bubbleMessages.id, messageId));
+  if (!msg) return { ok: false, error: "메시지를 찾을 수 없어요." };
+  return blockUser(msg.senderId, viewer, { surface: "chat", excerpt: msg.body });
 }
 
 // 내려간 쪽지·방명록 원문 보기 (문서 8장, 11-4). 방 주인(자기 방)과 관리자만. 열람을 기록한다.
@@ -517,7 +528,18 @@ export async function revealHeapOriginal(surface: HeapSurface, id: string, viewe
 
 // ─── 크리에이터 차단, 전체 차단 (문서 9장) ───
 
-export async function blockUser(targetUserId: string, viewer: Viewer): Promise<{ ok: boolean; error?: string }> {
+// 차단 목록(마이페이지)에 남기는 글은 이만큼만 자른다 (0016 check 와 같다)
+export const BLOCK_EXCERPT_MAX = 200;
+export const toExcerpt = (text: string) => Array.from(text.trim()).slice(0, BLOCK_EXCERPT_MAX).join("");
+
+export type BlockSource = { surface: "chat" | "note" | "guestbook"; excerpt: string };
+
+// source: 차단을 건 자리와 그때 글. 마이페이지 BLOCKED 목록이 자리별로 나눠 보여 준다.
+export async function blockUser(
+  targetUserId: string,
+  viewer: Viewer,
+  source?: BlockSource,
+): Promise<{ ok: boolean; error?: string }> {
   if (viewer.role !== "admin" && viewer.role !== "creator") return { ok: false, error: "차단할 권한이 없어요." };
   if (targetUserId === viewer.id) return { ok: false, error: "자기 자신은 차단할 수 없어요." };
   const role = await roleOf(targetUserId);
@@ -529,7 +551,15 @@ export async function blockUser(targetUserId: string, viewer: Viewer): Promise<{
   return db.transaction(async (tx) => {
     const created = await tx
       .insert(sanctions)
-      .values({ userId: targetUserId, scope, roomOwnerId, createdBy: viewer.id, reason: "manual" })
+      .values({
+        userId: targetUserId,
+        scope,
+        roomOwnerId,
+        createdBy: viewer.id,
+        reason: "manual",
+        surface: source?.surface ?? null,
+        excerpt: source ? toExcerpt(source.excerpt) : null,
+      })
       .onConflictDoNothing()
       .returning({ id: sanctions.id });
     if (!created.length) return { ok: false, error: "이미 차단한 사용자예요." };

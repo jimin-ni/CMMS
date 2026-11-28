@@ -10,6 +10,7 @@ import {
 } from "@/lib/heap/repo";
 import { getNoteCounts } from "@/lib/heap/notes-repo";
 import { listMyBlocks } from "@/lib/heap/blocks-repo";
+import { getRoom } from "@/lib/bubble/repo";
 import { MyBook, type MyCreatorData } from "@/components/mypage/my-book";
 import { LoadingScreen } from "@/components/onboarding-c/loading-screen";
 import { moneygraphyPixel, moneygraphyRounded, pretendard } from "@/app/fonts/onboarding";
@@ -30,17 +31,16 @@ async function MyPageContent() {
       getOpenBubbleRoomId(user.id),
       listCreatorChannels(user.id),
     ]);
-    const [visits, notes] = room
-      ? await Promise.all([getVisitCounts(room.id), getNoteCounts(room.id, user.id)])
-      : [
-          { today: 0, total: 0 },
-          { received: 0, unread: 0, replied: 0 },
-        ];
+    const [visits, notes, chatRoom] = await Promise.all([
+      room ? getVisitCounts(room.id) : { today: 0, total: 0 },
+      room ? getNoteCounts(room.id, user.id) : { received: 0, unread: 0, replied: 0 },
+      openRoomId ? getRoom(openRoomId, user.id) : null,
+    ]);
     creator = {
       room: room && { slug: room.slug, name: room.name },
       visits,
       notes,
-      chat: { openRoomId },
+      chat: { openRoomId, members: chatRoom?.member_count ?? 0 },
       channels: channels.map((c) => ({ platform: c.platform, title: c.title, url: c.channelUrl })),
     };
   }
@@ -55,7 +55,7 @@ async function MyPageContent() {
         isAdmin: role === "admin",
       }}
       creator={creator}
-      blocks={blocks.map((b) => ({ id: b.id, label: b.label, createdAt: b.createdAt.toISOString() }))}
+      blocks={blocks.map((b) => ({ ...b, createdAt: b.createdAt.toISOString() }))}
     />
   );
 }

@@ -3,7 +3,13 @@
 // 힙 방의 쪽지·방명록 신고, 작성자 차단(크리에이터·전체), 내려간 글 원문 보기 (문서 8장, 9장).
 // 화면은 글 id만 보낸다. 작성자는 서버가 찾는다 (익명 쪽지도). 권한은 moderation/repo.ts의 쿼리에서 다시 확인한다.
 import { getViewer } from "@/lib/session";
-import { blockHeapAuthor, reportHeapPost, revealHeapOriginal, type HeapSurface } from "@/lib/moderation/repo";
+import {
+  blockHeapAuthor,
+  decideSanction,
+  reportHeapPost,
+  revealHeapOriginal,
+  type HeapSurface,
+} from "@/lib/moderation/repo";
 import { blockAuthorOf, removeMyBlock, type HeapBlockResult } from "./blocks-repo";
 
 export type HeapModerationResult = { ok: true; body?: string } | { ok: false; error: string };
@@ -49,4 +55,13 @@ export async function unhidePersonAction(blockId: string): Promise<HeapModeratio
   const viewer = await getViewer();
   if (!viewer) return { ok: false, error: "로그인이 필요합니다." };
   return (await removeMyBlock(viewer.id, String(blockId))) ? { ok: true } : { ok: false, error: "이미 풀린 차단이에요." };
+}
+
+// 마이페이지 BLOCKED 의 UNBLOCK. hide 는 개인 가림 풀기, sanction 은 내가 건 차단 해제 (권한은 decideSanction 이 다시 본다)
+export async function unblockAction(kind: "hide" | "sanction", id: string): Promise<HeapModerationResult> {
+  if (kind === "hide") return unhidePersonAction(id);
+  if (kind !== "sanction") return { ok: false, error: "잘못된 요청이에요." };
+  const viewer = await getViewer();
+  if (!viewer) return { ok: false, error: "로그인이 필요합니다." };
+  return done(await decideSanction(String(id), "revoke", viewer));
 }

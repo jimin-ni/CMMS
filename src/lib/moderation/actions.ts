@@ -4,7 +4,7 @@
 // 권한은 repo 계층 쿼리에서 다시 확인한다.
 import { getViewer } from "@/lib/session";
 import {
-  blockUser,
+  blockChatAuthor,
   decideEvent,
   decideSanction,
   reportChatMessage,
@@ -24,10 +24,11 @@ export async function reportMessageAction(messageId: string): Promise<Moderation
   return done(await reportChatMessage(messageId, viewer));
 }
 
-export async function blockUserAction(userId: string): Promise<ModerationActionResult> {
+// 대화방 메시지의 보낸 사람 차단. 메시지 id로 보낸 사람과 글을 서버에서 찾는다.
+export async function blockChatAuthorAction(messageId: string): Promise<ModerationActionResult> {
   const viewer = await getViewer();
   if (!viewer) return { ok: false, error: "로그인이 필요합니다." };
-  return done(await blockUser(String(userId), viewer));
+  return done(await blockChatAuthor(String(messageId), viewer));
 }
 
 export async function revealRemovedAction(messageId: string): Promise<ModerationActionResult> {

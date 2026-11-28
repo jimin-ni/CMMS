@@ -183,6 +183,9 @@ export const heapBlocks = pgTable("heap_blocks", {
   blockerId: text("blocker_id").notNull(),
   blockedId: text("blocked_id").notNull(),
   label: text("label").notNull(),
+  // 차단한 자리와 그때 글 (0016). 0016 전 행은 null
+  surface: text("surface", { enum: ["note", "guestbook"] }),
+  excerpt: text("excerpt"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -326,6 +329,9 @@ export const sanctions = pgTable("sanctions", {
   reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
   revokedBy: text("revoked_by"),
+  // 차단한 자리와 그때 글 (0016). 자동 차단과 0016 전 행은 null
+  surface: text("surface", { enum: ["chat", "note", "guestbook"] }),
+  excerpt: text("excerpt"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
