@@ -47,7 +47,7 @@ import { setupGlobe } from './globe.js';
 import { DEBUG_ON } from './debug-flags.js';
 
 // heap-room.tsx 가 그리고 엔진이 채우거나 보이게 하는 노드의 id. dispose 가 첫 렌더 상태로 되돌린다.
-const LISTS = ['cardview', 'albumrow', 'player-frame', 'music-frame', 'phone-feed', 'pc-list', 'ks-body', 'cal-body', 'grid-list', 'gb-list', 'roomlist', 'ts-tints', 'ts-fonts'];
+const LISTS = ['cardview', 'albumrow', 'player-frame', 'music-frame', 'phone-feed', 'pc-list', 'ks-body', 'cal-body', 'gb-list', 'roomlist', 'ts-tints', 'ts-fonts'];
 const HIDDEN = ['cardview', 'visit', 'albumrow', 'stand', 'flip', 'srclink', 'eject', 'ytlink', 'sortexit', 'treeexit', 'globeexit', 'tree-write', 'tree-prev', 'tree-next', 'tree-sheet', 'ts-text', 'ts-ctl', 'ts-drag', 'tree-del', 'tree-confirm', 'player', 'player-shade', 'player-note', 'music', 'music-note', 'music-link', 'phone', 'pc', 'keepsake', 'calendar', 'grid', 'guestbook', 'rooms', 'rooms-legend'];
 
 /**
@@ -56,8 +56,9 @@ const HIDDEN = ['cardview', 'visit', 'albumrow', 'stand', 'flip', 'srclink', 'ej
  * `heap:editcmd`(edit.js), `heap:thumb`(dock-thumbs.js), `heap:reels`(live.js: 새 영상 목록으로 더미를 맞춘다), `heap:reveal`(live.js: 쪽지 공개일이 바뀌었다, detail: ISO 또는 null), `heap:capture`(loop.js: 지금 구도를 한 장 그려 준다), `heap:intro`(intro.js: 온보딩 연출), `heap:go`(nav.js: 온보딩 내비게이션 바의 이동), `heap:sparkle`(sparkle.js: 누를 수 있는 물건 위의 반짝임).
  * 팔레트와 배경은 그 자리에서 다시 칠한다 (recolour.js, time.js 의 setBackdrop). 꾸미기가 방의 틀(템플릿)을 바꾸면 엔진은 `heap:remount`(detail: 편집 상태)를 보낸다. heap-room.tsx 가 그 상태를 opts.resume 으로 넘겨 다시 마운트한다:
  * resume { edit, items, time, palette, backdrop, brand, shell, name, savedName, hist, future, saved, original, baseLayout } (edit.js 의 remount 참고).
- * 엔진이 `root` 에 직접 보내는 것은 셋이다. `heap:mode`(detail: 'room' | 'sit' | 'sort' | 'tree' | 'globe')는 모드가 정해질 때마다,
- * `heap:ready` 는 방이 화면에 뜬 뒤에 한 번, `heap:music`(detail: true | false)은 오른쪽 위 음악 플레이어가 열리고 닫힐 때 (players.js).
+ * 엔진이 `root` 에 직접 보내는 것은 넷이다. `heap:mode`(detail: 'room' | 'sit' | 'sort' | 'tree' | 'globe')는 모드가 정해질 때마다,
+ * `heap:ready` 는 방이 화면에 뜬 뒤에 한 번, `heap:music`(detail: true | false)은 오른쪽 위 음악 플레이어가 열리고 닫힐 때 (players.js),
+ * `heap:album`(detail: { name, items: [{ title, href, thumb }] })은 책장 앞에서 앨범을 골랐을 때 (shelf.js, heap-room.tsx 가 수첩으로 연다).
  * `modelBase` 는 가구 모델과 catalogue.json 이 있는 폴더다. 없으면 `dataBase` 옆의 "models/" 다.
  * `data` 는 서버가 DB에서 읽은 값이다 (page.tsx 가 바꿔 넘긴다): { roomUuid, name, serverTime, rooms, layout, reels, pieces, guestbook, visits, creatorVisit }.
  * creator.json(링크, 앨범)은 아직 `dataBase` 에서 읽는다. 없는 방은 링크와 앨범이 비어 있다.
