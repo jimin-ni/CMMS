@@ -5,6 +5,7 @@ import { getViewer } from "@/lib/session";
 import { getRoomBySlug } from "@/lib/heap/repo";
 import { loadRoomView } from "@/lib/heap/room-view";
 import { VisitRoom } from "@/components/onboarding-c/visit-room";
+import { LoadingScreen } from "@/components/onboarding-c/loading-screen";
 import { moneygraphyPixel, moneygraphyRounded, pretendard } from "@/app/fonts/onboarding";
 
 type RoomPageProps = {
@@ -57,7 +58,8 @@ export async function generateMetadata({ params }: RoomPageProps): Promise<Metad
 
 export default function RoomPage({ params }: RoomPageProps) {
   return (
-    <Suspense fallback={<div className="flex-1 bg-[#565344]" />}>
+    // 방을 읽는 동안 첫 화면과 같은 대기 화면(MEMOAMO와 넘어가는 책)을 띄운다. 방이 뜰 때까지는 VisitRoom 이 같은 화면을 이어서 덮는다.
+    <Suspense fallback={<LoadingScreen />}>
       <RoomContent params={params} />
     </Suspense>
   );

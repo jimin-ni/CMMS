@@ -230,14 +230,14 @@ export function Book({ heading, closeLabel, children }: { heading: string; close
             </div>
           </div>
 
-          <nav className="nb-pager" aria-label="쪽 넘기기">
-            <button type="button" onClick={() => goTo(at - 1)} disabled={at <= 0} aria-label="앞 쪽">
+          <nav className="nb-pager" aria-label="Pages">
+            <button type="button" onClick={() => goTo(at - 1)} disabled={at <= 0} aria-label="Previous page">
               ‹
             </button>
             <span className="ob-pixel" aria-live="polite">
               p.{pageLabel} / {String(pageCount).padStart(2, "0")}
             </span>
-            <button type="button" onClick={() => goTo(at + 1)} disabled={at >= steps} aria-label="다음 쪽">
+            <button type="button" onClick={() => goTo(at + 1)} disabled={at >= steps} aria-label="Next page">
               ›
             </button>
           </nav>

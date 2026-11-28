@@ -1,5 +1,5 @@
 import { and, desc, eq, exists, gte, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
-import type { AnyPgColumn } from "drizzle-orm/pg-core";
+import { alias, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { db } from "@/lib/db";
 import { bubbleMembers, bubbleMessages, bubbleRooms, creatorAvatars, user } from "@/lib/schema";
 import { avatarUrl } from "@/lib/creator/avatar";
@@ -37,6 +37,9 @@ export type MessageRow = {
   // 신고·차단으로 내린 글. 본문 대신 "커뮤니티 정책 위반으로 삭제되었습니다"를 보여준다.
   // 원문은 방 주인·관리자가 따로 요청할 때만 내려간다. 크리에이터 톡에는 없다.
   removed?: boolean;
+  // 인용 답장이 가리키는 메시지. 보는 사람이 그 메시지를 볼 수 있을 때만 내려간다(구독자는 자신과 크리에이터의 글만).
+  // 가리키는 글이 삭제되거나 내려갔으면 본문 없이 null. 크리에이터 톡에는 없다.
+  reply?: { id: string; sender_name: string; body: string | null } | null;
 };
 
 export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -137,13 +140,36 @@ export async function joinRoom(roomId: string, userId: string): Promise<void> {
 
 // 보는 사람에게 보이는 메시지만 고르는 조건. 구독자는 자신과 크리에이터의 메시지만 본다.
 // 판정에서 숨긴 글(blocked, held)은 누구에게도 대화방에 보이지 않는다. 검토 화면에서만 본다.
-function visibleTo(room: RoomRow, viewer: Viewer): SQL | undefined {
-  const shown = inArray(bubbleMessages.screenStatus, ["published", "removed"]);
+function visibleTo(
+  room: RoomRow,
+  viewer: Viewer,
+  msg: { screenStatus: AnyPgColumn; senderId: AnyPgColumn } = bubbleMessages,
+): SQL | undefined {
+  const shown = inArray(msg.screenStatus, ["published", "removed"]);
   if (seesAllMessages(room, viewer)) return shown;
-  return and(
-    shown,
-    or(eq(bubbleMessages.senderId, viewer.id), eq(bubbleMessages.senderId, room.creator_id)),
-  );
+  return and(shown, or(eq(msg.senderId, viewer.id), eq(msg.senderId, room.creator_id)));
+}
+
+// 인용 답장이 가리키는 메시지와 그 글쓴이
+const replyMsg = alias(bubbleMessages, "reply_msg");
+const replyUser = alias(user, "reply_user");
+
+// 보내는 사람이 볼 수 있는 이 방의 메시지인지. 인용 답장 대상 검사에 쓴다.
+export async function canQuoteMessage(room: RoomRow, viewer: Viewer, messageId: string): Promise<boolean> {
+  if (!UUID_PATTERN.test(messageId)) return false;
+  const rows = await db
+    .select({ id: bubbleMessages.id })
+    .from(bubbleMessages)
+    .where(
+      and(
+        eq(bubbleMessages.id, messageId),
+        eq(bubbleMessages.roomId, room.id),
+        isNull(bubbleMessages.deletedAt),
+        eq(bubbleMessages.screenStatus, "published"),
+        visibleTo(room, viewer),
+      ),
+    );
+  return rows.length > 0;
 }
 
 // DB 시각(밀리초). 실시간 읽기의 기준점으로 쓴다.
@@ -182,17 +208,25 @@ export async function listMessages(
         and ${bubbleMessages.deletedAt} is null
         and ${bubbleMessages.screenStatus} = 'published'
         and ${within(bubbleMessages.createdAt, deleteWindowMs)})`,
+      reply_id: replyMsg.id,
+      reply_sender_name: replyUser.name,
+      reply_body: sql<string | null>`case when ${replyMsg.deletedAt} is null
+        and ${replyMsg.screenStatus} = 'published' then ${replyMsg.body} end`,
     })
     .from(bubbleMessages)
     .innerJoin(user, eq(user.id, bubbleMessages.senderId))
     .leftJoin(creatorAvatars, eq(creatorAvatars.userId, bubbleMessages.senderId))
+    // 인용한 글은 보는 사람이 볼 수 있을 때만 붙인다. 다른 구독자의 글을 인용한 답장은 인용 없이 보인다.
+    .leftJoin(replyMsg, and(eq(replyMsg.id, bubbleMessages.replyToId), visibleTo(room, viewer, replyMsg)))
+    .leftJoin(replyUser, eq(replyUser.id, replyMsg.senderId))
     .where(and(eq(bubbleMessages.roomId, room.id), visibleTo(room, viewer), changed))
     .orderBy(desc(bubbleMessages.createdAt))
     .limit(limit);
 
   // 최근 것부터 잘랐으니 시간순으로 되돌린다.
-  return rows.reverse().map(({ sender_avatar_at, ...m }) => ({
+  return rows.reverse().map(({ sender_avatar_at, reply_id, reply_sender_name, reply_body, ...m }) => ({
     ...m,
+    reply: reply_id && reply_sender_name ? { id: reply_id, sender_name: reply_sender_name, body: reply_body } : null,
     sender_avatar_url: avatarUrl(m.sender_id, sender_avatar_at),
     created_at: m.created_at.toISOString(),
     deleted_at: m.deleted_at?.toISOString() ?? null,

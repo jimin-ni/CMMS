@@ -43,6 +43,7 @@ import { setPrefs, type NameShow } from "@/lib/settings/prefs";
 import { moneygraphyPixel, moneygraphyRounded, pretendard } from "@/app/fonts/onboarding";
 import "./heap-room.css";
 import { CREDITS } from "@/components/snow-globe/credits";
+import { CHAT_DOCK_OPEN } from "@/components/bubble/dock-parts";
 
 // 크리에이터 정보(creator.json)는 public/heap/rooms/ 아래의 정적 파일이다. 나머지 방 데이터는 서버가 DB에서 읽어 data로 넘긴다.
 const DATA_BASE = "/heap/rooms/";
@@ -160,6 +161,7 @@ export function HeapRoom({
   owner = null,
   signInHere = false,
   presence = false,
+  chatDock = false,
 }: {
   roomId: string;
   data: HeapRoomData;
@@ -172,6 +174,8 @@ export function HeapRoom({
   signInHere?: boolean;
   // 방 함께 있기를 켤지. /room 페이지만 true 를 넘긴다 (온보딩 방은 끈다)
   presence?: boolean;
+  // 오른쪽 아래 채팅 창(bubble/chat-dock.tsx)이 있는 화면: 휴대폰의 "버블 열기"가 버블 화면으로 가지 않고 채팅 창을 편다.
+  chatDock?: boolean;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
@@ -399,7 +403,12 @@ export function HeapRoom({
         presence: presenceOn ? presenceHub : undefined,
         pollMs: HEAP_POLICY.pollIntervalMs,
         bubbleHref: data.bubbleHref,
-        navigate: (href: string) => router.push(href),
+        navigate: (href: string) => {
+          if (chatDock && href === mountData.bubbleHref) {
+            root.querySelector<HTMLButtonElement>("#phone-close")?.click();
+            window.dispatchEvent(new Event(CHAT_DOCK_OPEN));
+          } else router.push(href);
+        },
         askSignIn: signInHere ? () => root.dispatchEvent(new CustomEvent("heap:signin", { detail: "chat" })) : undefined,
         // 기념품 링크가 유튜브 게시물인지 알아보는 데 쓴다 (엔진이 썸네일 주소를 만든다)
         parseLink: parsePieceUrl,
@@ -471,7 +480,7 @@ export function HeapRoom({
       root.removeEventListener("heap:remount", onRemount);
       dispose?.();
     };
-  }, [roomId, viewerName, signedIn, canEdit, router, resume, signInHere, presenceOn, presenceHub]);
+  }, [roomId, viewerName, signedIn, canEdit, router, resume, signInHere, presenceOn, presenceHub, chatDock]);
 
   // 체크리스트: 방 주인에게, 방이 뜬 뒤, 걸어 다니는 방이나 꾸미기(팔로워로 보기 빼고)에서
   const showChecklist = !!owner && ready && (editing ? !preview : mode === "room");
