@@ -51,7 +51,8 @@
 | 파일 | 항목 | 원본 | 길이 | 라이선스 | 출처 표기 | 커밋 |
 |---|---|---|---|---|---|---|
 | ~~`bgm/bgm-warm-retro-soul-backbeat-budgetpixel.mp3`~~ | 배경음악 1 (방의 기본 배경음악). 2026-11-24 지움 | [Warm Retro Soul Backbeat](https://budgetpixel.com/background-music/warm-retro-soul-backbeat-13196076) | 45.1초 | CC BY 4.0 | 필요 | 지움 |
-| `sfx/floor-walk-freesound-543685.mp3` | 마룻바닥 걷기 1 (방의 발소리로 씀) | [Freesound 543685](https://freesound.org/s/543685/) (미리듣기 MP3) | 0:24 | CC0 | 불필요 | 함 |
+| `sfx/footstep-01.mp3`, `sfx/footstep-02.mp3` | 한 발자국 소리 1, 2 (방의 발소리로 씀) | [미정] 사용자가 받은 파일. 출처 확인 필요 | 각 1초 미만 | [미정] | [미정] | 함 |
+| `sfx/floor-walk-freesound-543685.mp3` | 마룻바닥 걷기 1 (2026-11-29까지 방의 발소리로 씀) | [Freesound 543685](https://freesound.org/s/543685/) (미리듣기 MP3) | 0:24 | CC0 | 불필요 | 함 |
 | `sfx/floor-creak-freesound-347851.mp3` | 마룻바닥 걷기 2 | [Freesound 347851](https://freesound.org/s/347851/) (미리듣기 MP3) | 약 1:21 | CC0 | 불필요 | 함 |
 | `sfx/floor-walk-oga-83765.wav` | 마룻바닥 걷기 3 | [OpenGameArt: Steps in wood floor](https://opengameart.org/node/83765) | 약 3.5초 | CC0 | 불필요 | 함 |
 | `sfx/projector-start-stop-mixkit-3013.mp3` | 영사기 켜기 1 | Mixkit 3013 (Bell & Howell start/stop) | 0:29 | Mixkit Free | 불필요 | 안 함 (§3) |
@@ -76,7 +77,7 @@ A Christmas Carol(Mixkit 896)은 2026-11-18에 쓰지 않기로 하고 지웠습
 
 ### 쓰는 곳: 걷기 효과음 (`src/components/heap/engine/sfx.js`)
 
-- 내 캐릭터가 방 모드에서 걷는 동안 `floor-walk-freesound-543685.mp3`를 반복 재생하고, 멈추면 0.06초 안에 줄여 끕니다. 1.5초 이상 서 있으면 오디오를 멈춰 둡니다. 다른 사람 캐릭터의 발소리는 내지 않습니다.
+- [결정] (2026-11-29) 발이 땅에 닿을 때마다 한 발자국 소리를 한 번 냅니다. 걷기 애니메이션의 다리 박자(`walk.js`)에서 바로 부르므로 움직임과 소리가 함께 납니다. 첫 발은 `footstep-01.mp3`, 다음 발은 `footstep-02.mp3`, 그다음은 다시 01로 번갈아 냅니다(1걸음: 01, 2걸음: 01·02, 3걸음: 01·02·01). 멈췄다 다시 걸으면 01부터입니다. 다른 사람 캐릭터의 발소리는 내지 않습니다.
 - 러그 위에서는 같은 소리를 저역 필터(500Hz)로 먹먹하게 냅니다. 러그는 카탈로그의 `rug` 가구와 좌식 탁자에 딸린 러그입니다. 카펫 발소리 음원을 받으면 그 파일로 바꿉니다(§5).
 - 브라우저는 사용자 동작 전에 소리를 막으므로, 방에서 첫 클릭이나 키 입력 때 파일을 받아 오디오를 켭니다. 파일이 없으면 소리 없이 걷습니다.
 - 소리 크기 설정은 없습니다. 값은 `sfx.js`의 `LEVEL`에서 바꿉니다.
