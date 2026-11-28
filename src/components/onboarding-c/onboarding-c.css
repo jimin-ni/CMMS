@@ -496,6 +496,127 @@
   font-weight: 800;
   text-underline-offset: 3px;
 }
+/* 로그인 팝업의 가입 쪽 (login-popup.tsx): 같은 종이가 세로로 길어진다. 화면보다 길면 팝업 바깥이 스크롤된다 */
+.oc-modal:has(.oc-signup) {
+  overflow-y: auto;
+  align-items: safe center;
+}
+.oc-signup {
+  margin-block: auto;
+}
+.oc-signup .oc-paper-body {
+  padding: 30px 28px 26px;
+}
+.oc-signup h3 {
+  margin-bottom: 18px;
+}
+.oc-field small {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: none;
+}
+.oc-field .oc-bad { color: #a23a2a; }
+.oc-field .oc-good { color: #3f6b3a; }
+.oc-field .oc-good:empty { display: none; }
+/* 만 14세 확인: 예/아니오 두 칸. 고른 칸은 ink 바탕 */
+.oc-age {
+  margin-inline: 0;
+  padding: 0;
+  border: 0;
+}
+.oc-age legend {
+  padding: 0;
+  margin-bottom: 5px;
+}
+.oc-toggle {
+  display: flex;
+  gap: 8px;
+}
+.oc-toggle button {
+  flex: 1;
+  height: 40px;
+  border: 1px solid var(--color-ash);
+  border-radius: 4px;
+  background: #ffffff;
+  color: var(--color-ink);
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+.oc-toggle button[aria-pressed="true"] {
+  border-color: var(--color-ink);
+  background: var(--color-ink);
+  color: #ffffff;
+}
+.oc-field-head {
+  display: flex;
+  justify-content: space-between;
+}
+/* 닉네임 칸과 확인 단추 한 줄 */
+.oc-inline {
+  display: flex;
+  gap: 8px;
+}
+.oc-inline input {
+  flex: 1;
+  min-width: 0;
+}
+.oc-secondary {
+  flex: none;
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--color-ink);
+  border-radius: 4px;
+  background: #ffffff;
+  color: var(--color-ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.oc-secondary:disabled { opacity: 0.6; }
+/* 비밀번호 칸과 보기 단추 */
+.oc-password {
+  position: relative;
+  display: flex;
+}
+.oc-password input {
+  width: 100%;
+  padding-right: 44px;
+}
+.oc-password input[aria-invalid="true"] { border-color: #a23a2a; }
+.oc-password button {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 40px;
+  border: 0;
+  background: none;
+  color: var(--color-ash);
+  cursor: pointer;
+}
+.oc-password button:hover { color: var(--color-ink); }
+.oc-agree {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-ash);
+}
+.oc-agree a {
+  color: var(--color-ink);
+  text-underline-offset: 3px;
+}
+/* 로그인 쪽과 가입 쪽을 오가는 글자 단추 (링크 모양) */
+.oc-modal .oc-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-ink);
+  font: inherit;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
 .oc-close {
   position: absolute;
   top: 10px;
