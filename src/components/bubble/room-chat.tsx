@@ -132,7 +132,6 @@ export function RoomChat(props: Props) {
                     !message.deleted_at && (
                       <ModeratorTools
                         messageId={message.id}
-                        senderId={message.sender_id}
                         senderName={message.sender_name}
                         onDone={sync}
                       />

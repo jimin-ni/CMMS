@@ -1,111 +1,76 @@
 "use client";
 
-// 설정 화면 (/settings): 책상 위에 펼친 O링 수첩 (틀은 book.tsx).
-// 고른 값은 이 브라우저에 남는다 (src/lib/settings/prefs.ts).
-import type { ReactNode } from "react";
-import { Book, BookPage } from "./book";
-import {
-  setPrefs,
-  usePrefs,
-  type Language,
-  type RoomTime,
-} from "@/lib/settings/prefs";
+// 설정 화면 (/settings): 클립보드 종이 한 장 (틀은 clipboard.tsx, Figma "6차" Home - Setting).
+// LANGUAGE: 화면 글을 영어/한국어로 바꾼다. ROOM TIME: 방의 빛 (실시간 또는 아침·점심·저녁·밤).
+// 고른 값은 이 브라우저에 남는다 (src/lib/settings/prefs.ts). 갈색 단추가 지금 고른 값이다.
+import { Clipboard, Section } from "./clipboard";
+import { setPrefs, usePrefs, type Language, type RoomTime } from "@/lib/settings/prefs";
 
-export function SettingsBook() {
-  return (
-    <Book heading="SETTINGS" closeLabel="Close settings">
-      <LanguagePage />
-      <RoomTimePage />
-    </Book>
-  );
-}
+const TEXT = {
+  ko: {
+    title: "설정",
+    close: "설정 닫기",
+    language: "언어",
+    roomTime: "방 시간대",
+    times: { auto: "실시간", morning: "아침", noon: "점심", dusk: "저녁", night: "밤" },
+  },
+  en: {
+    title: "Setting",
+    close: "Close settings",
+    language: "Language",
+    roomTime: "Room time",
+    times: { auto: "Live", morning: "Morning", noon: "Noon", dusk: "Evening", night: "Night" },
+  },
+};
 
-function Page({ no, tag, title, children }: { no: number; tag: string; title: string; children: ReactNode }) {
-  return (
-    <BookPage id={String(no)} no={no} tag={tag} title={title}>
-      {children}
-    </BookPage>
-  );
-}
-
-// 둘 이상 중에서 하나 고르기 (라디오). 고른 칸은 진흙색 테두리와 손그림 체크
-function Choice<T extends string>({
-  name,
-  value,
-  checked,
-  onPick,
-  className = "",
-  children,
-}: {
-  name: string;
-  value: T;
-  checked: boolean;
-  onPick: (v: T) => void;
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <label className={`sb-choice ${className}`}>
-      <input type="radio" name={name} value={value} checked={checked} onChange={() => onPick(value)} />
-      {children}
-    </label>
-  );
-}
-
-const LANGUAGE_LABELS: [Language, string][] = [
-  ["ko", "Korean"],
+// 언어 이름은 고른 언어와 상관없이 그 언어로 쓴다 (Figma: ENGLISH, 한국어)
+const LANGUAGE_CHOICES: [Language, string][] = [
   ["en", "English"],
+  ["ko", "한국어"],
 ];
+// LIVE 한 줄, 그 아래 두 칸씩
+const TIME_ROWS: Exclude<RoomTime, "auto">[] = ["morning", "noon", "dusk", "night"];
 
-function LanguagePage() {
-  const { language } = usePrefs();
-  return (
-    <Page no={1} tag="language" title="setting">
-      <fieldset className="sb-field">
-        <legend className="ob-rounded sb-legend">Language</legend>
-        <div className="sb-row">
-          {LANGUAGE_LABELS.map(([v, label]) => (
-            <Choice key={v} name="language" value={v} checked={language === v} onPick={(language) => setPrefs({ language })} className="sb-chip">
-              <b className="ob-rounded">{label}</b>
-            </Choice>
-          ))}
-        </div>
-      </fieldset>
-      <p className="ob-hand sb-note">pick the words you read best ♡</p>
-    </Page>
+// onClose: 방 위에 띄운 경우 닫기 (room-tour.tsx). 없으면 /settings 주소로 바로 들어온 것이다
+export function SettingsBook({ onClose }: { onClose?: () => void } = {}) {
+  const { language, roomTime } = usePrefs();
+  const t = TEXT[language];
+  const timeButton = (v: RoomTime) => (
+    <button
+      key={v}
+      type="button"
+      className={`cb-btn${roomTime === v ? " on" : ""}`}
+      aria-pressed={roomTime === v}
+      onClick={() => setPrefs({ roomTime: v })}
+    >
+      {t.times[v]}
+    </button>
   );
-}
 
-// 시간대 칸의 하늘색: 엔진(heap/engine/time.js)의 같은 시간대 배경색(bd)
-const ROOM_TIME_LABELS: [Exclude<RoomTime, "auto">, string, string][] = [
-  ["morning", "Morning", "linear-gradient(180deg, #b4cfde, #eee4cb)"],
-  ["noon", "Noon", "linear-gradient(180deg, #a6cbe2, #e6f0f1)"],
-  ["dusk", "Evening", "linear-gradient(180deg, #4b416c, #d68a62)"],
-  ["night", "Night", "linear-gradient(180deg, #121833, #2a3157)"],
-];
-
-function RoomTimePage() {
-  const { roomTime } = usePrefs();
-  const pick = (roomTime: RoomTime) => setPrefs({ roomTime });
   return (
-    <Page no={2} tag="room time" title="room time">
-      <fieldset className="sb-field">
-        <legend className="ob-rounded sb-legend">Room time</legend>
-        <Choice name="room-time" value="auto" checked={roomTime === "auto"} onPick={pick} className="sb-chip sb-wide">
-          <b className="ob-rounded">Live</b>
-          <small>Follows Korea time</small>
-        </Choice>
-        <p className="ob-hand sb-or">or</p>
-        <div className="sb-grid">
-          {ROOM_TIME_LABELS.map(([v, label, sky]) => (
-            <Choice key={v} name="room-time" value={v} checked={roomTime === v} onPick={pick} className="sb-card sb-polaroid">
-              <span className="sb-sky" style={{ background: sky }} aria-hidden="true" />
-              <b className="ob-rounded">{label}</b>
-            </Choice>
+    <Clipboard title={t.title} closeLabel={t.close} className="cb-settings" onClose={onClose}>
+      <Section head={t.language}>
+        <div className="cb-buttons" role="group" aria-label={t.language}>
+          {LANGUAGE_CHOICES.map(([v, label]) => (
+            <button
+              key={v}
+              type="button"
+              lang={v}
+              className={`cb-btn${language === v ? " on" : ""}`}
+              aria-pressed={language === v}
+              onClick={() => setPrefs({ language: v })}
+            >
+              {label}
+            </button>
           ))}
         </div>
-      </fieldset>
-      {roomTime === null && <p className="ob-hand sb-note">Not set: shows the owner&apos;s time</p>}
-    </Page>
+      </Section>
+      <Section head={t.roomTime}>
+        <div role="group" aria-label={t.roomTime}>
+          <div className="cb-buttons">{timeButton("auto")}</div>
+          <div className="cb-buttons cb-gap">{TIME_ROWS.map(timeButton)}</div>
+        </div>
+      </Section>
+    </Clipboard>
   );
 }

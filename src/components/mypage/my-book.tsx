@@ -1,20 +1,25 @@
-import Link from "next/link";
-import type { ReactNode } from "react";
-import { Book, BookPage } from "@/components/settings/book";
-import { SignOutButton } from "@/components/sign-out-button";
-import type { HeapChannelPlatform } from "@/lib/heap/platform";
-import { BlockList, type MyBlock } from "./block-list";
+"use client";
 
-// 마이페이지 (/mypage): 설정과 같은 책상 위에 펼친 O링 수첩 (틀은 settings/book.tsx).
-// 모든 계정: 계정 정보와 로그아웃, 결제 정보. 크리에이터와 관리자: 쪽지, 대화방, 채널, 내 방.
-// 지금은 화면 구성만 잡는다. 상세 기능은 기존 화면(/creator, 방의 꾸미기)으로 보내거나 "준비 중"으로 둔다.
+// 마이페이지 (/mypage): 설정과 같은 클립보드 종이 (틀은 settings/clipboard.tsx, Figma "6차" MYPAGE).
+// 모든 계정: ACCOUNT, PAYMENT HISTORY, BLOCKED. 크리에이터와 관리자: CHANNELS, MY ROOM, LETTERS, CHAT 도.
+// 글은 설정의 언어를 따른다 (TEXT). 세션 값과 DB 값은 서버(page.tsx)가 읽어 넘긴다.
+// 단추: 흰 바탕은 누를 수 있는 동작, 갈색 바탕은 지금 켜진 상태 (예: 연결한 채널).
+import Link from "next/link";
+import { useState, useTransition, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { Clipboard, Fold, Section } from "@/components/settings/clipboard";
+import { SignOutButton } from "@/components/sign-out-button";
+import { closeRoomAction } from "@/lib/bubble/actions";
+import type { HeapChannelPlatform } from "@/lib/heap/platform";
+import { useLanguage, type Language } from "@/lib/settings/prefs";
+import { BlockList, type MyBlock } from "./block-list";
 
 export type MyAccount = {
   name: string;
   email: string;
-  roleLabel: string;
-  joinedAt: Date;
-  // 관리자면 계정 정보 장에 관리자 페이지 버튼을 보인다. 접근 권한은 관리자 페이지가 서버에서 다시 확인한다.
+  // 역할 값 (admin, creator, public). 이름은 고른 언어로 여기서 붙인다
+  role: string | null;
+  // 관리자면 ACCOUNT 에 관리자 페이지 단추를 보인다. 접근 권한은 관리자 페이지가 서버에서 다시 확인한다.
   isAdmin: boolean;
 };
 
@@ -23,9 +28,12 @@ export type MyCreatorData = {
   room: { slug: string; name: string } | null;
   visits: { today: number; total: number };
   notes: { received: number; unread: number; replied: number };
-  chat: { openRoomId: string | null };
+  chat: { openRoomId: string | null; members: number };
   channels: { platform: HeapChannelPlatform; title: string; url: string }[];
 };
+
+// 서버(src/lib/mypage/data.ts)가 읽어 넘기는 값 전부
+export type MyPageData = { account: MyAccount; creator: MyCreatorData | null; blocks: MyBlock[] };
 
 const PLATFORM_LABELS: Record<HeapChannelPlatform, string> = {
   youtube: "YouTube",
@@ -36,256 +44,260 @@ const PLATFORM_LABELS: Record<HeapChannelPlatform, string> = {
   tiktok: "TikTok",
 };
 
+// 플랫폼 단추 순서 (Figma: 세 칸씩 두 줄)
+const BUTTON_ORDER: HeapChannelPlatform[] = ["youtube", "instagram", "chzzk", "twitch", "soop", "tiktok"];
+
 const MY_ROOM_HREF = "/room/me";
 const CREATOR_HREF = "/creator";
 // 관리자 페이지. 지금은 AI 스크리닝 검토 화면 하나다 (docs/planning/12-ai-screening.md 11장).
 const ADMIN_HREF = "/admin/moderation";
 
-const dateFormat = new Intl.DateTimeFormat("ko-KR", { dateStyle: "long", timeZone: "Asia/Seoul" });
+const LOCALES: Record<Language, string> = { ko: "ko-KR", en: "en-US" };
 
+const TEXT = {
+  ko: {
+    title: "마이페이지",
+    close: "마이페이지 닫기",
+    roles: { admin: "관리자", creator: "크리에이터", public: "구독자" } as Record<string, string>,
+    account: "계정",
+    name: "이름",
+    email: "이메일",
+    role: "역할",
+    logout: "로그아웃",
+    admin: "관리자 페이지",
+    channels: "채널",
+    noChannel: "연결한 채널이 없어요",
+    room: "내 방",
+    today: "오늘 방문",
+    total: "전체 방문",
+    editRoom: "방 꾸미기",
+    makeRoom: "방 만들기",
+    payment: "결제 내역",
+    viewHistory: "내역 보기",
+    noHistory: "결제 내역이 없어요",
+    letters: "편지",
+    inbox: "받은 편지",
+    outbox: "보낸 답장",
+    openLetters: "편지함 열기",
+    chat: "채팅",
+    members: "참여자",
+    closeChat: "채팅 닫기",
+    closeConfirm: "대화방을 닫을까요? 참여자 모두 더 이상 대화할 수 없어요.",
+    openChat: "채팅 열기",
+    closed: "닫혀 있어요",
+    blocked: "차단",
+  },
+  en: {
+    title: "Mypage",
+    close: "Close my page",
+    roles: { admin: "Admin", creator: "Creator", public: "Subscriber" } as Record<string, string>,
+    account: "Account",
+    name: "Name",
+    email: "E-mail",
+    role: "Role",
+    logout: "Logout",
+    admin: "Admin page",
+    channels: "Channels",
+    noChannel: "No channels linked",
+    room: "My room",
+    today: "Today’s visitors",
+    total: "Total visitors",
+    editRoom: "Edit room",
+    makeRoom: "Make room",
+    payment: "Payment history",
+    viewHistory: "View history",
+    noHistory: "No payments yet",
+    letters: "Letters",
+    inbox: "Inbox",
+    outbox: "Outbox",
+    openLetters: "Open letters",
+    chat: "Chat",
+    members: "Members",
+    closeChat: "Close chat",
+    closeConfirm: "Close the chat room? No one will be able to talk in it.",
+    openChat: "Open chat",
+    closed: "Closed",
+    blocked: "Blocked",
+  },
+};
+type MyText = (typeof TEXT)["en"];
+
+// onClose: 방 위에 띄운 경우 닫기 (없으면 홈으로 간다). onRefresh: 값이 바뀐 뒤 다시 읽기 (없으면 router.refresh)
 export function MyBook({
   account,
   creator,
   blocks,
-}: {
-  account: MyAccount;
-  creator: MyCreatorData | null;
-  blocks: MyBlock[];
-}) {
-  const pages = [
-    <AccountPage key="account" no={1} account={account} />,
-    <PaymentPage key="payment" no={2} />,
-    <BlocksPage key="blocks" no={3} blocks={blocks} />,
-  ];
-  if (creator) {
-    pages.push(
-      <NotesPage key="notes" no={4} creator={creator} />,
-      <ChatPage key="chat" no={5} creator={creator} />,
-      <ChannelsPage key="channels" no={6} creator={creator} />,
-      <RoomPage key="room" no={7} creator={creator} />,
-    );
-  }
-  return (
-    <Book heading="MY PAGE" closeLabel="마이페이지 닫기">
-      {pages}
-    </Book>
-  );
-}
+  onClose,
+  onRefresh,
+}: MyPageData & { onClose?: () => void; onRefresh?: () => void }) {
+  const language = useLanguage();
+  const t = TEXT[language];
+  const role = account.role ?? "public";
+  const roomHref = creator?.room ? `/room/${creator.room.slug}` : MY_ROOM_HREF;
 
-// 칸 제목 (설정의 legend 와 같은 모양)
-function Head({ ko, en }: { ko: string; en: string }) {
   return (
-    <h3 className="ob-rounded sb-legend">
-      {ko} <small>{en}</small>
-    </h3>
-  );
-}
-
-// 이름: 값 한 줄
-function Row({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="mp-row">
-      <dt>{label}</dt>
-      <dd>{children}</dd>
-    </div>
-  );
-}
-
-// 큰 숫자 칸 (방문 수, 쪽지 수)
-function Stat({ label, sub, value }: { label: string; sub: string; value: number }) {
-  return (
-    <div className="mp-stat">
-      <span className="ob-pixel mp-stat-value">{value.toLocaleString("ko-KR")}</span>
-      <b className="ob-rounded">{label}</b>
-      <small>{sub}</small>
-    </div>
-  );
-}
-
-// 아직 만들지 않은 기능 자리
-function Soon({ children }: { children: ReactNode }) {
-  return <p className="ob-hand mp-soon">{children}</p>;
-}
-
-function AccountPage({ no, account }: { no: number; account: MyAccount }) {
-  return (
-    <BookPage id="account" no={no} tag="account" title="my account">
-      <Head ko="계정 정보" en="Account" />
-      <dl className="mp-list">
-        <Row label="이름">{account.name}</Row>
-        <Row label="이메일">{account.email}</Row>
-        <Row label="계정 종류">{account.roleLabel}</Row>
-        <Row label="가입일">{dateFormat.format(account.joinedAt)}</Row>
-      </dl>
-      <div className="mp-actions">
-        {account.isAdmin && (
-          <Link href={ADMIN_HREF} className="mp-btn">
-            관리자 페이지
-          </Link>
-        )}
-        <SignOutButton className="mp-btn" />
-      </div>
-    </BookPage>
-  );
-}
-
-// 결제는 Lemon Squeezy 를 검토 중이다 (아직 정하지 않음). 연결 전까지 빈 자리만 보인다.
-function PaymentPage({ no }: { no: number }) {
-  return (
-    <BookPage id="payment" no={no} tag="payment" title="payment">
-      <Head ko="등록된 카드" en="Card" />
-      <div className="mp-card mp-empty">
-        <span className="mp-card-chip" aria-hidden="true" />
-        <span>등록된 카드가 없어요</span>
-      </div>
-      <Head ko="결제 내역" en="History" />
-      <div className="mp-box mp-empty">결제 내역이 없어요</div>
-      <Soon>결제는 준비 중이에요</Soon>
-    </BookPage>
-  );
-}
-
-// 개인 차단 (0013): 방에서 "차단"으로 가린 사람. 풀면 다시 보인다. 쓰기를 막는 크리에이터 차단은 검토 화면에서 푼다.
-function BlocksPage({ no, blocks }: { no: number; blocks: MyBlock[] }) {
-  return (
-    <BookPage id="blocks" no={no} tag="blocked" title="blocked">
-      <Head ko="차단한 사람" en="Blocked" />
-      <BlockList blocks={blocks} />
-    </BookPage>
-  );
-}
-
-// 방이 없을 때 방 만들기로 보내는 칸 (내 방이 필요한 장에서 함께 쓴다)
-function NoRoom() {
-  return (
-    <div className="mp-box mp-empty">
-      아직 내 방이 없어요.{" "}
-      <Link href={MY_ROOM_HREF} className="mp-link">
-        방 만들기
-      </Link>
-    </div>
-  );
-}
-
-function NotesPage({ no, creator }: { no: number; creator: MyCreatorData }) {
-  const { room, notes } = creator;
-  return (
-    <BookPage id="notes" no={no} tag="letters" title="letters">
-      <Head ko="받은 쪽지와 답장" en="Letters" />
-      <div className="mp-stats">
-        <Stat label="받은 쪽지" sub="Received" value={notes.received} />
-        <Stat label="답장" sub="Replied" value={notes.replied} />
-      </div>
-      <Head ko="받은 쪽지" en="Inbox" />
-      {room ? (
-        <div className="mp-box">
-          <p className="mp-line">
-            안 읽은 쪽지 <b className="ob-pixel mp-accent">{notes.unread}</b>장
-          </p>
-          <Link href={`/room/${room.slug}`} className="mp-btn">
-            쪽지함 열기
-          </Link>
-        </div>
-      ) : (
-        <NoRoom />
-      )}
-    </BookPage>
-  );
-}
-
-function ChatPage({ no, creator }: { no: number; creator: MyCreatorData }) {
-  const open = creator.chat.openRoomId !== null;
-  return (
-    <BookPage id="chat" no={no} tag="chat" title="chat room">
-      <Head ko="대화방" en="Chat" />
-      <div className="mp-box">
-        <p className="mp-line">
-          <span className={`mp-dot${open ? " on" : ""}`} aria-hidden="true" />
-          {open ? "열려 있어요" : "닫혀 있어요"}
-        </p>
-        <div className="mp-actions">
-          {open && (
-            <Link href={`/bubble/${creator.chat.openRoomId}`} className="mp-btn">
-              대화방 가기
+    <Clipboard title={t.title} closeLabel={t.close} onClose={onClose}>
+      <Section head={t.account}>
+        <dl className="cb-fields">
+          <Field label={t.name}>{account.name}</Field>
+          <Field label={t.email}>{account.email}</Field>
+          <Field label={t.role}>{t.roles[role] ?? role}</Field>
+        </dl>
+        <div className="cb-buttons">
+          <SignOutButton className="cb-btn" label={t.logout} />
+          {account.isAdmin && (
+            <Link href={ADMIN_HREF} className="cb-btn">
+              {t.admin}
             </Link>
           )}
-          <Link href={CREATOR_HREF} className="mp-btn">
-            {open ? "닫기" : "열기"}
-          </Link>
         </div>
-      </div>
-      <Head ko="사용자 관리" en="Users" />
-      <dl className="mp-list">
-        <Row label="제한한 사용자">0명</Row>
-        <Row label="차단한 사용자">0명</Row>
-      </dl>
-      <Soon>제한과 차단은 준비 중이에요</Soon>
-    </BookPage>
+      </Section>
+
+      {creator && <ChannelsSection creator={creator} roomHref={roomHref} t={t} />}
+
+      {creator && (
+        <Section head={t.room}>
+          <dl className="cb-fields">
+            <Field label={t.today}>{creator.visits.today.toLocaleString(LOCALES[language])}</Field>
+            <Field label={t.total}>{creator.visits.total.toLocaleString(LOCALES[language])}</Field>
+          </dl>
+          <div className="cb-buttons">
+            <Link href={roomHref} className="cb-btn">
+              {creator.room ? t.editRoom : t.makeRoom}
+            </Link>
+          </div>
+        </Section>
+      )}
+
+      {/* 결제는 아직 없다 (Lemon Squeezy 검토 중). 펼치면 빈 내역만 보인다 */}
+      <Section head={t.payment} brown>
+        <Fold label={t.viewHistory}>
+          <p className="cb-empty">{t.noHistory}</p>
+        </Fold>
+      </Section>
+
+      {creator && (
+        <Section head={t.letters}>
+          <dl className="cb-fields">
+            <Field label={t.inbox}>{creator.notes.received.toLocaleString(LOCALES[language])}</Field>
+            <Field label={t.outbox}>{creator.notes.replied.toLocaleString(LOCALES[language])}</Field>
+          </dl>
+          <div className="cb-buttons">
+            <Link href={roomHref} className="cb-btn">
+              {creator.room ? t.openLetters : t.makeRoom}
+            </Link>
+          </div>
+        </Section>
+      )}
+
+      {creator && <ChatSection creator={creator} t={t} language={language} onRefresh={onRefresh} />}
+
+      <Section head={t.blocked}>
+        <BlockList blocks={blocks} />
+      </Section>
+    </Clipboard>
   );
 }
 
-function ChannelsPage({ no, creator }: { no: number; creator: MyCreatorData }) {
-  const { room, channels } = creator;
+// 이름 / 값 한 칸
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <BookPage id="channels" no={no} tag="channels" title="channels">
-      <Head ko="채널과 영상 가져오기" en="Channels" />
+    <div className="cb-field">
+      <dt className="cb-label">{label}</dt>
+      <dd className="cb-value">{children}</dd>
+    </div>
+  );
+}
+
+// 연결한 채널(이름과 주소) 세 칸까지, 그 아래 플랫폼 단추 여섯 개.
+// 연결한 플랫폼은 갈색(켜짐)이고 누르면 그 채널을 연다. 연결하지 않은 플랫폼은 흰색이고 누르면 내 방(채널 가져오기)으로 간다.
+function ChannelsSection({ creator, roomHref, t }: { creator: MyCreatorData; roomHref: string; t: MyText }) {
+  const { channels } = creator;
+  return (
+    <Section head={t.channels}>
       {channels.length > 0 ? (
-        <ul className="mp-channels">
-          {channels.map((channel) => (
-            <li key={`${channel.platform}:${channel.url}`}>
-              <b className="ob-rounded">{PLATFORM_LABELS[channel.platform]}</b>
-              <a href={channel.url} target="_blank" rel="noopener noreferrer" className="mp-link">
-                {channel.title || channel.url}
+        <dl className="cb-fields">
+          {channels.map((c) => (
+            <Field key={`${c.platform}:${c.url}`} label={PLATFORM_LABELS[c.platform]}>
+              <a href={c.url} target="_blank" rel="noopener noreferrer" className="cb-value-link">
+                {c.title || c.url}
               </a>
-            </li>
+            </Field>
           ))}
-        </ul>
+        </dl>
       ) : (
-        <div className="mp-box mp-empty">연결한 채널이 없어요</div>
+        <p className="cb-empty">{t.noChannel}</p>
       )}
-      <p className="mp-platforms">
-        {Object.values(PLATFORM_LABELS).map((label) => (
-          <span key={label} className="mp-tag">
-            {label}
-          </span>
-        ))}
-      </p>
-      {room ? (
-        <div className="mp-actions">
-          <Link href={`/room/${room.slug}`} className="mp-btn">
-            내 방에서 가져오기
-          </Link>
-        </div>
-      ) : (
-        <NoRoom />
-      )}
-      <p className="ob-hand sb-note">채널과 영상은 방 꾸미기의 채널 탭에서 가져와요</p>
-    </BookPage>
+      <div className="cb-buttons">
+        {BUTTON_ORDER.map((platform) => {
+          const linked = channels.find((c) => c.platform === platform);
+          return linked ? (
+            <a key={platform} href={linked.url} target="_blank" rel="noopener noreferrer" className="cb-btn on">
+              {PLATFORM_LABELS[platform]}
+            </a>
+          ) : (
+            <Link key={platform} href={roomHref} className="cb-btn">
+              {PLATFORM_LABELS[platform]}
+            </Link>
+          );
+        })}
+      </div>
+    </Section>
   );
 }
 
-function RoomPage({ no, creator }: { no: number; creator: MyCreatorData }) {
-  const { room, visits } = creator;
+// 열린 대화방의 참여자 수와 닫기. 닫혀 있으면 크리에이터 화면(/creator)에서 연다 (방 이름이 필요하다)
+function ChatSection({
+  creator,
+  t,
+  language,
+  onRefresh,
+}: {
+  creator: MyCreatorData;
+  t: MyText;
+  language: Language;
+  onRefresh?: () => void;
+}) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [error, setError] = useState("");
+  const { openRoomId, members } = creator.chat;
   return (
-    <BookPage id="room" no={no} tag="my room" title="my room">
-      <Head ko="방문 수" en="Visits" />
-      <div className="mp-stats">
-        <Stat label="오늘" sub="Today" value={visits.today} />
-        <Stat label="전체" sub="Total" value={visits.total} />
-      </div>
-      <Head ko="방 꾸미기" en="Decorate" />
-      {room ? (
-        <div className="mp-box">
-          <p className="mp-line">
-            <b className="ob-rounded">{room.name}</b> <small className="mp-sub">/room/{room.slug}</small>
-          </p>
-          <Link href={`/room/${room.slug}`} className="mp-btn">
-            방 꾸미러 가기
+    <Section head={t.chat}>
+      <dl className="cb-fields">
+        <Field label={t.members}>{openRoomId ? members.toLocaleString(LOCALES[language]) : t.closed}</Field>
+      </dl>
+      <div className="cb-buttons">
+        {openRoomId ? (
+          <button
+            type="button"
+            className="cb-btn"
+            disabled={pending}
+            onClick={() => {
+              if (!window.confirm(t.closeConfirm)) return;
+              start(async () => {
+                const res = await closeRoomAction(openRoomId);
+                if (res.ok) {
+                  setError("");
+                  if (onRefresh) onRefresh();
+                  else router.refresh();
+                } else setError(res.error);
+              });
+            }}
+          >
+            {t.closeChat}
+          </button>
+        ) : (
+          <Link href={CREATOR_HREF} className="cb-btn">
+            {t.openChat}
           </Link>
-        </div>
-      ) : (
-        <NoRoom />
+        )}
+      </div>
+      {error && (
+        <p className="cb-error" role="status">
+          {error}
+        </p>
       )}
-    </BookPage>
+    </Section>
   );
 }

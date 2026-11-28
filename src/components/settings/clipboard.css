@@ -1,0 +1,332 @@
+/* 설정(/settings)과 마이페이지(/mypage)의 클립보드 (clipboard.tsx). Figma "6차" Home - Setting, MYPAGE.
+   모든 크기는 Figma 프레임(2880×1800)의 px 값에 --u 를 곱한다. --u 는 화면에 맞춘 1 Figma px 의 CSS 길이다.
+   배경 세 겹 (public/settings/): film(맨 뒤, 기울어진 필름 판) -> paper(종이) -> clip(집게). 자리는 Figma 합성본 기준이다. */
+
+.cb-root {
+  --u: min(calc(100vw / 1000), calc(100dvh / 1560));
+  --ink: #1d1b19;
+  --brown: #4a1606;
+  --rule: #2b2a28;
+  --soft-rule: #b9917a;
+  --paper-text: #241f1b;
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  /* flex 가운데 맞춤: 좁은 화면에서 필름 판이 화면보다 넓어도 양쪽으로 똑같이 넘친다 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #b7d0de 0%, #d8cdb2 55%, #d3b88f 100%);
+  color: var(--paper-text);
+  font-family: var(--font-text);
+}
+/* 방 위에 띄운 경우: 배경은 방이다. 위의 내비게이션 바 자리(약 150 Figma px)를 비우고 그 아래에 놓는다 */
+/* Figma 프레임은 1800 높이: 합성본 위쪽 262(내비게이션 바 자리), 아래쪽 107 을 비운다 */
+.cb-root.cb-overlay {
+  --u: min(calc(100vw / 1000), calc(100dvh / 1800));
+  position: fixed;
+  /* 방 안의 단추(최대 30)와 채팅 창(40) 위, 내비게이션 바 아래 (아래 :has 규칙) */
+  z-index: 45;
+  background: rgb(12 10 8 / 0.08);
+  align-items: flex-end;
+  padding-bottom: calc(107 * var(--u));
+}
+@media (min-width: 1000px) {
+  .cb-root.cb-overlay {
+    --u: min(calc(100vw / 1600), calc(100dvh / 1800));
+  }
+}
+/* 띄워 둔 동안에도 내비게이션 바는 위에 보이고 누를 수 있다 (Figma Home - Setting) */
+.cb-overlay ~ .oc-nav {
+  z-index: 46;
+}
+.cb-root.cb-overlay .cb-stage {
+  animation: cb-in 0.35s cubic-bezier(0.2, 0.9, 0.25, 1.1);
+}
+@keyframes cb-in {
+  from {
+    transform: translateY(6%) rotate(-1deg);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cb-root.cb-overlay .cb-stage {
+    animation: none;
+  }
+}
+@media (min-width: 1000px) {
+  .cb-root {
+    --u: min(calc(100vw / 1600), calc(100dvh / 1560));
+  }
+}
+
+/* 합성본 크기 1379.5 × 1431 (Figma px) */
+.cb-stage {
+  position: relative;
+  width: calc(1379.5 * var(--u));
+  height: calc(1431 * var(--u));
+  flex: none;
+}
+.cb-layer {
+  position: absolute;
+  pointer-events: none;
+  user-select: none;
+  max-width: none;
+}
+.cb-film {
+  left: 0;
+  top: calc(46.1 * var(--u));
+  width: calc(1379.5 * var(--u));
+  height: calc(1384.9 * var(--u));
+}
+.cb-paper {
+  left: calc(232.2 * var(--u));
+  top: calc(122 * var(--u));
+  width: calc(916 * var(--u));
+  height: calc(1234 * var(--u));
+  box-shadow: 0 calc(10 * var(--u)) calc(40 * var(--u)) rgb(0 0 0 / 0.25);
+}
+.cb-clip {
+  left: calc(540.2 * var(--u));
+  top: 0;
+  width: calc(297.2 * var(--u));
+  height: calc(159.9 * var(--u));
+  z-index: 2;
+}
+
+/* 글이 들어가는 칸: 919 × 1098. 넘치면 스크롤하지만 스크롤바는 보이지 않는다 */
+.cb-scroll {
+  position: absolute;
+  left: calc(232.2 * var(--u));
+  top: calc(191 * var(--u));
+  width: calc(919 * var(--u));
+  height: calc(1098 * var(--u));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  z-index: 1;
+}
+.cb-scroll::-webkit-scrollbar {
+  display: none;
+}
+.cb-body {
+  padding: calc(25 * var(--u)) 0 calc(48 * var(--u)) calc(56 * var(--u));
+  width: calc(863 * var(--u));
+}
+
+/* 키보드로만 보이는 닫기 단추 (바깥 누르기, Esc 로도 닫힌다) */
+.cb-close {
+  position: absolute;
+  right: calc(16 * var(--u));
+  top: calc(16 * var(--u));
+  opacity: 0;
+  z-index: 3;
+  padding: 4px 10px;
+  border: 1px solid var(--ink);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--ink);
+  font: 700 13px var(--font-text);
+}
+.cb-close:focus-visible {
+  opacity: 1;
+}
+
+/* ─── 글 ─── */
+.cb-title,
+.cb-head,
+.cb-label,
+.cb-toggle,
+.cb-date {
+  font-family: var(--font-display);
+  font-weight: 500;
+  text-transform: uppercase;
+  color: var(--ink);
+  margin: 0;
+}
+.cb-title {
+  font-size: calc(58 * var(--u));
+  line-height: calc(71 * var(--u));
+  letter-spacing: -0.01em;
+}
+.cb-section {
+  margin-top: calc(66 * var(--u));
+}
+.cb-title + .cb-section {
+  margin-top: calc(54 * var(--u));
+}
+.cb-head {
+  font-size: calc(38 * var(--u));
+  line-height: calc(47 * var(--u));
+  padding-bottom: calc(5 * var(--u));
+  border-bottom: calc(1.5 * var(--u)) solid var(--rule);
+  margin-bottom: calc(12 * var(--u));
+}
+.cb-head.brown {
+  border-bottom-color: #7a3c22;
+}
+.cb-settings .cb-head {
+  padding-bottom: calc(4 * var(--u));
+  margin-bottom: calc(8 * var(--u));
+}
+
+/* 이름/값 칸. 세 칸 (56, 333, 610) */
+.cb-fields {
+  display: grid;
+  grid-template-columns: repeat(3, calc(277 * var(--u)));
+  margin: 0;
+}
+.cb-field {
+  min-width: 0;
+}
+.cb-label {
+  font-size: calc(27 * var(--u));
+  line-height: calc(34 * var(--u));
+}
+.cb-value {
+  margin: 0;
+  font-family: var(--font-oc-body), var(--font-text);
+  font-size: calc(28 * var(--u));
+  line-height: calc(33 * var(--u));
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-right: calc(16 * var(--u));
+}
+
+/* 단추: 흰 바탕 = 고르지 않음, 갈색 바탕 = 지금 상태(켜짐) */
+.cb-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, calc(277 * var(--u)));
+  row-gap: calc(12 * var(--u));
+  margin-top: calc(12 * var(--u));
+}
+.cb-settings .cb-buttons {
+  grid-template-columns: repeat(2, calc(255 * var(--u)));
+  margin-top: 0;
+}
+.cb-value-link {
+  color: inherit;
+  text-decoration: none;
+}
+.cb-value-link:hover {
+  text-decoration: underline;
+}
+.cb-empty + .cb-buttons {
+  margin-top: calc(16 * var(--u));
+}
+.cb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(206 * var(--u));
+  height: calc(41 * var(--u));
+  border: calc(2 * var(--u)) solid #2a2422;
+  border-radius: calc(5 * var(--u));
+  background: #fff;
+  color: var(--brown);
+  font-family: var(--font-nunito), var(--font-oc-body), sans-serif;
+  font-weight: 700;
+  font-size: calc(19 * var(--u));
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+.cb-btn:hover {
+  background: #f3ebe4;
+}
+.cb-btn.on {
+  background: var(--brown);
+  border-color: var(--brown);
+  color: #fff;
+}
+.cb-btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.cb-btn:focus-visible {
+  outline: 2px solid var(--brown);
+  outline-offset: 2px;
+}
+.cb-empty.cb-gap {
+  margin-top: calc(54 * var(--u));
+}
+.cb-buttons.cb-gap {
+  margin-top: calc(20 * var(--u));
+}
+
+/* ─── 접는 칸 (VIEW HISTORY, BLOCKED 의 CHAT/LETTER/GUEST BOOK) ─── */
+.cb-fold {
+  border-top: calc(1.5 * var(--u)) solid var(--soft-rule);
+  border-bottom: calc(1.5 * var(--u)) solid var(--soft-rule);
+}
+.cb-fold + .cb-fold {
+  margin-top: calc(14 * var(--u));
+}
+.cb-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: calc(43 * var(--u));
+  padding: 0 calc(12 * var(--u)) 0 calc(2 * var(--u));
+  border: 0;
+  background: none;
+  font-size: calc(27 * var(--u));
+  cursor: pointer;
+  text-align: left;
+}
+.cb-toggle:focus-visible {
+  outline: 2px solid var(--brown);
+  outline-offset: -2px;
+}
+.cb-caret {
+  width: calc(40 * var(--u));
+  height: calc(40 * var(--u));
+  color: #4b4846;
+  transition: transform 0.2s;
+}
+.cb-fold.open .cb-caret {
+  transform: rotate(180deg);
+}
+.cb-fold-body {
+  padding: calc(21 * var(--u)) 0 calc(21 * var(--u)) calc(3 * var(--u));
+}
+
+/* 접는 칸 안의 한 줄: 위에 작은 제목(날짜, 결제 이름), 아래에 값들 */
+.cb-item + .cb-item {
+  margin-top: calc(10 * var(--u));
+}
+.cb-date {
+  font-size: calc(24 * var(--u));
+  line-height: calc(30 * var(--u));
+}
+.cb-item-row {
+  display: grid;
+  grid-template-columns: calc(255 * var(--u)) calc(312 * var(--u)) 1fr;
+  align-items: center;
+  min-height: calc(36 * var(--u));
+}
+.cb-item-row .cb-value {
+  font-size: calc(25 * var(--u));
+  line-height: calc(29 * var(--u));
+}
+.cb-item-row .cb-btn {
+  margin-top: calc(-6 * var(--u));
+}
+.cb-empty {
+  margin: 0;
+  font-family: var(--font-oc-body), var(--font-text);
+  font-size: calc(25 * var(--u));
+  line-height: calc(29 * var(--u));
+  color: #6b625b;
+}
+.cb-error {
+  margin: calc(8 * var(--u)) 0 0;
+  font-size: calc(22 * var(--u));
+  color: #a3261b;
+}

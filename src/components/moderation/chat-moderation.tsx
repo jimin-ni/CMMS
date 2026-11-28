@@ -3,7 +3,7 @@
 // 버블 대화방 안의 AI 스크리닝 부품: 내린 글 표시, 신고·차단 버튼, 쓰기 차단 안내 (문서 8장, 9장, 10장)
 import { useState, useTransition } from "react";
 import {
-  blockUserAction,
+  blockChatAuthorAction,
   reportMessageAction,
   requestAppealAction,
   revealRemovedAction,
@@ -44,12 +44,10 @@ export function RemovedText({ messageId, canReveal }: { messageId: string; canRe
 // 방 주인·관리자가 구독자 글 옆에서 쓰는 신고(글 내림 + 경고 1회)와 차단(사람 단위 쓰기 차단 + 예전 글 내림)
 export function ModeratorTools({
   messageId,
-  senderId,
   senderName,
   onDone,
 }: {
   messageId: string;
-  senderId: string;
   senderName: string;
   onDone: () => void;
 }) {
@@ -84,7 +82,7 @@ export function ModeratorTools({
         onClick={() =>
           run(
             `${senderName} 님을 차단할까요? 내 방에서 더 이상 글을 쓸 수 없고, 예전 글도 모두 내려가요.`,
-            () => blockUserAction(senderId),
+            () => blockChatAuthorAction(messageId),
           )
         }
       >
