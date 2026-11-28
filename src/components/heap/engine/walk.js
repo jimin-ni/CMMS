@@ -189,7 +189,10 @@ export function setupWalk(ctx) {
       }
       turnToward(fig, mv.x, mv.z, dt);
     }
+    // 발소리: 다리가 반 박자(π) 돌 때마다 한 발이 땅에 닿는다. 걷기 시작한 프레임이 첫 발(0)이다 (sfx.js)
+    const prevStep = fig.phase > 0 ? Math.floor(fig.phase / Math.PI) : -1;
     stepGait(fig, moving, dt);
+    if (moving) { const n = Math.floor(fig.phase / Math.PI); if (n !== prevStep) ctx.footstep?.(n); }
     setHint(nearTable() ? 'near' : nearShelf() ? 'nearShelf' : nearDoor() ? 'nearDoor' : ctx.nearTree?.() ? 'nearTree' : 'room');
   }
 
