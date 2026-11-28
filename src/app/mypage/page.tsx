@@ -2,7 +2,6 @@ import { Suspense } from "react";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { roleLabel } from "@/lib/access";
 import {
   getOpenBubbleRoomId,
   getRoomByCreator,
@@ -51,7 +50,7 @@ async function MyPageContent() {
       account={{
         name: user.name,
         email: user.email,
-        roleLabel: roleLabel(role),
+        role: role ?? null,
         joinedAt: user.createdAt,
         isAdmin: role === "admin",
       }}

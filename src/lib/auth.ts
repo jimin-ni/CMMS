@@ -15,7 +15,7 @@ async function assertNickname(name: unknown, headers: Headers | undefined): Prom
   const value = typeof name === "string" ? name.trim() : "";
   const status = await checkNickname(value, clientKey(headers));
   if (status !== "ok") {
-    throw APIError.from("BAD_REQUEST", { message: NICKNAME_TEXT[status], code: `NICKNAME_${status.toUpperCase()}` });
+    throw APIError.from("BAD_REQUEST", { message: NICKNAME_TEXT.ko[status], code: `NICKNAME_${status.toUpperCase()}` });
   }
   return value;
 }

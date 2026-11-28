@@ -18,8 +18,6 @@ const SIGNIN_REASONS: Record<string, string> = {
   guestbook: "Sign in to leave your name in the guestbook.",
   note: "Sign in to hang a note on the tree.",
 };
-// 회원가입 화면으로 갔다가 돌아올 때 지금 주소에 붙일 것. 쪽지는 ?write=1 로 쓰기 판을 바로 연다 (heap-room.tsx).
-const SIGNUP_RETURN_QUERY: Record<string, string> = { note: "write=1" };
 // 설정 버튼이 여는 곳 (settings-book.tsx)
 const SETTINGS_HREF = "/settings";
 // 로그인한 사람의 이름 버튼이 여는 곳 (mypage/my-book.tsx)
@@ -177,12 +175,6 @@ export function RoomTour({
     else if (loginAction) hostRef.current?.querySelector(".heap-room")?.dispatchEvent(new CustomEvent("heap:signedin", { detail: loginAction }));
     router.refresh();
   }, [router, hostRef, loginAction, chatRoom]);
-  // 팝업에서 회원가입으로 가면 가입 뒤 이 방으로 돌아온다 (내비게이션 바의 로그인이면 돌아오지 않는다)
-  const signupNext = useMemo(() => {
-    if (!loginAction || typeof window === "undefined") return null;
-    const query = SIGNUP_RETURN_QUERY[loginAction];
-    return `${window.location.pathname}${query ? `?${query}` : window.location.search}`;
-  }, [loginAction]);
   // 방 안의 자리로 옮긴다: 홈(처음 들어온 상태), 탁자의 사진, 탁자의 휴대폰
   const go = (where: Go) => {
     if (where === "room" && homeHref) {
@@ -296,7 +288,7 @@ export function RoomTour({
         />
       )}
 
-      {login && <LoginPopup reason={login.reason} onClose={closeLogin} onSignedIn={onSignedIn} signupNext={signupNext} />}
+      {login && <LoginPopup reason={login.reason} onClose={closeLogin} onSignedIn={onSignedIn} />}
     </>
   );
 }

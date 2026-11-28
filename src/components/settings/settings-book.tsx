@@ -5,15 +5,55 @@
 import type { ReactNode } from "react";
 import { Book, BookPage } from "./book";
 import {
+  LANGUAGES,
   setPrefs,
+  useLanguage,
   usePrefs,
-  type Language,
   type RoomTime,
 } from "@/lib/settings/prefs";
 
+// 화면 글. 영어는 영어화(2026-11-27) 때의 글 그대로다
+const TEXT = {
+  ko: {
+    heading: "설정",
+    close: "설정 닫기",
+    langTag: "언어",
+    langTitle: "설정",
+    langLegend: "언어",
+    langs: { ko: "한국어", en: "영어" },
+    langNote: "가장 편한 말을 골라요 ♡",
+    timeTag: "방 시간대",
+    timeTitle: "방 시간대",
+    timeLegend: "방 시간대",
+    live: "실시간",
+    liveSub: "한국 시간을 따라 바뀌어요",
+    or: "또는",
+    times: { morning: "아침", noon: "점심", dusk: "저녁", night: "밤" },
+    notSet: "아직 고르지 않았어요: 방 주인이 정한 시간대로 보여요",
+  },
+  en: {
+    heading: "SETTINGS",
+    close: "Close settings",
+    langTag: "language",
+    langTitle: "setting",
+    langLegend: "Language",
+    langs: { ko: "Korean", en: "English" },
+    langNote: "pick the words you read best ♡",
+    timeTag: "room time",
+    timeTitle: "room time",
+    timeLegend: "Room time",
+    live: "Live",
+    liveSub: "Follows Korea time",
+    or: "or",
+    times: { morning: "Morning", noon: "Noon", dusk: "Evening", night: "Night" },
+    notSet: "Not set: shows the owner's time",
+  },
+};
+
 export function SettingsBook() {
+  const t = TEXT[useLanguage()];
   return (
-    <Book heading="SETTINGS" closeLabel="Close settings">
+    <Book heading={t.heading} closeLabel={t.close}>
       <LanguagePage />
       <RoomTimePage />
     </Book>
@@ -52,60 +92,57 @@ function Choice<T extends string>({
   );
 }
 
-const LANGUAGE_LABELS: [Language, string][] = [
-  ["ko", "Korean"],
-  ["en", "English"],
-];
-
 function LanguagePage() {
   const { language } = usePrefs();
+  const t = TEXT[language];
   return (
-    <Page no={1} tag="language" title="setting">
+    <Page no={1} tag={t.langTag} title={t.langTitle}>
       <fieldset className="sb-field">
-        <legend className="ob-rounded sb-legend">Language</legend>
+        <legend className="ob-rounded sb-legend">{t.langLegend}</legend>
         <div className="sb-row">
-          {LANGUAGE_LABELS.map(([v, label]) => (
+          {LANGUAGES.map((v) => (
             <Choice key={v} name="language" value={v} checked={language === v} onPick={(language) => setPrefs({ language })} className="sb-chip">
-              <b className="ob-rounded">{label}</b>
+              <b className="ob-rounded">{t.langs[v]}</b>
             </Choice>
           ))}
         </div>
       </fieldset>
-      <p className="ob-hand sb-note">pick the words you read best ♡</p>
+      <p className="ob-hand sb-note">{t.langNote}</p>
     </Page>
   );
 }
 
 // 시간대 칸의 하늘색: 엔진(heap/engine/time.js)의 같은 시간대 배경색(bd)
-const ROOM_TIME_LABELS: [Exclude<RoomTime, "auto">, string, string][] = [
-  ["morning", "Morning", "linear-gradient(180deg, #b4cfde, #eee4cb)"],
-  ["noon", "Noon", "linear-gradient(180deg, #a6cbe2, #e6f0f1)"],
-  ["dusk", "Evening", "linear-gradient(180deg, #4b416c, #d68a62)"],
-  ["night", "Night", "linear-gradient(180deg, #121833, #2a3157)"],
+const ROOM_TIME_SKIES: [Exclude<RoomTime, "auto">, string][] = [
+  ["morning", "linear-gradient(180deg, #b4cfde, #eee4cb)"],
+  ["noon", "linear-gradient(180deg, #a6cbe2, #e6f0f1)"],
+  ["dusk", "linear-gradient(180deg, #4b416c, #d68a62)"],
+  ["night", "linear-gradient(180deg, #121833, #2a3157)"],
 ];
 
 function RoomTimePage() {
-  const { roomTime } = usePrefs();
+  const { roomTime, language } = usePrefs();
+  const t = TEXT[language];
   const pick = (roomTime: RoomTime) => setPrefs({ roomTime });
   return (
-    <Page no={2} tag="room time" title="room time">
+    <Page no={2} tag={t.timeTag} title={t.timeTitle}>
       <fieldset className="sb-field">
-        <legend className="ob-rounded sb-legend">Room time</legend>
+        <legend className="ob-rounded sb-legend">{t.timeLegend}</legend>
         <Choice name="room-time" value="auto" checked={roomTime === "auto"} onPick={pick} className="sb-chip sb-wide">
-          <b className="ob-rounded">Live</b>
-          <small>Follows Korea time</small>
+          <b className="ob-rounded">{t.live}</b>
+          <small>{t.liveSub}</small>
         </Choice>
-        <p className="ob-hand sb-or">or</p>
+        <p className="ob-hand sb-or">{t.or}</p>
         <div className="sb-grid">
-          {ROOM_TIME_LABELS.map(([v, label, sky]) => (
+          {ROOM_TIME_SKIES.map(([v, sky]) => (
             <Choice key={v} name="room-time" value={v} checked={roomTime === v} onPick={pick} className="sb-card sb-polaroid">
               <span className="sb-sky" style={{ background: sky }} aria-hidden="true" />
-              <b className="ob-rounded">{label}</b>
+              <b className="ob-rounded">{t.times[v]}</b>
             </Choice>
           ))}
         </div>
       </fieldset>
-      {roomTime === null && <p className="ob-hand sb-note">Not set: shows the owner&apos;s time</p>}
+      {roomTime === null && <p className="ob-hand sb-note">{t.notSet}</p>}
     </Page>
   );
 }

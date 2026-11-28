@@ -10,13 +10,3 @@ export const roles = {
   creator: ac.newRole({}),
   public: ac.newRole({}),
 };
-
-export const ROLE_LABELS: Record<string, string> = {
-  admin: "관리자",
-  creator: "크리에이터",
-  public: "구독자",
-};
-
-export function roleLabel(role: string | null | undefined): string {
-  return ROLE_LABELS[role ?? "public"] ?? role ?? "구독자";
-}
