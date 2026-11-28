@@ -31,7 +31,8 @@ const LANGUAGE_CHOICES: [Language, string][] = [
 // LIVE 한 줄, 그 아래 두 칸씩
 const TIME_ROWS: Exclude<RoomTime, "auto">[] = ["morning", "noon", "dusk", "night"];
 
-export function SettingsBook() {
+// onClose: 방 위에 띄운 경우 닫기 (room-tour.tsx). 없으면 /settings 주소로 바로 들어온 것이다
+export function SettingsBook({ onClose }: { onClose?: () => void } = {}) {
   const { language, roomTime } = usePrefs();
   const t = TEXT[language];
   const timeButton = (v: RoomTime) => (
@@ -47,7 +48,7 @@ export function SettingsBook() {
   );
 
   return (
-    <Clipboard title={t.title} closeLabel={t.close} className="cb-settings">
+    <Clipboard title={t.title} closeLabel={t.close} className="cb-settings" onClose={onClose}>
       <Section head={t.language}>
         <div className="cb-buttons" role="group" aria-label={t.language}>
           {LANGUAGE_CHOICES.map(([v, label]) => (

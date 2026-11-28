@@ -20,6 +20,40 @@
   color: var(--paper-text);
   font-family: var(--font-text);
 }
+/* 방 위에 띄운 경우: 배경은 방이다. 위의 내비게이션 바 자리(약 150 Figma px)를 비우고 그 아래에 놓는다 */
+/* Figma 프레임은 1800 높이: 합성본 위쪽 262(내비게이션 바 자리), 아래쪽 107 을 비운다 */
+.cb-root.cb-overlay {
+  --u: min(calc(100vw / 1000), calc(100dvh / 1800));
+  position: fixed;
+  /* 방 안의 단추(최대 30)와 채팅 창(40) 위, 내비게이션 바 아래 (아래 :has 규칙) */
+  z-index: 45;
+  background: rgb(12 10 8 / 0.08);
+  align-items: flex-end;
+  padding-bottom: calc(107 * var(--u));
+}
+@media (min-width: 1000px) {
+  .cb-root.cb-overlay {
+    --u: min(calc(100vw / 1600), calc(100dvh / 1800));
+  }
+}
+/* 띄워 둔 동안에도 내비게이션 바는 위에 보이고 누를 수 있다 (Figma Home - Setting) */
+.cb-overlay ~ .oc-nav {
+  z-index: 46;
+}
+.cb-root.cb-overlay .cb-stage {
+  animation: cb-in 0.35s cubic-bezier(0.2, 0.9, 0.25, 1.1);
+}
+@keyframes cb-in {
+  from {
+    transform: translateY(6%) rotate(-1deg);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cb-root.cb-overlay .cb-stage {
+    animation: none;
+  }
+}
 @media (min-width: 1000px) {
   .cb-root {
     --u: min(calc(100vw / 1600), calc(100dvh / 1560));
@@ -217,6 +251,9 @@
 .cb-btn:focus-visible {
   outline: 2px solid var(--brown);
   outline-offset: 2px;
+}
+.cb-empty.cb-gap {
+  margin-top: calc(54 * var(--u));
 }
 .cb-buttons.cb-gap {
   margin-top: calc(20 * var(--u));

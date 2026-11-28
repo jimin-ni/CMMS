@@ -19,7 +19,6 @@ export type MyAccount = {
   email: string;
   // 역할 값 (admin, creator, public). 이름은 고른 언어로 여기서 붙인다
   role: string | null;
-  joinedAt: Date;
   // 관리자면 ACCOUNT 에 관리자 페이지 단추를 보인다. 접근 권한은 관리자 페이지가 서버에서 다시 확인한다.
   isAdmin: boolean;
 };
@@ -32,6 +31,9 @@ export type MyCreatorData = {
   chat: { openRoomId: string | null; members: number };
   channels: { platform: HeapChannelPlatform; title: string; url: string }[];
 };
+
+// 서버(src/lib/mypage/data.ts)가 읽어 넘기는 값 전부
+export type MyPageData = { account: MyAccount; creator: MyCreatorData | null; blocks: MyBlock[] };
 
 const PLATFORM_LABELS: Record<HeapChannelPlatform, string> = {
   youtube: "YouTube",
@@ -120,22 +122,21 @@ const TEXT = {
 };
 type MyText = (typeof TEXT)["en"];
 
+// onClose: 방 위에 띄운 경우 닫기 (없으면 홈으로 간다). onRefresh: 값이 바뀐 뒤 다시 읽기 (없으면 router.refresh)
 export function MyBook({
   account,
   creator,
   blocks,
-}: {
-  account: MyAccount;
-  creator: MyCreatorData | null;
-  blocks: MyBlock[];
-}) {
+  onClose,
+  onRefresh,
+}: MyPageData & { onClose?: () => void; onRefresh?: () => void }) {
   const language = useLanguage();
   const t = TEXT[language];
   const role = account.role ?? "public";
   const roomHref = creator?.room ? `/room/${creator.room.slug}` : MY_ROOM_HREF;
 
   return (
-    <Clipboard title={t.title} closeLabel={t.close}>
+    <Clipboard title={t.title} closeLabel={t.close} onClose={onClose}>
       <Section head={t.account}>
         <dl className="cb-fields">
           <Field label={t.name}>{account.name}</Field>
@@ -189,7 +190,7 @@ export function MyBook({
         </Section>
       )}
 
-      {creator && <ChatSection creator={creator} t={t} language={language} />}
+      {creator && <ChatSection creator={creator} t={t} language={language} onRefresh={onRefresh} />}
 
       <Section head={t.blocked}>
         <BlockList blocks={blocks} />
@@ -246,7 +247,17 @@ function ChannelsSection({ creator, roomHref, t }: { creator: MyCreatorData; roo
 }
 
 // 열린 대화방의 참여자 수와 닫기. 닫혀 있으면 크리에이터 화면(/creator)에서 연다 (방 이름이 필요하다)
-function ChatSection({ creator, t, language }: { creator: MyCreatorData; t: MyText; language: Language }) {
+function ChatSection({
+  creator,
+  t,
+  language,
+  onRefresh,
+}: {
+  creator: MyCreatorData;
+  t: MyText;
+  language: Language;
+  onRefresh?: () => void;
+}) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState("");
@@ -268,7 +279,8 @@ function ChatSection({ creator, t, language }: { creator: MyCreatorData; t: MyTe
                 const res = await closeRoomAction(openRoomId);
                 if (res.ok) {
                   setError("");
-                  router.refresh();
+                  if (onRefresh) onRefresh();
+                  else router.refresh();
                 } else setError(res.error);
               });
             }}

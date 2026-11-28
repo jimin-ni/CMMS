@@ -10,6 +10,8 @@ import { Paper } from "./paper";
 import { PixelIcon, type PixelIconName } from "./icons";
 import { LoginPopup } from "./login-popup";
 import { CHAT_DOCK_OPEN, ChatDock } from "@/components/bubble/chat-dock";
+import { SettingsBook } from "@/components/settings/settings-book";
+import { MyPageSheet } from "@/components/mypage/my-page-sheet";
 
 const LOGIN_REASON = "Sign in to leave your mark in this room.";
 // 로그인 전에 방 안에서 로그인이 필요한 것을 누를 때 (HeapRoom 이 보내는 heap:signin 의 detail)
@@ -18,10 +20,9 @@ const SIGNIN_REASONS: Record<string, string> = {
   guestbook: "Sign in to leave your name in the guestbook.",
   note: "Sign in to hang a note on the tree.",
 };
-// 설정 버튼이 여는 곳 (settings-book.tsx)
-const SETTINGS_HREF = "/settings";
-// 로그인한 사람의 이름 버튼이 여는 곳 (mypage/my-book.tsx)
-const MYPAGE_HREF = "/mypage";
+// 설정 버튼과 이름 버튼은 지금 있는 방 위에 클립보드를 띄운다 (settings-book.tsx, mypage/my-page-sheet.tsx).
+// 방은 그대로 뒤에 남아 있으므로, 다른 방으로 옮겨 간 뒤에 열면 그 방이 배경이다.
+type Sheet = "settings" | "mypage";
 // 가운데 안내 팝업이 아래로 내려가기까지
 const GUIDE_CENTER_MS = 3000;
 
@@ -73,6 +74,9 @@ export function RoomTour({
   // action: 방 안에서 로그인이 필요한 것을 눌러 뜬 경우 그 일(heap:signin 의 detail). 내비게이션 바의 로그인이면 null.
   // 로그인하거나 가입하고 나면 그 일을 하던 화면으로 돌아간다.
   const [login, setLogin] = useState<{ reason: string; action: string | null } | null>(null);
+  // 방 위에 띄운 설정·마이페이지. null 이면 닫힘
+  const [sheet, setSheet] = useState<Sheet | null>(null);
+  const closeSheet = useCallback(() => setSheet(null), []);
   const spots = useMemo(() => spotsFor(layoutItems), [layoutItems]);
 
   useEffect(() => {
@@ -177,6 +181,7 @@ export function RoomTour({
   }, [router, hostRef, loginAction, chatRoom]);
   // 방 안의 자리로 옮긴다: 홈(처음 들어온 상태), 탁자의 사진, 탁자의 휴대폰
   const go = (where: Go) => {
+    setSheet(null);
     if (where === "room" && homeHref) {
       router.push(homeHref);
       return;
@@ -197,7 +202,7 @@ export function RoomTour({
   const allFound = countFound >= spots.length;
   // 앉기, 상영, 책장, 열린 창에서는 엔진의 단추와 창을 쓰므로 안내 팝업을 잠시 내린다.
   // 모든 곳을 둘러보면 안내 팝업은 닫는다.
-  const guideShown = spot !== "hidden" && engineMode === "room" && !panelOpen && !allFound;
+  const guideShown = spot !== "hidden" && engineMode === "room" && !panelOpen && !allFound && sheet === null;
   const progressNote =
     allFound
       ? "You found every story here."
@@ -237,6 +242,10 @@ export function RoomTour({
         </Paper>
       </div>
 
+      {/* 내비게이션 바보다 먼저 그려서 바가 위에 남는다 */}
+      {sheet === "settings" && <SettingsBook onClose={closeSheet} />}
+      {sheet === "mypage" && signedIn && <MyPageSheet onClose={closeSheet} />}
+
       <nav className={`oc-nav${navOpen ? " open" : ""}`} aria-label="Menu" aria-hidden={!navOpen}>
         <Paper tape={["tl"]}>
           {NAV_ITEMS.map((item) => (
@@ -255,7 +264,7 @@ export function RoomTour({
             <button
               type="button"
               className="oc-nav-btn oc-nav-name"
-              onClick={() => router.push(MYPAGE_HREF)}
+              onClick={() => setSheet("mypage")}
               tabIndex={navOpen ? 0 : -1}
               title="My page"
             >
@@ -266,14 +275,17 @@ export function RoomTour({
             <button
               type="button"
               className="oc-nav-btn"
-              onClick={() => setLogin({ reason: LOGIN_REASON, action: null })}
+              onClick={() => {
+                setSheet(null);
+                setLogin({ reason: LOGIN_REASON, action: null });
+              }}
               tabIndex={navOpen ? 0 : -1}
             >
               <PixelIcon name="login" size={NAV_ICON} />
               <span className="oc-label">Login</span>
             </button>
           )}
-          <button type="button" className="oc-nav-btn" onClick={() => router.push(SETTINGS_HREF)} tabIndex={navOpen ? 0 : -1}>
+          <button type="button" className="oc-nav-btn" onClick={() => setSheet("settings")} tabIndex={navOpen ? 0 : -1}>
             <PixelIcon name="settings" size={NAV_ICON} />
             <span className="oc-label">Setting</span>
           </button>
